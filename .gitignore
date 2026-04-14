@@ -1,0 +1,13 @@
+/._data
+/._immich
+/._nextcloud
+/._setup.md
+/data
+.env
+*.log
+*.json
+*.pem
+._*
+*.sqlite
+/nginx/data
+/nginx/letsencrypt

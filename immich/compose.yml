@@ -1,0 +1,80 @@
+services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-server
+    restart: unless-stopped
+    ports:
+      - "2283:2283"
+    env_file: .env
+    environment:
+      DB_URL: ${DB_URL}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_DATABASE_NAME: ${DB_DATABASE_NAME}
+      IMMICH_SECRET: ${IMMICH_SECRET}
+      REDIS_HOSTNAME: immich-redis
+    volumes:
+      - ${UPLOAD_LOCATION}:/usr/src/app/upload
+      - /mnt/my-data/Photos:/mnt/photos:ro
+      - /mnt/my-data/Videos:/mnt/videos:ro
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      immich-database:
+        condition: service_healthy
+      immich-redis:
+        condition: service_healthy
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich-ml
+    restart: unless-stopped
+    env_file: .env
+    profiles:
+      - ml
+    volumes:
+      - immich-model-cache:/cache
+
+  immich-redis:
+    image: redis:7-alpine
+    container_name: immich-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  immich-database:
+    image: ghcr.io/immich-app/postgres:16-vectorchord0.5.3-pgvector0.8.1
+    container_name: immich-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+    env_file: .env
+    volumes:
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    shm_size: 128mb
+    healthcheck:
+      test: >-
+        pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  immich-offline-remover:
+      image: ghcr.io/tenekev/immich-offline-files-remover:latest
+      container_name: immich-offline-remover
+      restart: unless-stopped
+      environment:
+        API_URL: http://immich-server:2283/api
+        API_KEY: MWoCxyfDz6aE40T2Y5wTg8UQDfKbkBamimopIduiI
+        OFFLINE_THRESHOLD: 100
+        CRON_EXPRESSION: "0 2 * * *"  # runs at 2AM daily
+
+volumes:
+  immich-model-cache:
+
+
