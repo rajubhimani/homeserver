@@ -144,7 +144,21 @@ do_up() {
   printf "%s\n" "$compose_out" | tail -3
 
   if [ $compose_rc -ne 0 ]; then
-    return 1
+    # If port is held by a zombie docker-proxy, free it and retry once
+    port=$(printf "%s" "$compose_out" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
+    if [ -n "$port" ]; then
+      warn "Port $port in use — freeing zombie docker-proxy and retrying..."
+      sudo fuser -k "${port}/tcp" 2>/dev/null
+      sleep 1
+      if [ -n "$profile" ]; then
+        compose_out=$(docker compose $files --profile "$profile" up -d 2>&1)
+      else
+        compose_out=$(docker compose $files up -d 2>&1)
+      fi
+      compose_rc=$?
+      printf "%s\n" "$compose_out" | tail -3
+    fi
+    [ $compose_rc -ne 0 ] && return 1
   fi
 
   wait_healthy "$service"
