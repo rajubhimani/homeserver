@@ -11,3 +11,4 @@
 *.sqlite
 /nginx/data
 /nginx/letsencrypt
+test/*

@@ -1,0 +1,65 @@
+services:
+  paperless-db:
+    image: postgres:18
+    container_name: paperless-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ${DATA_ROOT}/paperless/postgres:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  paperless-redis:
+    image: redis:8-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PAPERLESS_REDIS: redis://paperless-redis:6379
+      PAPERLESS_DBHOST: paperless-db
+      PAPERLESS_DBNAME: ${POSTGRES_DB}
+      PAPERLESS_DBUSER: ${POSTGRES_USER}
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_URL: ${PAPERLESS_URL}
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_TIME_ZONE: ${TZ}
+    volumes:
+      - ${DATA_ROOT}/paperless/data:/usr/src/paperless/data
+      - ${DATA_ROOT}/paperless/media:/usr/src/paperless/media
+      - ${DATA_ROOT}/paperless/export:/usr/src/paperless/export
+      - ${DATA_ROOT}/paperless/consume:/usr/src/paperless/consume
+    depends_on:
+      paperless-db:
+        condition: service_healthy
+      paperless-redis:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

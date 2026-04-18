@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrajnaTech</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --pt-accent: #1D9E75;
+      --pt-accent-dark: #0F6E56;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f3;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6b6b6b;
+      --text-tertiary: #9b9b9b;
+      --border: rgba(0,0,0,0.12);
+      --border-hover: rgba(0,0,0,0.25);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1e1e1e;
+        --bg-secondary: #2a2a2a;
+        --text-primary: #f0f0f0;
+        --text-secondary: #a0a0a0;
+        --text-tertiary: #606060;
+        --border: rgba(255,255,255,0.12);
+        --border-hover: rgba(255,255,255,0.25);
+        --pt-accent: #2bc492;
+        --pt-accent-dark: #1D9E75;
+      }
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .wrap {
+      max-width: 760px;
+      width: 100%;
+    }
+
+    .header {
+      text-align: center;
+      padding: 2.5rem 0 2rem;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+
+    .logo-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-md);
+      background: var(--pt-accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-mark svg { width: 22px; height: 22px; }
+
+    .logo-name {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .logo-name span { color: var(--pt-accent); }
+
+    .tagline {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .section { margin-bottom: 2.5rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s;
+      text-decoration: none;
+    }
+
+    .card:hover { border-color: var(--border-hover); }
+
+    .card-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-icon.teal  { background: #E1F5EE; }
+    .card-icon.blue  { background: #E6F1FB; }
+    .card-icon.purple { background: #EEE6FB; }
+    .card-icon.orange { background: #FBF1E6; }
+    .card-icon.red   { background: #FBE6E6; }
+    .card-icon.pink  { background: #FBE6F3; }
+    .card-icon.gray  { background: #EBEBEB; }
+    .card-icon.yellow { background: #FBF8E6; }
+
+    @media (prefers-color-scheme: dark) {
+      .card-icon.teal   { background: #04342C; }
+      .card-icon.blue   { background: #042C53; }
+      .card-icon.purple { background: #2C0453; }
+      .card-icon.orange { background: #532C04; }
+      .card-icon.red    { background: #530404; }
+      .card-icon.pink   { background: #530432; }
+      .card-icon.gray   { background: #333333; }
+      .card-icon.yellow { background: #3D3804; }
+    }
+
+    .card-icon svg { width: 18px; height: 18px; }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-name {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .status.checking { color: #999; background: #eee; }
+    .status.online   { color: var(--pt-accent); background: #E1F5EE; }
+    .status.offline  { color: #c0392b; background: #FBE6E6; }
+
+    @media (prefers-color-scheme: dark) {
+      .status.checking { color: #666; background: #333; }
+      .status.online   { background: #04342C; color: #2bc492; }
+      .status.offline  { background: #530404; color: #e57373; }
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      transition: background 0.3s;
+    }
+
+    .status.checking .status-dot { background: #999; }
+    .status.online   .status-dot { background: var(--pt-accent); }
+    .status.offline  .status-dot { background: #c0392b; }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      flex: 1;
+    }
+
+    .card-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--pt-accent);
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    .card-link svg { width: 12px; height: 12px; }
+
+    .footer {
+      text-align: center;
+      padding-top: 1.5rem;
+      border-top: 0.5px solid var(--border);
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="3" fill="white"/>
+            <path d="M10 2 L10 5 M10 15 L10 18 M2 10 L5 10 M15 10 L18 10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M4.9 4.9 L7 7 M13 13 L15.1 15.1 M15.1 4.9 L13 7 M7 13 L4.9 15.1" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="logo-name">Prajna<span>Tech</span></span>
+      </div>
+      <p class="tagline">Your data, your hardware, your control.</p>
+    </div>
+
+    <!-- Storage & Media -->
+    <div class="section">
+      <p class="section-label">Storage &amp; Media</p>
+      <div class="grid">
+
+        <div class="card" data-service="immich">
+          <div class="card-icon teal">
+            <svg viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="2" width="14" height="10" rx="2" stroke="#0F6E56" stroke-width="1.4"/>
+              <circle cx="9" cy="7" r="2.5" stroke="#0F6E56" stroke-width="1.4"/>
+              <path d="M5 15 Q9 12 13 15" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Immich</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Self-hosted photo and video backup. Google Photos alternative with facial recognition and smart search.</p>
+          <a class="card-link" href="https://immich.prajnatech.in" target="_blank">
+            immich.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+        <div class="card" data-service="nextcloud">
+          <div class="card-icon blue">
+            <svg viewBox="0 0 18 18" fill="none">
+              <path d="M3 5 L3 14 Q3 15 4 15 L14 15 Q15 15 15 14 L15 5" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M2 5 L9 2 L16 5" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M7 15 L7 10 L11 10 L11 15" stroke="#185FA5" stroke-width="1.4"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Nextcloud</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more.</p>
+          <a class="card-link" href="https://nextcloud.prajnatech.in" target="_blank">
+            nextcloud.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+        <div class="card" data-service="jellyfin">
+          <div class="card-icon purple">
+            <svg viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="4" width="14" height="10" rx="2" stroke="#6B35B5" stroke-width="1.4"/>
+              <path d="M6 9 L8 11 L12 7" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 2 L9 4" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Jellyfin</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.</p>
+          <a class="card-link" href="https://jellyfin.prajnatech.in" target="_blank">
+            jellyfin.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Productivity -->
+    <div class="section">
+      <p class="section-label">Productivity</p>
+      <div class="grid">
+
+        <div class="card" data-service="paperless">
+          <div class="card-icon orange">
+            <svg viewBox="0 0 18 18" fill="none">
+              <path d="M4 3 L14 3 Q15 3 15 4 L15 14 Q15 15 14 15 L4 15 Q3 15 3 14 L3 4 Q3 3 4 3Z" stroke="#A85C04" stroke-width="1.4"/>
+              <path d="M6 7 L12 7 M6 10 L10 10" stroke="#A85C04" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Paperless</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Scan, index, and archive all your documents. Full-text search with OCR — go paperless.</p>
+          <a class="card-link" href="https://paperless.prajnatech.in" target="_blank">
+            paperless.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+        <div class="card" data-service="stirling-pdf">
+          <div class="card-icon red">
+            <svg viewBox="0 0 18 18" fill="none">
+              <rect x="3" y="2" width="9" height="12" rx="1.5" stroke="#A83535" stroke-width="1.4"/>
+              <path d="M6 5 L9 5 M6 8 L9 8" stroke="#A83535" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M11 10 L15 14 M13 10 L15 12" stroke="#A83535" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Stirling PDF</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Merge, split, compress, convert, and edit PDFs. Full PDF toolkit that runs locally.</p>
+          <a class="card-link" href="https://stirling-pdf.prajnatech.in" target="_blank">
+            stirling-pdf.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+        <div class="card" data-service="mealie">
+          <div class="card-icon pink">
+            <svg viewBox="0 0 18 18" fill="none">
+              <path d="M9 2 L10.5 6.5 L15.5 6.5 L11.5 9.5 L13 14 L9 11 L5 14 L6.5 9.5 L2.5 6.5 L7.5 6.5 Z" stroke="#A5356B" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Mealie</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists.</p>
+          <a class="card-link" href="https://mealie.prajnatech.in" target="_blank">
+            mealie.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Dev & Security -->
+    <div class="section">
+      <p class="section-label">Dev &amp; Security</p>
+      <div class="grid">
+
+        <div class="card" data-service="gitea">
+          <div class="card-icon teal">
+            <svg viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="7" stroke="#0F6E56" stroke-width="1.4"/>
+              <path d="M6 6 L12 9 L6 12 Z" fill="#0F6E56"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Gitea</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Self-hosted Git service. Manage code repositories, issues, and pull requests. GitHub alternative.</p>
+          <a class="card-link" href="https://gitea.prajnatech.in" target="_blank">
+            gitea.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+        <div class="card" data-service="vaultwarden">
+          <div class="card-icon blue">
+            <svg viewBox="0 0 18 18" fill="none">
+              <rect x="4" y="3" width="10" height="13" rx="2" stroke="#185FA5" stroke-width="1.4"/>
+              <path d="M7 7 L7 11 M9 6 L9 12 M11 8 L11 11" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Vaultwarden</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Self-hosted password manager. Bitwarden-compatible — use any Bitwarden app to sync passwords.</p>
+          <a class="card-link" href="https://vaultwarden.prajnatech.in" target="_blank">
+            vaultwarden.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- System -->
+    <div class="section">
+      <p class="section-label">System</p>
+      <div class="grid">
+
+        <div class="card" data-service="uptime-kuma">
+          <div class="card-icon yellow">
+            <svg viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="6" stroke="#8A7A04" stroke-width="1.4"/>
+              <path d="M9 5 L9 9" stroke="#8A7A04" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="9" cy="12" r="1" fill="#8A7A04"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Uptime Kuma</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking.</p>
+          <a class="card-link" href="https://uptime-kuma.prajnatech.in" target="_blank">
+            uptime-kuma.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+        <div class="card" data-service="dozzle">
+          <div class="card-icon gray">
+            <svg viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="4" width="14" height="10" rx="2" stroke="#555555" stroke-width="1.4"/>
+              <path d="M5 8 L8 11 L13 7" stroke="#555555" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="card-header">
+            <span class="card-name">Dozzle</span>
+            <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+          </div>
+          <p class="card-desc">Real-time Docker container log viewer in the browser. Quickly tail logs from any running container.</p>
+          <a class="card-link" href="https://dozzle.prajnatech.in" target="_blank">
+            dozzle.prajnatech.in
+            <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="footer">
+      Built and maintained by Raju · Ahmedabad, India · 2026
+    </div>
+  </div>
+  <script>
+    async function checkService(card) {
+      const service = card.dataset.service;
+      const badge = card.querySelector('.status');
+      const text = badge.querySelector('.status-text');
+      try {
+        const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000) });
+        const up = res.status < 500;
+        badge.className = `status ${up ? 'online' : 'offline'}`;
+        text.textContent = up ? 'online' : 'offline';
+      } catch {
+        badge.className = 'status offline';
+        text.textContent = 'offline';
+      }
+    }
+
+    function checkAll() {
+      document.querySelectorAll('.card[data-service]').forEach(checkService);
+    }
+
+    checkAll();
+    setInterval(checkAll, 60000);
+  </script>
+</body>
+</html>

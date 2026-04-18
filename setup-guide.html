@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrajnaTech · Setup Guide</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #1D9E75;
+      --accent-dim: #0F6E56;
+      --accent-bg: #E1F5EE;
+      --bg: #0d0d0d;
+      --bg-surface: #161616;
+      --bg-card: #1c1c1c;
+      --text: #f0ede8;
+      --text-muted: #888880;
+      --text-dim: #444440;
+      --border: rgba(255,255,255,0.07);
+      --border-accent: rgba(29,158,117,0.3);
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --radius: 6px;
+      --radius-lg: 10px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-head);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Layout */
+    .layout { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      background: var(--bg-surface);
+      border-right: 0.5px solid var(--border);
+      padding: 2rem 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .logo-mark {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-mark svg { width: 16px; height: 16px; }
+
+    .logo-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .logo-name span { color: var(--accent); }
+
+    .nav-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .nav-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+
+    .nav-list a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .nav-list a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .nav-list a.active { color: var(--accent); background: rgba(29,158,117,0.08); }
+
+    .nav-num {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      min-width: 16px;
+    }
+
+    /* Main content */
+    .main {
+      margin-left: 240px;
+      flex: 1;
+      max-width: 860px;
+      padding: 4rem 3rem;
+    }
+
+    /* Hero */
+    .hero {
+      padding-bottom: 3rem;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 4rem;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      background: rgba(29,158,117,0.1);
+      border: 0.5px solid var(--border-accent);
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-badge-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    h1 {
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+
+    h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 540px;
+      line-height: 1.7;
+    }
+
+    /* Sections */
+    .section {
+      margin-bottom: 4rem;
+      scroll-margin-top: 2rem;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .section-num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+      opacity: 0.7;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+
+    h3 {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      margin-top: 1.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: var(--bg-card);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      border-bottom: 0.5px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .code-lang {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .copy-btn {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .copy-btn:hover { color: var(--accent); background: rgba(29,158,117,0.08); }
+
+    pre {
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #c9c5bc;
+    }
+
+    .kw { color: #7dd3b0; }
+    .str { color: #e8c77a; }
+    .cm { color: #555550; }
+    .hl { color: var(--accent); }
+
+    /* Info / note cards */
+    .note {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      margin: 1rem 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .note.info {
+      background: rgba(29,158,117,0.07);
+      border: 0.5px solid var(--border-accent);
+      color: #9fd4bf;
+    }
+
+    .note.warn {
+      background: rgba(186,117,23,0.08);
+      border: 0.5px solid rgba(186,117,23,0.3);
+      color: #c9a96e;
+    }
+
+    .note-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 8px 12px;
+      border-bottom: 0.5px solid var(--border);
+      font-weight: 400;
+    }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 0.5px solid var(--border);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(29,158,117,0.1);
+      color: var(--accent);
+      border: 0.5px solid var(--border-accent);
+    }
+
+    /* Step list */
+    .steps { list-style: none; display: flex; flex-direction: column; gap: 0; }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      padding: 1rem 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .step:last-child { border-bottom: none; }
+
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      min-width: 24px;
+      padding-top: 2px;
+    }
+
+    .step-content { flex: 1; }
+    .step-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+    .step-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+    /* Footer */
+    .footer {
+      margin-top: 5rem;
+      padding-top: 2rem;
+      border-top: 0.5px solid var(--border);
+      font-size: 13px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 2rem 1.25rem; }
+      h1 { font-size: 28px; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <a href="#" class="sidebar-logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="3" fill="white"/>
+          <path d="M10 2 L10 5 M10 15 L10 18 M2 10 L5 10 M15 10 L18 10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M4.9 4.9 L7 7 M13 13 L15.1 15.1 M15.1 4.9 L13 7 M7 13 L4.9 15.1" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="logo-name">Prajna<span>Tech</span></span>
+    </a>
+
+    <nav>
+      <p class="nav-label">Sections</p>
+      <ul class="nav-list">
+        <li><a href="#tunnel"><span class="nav-num">01</span>Cloudflare Tunnel</a></li>
+        <li><a href="#docker"><span class="nav-num">02</span>Docker Network</a></li>
+        <li><a href="#npm"><span class="nav-num">03</span>Nginx Proxy Manager</a></li>
+        <li><a href="#immich"><span class="nav-num">04</span>Immich</a></li>
+        <li><a href="#nextcloud"><span class="nav-num">05</span>Nextcloud</a></li>
+        <li><a href="#landing"><span class="nav-num">06</span>Landing Page</a></li>
+        <li><a href="#dns"><span class="nav-num">07</span>Cloudflare DNS</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <div class="hero">
+      <div class="hero-badge"><span class="hero-badge-dot"></span>Self-hosted · Ubuntu 24.04</div>
+      <h1>PrajnaTech<br><em>Setup Guide</em></h1>
+      <p class="hero-desc">Complete homeserver setup — Cloudflare Tunnel, Docker, Nginx Proxy Manager, Immich, Nextcloud, and DNS configuration.</p>
+    </div>
+
+    <!-- 01 Cloudflare Tunnel -->
+    <section class="section" id="tunnel">
+      <div class="section-header">
+        <span class="section-num">01</span>
+        <h2>Cloudflare Tunnel</h2>
+      </div>
+
+      <p>Cloudflare Tunnel lets you expose local services to the internet without port forwarding. Traffic flows from Cloudflare's edge through an outbound connection — no open inbound ports needed.</p>
+
+      <h3>Install cloudflared</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg &gt; /dev/null
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt update &amp;&amp; sudo apt install cloudflared</pre>
+      </div>
+
+      <h3>Create tunnel</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>cloudflared tunnel login
+cloudflared tunnel create prajnatech</pre>
+      </div>
+
+      <h3>Config file</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">~/.cloudflared/config.yml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="kw">tunnel</span>: &lt;YOUR_TUNNEL_ID&gt;
+<span class="kw">credentials-file</span>: /home/raju/.cloudflared/&lt;YOUR_TUNNEL_ID&gt;.json
+<span class="kw">loglevel</span>: error
+<span class="kw">no-autoupdate</span>: <span class="hl">true</span>
+<span class="kw">grace-period</span>: 5s
+
+<span class="kw">ingress</span>:
+  - <span class="kw">hostname</span>: <span class="str">"www.prajnatech.in"</span>
+    <span class="kw">service</span>: http://localhost:80
+  - <span class="kw">hostname</span>: <span class="str">"prajnatech.in"</span>
+    <span class="kw">service</span>: http://localhost:80
+  - <span class="kw">hostname</span>: <span class="str">"*.prajnatech.in"</span>
+    <span class="kw">service</span>: http://localhost:80
+  - <span class="kw">service</span>: http_status:404</pre>
+      </div>
+
+      <h3>Install & start service</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>sudo mkdir -p /etc/cloudflared
+sudo cp ~/.cloudflared/config.yml /etc/cloudflared/config.yml
+sudo cloudflared service install
+sudo systemctl enable cloudflared
+sudo systemctl start cloudflared</pre>
+      </div>
+
+      <h3>Set fast stop timeout</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>sudo systemctl edit cloudflared</pre>
+      </div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">systemd override</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>[Service]
+TimeoutStopSec=5</pre>
+      </div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>sudo systemctl daemon-reload
+sudo systemctl restart cloudflared</pre>
+      </div>
+    </section>
+
+    <!-- 02 Docker Network -->
+    <section class="section" id="docker">
+      <div class="section-header">
+        <span class="section-num">02</span>
+        <h2>Docker Network & Compose Structure</h2>
+      </div>
+
+      <p>Each service runs in its own compose file. A shared external Docker network lets all containers talk to each other by container name.</p>
+
+      <h3>Create shared network</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>docker network create homeserver</pre>
+      </div>
+
+      <div class="note info">
+        <span class="note-icon">→</span>
+        Run this once before starting any compose files. Every compose file references this network as <code>external: true</code>.
+      </div>
+
+      <h3>Folder structure</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">tree</span></div>
+        <pre>~/docker/
+├── npm/
+│   └── docker-compose.yml
+├── nextcloud/
+│   ├── docker-compose.yml
+│   └── .env
+├── immich/
+│   ├── docker-compose.yml
+│   └── .env
+└── landing/
+    ├── docker-compose.yml
+    └── index.html</pre>
+      </div>
+
+      <h3>Network block (add to every compose file)</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="kw">networks</span>:
+  homeserver:
+    <span class="kw">external</span>: <span class="hl">true</span></pre>
+      </div>
+
+      <h3>Startup order</h3>
+      <ul class="steps">
+        <li class="step"><span class="step-num">01</span><div class="step-content"><div class="step-title">NPM first</div><div class="step-desc">Nginx Proxy Manager must be up before traffic can be routed.</div></div></li>
+        <li class="step"><span class="step-num">02</span><div class="step-content"><div class="step-title">Nextcloud</div><div class="step-desc">Postgres DB starts first via healthcheck dependency.</div></div></li>
+        <li class="step"><span class="step-num">03</span><div class="step-content"><div class="step-title">Immich</div><div class="step-desc">Depends on Postgres and Redis — both must be healthy.</div></div></li>
+        <li class="step"><span class="step-num">04</span><div class="step-content"><div class="step-title">Landing page</div><div class="step-desc">Static Nginx container, start anytime.</div></div></li>
+      </ul>
+    </section>
+
+    <!-- 03 NPM -->
+    <section class="section" id="npm">
+      <div class="section-header">
+        <span class="section-num">03</span>
+        <h2>Nginx Proxy Manager</h2>
+      </div>
+
+      <p>NPM is the single entry point for all HTTP traffic. Cloudflare Tunnel points to NPM on port 80, and NPM routes to each container by name.</p>
+
+      <h3>docker-compose.yml</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="kw">services</span>:
+  <span class="hl">nginx-proxy-manager</span>:
+    <span class="kw">image</span>: jc21/nginx-proxy-manager:latest
+    <span class="kw">container_name</span>: nginx-proxy-manager
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">ports</span>:
+      - <span class="str">"80:80"</span>
+      - <span class="str">"443:443"</span>
+      - <span class="str">"81:81"</span>
+    <span class="kw">volumes</span>:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    <span class="kw">networks</span>:
+      - homeserver
+
+<span class="kw">networks</span>:
+  homeserver:
+    <span class="kw">external</span>: <span class="hl">true</span></pre>
+      </div>
+
+      <div class="note info">
+        <span class="note-icon">→</span>
+        Default login: <strong>admin@example.com</strong> / <strong>changeme</strong> — change immediately on first login.
+      </div>
+
+      <h3>Add proxy hosts in NPM UI (http://localhost:81)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domain</th><th>Forward Hostname</th><th>Forward Port</th><th>SSL</th></tr></thead>
+          <tbody>
+            <tr><td>immich.prajnatech.in</td><td>immich-server</td><td>2283</td><td><span class="tag">none</span></td></tr>
+            <tr><td>nextcloud.prajnatech.in</td><td>nextcloud</td><td>80</td><td><span class="tag">none</span></td></tr>
+            <tr><td>prajnatech.in</td><td>landing</td><td>80</td><td><span class="tag">none</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn">
+        <span class="note-icon">!</span>
+        No SSL needed — Cloudflare Tunnel handles TLS termination at the edge. Traffic from tunnel to NPM is plain HTTP internally.
+      </div>
+    </section>
+
+    <!-- 04 Immich -->
+    <section class="section" id="immich">
+      <div class="section-header">
+        <span class="section-num">04</span>
+        <h2>Immich</h2>
+      </div>
+
+      <p>Self-hosted photo and video backup with facial recognition, smart search, and mobile apps. Runs as multiple containers — server, Redis, Postgres, and optional ML.</p>
+
+      <h3>docker-compose.yml</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="kw">services</span>:
+  <span class="hl">immich-server</span>:
+    <span class="kw">image</span>: ghcr.io/immich-app/immich-server:release
+    <span class="kw">container_name</span>: immich-server
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">env_file</span>: .env
+    <span class="kw">environment</span>:
+      DB_URL: ${DB_URL}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_DATABASE_NAME: ${DB_DATABASE_NAME}
+      IMMICH_SECRET: ${IMMICH_SECRET}
+      REDIS_HOSTNAME: immich-redis
+    <span class="kw">volumes</span>:
+      - ${UPLOAD_LOCATION}:/usr/src/app/upload
+      - /mnt/my-data/Photos:/mnt/photos:ro
+      - /mnt/my-data/Videos:/mnt/videos:ro
+      - /etc/localtime:/etc/localtime:ro
+    <span class="kw">depends_on</span>:
+      immich-database:
+        <span class="kw">condition</span>: service_healthy
+      immich-redis:
+        <span class="kw">condition</span>: service_healthy
+    <span class="kw">networks</span>:
+      - homeserver
+
+  <span class="hl">immich-machine-learning</span>:
+    <span class="kw">image</span>: ghcr.io/immich-app/immich-machine-learning:release
+    <span class="kw">container_name</span>: immich-ml
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">env_file</span>: .env
+    <span class="kw">profiles</span>:
+      - ml
+    <span class="kw">volumes</span>:
+      - immich-model-cache:/cache
+    <span class="kw">networks</span>:
+      - homeserver
+
+  <span class="hl">immich-redis</span>:
+    <span class="kw">image</span>: redis:7-alpine
+    <span class="kw">container_name</span>: immich-redis
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: ["CMD", "redis-cli", "ping"]
+      <span class="kw">interval</span>: 10s
+      <span class="kw">timeout</span>: 5s
+      <span class="kw">retries</span>: 5
+    <span class="kw">networks</span>:
+      - homeserver
+
+  <span class="hl">immich-database</span>:
+    <span class="kw">image</span>: ghcr.io/immich-app/postgres:16-vectorchord0.5.3-pgvector0.8.1
+    <span class="kw">container_name</span>: immich-db
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">env_file</span>: .env
+    <span class="kw">environment</span>:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+    <span class="kw">volumes</span>:
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    <span class="kw">shm_size</span>: 128mb
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1
+      <span class="kw">interval</span>: 10s
+      <span class="kw">timeout</span>: 5s
+      <span class="kw">retries</span>: 5
+      <span class="kw">start_period</span>: 30s
+    <span class="kw">networks</span>:
+      - homeserver
+
+<span class="kw">volumes</span>:
+  immich-model-cache:
+
+<span class="kw">networks</span>:
+  homeserver:
+    <span class="kw">external</span>: <span class="hl">true</span></pre>
+      </div>
+
+      <h3>Start</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="cm"># Without ML (recommended for low-resource setups)</span>
+docker compose up -d
+
+<span class="cm"># With ML (facial recognition, smart search)</span>
+docker compose --profile ml up -d
+
+<span class="cm"># Verify</span>
+curl http://localhost:2283/api/server/ping</pre>
+      </div>
+    </section>
+
+    <!-- 05 Nextcloud -->
+    <section class="section" id="nextcloud">
+      <div class="section-header">
+        <span class="section-num">05</span>
+        <h2>Nextcloud</h2>
+      </div>
+
+      <p>Self-hosted file storage and sync. Google Drive alternative with calendar, contacts, and office suite.</p>
+
+      <h3>docker-compose.yml</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="kw">services</span>:
+  <span class="hl">nextcloud-db</span>:
+    <span class="kw">image</span>: postgres:16
+    <span class="kw">container_name</span>: nextcloud-db
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">env_file</span>: .env
+    <span class="kw">environment</span>:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    <span class="kw">volumes</span>:
+      - ${DATA_ROOT}/postgres-nextcloud:/var/lib/postgresql/data
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      <span class="kw">interval</span>: 10s
+      <span class="kw">timeout</span>: 5s
+      <span class="kw">retries</span>: 5
+    <span class="kw">networks</span>:
+      - homeserver
+
+  <span class="hl">nextcloud</span>:
+    <span class="kw">image</span>: nextcloud:latest
+    <span class="kw">container_name</span>: nextcloud
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">env_file</span>: .env
+    <span class="kw">environment</span>:
+      POSTGRES_HOST: nextcloud-db
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+      NEXTCLOUD_TRUSTED_PROXIES: nginx-proxy-manager
+    <span class="kw">volumes</span>:
+      - ${DATA_ROOT}/nextcloud:/var/www/html/data
+      - ${USER_DATA_ROOT}:/mnt/seagate
+    <span class="kw">depends_on</span>:
+      nextcloud-db:
+        <span class="kw">condition</span>: service_healthy
+    <span class="kw">networks</span>:
+      - homeserver
+
+<span class="kw">networks</span>:
+  homeserver:
+    <span class="kw">external</span>: <span class="hl">true</span></pre>
+      </div>
+
+      <h3>Trusted domains (.env)</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">.env</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>NEXTCLOUD_TRUSTED_DOMAINS=localhost 192.168.1.* 100.x.x.x *.ts.net nextcloud.prajnatech.in</pre>
+      </div>
+    </section>
+
+    <!-- 06 Landing Page -->
+    <section class="section" id="landing">
+      <div class="section-header">
+        <span class="section-num">06</span>
+        <h2>Landing Page</h2>
+      </div>
+
+      <p>A static landing page served by Nginx Alpine, showing all running services with links.</p>
+
+      <h3>docker-compose.yml</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="kw">services</span>:
+  <span class="hl">landing</span>:
+    <span class="kw">image</span>: nginx:alpine
+    <span class="kw">container_name</span>: landing
+    <span class="kw">restart</span>: unless-stopped
+    <span class="kw">volumes</span>:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    <span class="kw">networks</span>:
+      - homeserver
+
+<span class="kw">networks</span>:
+  homeserver:
+    <span class="kw">external</span>: <span class="hl">true</span></pre>
+      </div>
+
+      <h3>Deploy</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>mkdir -p ~/docker/landing
+cp index.html ~/docker/landing/
+cd ~/docker/landing
+docker compose up -d</pre>
+      </div>
+
+      <p>Then add proxy host in NPM: <code>prajnatech.in</code> → <code>landing:80</code></p>
+    </section>
+
+    <!-- 07 DNS -->
+    <section class="section" id="dns">
+      <div class="section-header">
+        <span class="section-num">07</span>
+        <h2>Cloudflare DNS</h2>
+      </div>
+
+      <p>All DNS records point to the Cloudflare Tunnel. A wildcard CNAME covers all subdomains — no DNS changes needed when adding new services.</p>
+
+      <h3>DNS records (Cloudflare Dashboard → DNS)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Name</th><th>Target</th><th>Proxy</th></tr></thead>
+          <tbody>
+            <tr><td>CNAME</td><td>@</td><td>&lt;tunnel-id&gt;.cfargotunnel.com</td><td><span class="tag">proxied</span></td></tr>
+            <tr><td>CNAME</td><td>www</td><td>&lt;tunnel-id&gt;.cfargotunnel.com</td><td><span class="tag">proxied</span></td></tr>
+            <tr><td>CNAME</td><td>*</td><td>&lt;tunnel-id&gt;.cfargotunnel.com</td><td><span class="tag">proxied</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note info">
+        <span class="note-icon">→</span>
+        Replace <code>&lt;tunnel-id&gt;</code> with your actual tunnel UUID. The wildcard <code>*</code> record covers all subdomains automatically — immich, nextcloud, and anything added in future.
+      </div>
+
+      <div class="note warn">
+        <span class="note-icon">!</span>
+        Do not add individual CNAME records for immich or nextcloud — NPM handles routing internally. Only the three records above are needed.
+      </div>
+
+      <h3>Traffic flow</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">flow</span></div>
+        <pre>Browser → Cloudflare Edge (TLS) → cloudflared tunnel → NPM:80 → container</pre>
+      </div>
+    </section>
+
+    <div class="footer">
+      prajnatech · setup guide · 2026
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function copyCode(btn) {
+    const pre = btn.closest('.code-block').querySelector('pre');
+    navigator.clipboard.writeText(pre.innerText).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => btn.textContent = 'copy', 1500);
+    });
+  }
+
+  // Highlight active nav item on scroll
+  const sections = document.querySelectorAll('.section');
+  const navLinks = document.querySelectorAll('.nav-list a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const active = document.querySelector(`.nav-list a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,48 @@
+services:
+  gitea-db:
+    image: postgres:18
+    container_name: gitea-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ${DATA_ROOT}/gitea/postgres:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GITEA__database__DB_TYPE: postgres
+      GITEA__database__HOST: gitea-db:5432
+      GITEA__database__NAME: ${POSTGRES_DB}
+      GITEA__database__USER: ${POSTGRES_USER}
+      GITEA__database__PASSWD: ${POSTGRES_PASSWORD}
+      GITEA__server__DOMAIN: ${GITEA_DOMAIN}
+      GITEA__server__ROOT_URL: ${GITEA_ROOT_URL}
+      GITEA__server__SSH_PORT: 2222
+    volumes:
+      - ${DATA_ROOT}/gitea/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      gitea-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

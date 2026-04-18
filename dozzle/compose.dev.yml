@@ -1,0 +1,4 @@
+services:
+  dozzle:
+    ports:
+      - "9999:8080"

@@ -1,0 +1,14 @@
+services:
+  landing:
+    image: nginx:alpine
+    container_name: landing
+    restart: unless-stopped
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

@@ -1,0 +1,4 @@
+services:
+  paperless:
+    ports:
+      - "8010:8000"

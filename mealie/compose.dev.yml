@@ -1,0 +1,4 @@
+services:
+  mealie:
+    ports:
+      - "9925:9000"

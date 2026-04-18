@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-Hosting Guide — Expose Home Services to Internet</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --bg2: #171b24;
+    --bg3: #1e2330;
+    --border: #2a2f3e;
+    --border2: #3a4055;
+    --text: #e8eaf0;
+    --text2: #9199b0;
+    --text3: #5a6175;
+    --accent: #4f8ef7;
+    --accent2: #2563d4;
+    --green: #34d399;
+    --green-bg: #0d2a1f;
+    --yellow: #fbbf24;
+    --yellow-bg: #2a1f08;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Sora', sans-serif;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  /* Header */
+  .header { margin-bottom: 2.5rem; }
+  .header-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(79,142,247,0.1);
+    border: 1px solid rgba(79,142,247,0.25);
+    border-radius: 4px;
+    padding: 3px 10px;
+    margin-bottom: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+  .header p {
+    font-size: 15px;
+    color: var(--text2);
+    max-width: 600px;
+  }
+
+  /* Top tabs */
+  .top-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .top-tab {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text2);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 18px;
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .top-tab:hover { color: var(--text); }
+  .top-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Tab panels */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Sub tabs */
+  .sub-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+  .sub-tab {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--text2);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sub-tab:hover { border-color: var(--border2); color: var(--text); }
+  .sub-tab.active { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+
+  /* Sub panels */
+  .sub-panel { display: none; }
+  .sub-panel.active { display: block; }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 1rem;
+  }
+  .flow-box {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .flow-arrow { color: var(--text3); font-size: 14px; }
+
+  /* Badges */
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .badge-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+  .badge-warn { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(251,191,36,0.2); }
+
+  /* Steps */
+  .steps { display: flex; flex-direction: column; gap: 1px; }
+
+  .step {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .step:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .step:last-child { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+  .step:only-child { border-radius: var(--radius-lg); }
+  .step:not(:last-child) { border-bottom-color: transparent; }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .step-header:hover { background: var(--bg3); }
+
+  .step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(79,142,247,0.12);
+    border: 1px solid rgba(79,142,247,0.3);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .step-chevron {
+    font-size: 12px;
+    color: var(--text3);
+    transition: transform 0.2s;
+  }
+  .step.open .step-chevron { transform: rotate(180deg); }
+
+  .step-body {
+    display: none;
+    padding: 0 18px 16px 56px;
+  }
+  .step.open .step-body { display: block; }
+
+  .step-desc {
+    font-size: 13.5px;
+    color: var(--text2);
+    line-height: 1.65;
+    margin-bottom: 10px;
+  }
+  .step-desc:last-child { margin-bottom: 0; }
+
+  /* Code blocks */
+  pre {
+    background: #0a0d14;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #c9d1e8;
+    overflow-x: auto;
+    margin: 10px 0;
+    position: relative;
+  }
+  pre .comment { color: #4a5568; }
+  pre .cmd { color: #68d391; }
+
+  /* Copy button */
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--border2); }
+  .copy-btn.copied { color: var(--green); border-color: rgba(52,211,153,0.3); }
+
+  /* Note / warning box */
+  .note {
+    background: rgba(251,191,36,0.06);
+    border-left: 3px solid rgba(251,191,36,0.5);
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #d4a430;
+    line-height: 1.55;
+    margin: 10px 0;
+  }
+  .note-info {
+    background: rgba(79,142,247,0.06);
+    border-left: 3px solid rgba(79,142,247,0.4);
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #6ca0f5;
+    line-height: 1.55;
+    margin: 10px 0;
+  }
+
+  /* Section label */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    margin-bottom: 0.75rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .header h1 { font-size: 22px; }
+    .flow { gap: 4px; }
+    .flow-box { font-size: 10.5px; padding: 3px 8px; }
+    .step-body { padding-left: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="header-tag">Ubuntu · Self-hosting</div>
+    <h1>Expose home services to the internet</h1>
+    <p>Step-by-step guide for Immich, Nextcloud, and any other service running on your home server.</p>
+  </div>
+
+  <!-- Top tabs -->
+  <div class="top-tabs">
+    <button class="top-tab active" onclick="switchTop(this,'with-domain')">With a domain</button>
+    <button class="top-tab" onclick="switchTop(this,'without-domain')">Without a domain</button>
+  </div>
+
+  <!-- ======================== WITH DOMAIN ======================== -->
+  <div id="with-domain" class="tab-panel active">
+
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="switchSub(this,'cf-tunnel','with-domain')">Option A — Cloudflare Tunnel</button>
+      <button class="sub-tab" onclick="switchSub(this,'traditional','with-domain')">Option B — DDNS + Port Forwarding</button>
+    </div>
+
+    <!-- CF TUNNEL -->
+    <div id="cf-tunnel" class="sub-panel active">
+      <div class="flow">
+        <span class="flow-box">Browser</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Cloudflare DNS</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Encrypted Tunnel</span><span class="flow-arrow">→</span>
+        <span class="flow-box">cloudflared daemon</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Your service</span>
+      </div>
+      <div class="badges">
+        <span class="badge badge-ok">✓ No port forwarding</span>
+        <span class="badge badge-ok">✓ Works behind CGNAT</span>
+        <span class="badge badge-ok">✓ Free SSL auto</span>
+        <span class="badge badge-ok">✓ Recommended for beginners</span>
+      </div>
+
+      <div class="steps">
+
+        <div class="step open">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div class="step-title">Add your domain to Cloudflare</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Go to <strong>cloudflare.com</strong> → create a free account → click <strong>Add a Site</strong> → enter your domain → choose the <strong>Free plan</strong>.</div>
+            <div class="step-desc">Cloudflare will give you 2 nameservers like:<br><code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">art.ns.cloudflare.com</code> and <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">bob.ns.cloudflare.com</code></div>
+            <div class="step-desc">Go to your domain registrar (GoDaddy, Namecheap, etc.) and replace the existing nameservers with these two. Wait 10–30 minutes for it to propagate.</div>
+            <div class="note-info">After this, Cloudflare controls your domain's DNS. All future DNS changes happen in the Cloudflare dashboard.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div class="step-title">Install cloudflared on your Ubuntu server</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">SSH into your server and run these commands one by one:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button><span class="comment"># Download the package</span>
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+
+<span class="comment"># Install it</span>
+sudo dpkg -i cloudflared.deb
+
+<span class="comment"># Verify installation</span>
+cloudflared --version</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">3</div>
+            <div class="step-title">Login to Cloudflare from your server</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Run this command — it will print a URL in the terminal. Copy the URL, open it in your browser, and authorize your domain.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>cloudflared tunnel login</pre>
+            <div class="step-desc">This links your server to your Cloudflare account and saves a credentials file.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">4</div>
+            <div class="step-title">Create a tunnel</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Give your tunnel any name — here we use <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">home-tunnel</code>.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>cloudflared tunnel create home-tunnel</pre>
+            <div class="step-desc">This prints a <strong>Tunnel ID</strong> that looks like: <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">6ff42ae2-765d-4adf-8112-31c55c1551ef</code></div>
+            <div class="note">Save this Tunnel ID — you need it in the next step.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">5</div>
+            <div class="step-title">Create the config file</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Open the config file for editing:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>sudo nano ~/.cloudflared/config.yml</pre>
+            <div class="step-desc">Paste this inside (replace with your actual Tunnel ID and domain):</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>tunnel: YOUR-TUNNEL-ID
+credentials-file: /root/.cloudflared/YOUR-TUNNEL-ID.json
+
+ingress:
+  - hostname: immich.yourdomain.com
+    service: http://localhost:2283
+  - hostname: nextcloud.yourdomain.com
+    service: http://localhost:8080
+  - service: http_status:404</pre>
+            <div class="note">The last line <code style="font-family:var(--mono);font-size:12px">- service: http_status:404</code> is required — it catches any unmatched request. Don't remove it.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">6</div>
+            <div class="step-title">Point your subdomains to the tunnel</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Run once for each subdomain. This automatically creates DNS records in your Cloudflare dashboard.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>cloudflared tunnel route dns home-tunnel immich.yourdomain.com
+cloudflared tunnel route dns home-tunnel nextcloud.yourdomain.com</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">7</div>
+            <div class="step-title">Run the tunnel as a background service</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">This makes the tunnel start automatically even after a reboot.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>sudo cloudflared service install
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+
+<span class="comment"># Check it's running fine</span>
+sudo systemctl status cloudflared</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">8</div>
+            <div class="step-title">Test it + debug tips</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Open your browser and go to <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">https://immich.yourdomain.com</code> — it should load with HTTPS automatically.</div>
+            <div class="step-desc">If something's not working, check the logs:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button><span class="comment"># Watch live logs</span>
+sudo journalctl -u cloudflared -f
+
+<span class="comment"># Check if your service is running on the right port</span>
+curl http://localhost:2283</pre>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end cf-tunnel -->
+
+    <!-- TRADITIONAL -->
+    <div id="traditional" class="sub-panel">
+      <div class="flow">
+        <span class="flow-box">Browser</span><span class="flow-arrow">→</span>
+        <span class="flow-box">DDNS → home IP</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Router port 443</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Nginx Proxy Manager</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Your service</span>
+      </div>
+      <div class="badges">
+        <span class="badge badge-ok">✓ Full control over proxy</span>
+        <span class="badge badge-warn">⚠ Needs port forwarding</span>
+        <span class="badge badge-warn">⚠ Fails behind CGNAT</span>
+        <span class="badge badge-warn">⚠ ISP may block port 443</span>
+      </div>
+
+      <div class="steps">
+
+        <div class="step open">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div class="step-title">Add domain to Cloudflare (same as Option A Step 1)</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Go to cloudflare.com → Add a Site → Free plan. Replace your registrar's nameservers with the two nameservers Cloudflare gives you. Wait 10–30 minutes.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div class="step-title">Set up DDNS with ddclient</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">ddclient watches your home IP and updates your Cloudflare DNS record automatically when it changes.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>sudo apt update && sudo apt install ddclient -y
+<span class="comment"># Press Enter through the setup wizard — we'll configure manually</span>
+sudo nano /etc/ddclient.conf</pre>
+            <div class="step-desc">Paste this into the file. Get your API token from: Cloudflare dashboard → My Profile → API Tokens → Create Token → use "Edit zone DNS" template.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>protocol=cloudflare
+zone=yourdomain.com
+login=token
+password=YOUR_CLOUDFLARE_API_TOKEN
+ttl=120
+yourdomain.com</pre>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>sudo systemctl enable ddclient
+sudo systemctl start ddclient
+
+<span class="comment"># Test that it's working</span>
+sudo ddclient -daemon=0 -debug -verbose -noquiet</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">3</div>
+            <div class="step-title">Find your server's local IP</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">You need this for port forwarding. Look for something like <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">192.168.1.105</code></div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>ip a | grep inet</pre>
+            <div class="note">Set a DHCP reservation in your router settings so this IP never changes. Otherwise port forwarding breaks when the IP changes.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">4</div>
+            <div class="step-title">Set up port forwarding on your router</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Open <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">192.168.1.1</code> (or <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">192.168.0.1</code>) in your browser → login to router admin panel → find <strong>Port Forwarding</strong> (may be under Advanced / NAT / Virtual Server).</div>
+            <div class="step-desc">Add these two rules, pointing to your server's local IP:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>Name: HTTP  | External Port: 80  | Internal IP: 192.168.1.x | Port: 80  | Protocol: TCP
+Name: HTTPS | External Port: 443 | Internal IP: 192.168.1.x | Port: 443 | Protocol: TCP</pre>
+            <div class="note">If your ISP blocks ports 80/443 or you're behind CGNAT, this won't work. Use Cloudflare Tunnel (Option A) instead — it bypasses this entirely.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">5</div>
+            <div class="step-title">Install Docker</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+<span class="comment"># Log out and back in, then verify</span>
+docker --version</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">6</div>
+            <div class="step-title">Install Nginx Proxy Manager</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>mkdir ~/nginx-proxy-manager && cd ~/nginx-proxy-manager
+nano docker-compose.yml</pre>
+            <div class="step-desc">Paste this into the file:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>services:
+  app:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+      - 81:81
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt</pre>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>docker compose up -d</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">7</div>
+            <div class="step-title">Configure Nginx Proxy Manager</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Open <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">http://YOUR-SERVER-IP:81</code> in your browser.</div>
+            <div class="step-desc">Default login — you'll be asked to change these immediately:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>Email:    admin@example.com
+Password: changeme</pre>
+            <div class="step-desc">Then go to <strong>Proxy Hosts → Add Proxy Host</strong> and fill in:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>Domain Name:       immich.yourdomain.com
+Scheme:            http
+Forward Hostname:  localhost
+Forward Port:      2283
+Block Exploits:    ON (toggle)
+
+SSL tab:
+  → Request a new SSL certificate
+  → Force SSL: ON
+  → HTTP/2 Support: ON
+  → Enter your email → Save</pre>
+            <div class="step-desc">Repeat for each service (Nextcloud on port 8080, etc.). Let's Encrypt certificates are free and auto-renewing.</div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end traditional -->
+
+  </div><!-- end with-domain -->
+
+
+  <!-- ======================== WITHOUT DOMAIN ======================== -->
+  <div id="without-domain" class="tab-panel">
+
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="switchSub(this,'tailscale','without-domain')">Option 1 — Tailscale</button>
+      <button class="sub-tab" onclick="switchSub(this,'duckdns','without-domain')">Option 2 — DuckDNS</button>
+      <button class="sub-tab" onclick="switchSub(this,'cf-quick','without-domain')">Option 3 — CF Quick Tunnel</button>
+      <button class="sub-tab" onclick="switchSub(this,'ngrok','without-domain')">Option 4 — ngrok</button>
+    </div>
+
+    <!-- TAILSCALE -->
+    <div id="tailscale" class="sub-panel active">
+      <div class="flow">
+        <span class="flow-box">Your phone/laptop</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Tailscale VPN</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Home server</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Immich / Nextcloud</span>
+      </div>
+      <div class="badges">
+        <span class="badge badge-ok">✓ No domain needed</span>
+        <span class="badge badge-ok">✓ No port forwarding</span>
+        <span class="badge badge-ok">✓ Most secure option</span>
+        <span class="badge badge-ok">✓ Free for personal use</span>
+        <span class="badge badge-warn">⚠ Only your devices can access</span>
+      </div>
+
+      <div class="steps">
+
+        <div class="step open">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div class="step-title">Create a Tailscale account</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Go to <strong>tailscale.com</strong> → sign up for free. The free plan supports up to 3 users and 100 devices — more than enough for personal use.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div class="step-title">Install Tailscale on your server</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up</pre>
+            <div class="step-desc">It prints a URL — open it in your browser and authorize the device on your Tailscale account.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">3</div>
+            <div class="step-title">Install Tailscale on your other devices</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Download the Tailscale app on your phone or laptop:</div>
+            <div class="step-desc">→ iOS / Android: search "Tailscale" in the App Store / Play Store<br>→ Windows / Mac: download from tailscale.com/download</div>
+            <div class="step-desc">Login with the same account. All devices are now on the same private network — no matter where in the world they are.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">4</div>
+            <div class="step-title">Find your server's Tailscale IP</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>tailscale ip -4</pre>
+            <div class="step-desc">You get a permanent private IP like <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">100.64.x.x</code> — this never changes and is always reachable from your devices anywhere in the world.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">5</div>
+            <div class="step-title">Access your services</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">From any of your devices (with Tailscale connected), just open:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>http://100.64.x.x:2283    → Immich
+http://100.64.x.x:8080    → Nextcloud</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">6</div>
+            <div class="step-title">(Optional) Enable MagicDNS for nicer URLs</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">In Tailscale admin panel (login.tailscale.com) → DNS tab → Enable MagicDNS. Your server becomes reachable by its hostname instead of IP:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>http://ubuntu-server:2283   → Immich
+http://ubuntu-server:8080   → Nextcloud</pre>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end tailscale -->
+
+    <!-- DUCKDNS -->
+    <div id="duckdns" class="sub-panel">
+      <div class="flow">
+        <span class="flow-box">Browser</span><span class="flow-arrow">→</span>
+        <span class="flow-box">yourname.duckdns.org</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Home IP (auto-updated)</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Nginx Proxy Manager</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Your service</span>
+      </div>
+      <div class="badges">
+        <span class="badge badge-ok">✓ Free forever</span>
+        <span class="badge badge-ok">✓ Permanent URL</span>
+        <span class="badge badge-warn">⚠ URL looks less professional</span>
+        <span class="badge badge-warn">⚠ Needs port forwarding</span>
+      </div>
+
+      <div class="steps">
+
+        <div class="step open">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div class="step-title">Get a free DuckDNS subdomain</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Go to <strong>duckdns.org</strong> → login with Google/GitHub → pick a name. You get <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">yourname.duckdns.org</code> for free forever.</div>
+            <div class="step-desc">Copy your <strong>token</strong> from the dashboard — you'll need it in the next step.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div class="step-title">Set up auto IP updater on server</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">This cron job runs every 5 minutes and tells DuckDNS your current home IP.</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>crontab -e</pre>
+            <div class="step-desc">Add this line at the bottom (replace yourname and YOUR_TOKEN):</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>*/5 * * * * curl -s "https://www.duckdns.org/update?domains=yourname&token=YOUR_TOKEN&ip=" > /dev/null</pre>
+            <div class="step-desc">Save and exit. Test it works immediately:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>curl "https://www.duckdns.org/update?domains=yourname&token=YOUR_TOKEN&ip="</pre>
+            <div class="step-desc">You should see <code style="font-family:var(--mono);font-size:12px;color:var(--green)">OK</code> in the response.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">3</div>
+            <div class="step-title">Port forwarding on router</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Open <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">192.168.1.1</code> in browser → login → find Port Forwarding → add two rules pointing to your server's local IP:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>External Port 80  → Internal IP: 192.168.1.x  Port: 80  (TCP)
+External Port 443 → Internal IP: 192.168.1.x  Port: 443 (TCP)</pre>
+            <div class="note">If your ISP blocks ports or you're behind CGNAT, combine DuckDNS with Cloudflare Tunnel instead of port forwarding.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">4</div>
+            <div class="step-title">Install Docker + Nginx Proxy Manager</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+mkdir ~/nginx-proxy-manager && cd ~/nginx-proxy-manager
+nano docker-compose.yml</pre>
+            <div class="step-desc">Paste this into the file:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>services:
+  app:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+      - 81:81
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt</pre>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>docker compose up -d</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">5</div>
+            <div class="step-title">Add proxy hosts in Nginx Proxy Manager</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Open <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">http://YOUR-SERVER-IP:81</code> → login (admin@example.com / changeme) → Proxy Hosts → Add Proxy Host:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>Domain:           immich.yourname.duckdns.org
+Scheme:           http
+Forward Hostname: localhost
+Forward Port:     2283
+
+SSL tab → Request new certificate → Force SSL ON</pre>
+            <div class="step-desc">Repeat for Nextcloud using <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">nextcloud.yourname.duckdns.org</code> on port 8080.</div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end duckdns -->
+
+    <!-- CF QUICK TUNNEL -->
+    <div id="cf-quick" class="sub-panel">
+      <div class="flow">
+        <span class="flow-box">Browser</span><span class="flow-arrow">→</span>
+        <span class="flow-box">random.trycloudflare.com</span><span class="flow-arrow">→</span>
+        <span class="flow-box">cloudflared</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Your service</span>
+      </div>
+      <div class="badges">
+        <span class="badge badge-ok">✓ Zero setup</span>
+        <span class="badge badge-ok">✓ Works instantly</span>
+        <span class="badge badge-warn">⚠ URL changes every restart</span>
+        <span class="badge badge-warn">⚠ Testing only — not permanent</span>
+      </div>
+
+      <div class="steps">
+
+        <div class="step open">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div class="step-title">Install cloudflared</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+sudo dpkg -i cloudflared.deb</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div class="step-title">Run a quick tunnel</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">No account needed. Just point it at any local port:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>cloudflared tunnel --url http://localhost:2283</pre>
+            <div class="step-desc">Within a few seconds you'll see a random HTTPS URL like:</div>
+            <pre>https://banana-coffee-random123.trycloudflare.com</pre>
+            <div class="step-desc">Share this URL with anyone — they can access your service immediately. The tunnel stays alive as long as this command is running. Stop it with <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">Ctrl+C</code>.</div>
+            <div class="note">The URL is completely random and changes every time you restart. Not suitable for permanent use — upgrade to Option A (Cloudflare Tunnel with domain) for that.</div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end cf-quick -->
+
+    <!-- NGROK -->
+    <div id="ngrok" class="sub-panel">
+      <div class="flow">
+        <span class="flow-box">Browser</span><span class="flow-arrow">→</span>
+        <span class="flow-box">abc123.ngrok.io</span><span class="flow-arrow">→</span>
+        <span class="flow-box">ngrok agent</span><span class="flow-arrow">→</span>
+        <span class="flow-box">Your service</span>
+      </div>
+      <div class="badges">
+        <span class="badge badge-ok">✓ Popular for dev/testing</span>
+        <span class="badge badge-ok">✓ Nice web dashboard</span>
+        <span class="badge badge-warn">⚠ URL changes on free plan</span>
+        <span class="badge badge-warn">⚠ 1 tunnel at a time (free)</span>
+      </div>
+
+      <div class="steps">
+
+        <div class="step open">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div class="step-title">Create an ngrok account</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Go to <strong>ngrok.com</strong> → sign up for free → copy your <strong>authtoken</strong> from the dashboard.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div class="step-title">Install ngrok</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+  | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc > /dev/null
+
+echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+  | sudo tee /etc/apt/sources.list.d/ngrok.list
+
+sudo apt update && sudo apt install ngrok</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">3</div>
+            <div class="step-title">Add your authtoken</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>ngrok config add-authtoken YOUR_TOKEN_HERE</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">4</div>
+            <div class="step-title">Start a tunnel</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>ngrok http 2283</pre>
+            <div class="step-desc">You'll get a URL like <code style="font-family:var(--mono);font-size:12px;color:#c9d1e8">https://abc123.ngrok.io</code> pointing to your Immich. The ngrok terminal shows live traffic stats.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">5</div>
+            <div class="step-title">Multiple services with a config file</div>
+            <span class="step-chevron">▼</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Create a config to run multiple tunnels at once:</div>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>nano ~/.config/ngrok/ngrok.yml</pre>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>version: "2"
+authtoken: YOUR_TOKEN_HERE
+tunnels:
+  immich:
+    proto: http
+    addr: 2283
+  nextcloud:
+    proto: http
+    addr: 8080</pre>
+            <pre><button class="copy-btn" onclick="copyCode(this)">copy</button>ngrok start --all</pre>
+            <div class="note">Free plan only supports 1 tunnel at a time. You need a paid plan for running multiple tunnels simultaneously.</div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end ngrok -->
+
+  </div><!-- end without-domain -->
+
+</div><!-- end page -->
+
+<script>
+  function switchTop(btn, id) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.top-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  function switchSub(btn, id, parentId) {
+    const parent = document.getElementById(parentId);
+    parent.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+    parent.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  function toggleStep(header) {
+    const step = header.parentElement;
+    step.classList.toggle('open');
+  }
+
+  function copyCode(btn) {
+    const pre = btn.parentElement;
+    const text = pre.innerText.replace('copy','').replace('copied','').trim();
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    });
+  }
+</script>
+</body>
+</html>

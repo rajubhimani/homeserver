@@ -3,11 +3,12 @@ services:
     image: jc21/nginx-proxy-manager:latest
     container_name: nginx-proxy-manager
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "81:81"
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt
-      - /var/lib/tailscale/certs:/tailscale-certs:ro
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

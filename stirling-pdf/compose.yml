@@ -1,0 +1,15 @@
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: stirling-pdf
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${DATA_ROOT}/stirling-pdf/configs:/configs
+      - ${DATA_ROOT}/stirling-pdf/logs:/logs
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

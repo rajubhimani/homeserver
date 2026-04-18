@@ -1,0 +1,13 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - ${DATA_ROOT}/uptime-kuma:/app/data
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

@@ -1,0 +1,4 @@
+services:
+  stirling-pdf:
+    ports:
+      - "8089:8080"
