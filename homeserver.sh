@@ -17,7 +17,17 @@
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-ALL_SERVICES="nginx nextcloud immich landing jellyfin vaultwarden paperless stirling-pdf mealie gitea uptime-kuma dozzle"
+# Startup order — sequential, infrastructure first, monitoring last
+SERVICES_UP="dozzle nginx landing nextcloud vaultwarden gitea immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma"
+
+# Shutdown order — reverse
+SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich gitea vaultwarden nextcloud landing nginx dozzle"
+
+# Extra services — valid but not in default 'all' list (start manually)
+SERVICES_EXTRA="stirling-pdf"
+
+# Timeout in seconds to wait for a service to become healthy
+HEALTH_TIMEOUT=180
 
 # Colors
 GREEN="\033[0;32m"
@@ -38,13 +48,12 @@ base_file() {
 }
 
 is_valid_service() {
-  for s in $ALL_SERVICES; do
+  for s in $SERVICES_UP $SERVICES_EXTRA; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
 }
 
-# Build -f flags: base + env overlay
 compose_files() {
   service=$1
   env=$2
@@ -55,7 +64,6 @@ compose_files() {
   echo "$files"
 }
 
-# Build -f flags for down: base + all overlays to ensure full cleanup
 compose_files_all() {
   service=$1
   dir="$BASE_DIR/$service"
@@ -65,6 +73,51 @@ compose_files_all() {
     [ -f "$dir/compose.${e}.yml" ] && files="$files -f $dir/compose.${e}.yml"
   done
   echo "$files"
+}
+
+# Wait for a service to become healthy or running
+# Returns 0 on success, 1 on failure/timeout
+wait_healthy() {
+  service=$1
+  elapsed=0
+  interval=5
+
+  # get the main container name for this service
+  container=$(docker ps -a --format "{{.Names}}" | grep "^${service}$" | head -1)
+  if [ -z "$container" ]; then
+    # try common naming patterns
+    container=$(docker ps -a --format "{{.Names}}" | grep "^${service}-" | grep -v "db\|redis\|worker" | head -1)
+  fi
+  [ -z "$container" ] && container="$service"
+
+  printf "  ${CYAN}waiting for %s to be ready..." "$service"
+
+  while [ $elapsed -lt $HEALTH_TIMEOUT ]; do
+    status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
+    health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null)
+
+    if [ "$health" = "healthy" ]; then
+      printf " ready (${elapsed}s)${RESET}\n"
+      return 0
+    elif [ "$health" = "none" ] && [ "$status" = "running" ]; then
+      printf " ready (${elapsed}s)${RESET}\n"
+      return 0
+    elif [ "$status" = "exited" ] || [ "$status" = "dead" ]; then
+      printf " exited${RESET}\n"
+      return 1
+    elif [ "$status" = "created" ]; then
+      printf " dependency failed${RESET}\n"
+      return 1
+    fi
+    # unhealthy = keep waiting; some services temporarily fail checks during boot
+
+    sleep $interval
+    elapsed=$((elapsed + interval))
+    printf "."
+  done
+
+  printf " timeout after ${HEALTH_TIMEOUT}s${RESET}\n"
+  return 1
 }
 
 do_up() {
@@ -82,17 +135,20 @@ do_up() {
 
   if [ -n "$profile" ]; then
     info "Starting $service ($env) --profile $profile..."
-    docker compose $files --profile "$profile" up -d
+    compose_out=$(docker compose $files --profile "$profile" up -d 2>&1)
   else
     info "Starting $service ($env)..."
-    docker compose $files up -d
+    compose_out=$(docker compose $files up -d 2>&1)
+  fi
+  compose_rc=$?
+  printf "%s\n" "$compose_out" | tail -3
+
+  if [ $compose_rc -ne 0 ]; then
+    return 1
   fi
 
-  if [ $? -eq 0 ]; then
-    success "$service started"
-  else
-    error "$service failed to start"
-  fi
+  wait_healthy "$service"
+  return $?
 }
 
 do_down() {
@@ -113,7 +169,6 @@ do_down() {
     docker compose $files --profile "$profile" down
   else
     info "Stopping $service..."
-    # always include all profiles on full down so nothing is left behind
     docker compose $files --profile ml down 2>/dev/null || docker compose $files down
   fi
 
@@ -146,19 +201,22 @@ show_help() {
   printf "    prod   ports on 127.0.0.1 only (nginx proxy handles external)\n"
   printf "\n"
   printf "  ${BOLD}Examples:${RESET}\n"
-  printf "    ./homeserver.sh dev up all                      start all (dev)\n"
-  printf "    ./homeserver.sh prod up all                     start all (prod)\n"
+  printf "    ./homeserver.sh dev up all                      start all sequentially (dev)\n"
+  printf "    ./homeserver.sh prod up all                     start all sequentially (prod)\n"
   printf "    ./homeserver.sh dev up landing mealie           start specific services\n"
-  printf "    ./homeserver.sh prod up nextcloud immich        start multiple\n"
-  printf "    ./homeserver.sh dev down all                    stop all\n"
+  printf "    ./homeserver.sh dev down all                    stop all (reverse order)\n"
   printf "    ./homeserver.sh dev down landing mealie         stop specific\n"
   printf "    ./homeserver.sh dev up immich --profile ml      add ML to running immich\n"
   printf "    ./homeserver.sh dev down immich --profile ml    remove only ML\n"
-  printf "    ./homeserver.sh dev down immich                 stop immich + ML\n"
   printf "    ./homeserver.sh dev logs immich                 follow logs\n"
   printf "\n"
-  printf "  ${BOLD}Services:${RESET}\n"
-  printf "    %s\n" "$ALL_SERVICES" | fold -s -w 60 | sed 's/^/    /'
+  printf "  ${BOLD}Startup order (all):${RESET}\n"
+  printf "    %s\n" "$SERVICES_UP"
+  printf "\n"
+  printf "  ${BOLD}Manual-only services (not in all):${RESET}\n"
+  printf "    %s\n" "$SERVICES_EXTRA"
+  printf "\n"
+  printf "  ${BOLD}Health timeout:${RESET} ${HEALTH_TIMEOUT}s per service\n"
   printf "\n"
 }
 
@@ -173,7 +231,6 @@ ENV="$1"
 ACTION="$2"
 shift 2
 
-# validate env
 case "$ENV" in
   dev|prod) ;;
   help|--help|-h) show_help; exit 0 ;;
@@ -184,7 +241,6 @@ case "$ENV" in
     ;;
 esac
 
-# validate action
 case "$ACTION" in
   up|down|logs) ;;
   *)
@@ -194,9 +250,9 @@ case "$ACTION" in
     ;;
 esac
 
-# collect services and optional --profile from remaining args
 SERVICES_TO_RUN=""
 PROFILE=""
+RUN_ALL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -209,7 +265,7 @@ while [ $# -gt 0 ]; do
       PROFILE="$1"
       ;;
     all)
-      SERVICES_TO_RUN="$ALL_SERVICES"
+      RUN_ALL=1
       ;;
     *)
       if is_valid_service "$1"; then
@@ -224,7 +280,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ -z "$SERVICES_TO_RUN" ]; then
+if [ $RUN_ALL -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
   error "No services specified"
   show_help
   exit 1
@@ -235,23 +291,60 @@ fi
 case "$ACTION" in
   up)
     header "Starting services in $ENV mode..."
-    for service in $SERVICES_TO_RUN; do
+
+    # pick ordered list or custom list
+    if [ $RUN_ALL -eq 1 ]; then
+      list="$SERVICES_UP"
+    else
+      list="$SERVICES_TO_RUN"
+    fi
+
+    FAILED=""
+    for service in $list; do
       do_up "$service" "$ENV" "$PROFILE"
+      if [ $? -ne 0 ]; then
+        error "$service FAILED"
+        FAILED="$FAILED $service"
+      else
+        success "$service started"
+      fi
+      printf "\n"
     done
-    printf "\n"
-    success "Done"
+
+    # summary
+    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+    if [ -z "$FAILED" ]; then
+      success "All services started successfully"
+    else
+      warn "Completed with failures:"
+      for f in $FAILED; do
+        error "  $f"
+      done
+      printf "\n  Run ${CYAN}sh homeserver.sh $ENV logs <service>${RESET} to investigate\n"
+    fi
+    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n\n"
     ;;
+
   down)
     header "Stopping services..."
-    for service in $SERVICES_TO_RUN; do
+
+    if [ $RUN_ALL -eq 1 ]; then
+      list="$SERVICES_DOWN"
+    else
+      list="$SERVICES_TO_RUN"
+    fi
+
+    for service in $list; do
       do_down "$service" "$ENV" "$PROFILE"
     done
+
     printf "\n"
     success "Done"
     ;;
+
   logs)
-    # logs only makes sense for one service
     service=$(echo "$SERVICES_TO_RUN" | awk '{print $1}')
+    [ $RUN_ALL -eq 1 ] && service=$(echo "$SERVICES_UP" | awk '{print $1}')
     do_logs "$service" "$ENV"
     ;;
 esac

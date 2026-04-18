@@ -1,0 +1,15 @@
+services:
+  stirling-pdf-lite:
+    image: stirlingtools/stirling-pdf:latest-ultra-lite
+    container_name: stirling-pdf-lite
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${DATA_ROOT}/stirling-pdf-lite/configs:/configs
+      - ${DATA_ROOT}/stirling-pdf-lite/logs:/logs
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true
