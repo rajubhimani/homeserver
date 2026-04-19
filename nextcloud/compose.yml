@@ -34,7 +34,11 @@ services:
       NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
       NEXTCLOUD_TRUSTED_PROXIES: nginx-proxy-manager
     volumes:
-      - ${DATA_ROOT}/nextcloud:/var/www/html/data
+      - ${DATA_ROOT}/nextcloud/config:/var/www/html/config
+      - ${DATA_ROOT}/nextcloud/data:/var/www/html/data
+      - ${DATA_ROOT}/nextcloud/custom_apps:/var/www/html/custom_apps
+      - ${DATA_ROOT}/nextcloud/version.php:/var/www/html/version.php
+      - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
       - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
       nextcloud-db:

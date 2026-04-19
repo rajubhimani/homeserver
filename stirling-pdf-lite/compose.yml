@@ -4,9 +4,16 @@ services:
     container_name: stirling-pdf-lite
     restart: unless-stopped
     env_file: .env
+    environment:
+      DISABLE_ADDITIONAL_FEATURES: "false"
+      SECURITY_ENABLELOGIN: "true"
+      SECURITY_INITIALLOGIN_USERNAME: ${STIRLING_ADMIN_USER}
+      SECURITY_INITIALLOGIN_PASSWORD: ${STIRLING_ADMIN_PASSWORD}
     volumes:
       - ${DATA_ROOT}/stirling-pdf-lite/configs:/configs
       - ${DATA_ROOT}/stirling-pdf-lite/logs:/logs
+      - ${DATA_ROOT}/stirling-pdf-lite/customFiles:/customFiles
+      - ${DATA_ROOT}/stirling-pdf-lite/pipeline:/pipeline
     networks:
       - homeserver
 

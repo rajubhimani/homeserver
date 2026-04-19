@@ -7,6 +7,9 @@ services:
     volumes:
       - ${DATA_ROOT}/stirling-pdf/configs:/configs
       - ${DATA_ROOT}/stirling-pdf/logs:/logs
+      - ${DATA_ROOT}/stirling-pdf/customFiles:/customFiles
+      - ${DATA_ROOT}/stirling-pdf/pipeline:/pipeline
+      - ${DATA_ROOT}/stirling-pdf/tessdata:/usr/share/tessdata
     networks:
       - homeserver
 

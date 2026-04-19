@@ -49,11 +49,12 @@ services:
       PAPERLESS_TIME_ZONE: ${TZ}
       PAPERLESS_TASK_WORKERS: ${PAPERLESS_TASK_WORKERS}
       PAPERLESS_THREADS_PER_WORKER: ${PAPERLESS_THREADS_PER_WORKER}
+      PAPERLESS_DATA_DIR: /paperless/data
+      PAPERLESS_MEDIA_ROOT: /paperless/media
+      PAPERLESS_CONSUMPTION_DIR: /paperless/consume
+      PAPERLESS_EXPORT_DIR: /paperless/export
     volumes:
-      - ${DATA_ROOT}/paperless/data:/usr/src/paperless/data
-      - ${DATA_ROOT}/paperless/media:/usr/src/paperless/media
-      - ${DATA_ROOT}/paperless/export:/usr/src/paperless/export
-      - ${DATA_ROOT}/paperless/consume:/usr/src/paperless/consume
+      - ${DATA_ROOT}/paperless:/paperless
     depends_on:
       paperless-db:
         condition: service_healthy

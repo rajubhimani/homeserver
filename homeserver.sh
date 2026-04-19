@@ -23,6 +23,9 @@ SERVICES_UP="dozzle nginx landing nextcloud vaultwarden gitea immich jellyfin pa
 # Shutdown order — reverse
 SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich gitea vaultwarden nextcloud landing nginx dozzle"
 
+# Core group — infrastructure-only subset
+SERVICES_CORE="dozzle nginx landing nextcloud"
+
 # Extra services — valid but not in default 'all' list (start manually)
 SERVICES_EXTRA="stirling-pdf"
 
@@ -217,6 +220,8 @@ show_help() {
   printf "  ${BOLD}Examples:${RESET}\n"
   printf "    ./homeserver.sh dev up all                      start all sequentially (dev)\n"
   printf "    ./homeserver.sh prod up all                     start all sequentially (prod)\n"
+  printf "    ./homeserver.sh dev up core                     start core only (dozzle nginx landing nextcloud)\n"
+  printf "    ./homeserver.sh dev down core                   stop core (reverse order)\n"
   printf "    ./homeserver.sh dev up landing mealie           start specific services\n"
   printf "    ./homeserver.sh dev down all                    stop all (reverse order)\n"
   printf "    ./homeserver.sh dev down landing mealie         stop specific\n"
@@ -267,6 +272,7 @@ esac
 SERVICES_TO_RUN=""
 PROFILE=""
 RUN_ALL=0
+RUN_CORE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -281,6 +287,9 @@ while [ $# -gt 0 ]; do
     all)
       RUN_ALL=1
       ;;
+    core)
+      RUN_CORE=1
+      ;;
     *)
       if is_valid_service "$1"; then
         SERVICES_TO_RUN="$SERVICES_TO_RUN $1"
@@ -294,7 +303,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ $RUN_ALL -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
+if [ $RUN_ALL -eq 0 ] && [ $RUN_CORE -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
   error "No services specified"
   show_help
   exit 1
@@ -309,6 +318,8 @@ case "$ACTION" in
     # pick ordered list or custom list
     if [ $RUN_ALL -eq 1 ]; then
       list="$SERVICES_UP"
+    elif [ $RUN_CORE -eq 1 ]; then
+      list="$SERVICES_CORE"
     else
       list="$SERVICES_TO_RUN"
     fi
@@ -344,6 +355,8 @@ case "$ACTION" in
 
     if [ $RUN_ALL -eq 1 ]; then
       list="$SERVICES_DOWN"
+    elif [ $RUN_CORE -eq 1 ]; then
+      list="$(echo "$SERVICES_CORE" | tr ' ' '\n' | tac | tr '\n' ' ')"
     else
       list="$SERVICES_TO_RUN"
     fi
