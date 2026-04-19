@@ -85,6 +85,11 @@ Cloudflare handles TLS termination. Traffic from the tunnel to NPM is plain HTTP
 │   ├── compose.dev.yml
 │   ├── compose.prod.yml
 │   └── .env
+├── stirling-pdf-lite/
+│   ├── compose.yml
+│   ├── compose.dev.yml
+│   ├── compose.prod.yml
+│   └── .env
 ├── mealie/
 │   ├── compose.yml
 │   ├── compose.dev.yml
@@ -148,6 +153,7 @@ Data drive:
 | [08](docs/08-maintenance.md) | Maintenance | Updates, troubleshooting, quick reference |
 | [09](docs/09-firewall.md) | Firewall | UFW rules + compose port bindings per path |
 | [10](docs/10-new-services.md) | New Services | Jellyfin, Vaultwarden, Paperless, and more |
+| [11](docs/11-services-reference.md) | Services Reference | All services, ports, NPM proxy config, notes |
 
 ---
 

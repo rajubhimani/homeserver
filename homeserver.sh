@@ -309,10 +309,21 @@ if [ $RUN_ALL -eq 0 ] && [ $RUN_CORE -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
   exit 1
 fi
 
+# ── Pre-flight checks ─────────────────────────────────────────────
+
+ensure_network() {
+  if ! docker network inspect homeserver >/dev/null 2>&1; then
+    warn "Docker network 'homeserver' not found — creating..."
+    docker network create homeserver >/dev/null
+    success "Network 'homeserver' created"
+  fi
+}
+
 # ── Execute ───────────────────────────────────────────────────────
 
 case "$ACTION" in
   up)
+    ensure_network
     header "Starting services in $ENV mode..."
 
     # pick ordered list or custom list

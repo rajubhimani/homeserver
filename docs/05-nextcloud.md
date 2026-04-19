@@ -70,6 +70,23 @@ Login with your admin credentials.
 
 ---
 
+## Volume Notes
+
+Nextcloud uses **partial volume mounts** (not the full `/var/www/html`):
+
+| Host path | Container path | Purpose |
+| --- | --- | --- |
+| `data/nextcloud/config` | `/var/www/html/config` | Config including `config.php` |
+| `data/nextcloud/data` | `/var/www/html/data` | User files |
+| `data/nextcloud/custom_apps` | `/var/www/html/custom_apps` | User-installed apps |
+| `data/nextcloud/version.php` | `/var/www/html/version.php` | Prevents false "new instance" detection on restart |
+
+A `before-starting` hook (`nextcloud/hooks/before-starting/00-sync-php.sh`) runs rsync on every startup to populate the PHP files from the image into the container.
+
+> **Why not mount the full `/var/www/html`?** Docker's seccomp profile blocks `lchown` on symlinks. Nextcloud's rsync tries to chown `.map.license` symlinks, fails, and crash-loops. Partial mounts avoid this entirely.
+
+---
+
 ## Enable External Storage
 
 ```text

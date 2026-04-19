@@ -33,7 +33,7 @@ MEDIA_ROOT=/mnt/seagate/media
 ```
 
 ```bash
-./homeserver.sh jellyfin dev
+sh homeserver.sh dev up jellyfin
 ```
 
 Open `http://<ip>:8096` — complete the setup wizard on first launch.
@@ -59,7 +59,7 @@ ADMIN_TOKEN=<openssl rand -base64 48>
 ```
 
 ```bash
-./homeserver.sh vaultwarden dev
+sh homeserver.sh dev up vaultwarden
 ```
 
 **Onboarding users (no SMTP needed):**
@@ -98,24 +98,62 @@ PAPERLESS_ADMIN_PASSWORD=your_strong_password
 ```
 
 ```bash
-./homeserver.sh paperless dev
+sh homeserver.sh dev up paperless
 ```
 
 Admin account is created automatically from `PAPERLESS_ADMIN_USER` / `PAPERLESS_ADMIN_PASSWORD` on first start.
 
 ---
 
-## Stirling PDF
+## Stirling PDF Lite
 
-**Purpose:** PDF toolkit — merge, split, compress, convert, OCR.  
+**Purpose:** Lightweight PDF toolkit — always on, default endpoint.  
+**Port:** `8090`  
+**Image:** `stirlingtools/stirling-pdf:latest-ultra-lite` (~200MB)  
+**Data:** `${DATA_ROOT}/stirling-pdf-lite/`
+
+```bash
+cd ~/homeserver/stirling-pdf-lite
+cp .env.example .env
+# edit .env — set password
+```
+
+```env
+DATA_ROOT=../data
+STIRLING_ADMIN_USER=admin
+STIRLING_ADMIN_PASSWORD=your_strong_password
+```
+
+```bash
+sh homeserver.sh dev up stirling-pdf-lite
+```
+
+Authentication is handled via **NPM Access List** (not app-level login):
+1. NPM → Access Lists → Add → set username/password + `Allow 0.0.0.0/0`
+2. NPM → Proxy Hosts → `stirling-pdf-lite.yourdomain.com` → Access List → select it
+
+> The ultra-lite image does not include built-in auth. NPM access list is the recommended approach.
+
+---
+
+## Stirling PDF (Full)
+
+**Purpose:** Full PDF toolkit with OCR, LibreOffice conversion — manual start only (heavy).  
 **Port:** `8089`  
+**Image:** `stirlingtools/stirling-pdf:latest` (~1.5GB)  
 **Data:** `${DATA_ROOT}/stirling-pdf/`
+
+> Not in `all` — start manually when needed, stop when done.
+
+```bash
+sh homeserver.sh dev up stirling-pdf
+sh homeserver.sh dev down stirling-pdf
+```
 
 ```bash
 cd ~/homeserver/stirling-pdf
 cp .env.example .env
 # set DATA_ROOT
-./homeserver.sh stirling-pdf dev
 ```
 
 No login required by default. All processing is local.
@@ -125,7 +163,7 @@ No login required by default. All processing is local.
 ## Mealie
 
 **Purpose:** Recipe manager and meal planner.  
-**Port:** `9925`  
+**Port:** `9000`  
 **Data:** `${DATA_ROOT}/mealie/`  
 **Depends on:** Postgres (included in compose)
 
@@ -140,11 +178,11 @@ DATA_ROOT=/mnt/seagate
 POSTGRES_DB=mealie
 POSTGRES_USER=mealie
 POSTGRES_PASSWORD=your_strong_password
-MEALIE_BASE_URL=http://192.168.1.100:9925
+MEALIE_BASE_URL=http://192.168.1.100:9000
 ```
 
 ```bash
-./homeserver.sh mealie dev
+sh homeserver.sh dev up mealie
 ```
 
 Default login: `changeme@example.com` / `MyPassword` — change immediately after first login.
@@ -174,7 +212,7 @@ GITEA_ROOT_URL=https://gitea.yourdomain.com
 ```
 
 ```bash
-./homeserver.sh gitea dev
+sh homeserver.sh dev up gitea
 ```
 
 Complete the setup wizard on first visit. Create admin account via the web installer.
@@ -191,7 +229,7 @@ Complete the setup wizard on first visit. Create admin account via the web insta
 cd ~/homeserver/uptime-kuma
 cp .env.example .env
 # set DATA_ROOT
-./homeserver.sh uptime-kuma dev
+sh homeserver.sh dev up uptime-kuma
 ```
 
 Create admin account on first visit. Add monitors for each service URL.
@@ -205,7 +243,7 @@ Create admin account on first visit. Add monitors for each service URL.
 **Access:** Read-only Docker socket mount — no `.env` needed.
 
 ```bash
-./homeserver.sh dozzle dev
+sh homeserver.sh dev up dozzle
 ```
 
 Open `http://<ip>:9999` — all running containers are listed immediately. No login by default.
@@ -214,20 +252,7 @@ Open `http://<ip>:9999` — all running containers are listed immediately. No lo
 
 ## NPM Proxy Hosts
 
-Add these in Nginx Proxy Manager for production (Cloudflare) access:
-
-| Domain | Forward Hostname | Forward Port |
-| --- | --- | --- |
-| `jellyfin.yourdomain.com` | `jellyfin` | `8096` |
-| `vaultwarden.yourdomain.com` | `vaultwarden` | `80` |
-| `paperless.yourdomain.com` | `paperless` | `8000` |
-| `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` |
-| `mealie.yourdomain.com` | `mealie` | `9000` |
-| `gitea.yourdomain.com` | `gitea` | `3000` |
-| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` |
-| `dozzle.yourdomain.com` | `dozzle` | `8080` |
-
-> Forward hostname is the Docker **container name**. NPM resolves it via the shared `homeserver` network.
+→ See [11 — Services Reference](11-services-reference.md) for the full NPM proxy host table and per-service notes.
 
 ---
 

@@ -9,25 +9,37 @@
 All services are managed via `homeserver.sh` in the repo root.
 
 ```bash
-# start all services (dev by default)
-./homeserver.sh
+# Usage: sh homeserver.sh <env> <up|down|logs> <service|all|core> [--profile <name>]
 
-# start all — prod mode (ports on 127.0.0.1 only, nginx proxies)
-./homeserver.sh all prod
+# Start all services (sequential, infrastructure first)
+sh homeserver.sh dev up all
+sh homeserver.sh prod up all
 
-# start a single service
-./homeserver.sh jellyfin
-./homeserver.sh jellyfin prod
+# Start core only (dozzle, nginx, landing, nextcloud)
+sh homeserver.sh dev up core
+sh homeserver.sh dev down core
 
-# stop all
-./homeserver.sh down
+# Start / stop specific services
+sh homeserver.sh dev up jellyfin
+sh homeserver.sh dev down mealie
+sh homeserver.sh dev up landing nextcloud
 
-# stop one service
-./homeserver.sh down mealie
+# Stop all (reverse order)
+sh homeserver.sh dev down all
 
-# follow logs
-./homeserver.sh logs immich
+# Follow logs
+sh homeserver.sh dev logs immich
+
+# Immich with ML profile
+sh homeserver.sh dev up immich --profile ml
+sh homeserver.sh dev down immich --profile ml
+
+# Manual-only services (not in 'all')
+sh homeserver.sh dev up stirling-pdf
+sh homeserver.sh dev down stirling-pdf
 ```
+
+> The shared `homeserver` Docker network is created automatically if missing on every `up` command.
 
 ---
 
@@ -141,7 +153,7 @@ docker --context homeserver ps  # one-off without switching
 | Problem | Fix |
 | --- | --- |
 | Container not starting | `./homeserver.sh <service> dev` |
-| `network homeserver not found` | `docker network create homeserver` |
+| `network homeserver not found` | `homeserver.sh` auto-creates it — or run `docker network create homeserver` manually |
 | Data drive not mounted | `sudo mount -a` |
 | Tunnel not routing | `sudo systemctl restart cloudflared` → `journalctl -u cloudflared -f` |
 | Nextcloud DB permission error | `docker compose down && rm -rf /mnt/seagate/postgres-nextcloud/* && docker compose up -d` |
@@ -168,42 +180,5 @@ docker --context homeserver ps  # one-off without switching
 
 ---
 
-## Quick Reference
-
-```bash
-# create shared network (one-time)
-docker network create homeserver
-
-# start/stop all
-./homeserver.sh all dev
-./homeserver.sh all prod
-./homeserver.sh down
-
-# start/stop one service
-./homeserver.sh jellyfin dev
-./homeserver.sh down jellyfin
-
-# follow logs
-./homeserver.sh logs nextcloud
-./homeserver.sh logs immich
-
-# check env vars inside container
-docker exec nextcloud env | grep POSTGRES
-docker exec immich-server env | grep DB_URL
-
-# immich with ML
-cd ~/homeserver/immich && docker compose --profile ml up -d
-
-# tunnel (Cloudflare path)
-sudo systemctl status cloudflared
-sudo systemctl restart cloudflared
-
-# remote context (Mac → server)
-docker context use homeserver
-docker context use default
-docker context ls
-```
-
----
 
 [← Landing Page](07-landing.md) | [Home](../setup.md)
