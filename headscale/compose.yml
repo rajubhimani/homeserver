@@ -1,0 +1,22 @@
+services:
+  headscale:
+    image: headscale/headscale:latest
+    container_name: headscale
+    restart: unless-stopped
+    command: serve
+    volumes:
+      - ./config:/etc/headscale
+      - ${DATA_ROOT}/headscale:/var/lib/headscale
+    networks:
+      - homeserver
+
+  headscale-admin:
+    image: goodieshq/headscale-admin:latest
+    container_name: headscale-admin
+    restart: unless-stopped
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

@@ -1,0 +1,4 @@
+services:
+  dockge:
+    ports:
+      - "5001:5001/tcp"

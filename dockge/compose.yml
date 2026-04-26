@@ -1,0 +1,22 @@
+services:
+  dockge:
+    image: louislam/dockge:latest
+    container_name: dockge
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DOCKGE_STACKS_DIR: ${DOCKGE_STACKS_DIR}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DATA_ROOT}/dockge:/app/data
+      # Dockge requires the stacks path to be identical inside and outside the
+      # container — it uses the host path directly when running compose commands.
+      # DOCKGE_STACKS_DIR must be an absolute path; relative paths will break it.
+      # Set DOCKGE_STACKS_DIR in .env and create the directory before starting.
+      - ${DOCKGE_STACKS_DIR}:${DOCKGE_STACKS_DIR}
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

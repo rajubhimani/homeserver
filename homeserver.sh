@@ -2,7 +2,7 @@
 # homeserver.sh — manage all homeserver services
 #
 # Usage:
-#   ./homeserver.sh <env> <up|down|logs> <service|all> [service2 ...] [--profile <name>]
+#   ./homeserver.sh <env> <up|down|logs|update> <service|all> [service2 ...] [--profile <name>]
 #
 # Examples:
 #   ./homeserver.sh dev up all
@@ -27,7 +27,7 @@ SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jelly
 SERVICES_CORE="dozzle nginx landing nextcloud"
 
 # Extra services — valid but not in default 'all' list (start manually)
-SERVICES_EXTRA="stirling-pdf"
+SERVICES_EXTRA="stirling-pdf wg-easy headscale openvpn portainer dockge"
 
 # Timeout in seconds to wait for a service to become healthy
 HEALTH_TIMEOUT=180
@@ -192,6 +192,33 @@ do_down() {
   success "$service stopped"
 }
 
+do_update() {
+  service=$1
+  env=$2
+  dir="$BASE_DIR/$service"
+
+  if [ ! -d "$dir" ]; then
+    error "Service '$service' not found"
+    return 1
+  fi
+
+  files=$(compose_files "$service" "$env")
+
+  info "Pulling latest images for $service..."
+  docker compose $files pull
+  pull_rc=$?
+  [ $pull_rc -ne 0 ] && warn "Pull had issues for $service — continuing with recreate anyway"
+
+  info "Recreating $service ($env)..."
+  compose_out=$(docker compose $files up -d --force-recreate 2>&1)
+  compose_rc=$?
+  printf "%s\n" "$compose_out" | tail -3
+  [ $compose_rc -ne 0 ] && return 1
+
+  wait_healthy "$service"
+  return $?
+}
+
 do_logs() {
   service=$1
   env=$2
@@ -228,6 +255,8 @@ show_help() {
   printf "    ./homeserver.sh dev up immich --profile ml      add ML to running immich\n"
   printf "    ./homeserver.sh dev down immich --profile ml    remove only ML\n"
   printf "    ./homeserver.sh dev logs immich                 follow logs\n"
+  printf "    ./homeserver.sh dev update all                  pull latest images and recreate all\n"
+  printf "    ./homeserver.sh dev update jellyfin             pull and update a single service\n"
   printf "\n"
   printf "  ${BOLD}Startup order (all):${RESET}\n"
   printf "    %s\n" "$SERVICES_UP"
@@ -261,9 +290,9 @@ case "$ENV" in
 esac
 
 case "$ACTION" in
-  up|down|logs) ;;
+  up|down|logs|update) ;;
   *)
-    error "Unknown action '$ACTION' — use up, down, or logs"
+    error "Unknown action '$ACTION' — use up, down, logs, or update"
     show_help
     exit 1
     ;;
@@ -384,5 +413,42 @@ case "$ACTION" in
     service=$(echo "$SERVICES_TO_RUN" | awk '{print $1}')
     [ $RUN_ALL -eq 1 ] && service=$(echo "$SERVICES_UP" | awk '{print $1}')
     do_logs "$service" "$ENV"
+    ;;
+
+  update)
+    ensure_network
+    header "Updating services in $ENV mode..."
+
+    if [ $RUN_ALL -eq 1 ]; then
+      list="$SERVICES_UP"
+    elif [ $RUN_CORE -eq 1 ]; then
+      list="$SERVICES_CORE"
+    else
+      list="$SERVICES_TO_RUN"
+    fi
+
+    FAILED=""
+    for service in $list; do
+      do_update "$service" "$ENV"
+      if [ $? -ne 0 ]; then
+        error "$service FAILED"
+        FAILED="$FAILED $service"
+      else
+        success "$service updated"
+      fi
+      printf "\n"
+    done
+
+    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+    if [ -z "$FAILED" ]; then
+      success "All services updated successfully"
+    else
+      warn "Completed with failures:"
+      for f in $FAILED; do
+        error "  $f"
+      done
+      printf "\n  Run ${CYAN}sh homeserver.sh $ENV logs <service>${RESET} to investigate\n"
+    fi
+    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n\n"
     ;;
 esac

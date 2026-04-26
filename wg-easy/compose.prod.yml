@@ -1,0 +1,5 @@
+services:
+  wg-easy:
+    ports:
+      - "51820:51820/udp"         # WireGuard must accept external connections
+      - "127.0.0.1:51821:51821/tcp"  # Web UI behind nginx

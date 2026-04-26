@@ -129,6 +129,20 @@ Users will see a browser login prompt before reaching the app.
 
 - No login by default — consider NPM access list if exposed publicly
 
+### Portainer CE
+
+- Port `9000` (HTTP) or `9443` (HTTPS)
+- Create admin account on first browser visit — do it immediately, the prompt times out after a few minutes
+- Sees all running containers including existing homeserver services
+
+### Dockge
+
+- Port `5001`
+- Create admin account on first browser visit
+- **Stacks directory gotcha:** `DOCKGE_STACKS_DIR` in `.env` must be an absolute path and must be identical inside and outside the container. Dockge runs `docker compose` commands using the host path directly — a relative path or mismatched mount silently breaks stack management.
+- Create the directory before starting: `mkdir -p <DOCKGE_STACKS_DIR>`
+- Dockge only manages stacks it creates in that directory — existing homeserver services will not appear. Use Portainer if you need to see and manage already-running containers.
+
 ---
 
 [← New Services](10-new-services.md) | [Home](../setup.md)

@@ -1,0 +1,18 @@
+services:
+  openvpn:
+    image: kylemanna/openvpn
+    container_name: openvpn
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${DATA_ROOT}/openvpn:/etc/openvpn
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

@@ -1,0 +1,4 @@
+services:
+  openvpn:
+    ports:
+      - "1194:1194/udp"
