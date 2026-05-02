@@ -37,11 +37,11 @@ services:
       - homeserver
 
   immich-redis:
-    image: redis:8-alpine
+    image: valkey/valkey:9-alpine
     container_name: immich-redis
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -76,7 +76,7 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://immich-server:2283/api
-      API_KEY: MWoCxyfDz6aE40T2Y5wTg8UQDfKbkBamimopIduiI
+      API_KEY: ${IMMICH_OFFLINE_API_KEY}
       OFFLINE_THRESHOLD: 100
       CRON_EXPRESSION: "0 2 * * *"
     networks:
