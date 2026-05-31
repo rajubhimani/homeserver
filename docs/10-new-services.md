@@ -219,6 +219,35 @@ Complete the setup wizard on first visit. Create admin account via the web insta
 
 ---
 
+## Forgejo
+
+**Purpose:** Community-driven Gitea fork. Self-hosted Git with repos, CI/CD actions, and issue tracking.  
+**Port:** `3001` (web), `2223` (SSH)  
+**Data:** `${DATA_ROOT}/forgejo/`  
+**Depends on:** Postgres (included in compose)
+
+```bash
+cd ~/homeserver/forgejo
+# edit .env
+```
+
+```env
+DATA_ROOT=/mnt/seagate
+POSTGRES_DB=forgejo
+POSTGRES_USER=forgejo
+POSTGRES_PASSWORD=your_strong_password
+FORGEJO_DOMAIN=forgejo.yourdomain.com
+FORGEJO_ROOT_URL=https://forgejo.yourdomain.com
+```
+
+```bash
+sh homeserver.sh dev up forgejo
+```
+
+Complete the setup wizard on first visit. Create admin account via the web installer.
+
+---
+
 ## Uptime Kuma
 
 **Purpose:** Monitor services and get alerts when something goes down.  

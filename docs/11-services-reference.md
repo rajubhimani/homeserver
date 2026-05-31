@@ -19,7 +19,7 @@ Quick reference for all services — ports, NPM proxy config, service groups, an
 **Startup order (`all`):**
 
 ```text
-dozzle → nginx → landing → nextcloud → vaultwarden → gitea → immich
+dozzle → nginx → landing → nextcloud → vaultwarden → gitea → forgejo → immich
 → jellyfin → paperless → stirling-pdf-lite → mealie → uptime-kuma
 ```
 
@@ -42,6 +42,7 @@ Shutdown is always the reverse. Dozzle starts first and stops last for visibilit
 | Stirling PDF Lite | `stirling-pdf-lite` | 8090 | `data/stirling-pdf-lite/` | ✓ |
 | Mealie | `mealie` | 9000 | `data/mealie/` | ✓ |
 | Gitea | `gitea` | 3000 / 2222 | `data/gitea/` | ✓ |
+| Forgejo | `forgejo` | 3001 / 2223 | `data/forgejo/` | ✓ |
 | Uptime Kuma | `uptime-kuma` | 3001 | `data/uptime-kuma/` | ✓ |
 | Stirling PDF (Full) | `stirling-pdf` | 8089 | `data/stirling-pdf/` | Manual |
 
@@ -65,6 +66,7 @@ Add these in Nginx Proxy Manager → Proxy Hosts.
 | `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | — | Manual start only |
 | `mealie.yourdomain.com` | `mealie` | `9000` | — | |
 | `gitea.yourdomain.com` | `gitea` | `3000` | — | |
+| `forgejo.yourdomain.com` | `forgejo` | `3000` | — | |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | — | |
 | `dozzle.yourdomain.com` | `dozzle` | `8080` | — | |
 | `photos.yourdomain.com` | `immich-server` | `2283` | — | Alias for Immich |
@@ -102,8 +104,9 @@ Users will see a browser login prompt before reaching the app.
 
 ### Vaultwarden
 
-- Signups disabled by default — invite users via `/admin` panel
+- Signups disabled by default (`SIGNUPS_ALLOWED=false` in `.env`) — invite users via `/admin` panel
 - Admin token: set `ADMIN_TOKEN` in `.env` (`openssl rand -base64 48`)
+- To allow signups: set `SIGNUPS_ALLOWED=true` in `.env` and restart
 
 ### Paperless-ngx
 
@@ -119,11 +122,25 @@ Users will see a browser login prompt before reaching the app.
 ### Mealie
 
 - Default login: `changeme@example.com` / `MyPassword` — change immediately after first login
+- Signups disabled by default (`ALLOW_SIGNUP=false` in `.env`)
+- To allow signups: set `ALLOW_SIGNUP=true` in `.env` and restart
 
 ### Gitea
 
 - SSH clone port: `2222` (mapped from container's 22)
-- Setup wizard runs on first browser visit
+- Setup wizard skipped automatically (`GITEA__security__INSTALL_LOCK=true` in compose)
+- Registration disabled by default (`DISABLE_REGISTRATION=true` in `.env`)
+- To allow signups: set `DISABLE_REGISTRATION=false` in `.env` and restart
+
+### Forgejo
+
+- Community-driven Gitea fork — same UX, independent release cycle
+- SSH clone port: `2223` (mapped from container's 22)
+- Config env vars use `FORGEJO__` prefix (e.g. `FORGEJO__database__HOST`)
+- Image: `codeberg.org/forgejo/forgejo:15` (pinned major version)
+- Setup wizard skipped automatically (`FORGEJO__security__INSTALL_LOCK=true` in compose)
+- Registration disabled by default (`DISABLE_REGISTRATION=true` in `.env`)
+- To allow signups: set `DISABLE_REGISTRATION=false` in `.env` and restart
 
 ### Dozzle
 

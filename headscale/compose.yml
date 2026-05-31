@@ -6,7 +6,7 @@ services:
     command: serve
     volumes:
       - ./config:/etc/headscale
-      - ${DATA_ROOT}/headscale:/var/lib/headscale
+      - ${DATA_ROOT}/data:/var/lib/headscale
     networks:
       - homeserver
 

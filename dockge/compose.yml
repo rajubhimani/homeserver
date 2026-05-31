@@ -8,7 +8,7 @@ services:
       DOCKGE_STACKS_DIR: ${DOCKGE_STACKS_DIR}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${DATA_ROOT}/dockge:/app/data
+      - ${DATA_ROOT}/data:/app/data
       # Dockge requires the stacks path to be identical inside and outside the
       # container — it uses the host path directly when running compose commands.
       # DOCKGE_STACKS_DIR must be an absolute path; relative paths will break it.

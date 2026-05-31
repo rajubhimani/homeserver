@@ -15,7 +15,7 @@ services:
       WG_PERSISTENT_KEEPALIVE: ${WG_PERSISTENT_KEEPALIVE:-25}
       LANG: ${WG_LANG:-en}
     volumes:
-      - ${DATA_ROOT}/wg-easy:/etc/wireguard
+      - ${DATA_ROOT}/data:/etc/wireguard
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
