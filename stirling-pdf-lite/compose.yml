@@ -10,10 +10,10 @@ services:
       SECURITY_INITIALLOGIN_USERNAME: ${STIRLING_ADMIN_USER}
       SECURITY_INITIALLOGIN_PASSWORD: ${STIRLING_ADMIN_PASSWORD}
     volumes:
-      - ${DATA_ROOT}/stirling-pdf-lite/configs:/configs
-      - ${DATA_ROOT}/stirling-pdf-lite/logs:/logs
-      - ${DATA_ROOT}/stirling-pdf-lite/customFiles:/customFiles
-      - ${DATA_ROOT}/stirling-pdf-lite/pipeline:/pipeline
+      - ${DATA_ROOT}/configs:/configs
+      - ${DATA_ROOT}/logs:/logs
+      - ${DATA_ROOT}/customFiles:/customFiles
+      - ${DATA_ROOT}/pipeline:/pipeline
     networks:
       - homeserver
 

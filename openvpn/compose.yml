@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - ${DATA_ROOT}/openvpn:/etc/openvpn
+      - ${DATA_ROOT}/data:/etc/openvpn
     cap_add:
       - NET_ADMIN
     devices:

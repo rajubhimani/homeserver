@@ -16,12 +16,13 @@
 #   ./homeserver.sh dev logs immich
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVICE_DATA_ROOT="$BASE_DIR/service_data"
 
 # Startup order — sequential, infrastructure first, monitoring last
-SERVICES_UP="dozzle nginx landing nextcloud vaultwarden gitea immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma"
+SERVICES_UP="dozzle nginx landing nextcloud vaultwarden gitea forgejo immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma"
 
 # Shutdown order — reverse
-SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich gitea vaultwarden nextcloud landing nginx dozzle"
+SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich forgejo gitea vaultwarden nextcloud landing nginx dozzle"
 
 # Core group — infrastructure-only subset
 SERVICES_CORE="dozzle nginx landing nextcloud"
@@ -135,31 +136,35 @@ do_up() {
   fi
 
   files=$(compose_files "$service" "$env")
+  data_root="$SERVICE_DATA_ROOT/$service"
 
   if [ -n "$profile" ]; then
     info "Starting $service ($env) --profile $profile..."
-    compose_out=$(docker compose $files --profile "$profile" up -d 2>&1)
+    DATA_ROOT="$data_root" docker compose $files --profile "$profile" up -d
   else
     info "Starting $service ($env)..."
-    compose_out=$(docker compose $files up -d 2>&1)
+    DATA_ROOT="$data_root" docker compose $files up -d
   fi
   compose_rc=$?
-  printf "%s\n" "$compose_out" | tail -3
 
   if [ $compose_rc -ne 0 ]; then
-    # If port is held by a zombie docker-proxy, free it and retry once
-    port=$(printf "%s" "$compose_out" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
+    # Capture output only on failure to detect zombie docker-proxy port conflicts
+    if [ -n "$profile" ]; then
+      compose_err=$(DATA_ROOT="$data_root" docker compose $files --profile "$profile" up -d 2>&1)
+    else
+      compose_err=$(DATA_ROOT="$data_root" docker compose $files up -d 2>&1)
+    fi
+    port=$(printf "%s" "$compose_err" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
     if [ -n "$port" ]; then
       warn "Port $port in use — freeing zombie docker-proxy and retrying..."
       sudo fuser -k "${port}/tcp" 2>/dev/null
       sleep 1
       if [ -n "$profile" ]; then
-        compose_out=$(docker compose $files --profile "$profile" up -d 2>&1)
+        DATA_ROOT="$data_root" docker compose $files --profile "$profile" up -d
       else
-        compose_out=$(docker compose $files up -d 2>&1)
+        DATA_ROOT="$data_root" docker compose $files up -d
       fi
       compose_rc=$?
-      printf "%s\n" "$compose_out" | tail -3
     fi
     [ $compose_rc -ne 0 ] && return 1
   fi
@@ -180,13 +185,14 @@ do_down() {
   fi
 
   files=$(compose_files_all "$service")
+  data_root="$SERVICE_DATA_ROOT/$service"
 
   if [ -n "$profile" ]; then
     info "Stopping $service --profile $profile..."
-    docker compose $files --profile "$profile" down
+    DATA_ROOT="$data_root" docker compose $files --profile "$profile" down
   else
     info "Stopping $service..."
-    docker compose $files --profile ml down 2>/dev/null || docker compose $files down
+    DATA_ROOT="$data_root" docker compose $files --profile ml down 2>/dev/null || DATA_ROOT="$data_root" docker compose $files down
   fi
 
   success "$service stopped"
@@ -203,16 +209,16 @@ do_update() {
   fi
 
   files=$(compose_files "$service" "$env")
+  data_root="$SERVICE_DATA_ROOT/$service"
 
   info "Pulling latest images for $service..."
-  docker compose $files pull
+  DATA_ROOT="$data_root" docker compose $files pull
   pull_rc=$?
   [ $pull_rc -ne 0 ] && warn "Pull had issues for $service — continuing with recreate anyway"
 
   info "Recreating $service ($env)..."
-  compose_out=$(docker compose $files up -d --force-recreate 2>&1)
+  DATA_ROOT="$data_root" docker compose $files up -d --force-recreate
   compose_rc=$?
-  printf "%s\n" "$compose_out" | tail -3
   [ $compose_rc -ne 0 ] && return 1
 
   wait_healthy "$service"
@@ -230,7 +236,7 @@ do_logs() {
   fi
 
   files=$(compose_files "$service" "$env")
-  docker compose $files logs -f
+  DATA_ROOT="$SERVICE_DATA_ROOT/$service" docker compose $files logs -f
 }
 
 show_help() {
@@ -256,6 +262,7 @@ show_help() {
   printf "    ./homeserver.sh dev down immich --profile ml    remove only ML\n"
   printf "    ./homeserver.sh dev logs immich                 follow logs\n"
   printf "    ./homeserver.sh dev update all                  pull latest images and recreate all\n"
+  printf "    ./homeserver.sh dev update running              pull and recreate only currently running services\n"
   printf "    ./homeserver.sh dev update jellyfin             pull and update a single service\n"
   printf "\n"
   printf "  ${BOLD}Startup order (all):${RESET}\n"
@@ -302,6 +309,7 @@ SERVICES_TO_RUN=""
 PROFILE=""
 RUN_ALL=0
 RUN_CORE=0
+RUN_RUNNING=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -319,6 +327,9 @@ while [ $# -gt 0 ]; do
     core)
       RUN_CORE=1
       ;;
+    running)
+      RUN_RUNNING=1
+      ;;
     *)
       if is_valid_service "$1"; then
         SERVICES_TO_RUN="$SERVICES_TO_RUN $1"
@@ -332,11 +343,26 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ $RUN_ALL -eq 0 ] && [ $RUN_CORE -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
+if [ $RUN_ALL -eq 0 ] && [ $RUN_CORE -eq 0 ] && [ $RUN_RUNNING -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
   error "No services specified"
   show_help
   exit 1
 fi
+
+# ── Helpers ───────────────────────────────────────────────────────
+
+# Returns the subset of SERVICES_UP that have at least one running container,
+# preserving startup order.
+get_running_services() {
+  running_containers=$(docker ps --format "{{.Names}}")
+  result=""
+  for svc in $SERVICES_UP $SERVICES_EXTRA; do
+    if printf "%s" "$running_containers" | grep -qE "^${svc}(-|$)"; then
+      result="$result $svc"
+    fi
+  done
+  printf "%s" "$result"
+}
 
 # ── Pre-flight checks ─────────────────────────────────────────────
 
@@ -423,6 +449,14 @@ case "$ACTION" in
       list="$SERVICES_UP"
     elif [ $RUN_CORE -eq 1 ]; then
       list="$SERVICES_CORE"
+    elif [ $RUN_RUNNING -eq 1 ]; then
+      list=$(get_running_services)
+      if [ -z "$list" ]; then
+        warn "No running services detected"
+        exit 0
+      fi
+      info "Detected running services:$list"
+      printf "\n"
     else
       list="$SERVICES_TO_RUN"
     fi

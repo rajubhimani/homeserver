@@ -4,7 +4,7 @@ services:
     container_name: uptime-kuma
     restart: unless-stopped
     volumes:
-      - ${DATA_ROOT}/uptime-kuma:/app/data
+      - ${DATA_ROOT}/data:/app/data
     networks:
       - homeserver
 

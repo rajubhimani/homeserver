@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ${DATA_ROOT}/postgres-nextcloud:/var/lib/postgresql
+      - ${DATA_ROOT}/postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -49,9 +49,9 @@ services:
       REDIS_HOST_PORT: 6379
     volumes:
       - nextcloud_html:/var/www/html
-      - ${DATA_ROOT}/nextcloud/config:/var/www/html/config
-      - ${DATA_ROOT}/nextcloud/data:/var/www/html/data
-      - ${DATA_ROOT}/nextcloud/custom_apps:/var/www/html/custom_apps
+      - ${DATA_ROOT}/config:/var/www/html/config
+      - ${DATA_ROOT}/data:/var/www/html/data
+      - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
       - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
@@ -75,9 +75,9 @@ services:
     entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; sleep 300; done"
     volumes:
       - nextcloud_html:/var/www/html
-      - ${DATA_ROOT}/nextcloud/config:/var/www/html/config
-      - ${DATA_ROOT}/nextcloud/data:/var/www/html/data
-      - ${DATA_ROOT}/nextcloud/custom_apps:/var/www/html/custom_apps
+      - ${DATA_ROOT}/config:/var/www/html/config
+      - ${DATA_ROOT}/data:/var/www/html/data
+      - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
       - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
       - nextcloud

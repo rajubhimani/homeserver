@@ -18,6 +18,7 @@
 | Stirling PDF | PDF toolkit | Adobe Acrobat |
 | Mealie | Recipe manager | Recipe apps |
 | Gitea | Git hosting | GitHub |
+| Forgejo | Git hosting (Gitea fork) | GitHub |
 | Uptime Kuma | Service monitoring | Pingdom |
 | Dozzle | Docker log viewer | — |
 | Nginx Proxy Manager | Reverse proxy + routing | Manual nginx config |
@@ -126,6 +127,7 @@ sh homeserver.sh dev down stirling-pdf
 ├── stirling-pdf-lite/
 ├── mealie/
 ├── gitea/
+├── forgejo/
 ├── uptime-kuma/
 ├── dozzle/
 ├── wg-easy/
@@ -149,5 +151,6 @@ Data drive:
 ├── stirling-pdf-lite/
 ├── mealie/
 ├── gitea/
+├── forgejo/
 └── uptime-kuma/
 ```

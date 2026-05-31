@@ -2,7 +2,7 @@
 /._immich
 /._nextcloud
 /._setup.md
-/data
+service_data/
 .env
 *.log
 *.json

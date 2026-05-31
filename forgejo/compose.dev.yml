@@ -1,0 +1,5 @@
+services:
+  forgejo:
+    ports:
+      - "3001:3000"
+      - "2223:22"

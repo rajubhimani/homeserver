@@ -7,9 +7,9 @@ services:
     environment:
       DOMAIN: ${VAULTWARDEN_DOMAIN}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
-      SIGNUPS_ALLOWED: "false"
+      SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED:-false}
     volumes:
-      - ${DATA_ROOT}/vaultwarden:/data
+      - ${DATA_ROOT}/data:/data
     networks:
       - homeserver
 

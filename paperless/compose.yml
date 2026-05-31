@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ${DATA_ROOT}/paperless/postgres:/var/lib/postgresql
+      - ${DATA_ROOT}/postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -54,7 +54,7 @@ services:
       PAPERLESS_CONSUMPTION_DIR: /paperless/consume
       PAPERLESS_EXPORT_DIR: /paperless/export
     volumes:
-      - ${DATA_ROOT}/paperless:/paperless
+      - ${DATA_ROOT}/app:/paperless
     depends_on:
       paperless-db:
         condition: service_healthy

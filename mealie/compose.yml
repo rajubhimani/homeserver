@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ${DATA_ROOT}/mealie/postgres:/var/lib/postgresql
+      - ${DATA_ROOT}/postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -33,8 +33,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       BASE_URL: ${MEALIE_BASE_URL}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
     volumes:
-      - ${DATA_ROOT}/mealie/data:/app/data
+      - ${DATA_ROOT}/data:/app/data
     depends_on:
       mealie-db:
         condition: service_healthy
