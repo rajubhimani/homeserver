@@ -54,13 +54,15 @@ All services join the external `homeserver` Docker bridge network. NPM resolves 
 ## Adding a new service
 
 1. Create `<service>/compose.yml`, `compose.dev.yml`, `compose.prod.yml`, `.env`, and `.env.example`
-2. Set `DATA_ROOT=../service_data/<service>` in both `.env` and `.env.example`
-3. Create `service_data/<service>/` subdirectories before first start (see Data directory convention below)
-4. Add the service name to `SERVICES_UP` and `SERVICES_DOWN` in `homeserver.sh`
-5. Add a card to `landing/index.html` under the appropriate section
-6. Add NPM proxy host entry in `docs/11-services-reference.md`
-7. Add a service row in `docs/11-services-reference.md` and `setup.md`
-8. Document setup steps in `docs/10-new-services.md`
+2. Set `DATA_ROOT=../service_data/<service>` in **both** `.env` and `.env.example`
+3. Every env var added to `.env` must also be added to `.env.example` with its default value and a comment — they must always stay in sync
+4. If the service supports registration control, always add the appropriate toggle to both `.env` and `.env.example` (see Registration toggle table below)
+4. Create `service_data/<service>/` subdirectories before first start (see Data directory convention below)
+5. Add the service name to `SERVICES_UP` and `SERVICES_DOWN` in `homeserver.sh`
+6. Add a card to `landing/index.html` under the appropriate section
+7. Add NPM proxy host entry in `docs/11-services-reference.md`
+8. Add a service row in `docs/11-services-reference.md` and `setup.md`
+9. Document setup steps in `docs/10-new-services.md`
 
 ## Services with PostgreSQL
 
