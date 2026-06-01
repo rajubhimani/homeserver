@@ -35,6 +35,13 @@ services:
       GITEA__server__SSH_PORT: 2222
       GITEA__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
       GITEA__security__INSTALL_LOCK: "true"
+      GITEA__actions__ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ${DATA_ROOT}/data:/data
       - /etc/timezone:/etc/timezone:ro
@@ -42,6 +49,23 @@ services:
     depends_on:
       gitea-db:
         condition: service_healthy
+    networks:
+      - homeserver
+
+  gitea-runner:
+    image: gitea/act_runner:latest
+    container_name: gitea-runner
+    restart: unless-stopped
+    profiles:
+      - runner
+    environment:
+      GITEA_INSTANCE_URL: ${GITEA_ROOT_URL}
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DATA_ROOT}/runner-data:/data
+    depends_on:
+      - gitea
     networks:
       - homeserver
 

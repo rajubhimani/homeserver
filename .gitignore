@@ -9,6 +9,4 @@ service_data/
 *.pem
 ._*
 *.sqlite
-/nginx/data
-/nginx/letsencrypt
 test/*

@@ -1,14 +1,16 @@
 services:
-  landing:
+  nginx-plain:
     image: nginx:alpine
-    container_name: landing
+    container_name: nginx-plain
     restart: unless-stopped
     env_file: .env
-    entrypoint: ["/entrypoint.sh"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    # nginx:alpine automatically processes templates/*.conf.template via envsubst
+    # and writes results to /etc/nginx/conf.d/ on startup
     volumes:
-      - ./index.html:/template/index.html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./templates:/etc/nginx/templates:ro
+      - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
       interval: 10s

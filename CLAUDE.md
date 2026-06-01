@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A self-hosted personal cloud stack managed with Docker Compose. Each service lives in its own directory with a three-layer compose structure. `homeserver.sh` is the single entrypoint for managing all services.
 
+## Global configuration
+
+Set your domain once in the root `.env` — `homeserver.sh` injects it into every service automatically:
+
+```
+# .env (repo root)
+DOMAIN=yourdomain.com
+```
+
+`homeserver.sh` also injects `DATA_ROOT` per service. Never hardcode the domain in individual service `.env` files — use `${DOMAIN}` references where possible.
+
 ## Managing services
 
 ```bash
@@ -35,7 +46,7 @@ sh homeserver.sh dev logs <service>
 - `core` — dozzle, nginx, landing, nextcloud only
 - Manual-only (not in `all`): `stirling-pdf`, `wg-easy`, `headscale`, `openvpn`, `portainer`, `dockge`
 
-**Startup order:** dozzle → nginx → landing → nextcloud → vaultwarden → gitea → forgejo → immich → jellyfin → paperless → stirling-pdf-lite → mealie → uptime-kuma
+**Startup order:** dozzle → cloudflared → nginx → landing → nextcloud → vaultwarden → gitea → forgejo → gitlab → immich → jellyfin → paperless → stirling-pdf-lite → mealie → uptime-kuma
 
 ## Compose file pattern
 
@@ -57,12 +68,25 @@ All services join the external `homeserver` Docker bridge network. NPM resolves 
 2. Set `DATA_ROOT=../service_data/<service>` in **both** `.env` and `.env.example`
 3. Every env var added to `.env` must also be added to `.env.example` with its default value and a comment — they must always stay in sync
 4. If the service supports registration control, always add the appropriate toggle to both `.env` and `.env.example` (see Registration toggle table below)
-4. Create `service_data/<service>/` subdirectories before first start (see Data directory convention below)
-5. Add the service name to `SERVICES_UP` and `SERVICES_DOWN` in `homeserver.sh`
-6. Add a card to `landing/index.html` under the appropriate section
-7. Add NPM proxy host entry in `docs/11-services-reference.md`
-8. Add a service row in `docs/11-services-reference.md` and `setup.md`
-9. Document setup steps in `docs/10-new-services.md`
+5. Create `service_data/<service>/` subdirectories before first start (see Data directory convention below)
+6. Add the service name to `SERVICES_UP` and `SERVICES_DOWN` in `homeserver.sh`
+7. Add a card to `landing/index.html` under the appropriate section and add its subdomain to `SERVICE_SUBDOMAINS` in the script block
+8. Add a `/health/<service>` proxy route to `landing/nginx.conf` pointing to `http://<container>:<port>` — without this the landing page card always shows offline
+8. Add NPM proxy host entry in `docs/11-services-reference.md`
+9. Add a service row in `docs/11-services-reference.md` and `setup.md`
+10. Document setup steps in `docs/10-new-services.md`
+11. Add a `healthcheck` to the service container in `compose.yml` (see healthcheck patterns below)
+11. If the service has optional sub-services (e.g. runners added via `--profile`), document them in **all** relevant doc sections in the same pass — never update compose files without updating the matching docs
+12. Every service container must have a `healthcheck` — use the service's own health endpoint where available, otherwise a simple HTTP probe or process check. This enables reliable `depends_on: condition: service_healthy` ordering and makes `docker ps` show real status
+
+**Healthcheck patterns by service type:**
+- nginx-based: `wget -q --spider http://localhost/ || exit 1`
+- HTTP app: `curl -f http://localhost:<port>/health || exit 1`
+- Dozzle: `["/dozzle", "healthcheck"]`
+- Gitea/Forgejo: `curl -f http://localhost:3000/api/healthz || exit 1`
+- Nextcloud: `curl -f http://localhost/status.php || exit 1`
+- Postgres: `pg_isready -U ${POSTGRES_USER}`
+- Redis/Valkey: `redis-cli ping` / `valkey-cli ping`
 
 ## Services with PostgreSQL
 
@@ -70,22 +94,35 @@ Services that need Postgres (nextcloud, paperless, mealie, gitea, forgejo) inclu
 - `forgejo-db` / `gitea-db` / etc. container using `postgres:18`
 - `postgres-init/init.sh` that grants schema ownership — required due to PostgreSQL 15+ default privilege changes
 - Healthcheck on the DB so the app container waits until it's ready
-- Postgres data volume path: `${DATA_ROOT}/<service>/postgres:/var/lib/postgresql/data`
+- Postgres data volume path: `${DATA_ROOT}/postgres:/var/lib/postgresql`
+
+## Reverse proxy — pick one
+
+Two options — **run only one at a time**, both bind to port 80/443:
+
+| Option | Service | Best for |
+| --- | --- | --- |
+| `nginx` | Nginx Proxy Manager | UI-based config, Let's Encrypt via UI, beginners |
+| `nginx-plain` | Plain nginx | Config-file based, scripted/automated setups |
+
+**To switch:** edit `SERVICES_UP` in `homeserver.sh` — replace `nginx` with `nginx-plain`. Then edit `nginx-plain/conf.d/default.conf` — replace `yourdomain.com` with your domain.
 
 ## Traffic flow
 
 ```
-Browser → Cloudflare Edge (TLS) → cloudflared → NPM:80 → <container>
+Browser → Cloudflare Edge (TLS) → cloudflared (container) → nginx / NPM :80 → <container>
 ```
 
-Cloudflare terminates TLS. Internal traffic is plain HTTP. NPM proxy hosts use `http` scheme and the Docker container name as the forward hostname.
+Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve services by Docker container name on the `homeserver` network. `cloudflared` connects **outbound only** — no ports need to be opened on the firewall.
 
 ## Port reference
+
+**IMPORTANT — always check this table before assigning ports to a new service. Every host dev port must be unique. SSH ports must also be unique.**
 
 | Service | Dev port | Container port |
 | --- | --- | --- |
 | Nginx Proxy Manager | 80 / 443 | 80 / 443 |
-| Landing | 8082 | 80 |
+| Landing | 8080 | 80 |
 | Dozzle | 9999 | 8080 |
 | Nextcloud | 8081 | 80 |
 | Immich | 2283 | 2283 |
@@ -94,10 +131,19 @@ Cloudflare terminates TLS. Internal traffic is plain HTTP. NPM proxy hosts use `
 | Paperless | 8010 | 8000 |
 | Stirling PDF Lite | 8090 | 8080 |
 | Stirling PDF (Full) | 8089 | 8080 |
-| Mealie | 9000 | 9000 |
-| Gitea | 3000 / 2222 | 3000 / 22 |
-| Forgejo | 3001 / 2223 | 3000 / 22 |
+| Mealie | 9925 | 9000 |
+| Gitea | 3000 / 2222 (SSH) | 3000 / 22 |
+| Forgejo | 3002 / 2223 (SSH) | 3000 / 22 |
+| GitLab | 8085 / 2224 (SSH) | 80 / 22 |
 | Uptime Kuma | 3001 | 3001 |
+| Headscale | 8086 | 8080 |
+
+**Next available ports:** web `8087`, SSH `2225`
+
+When adding a new service:
+- Pick a web port not in the table above — update this table immediately
+- If the service has SSH, pick the next SSH port (`2225`, `2226`, …)
+- Never reuse a port, even for manual-only services — they may run alongside `all`
 
 ## Data directory convention
 
@@ -144,6 +190,7 @@ Each service with public signup has a toggle in its `.env`:
 | Gitea | `DISABLE_REGISTRATION` | `true` | `false` |
 | Vaultwarden | `SIGNUPS_ALLOWED` | `false` | `true` |
 | Mealie | `ALLOW_SIGNUP` | `false` | `true` |
+| GitLab | `SIGNUP_ENABLED` | `false` | `true` |
 
 All default to **disabled**. To re-enable, update the value in `.env` and restart the service:
 ```bash

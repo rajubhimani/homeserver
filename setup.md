@@ -19,6 +19,7 @@
 | Mealie | Recipe manager | Recipe apps |
 | Gitea | Git hosting | GitHub |
 | Forgejo | Git hosting (Gitea fork) | GitHub |
+| GitLab CE | Full DevOps platform | GitHub / GitLab.com |
 | Uptime Kuma | Service monitoring | Pingdom |
 | Dozzle | Docker log viewer | — |
 | Nginx Proxy Manager | Reverse proxy + routing | Manual nginx config |
@@ -128,6 +129,7 @@ sh homeserver.sh dev down stirling-pdf
 ├── mealie/
 ├── gitea/
 ├── forgejo/
+├── gitlab/
 ├── uptime-kuma/
 ├── dozzle/
 ├── wg-easy/
@@ -136,21 +138,20 @@ sh homeserver.sh dev down stirling-pdf
 └── landing/
 ```
 
-Data drive:
+Service data (gitignored, lives in repo root):
 
 ```text
-/mnt/seagate/
-├── nextcloud/
-├── postgres-nextcloud/
-├── immich/
-├── postgres-immich/
-├── jellyfin/
-├── vaultwarden/
-├── paperless/
-├── stirling-pdf/
-├── stirling-pdf-lite/
-├── mealie/
-├── gitea/
-├── forgejo/
-└── uptime-kuma/
+service_data/
+├── nextcloud/      (postgres/, config/, data/, custom_apps/)
+├── immich/         (upload/, postgres/)
+├── jellyfin/       (config/, cache/)
+├── vaultwarden/    (data/)
+├── paperless/      (postgres/, app/)
+├── stirling-pdf/   (configs/, logs/, customFiles/, pipeline/, tessdata/)
+├── stirling-pdf-lite/ (configs/, logs/, customFiles/, pipeline/)
+├── mealie/         (postgres/, data/)
+├── gitea/          (postgres/, data/)
+├── forgejo/        (postgres/, app/)
+├── gitlab/         (config/, logs/, data/)
+└── uptime-kuma/    (data/)
 ```

@@ -4,7 +4,7 @@
 
 ---
 
-All new services follow the same pattern as Nextcloud and Immich:
+All services follow the same three-file compose pattern:
 
 - `compose.yml` — base config, no ports
 - `compose.dev.yml` — ports on all interfaces (direct access)
@@ -19,16 +19,15 @@ Use `homeserver.sh` to manage them (see [Maintenance](08-maintenance.md)).
 
 **Purpose:** Stream movies, TV shows, and music from your server.  
 **Port:** `8096`  
-**Data:** `${DATA_ROOT}/jellyfin/`
+**Data:** `service_data/jellyfin/`
 
 ```bash
-cd ~/homeserver/jellyfin
-cp .env.example .env
-# edit .env — set DATA_ROOT and MEDIA_ROOT
+cp jellyfin/.env.example jellyfin/.env
+# edit .env — set MEDIA_ROOT to your media drive path
 ```
 
 ```env
-DATA_ROOT=/mnt/seagate
+DATA_ROOT=../service_data/jellyfin
 MEDIA_ROOT=/mnt/seagate/media
 ```
 
@@ -36,7 +35,10 @@ MEDIA_ROOT=/mnt/seagate/media
 sh homeserver.sh dev up jellyfin
 ```
 
-Open `http://<ip>:8096` — complete the setup wizard on first launch.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| First visit | Open `http://<ip>:8096` — setup wizard creates the admin account |
 
 ---
 
@@ -44,31 +46,33 @@ Open `http://<ip>:8096` — complete the setup wizard on first launch.
 
 **Purpose:** Self-hosted password manager, compatible with all Bitwarden apps.  
 **Port:** `8200`  
-**Data:** `${DATA_ROOT}/vaultwarden/`
+**Data:** `service_data/vaultwarden/`
 
 ```bash
-cd ~/homeserver/vaultwarden
-cp .env.example .env
+cp vaultwarden/.env.example vaultwarden/.env
 # edit .env
 ```
 
 ```env
-DATA_ROOT=/mnt/seagate
-VAULTWARDEN_DOMAIN=https://vaultwarden.yourdomain.com
+DATA_ROOT=../service_data/vaultwarden
+VAULTWARDEN_DOMAIN=https://vault.yourdomain.com
 ADMIN_TOKEN=<openssl rand -base64 48>
+SIGNUPS_ALLOWED=false
 ```
 
 ```bash
 sh homeserver.sh dev up vaultwarden
 ```
 
-**Onboarding users (no SMTP needed):**
-1. Go to `http://<ip>:8200/admin` → enter `ADMIN_TOKEN`
-2. Users → Invite User → enter their email
-3. Share `http://<ip>:8200/#/signup` with them
-4. They register using the invited email and set their master password
+**Admin access:** Vaultwarden has no admin user account — the admin panel is protected by `ADMIN_TOKEN`.
 
-> ⚠️ `SIGNUPS_ALLOWED` is `false` by default — use admin panel to invite.
+| Method | How |
+| --- | --- |
+| Admin panel | `http://<ip>:8200/admin` → enter `ADMIN_TOKEN` |
+
+**Inviting users (no SMTP needed):**
+1. Admin panel → Users → Invite User → enter email
+2. Share `http://<ip>:8200/#/signup` with the invited email address
 
 ---
 
@@ -76,17 +80,16 @@ sh homeserver.sh dev up vaultwarden
 
 **Purpose:** Scan, OCR, and archive documents. Full-text search.  
 **Port:** `8010`  
-**Data:** `${DATA_ROOT}/paperless/`  
+**Data:** `service_data/paperless/`  
 **Depends on:** Postgres + Redis (included in compose)
 
 ```bash
-cd ~/homeserver/paperless
-cp .env.example .env
+cp paperless/.env.example paperless/.env
 # edit .env
 ```
 
 ```env
-DATA_ROOT=/mnt/seagate
+DATA_ROOT=../service_data/paperless
 TZ=Asia/Kolkata
 POSTGRES_DB=paperless
 POSTGRES_USER=paperless
@@ -101,7 +104,11 @@ PAPERLESS_ADMIN_PASSWORD=your_strong_password
 sh homeserver.sh dev up paperless
 ```
 
-Admin account is created automatically from `PAPERLESS_ADMIN_USER` / `PAPERLESS_ADMIN_PASSWORD` on first start.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| Env vars ✓ | `PAPERLESS_ADMIN_USER` / `PAPERLESS_ADMIN_PASSWORD` — auto-created on first start |
+| CLI | `docker exec -it paperless python manage.py createsuperuser` |
 
 ---
 
@@ -110,16 +117,15 @@ Admin account is created automatically from `PAPERLESS_ADMIN_USER` / `PAPERLESS_
 **Purpose:** Lightweight PDF toolkit — always on, default endpoint.  
 **Port:** `8090`  
 **Image:** `stirlingtools/stirling-pdf:latest-ultra-lite` (~200MB)  
-**Data:** `${DATA_ROOT}/stirling-pdf-lite/`
+**Data:** `service_data/stirling-pdf-lite/`
 
 ```bash
-cd ~/homeserver/stirling-pdf-lite
-cp .env.example .env
+cp stirling-pdf-lite/.env.example stirling-pdf-lite/.env
 # edit .env — set password
 ```
 
 ```env
-DATA_ROOT=../data
+DATA_ROOT=../service_data/stirling-pdf-lite
 STIRLING_ADMIN_USER=admin
 STIRLING_ADMIN_PASSWORD=your_strong_password
 ```
@@ -128,11 +134,10 @@ STIRLING_ADMIN_PASSWORD=your_strong_password
 sh homeserver.sh dev up stirling-pdf-lite
 ```
 
-Authentication is handled via **NPM Access List** (not app-level login):
-1. NPM → Access Lists → Add → set username/password + `Allow 0.0.0.0/0`
-2. NPM → Proxy Hosts → `stirling-pdf-lite.yourdomain.com` → Access List → select it
-
-> The ultra-lite image does not include built-in auth. NPM access list is the recommended approach.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| Env vars ✓ | `STIRLING_ADMIN_USER` / `STIRLING_ADMIN_PASSWORD` — set at startup |
 
 ---
 
@@ -141,7 +146,7 @@ Authentication is handled via **NPM Access List** (not app-level login):
 **Purpose:** Full PDF toolkit with OCR, LibreOffice conversion — manual start only (heavy).  
 **Port:** `8089`  
 **Image:** `stirlingtools/stirling-pdf:latest` (~1.5GB)  
-**Data:** `${DATA_ROOT}/stirling-pdf/`
+**Data:** `service_data/stirling-pdf/`
 
 > Not in `all` — start manually when needed, stop when done.
 
@@ -150,13 +155,7 @@ sh homeserver.sh dev up stirling-pdf
 sh homeserver.sh dev down stirling-pdf
 ```
 
-```bash
-cd ~/homeserver/stirling-pdf
-cp .env.example .env
-# set DATA_ROOT
-```
-
-No login required by default. All processing is local.
+**Admin account:** No login required — all processing is local.
 
 ---
 
@@ -164,28 +163,31 @@ No login required by default. All processing is local.
 
 **Purpose:** Recipe manager and meal planner.  
 **Port:** `9000`  
-**Data:** `${DATA_ROOT}/mealie/`  
+**Data:** `service_data/mealie/`  
 **Depends on:** Postgres (included in compose)
 
 ```bash
-cd ~/homeserver/mealie
-cp .env.example .env
+cp mealie/.env.example mealie/.env
 # edit .env
 ```
 
 ```env
-DATA_ROOT=/mnt/seagate
+DATA_ROOT=../service_data/mealie
 POSTGRES_DB=mealie
 POSTGRES_USER=mealie
 POSTGRES_PASSWORD=your_strong_password
-MEALIE_BASE_URL=http://192.168.1.100:9000
+MEALIE_BASE_URL=https://mealie.yourdomain.com
+ALLOW_SIGNUP=false
 ```
 
 ```bash
 sh homeserver.sh dev up mealie
 ```
 
-Default login: `changeme@example.com` / `MyPassword` — change immediately after first login.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| Default credentials | `changeme@example.com` / `MyPassword` — **change immediately** after first login |
 
 ---
 
@@ -193,29 +195,39 @@ Default login: `changeme@example.com` / `MyPassword` — change immediately afte
 
 **Purpose:** Self-hosted Git service. Manage repos, issues, pull requests.  
 **Port:** `3000` (web), `2222` (SSH)  
-**Data:** `${DATA_ROOT}/gitea/`  
+**Data:** `service_data/gitea/`  
 **Depends on:** Postgres (included in compose)
 
 ```bash
-cd ~/homeserver/gitea
-cp .env.example .env
+cp gitea/.env.example gitea/.env
 # edit .env
 ```
 
 ```env
-DATA_ROOT=/mnt/seagate
+DATA_ROOT=../service_data/gitea
 POSTGRES_DB=gitea
 POSTGRES_USER=gitea
 POSTGRES_PASSWORD=your_strong_password
 GITEA_DOMAIN=gitea.yourdomain.com
 GITEA_ROOT_URL=https://gitea.yourdomain.com
+DISABLE_REGISTRATION=true
+GITEA_RUNNER_TOKEN=your_runner_token_here
 ```
 
 ```bash
 sh homeserver.sh dev up gitea
 ```
 
-Complete the setup wizard on first visit. Create admin account via the web installer.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| CLI ✓ | `docker exec -it gitea gitea admin user create --username admin --password yourpassword --email admin@example.com --admin` |
+| First visit | Remove `GITEA__security__INSTALL_LOCK: "true"` from `compose.yml`, restart, browse to `http://<ip>:3000` — setup wizard appears with an admin form at the bottom |
+
+**Actions runner (optional):**
+1. Site Admin → Runners → Create Runner → copy the token
+2. Set `GITEA_RUNNER_TOKEN=<token>` in `.env`
+3. `sh homeserver.sh dev up gitea --profile runner`
 
 ---
 
@@ -223,28 +235,80 @@ Complete the setup wizard on first visit. Create admin account via the web insta
 
 **Purpose:** Community-driven Gitea fork. Self-hosted Git with repos, CI/CD actions, and issue tracking.  
 **Port:** `3001` (web), `2223` (SSH)  
-**Data:** `${DATA_ROOT}/forgejo/`  
+**Data:** `service_data/forgejo/`  
 **Depends on:** Postgres (included in compose)
 
 ```bash
-cd ~/homeserver/forgejo
+cp forgejo/.env.example forgejo/.env
 # edit .env
 ```
 
 ```env
-DATA_ROOT=/mnt/seagate
+DATA_ROOT=../service_data/forgejo
 POSTGRES_DB=forgejo
 POSTGRES_USER=forgejo
 POSTGRES_PASSWORD=your_strong_password
 FORGEJO_DOMAIN=forgejo.yourdomain.com
 FORGEJO_ROOT_URL=https://forgejo.yourdomain.com
+DISABLE_REGISTRATION=false
 ```
 
 ```bash
 sh homeserver.sh dev up forgejo
 ```
 
-Complete the setup wizard on first visit. Create admin account via the web installer.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| CLI ✓ | `docker exec -it forgejo forgejo admin user create --username admin --password yourpassword --email admin@example.com --admin` |
+| First visit | Remove `FORGEJO__security__INSTALL_LOCK: "true"` from `compose.yml`, restart, browse to `http://<ip>:3001` — setup wizard appears with an admin form at the bottom |
+
+**Actions runner (optional):**
+```bash
+sh homeserver.sh dev up forgejo --profile runner
+docker exec -it forgejo-runner forgejo-runner register
+```
+
+---
+
+## GitLab CE
+
+**Purpose:** Full DevOps platform — Git repos, CI/CD pipelines, container registry, issue tracking.  
+**Port:** `8085` (web), `2224` (SSH)  
+**Data:** `service_data/gitlab/` (config, logs, data)  
+**Note:** Built-in Postgres/Redis/nginx — no separate database container needed. Requires ~4GB RAM minimum.
+
+```bash
+cp gitlab/.env.example gitlab/.env
+# edit .env
+```
+
+```env
+DATA_ROOT=../service_data/gitlab
+GITLAB_HOSTNAME=gitlab.yourdomain.com
+GITLAB_EXTERNAL_URL=https://gitlab.yourdomain.com
+GITLAB_SSH_PORT=2224
+SIGNUP_ENABLED=false
+```
+
+```bash
+sh homeserver.sh dev up gitlab
+```
+
+GitLab takes ~2–3 minutes to fully start on first launch.
+
+**Admin account:**
+| Method | How |
+| --- | --- |
+| First visit ✓ | Browse to `http://<ip>:8085` — prompted to set the `root` password on first login |
+| Env var | Add `gitlab_rails['initial_root_password'] = 'yourpassword'` inside `GITLAB_OMNIBUS_CONFIG` **before first start** — ignored after GitLab has already initialised |
+| CLI | `docker exec -it gitlab gitlab-rake "gitlab:password:reset[root]"` — works any time, including after first start |
+
+**Actions runner (optional):**
+```bash
+sh homeserver.sh dev up gitlab --profile runner
+docker exec -it gitlab-runner gitlab-runner register
+```
 
 ---
 
@@ -252,16 +316,17 @@ Complete the setup wizard on first visit. Create admin account via the web insta
 
 **Purpose:** Monitor services and get alerts when something goes down.  
 **Port:** `3001`  
-**Data:** `${DATA_ROOT}/uptime-kuma/`
+**Data:** `service_data/uptime-kuma/`
 
 ```bash
-cd ~/homeserver/uptime-kuma
-cp .env.example .env
-# set DATA_ROOT
+cp uptime-kuma/.env.example uptime-kuma/.env
 sh homeserver.sh dev up uptime-kuma
 ```
 
-Create admin account on first visit. Add monitors for each service URL.
+**Admin account:**
+| Method | How |
+| --- | --- |
+| First visit ✓ | Browse to `http://<ip>:3001` — create the admin account on first launch |
 
 ---
 
@@ -275,7 +340,7 @@ Create admin account on first visit. Add monitors for each service URL.
 sh homeserver.sh dev up dozzle
 ```
 
-Open `http://<ip>:9999` — all running containers are listed immediately. No login by default.
+**Admin account:** No login by default — consider NPM access list if exposed publicly.
 
 ---
 

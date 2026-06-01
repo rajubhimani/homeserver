@@ -1,7 +1,7 @@
 services:
   headscale:
     ports:
-      - "127.0.0.1:8085:8080/tcp"  # nginx proxies externally (e.g. headscale.yourdomain.com)
+      - "127.0.0.1:8086:8080/tcp"  # nginx proxies externally (e.g. headscale.yourdomain.com)
   headscale-admin:
     ports:
       - "127.0.0.1:9090:80/tcp"    # admin UI behind nginx only

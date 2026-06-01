@@ -23,6 +23,7 @@ services:
     image: redis:8-alpine
     container_name: paperless-redis
     restart: unless-stopped
+    command: redis-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

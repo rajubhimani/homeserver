@@ -19,7 +19,7 @@ Quick reference for all services — ports, NPM proxy config, service groups, an
 **Startup order (`all`):**
 
 ```text
-dozzle → nginx → landing → nextcloud → vaultwarden → gitea → forgejo → immich
+dozzle → nginx → landing → nextcloud → vaultwarden → gitea → forgejo → gitlab → immich
 → jellyfin → paperless → stirling-pdf-lite → mealie → uptime-kuma
 ```
 
@@ -32,19 +32,21 @@ Shutdown is always the reverse. Dozzle starts first and stops last for visibilit
 | Service | Container | Port | Data path | Always on |
 | --- | --- | --- | --- | --- |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 | `data/nginx/` | ✓ |
-| Landing Page | `landing` | 8082 | stateless (repo) | ✓ |
+| Landing Page | `landing` | 8080 | stateless (repo) | ✓ |
 | Dozzle | `dozzle` | 9999 | none | ✓ |
-| Nextcloud | `nextcloud` | 8081 | `data/nextcloud/` | ✓ |
-| Immich | `immich-server` | 2283 | `data/immich/` | ✓ |
-| Jellyfin | `jellyfin` | 8096 | `data/jellyfin/` | ✓ |
-| Vaultwarden | `vaultwarden` | 8200 | `data/vaultwarden/` | ✓ |
-| Paperless-ngx | `paperless` | 8010 | `data/paperless/` | ✓ |
-| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | `data/stirling-pdf-lite/` | ✓ |
-| Mealie | `mealie` | 9000 | `data/mealie/` | ✓ |
-| Gitea | `gitea` | 3000 / 2222 | `data/gitea/` | ✓ |
-| Forgejo | `forgejo` | 3001 / 2223 | `data/forgejo/` | ✓ |
-| Uptime Kuma | `uptime-kuma` | 3001 | `data/uptime-kuma/` | ✓ |
-| Stirling PDF (Full) | `stirling-pdf` | 8089 | `data/stirling-pdf/` | Manual |
+| Nextcloud | `nextcloud` | 8081 | `service_data/nextcloud/` | ✓ |
+| Immich | `immich-server` | 2283 | `service_data/immich/` | ✓ |
+| Jellyfin | `jellyfin` | 8096 | `service_data/jellyfin/` | ✓ |
+| Vaultwarden | `vaultwarden` | 8200 | `service_data/vaultwarden/` | ✓ |
+| Paperless-ngx | `paperless` | 8010 | `service_data/paperless/` | ✓ |
+| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | `service_data/stirling-pdf-lite/` | ✓ |
+| Mealie | `mealie` | 9925 | `service_data/mealie/` | ✓ |
+| Gitea | `gitea` | 3000 / 2222 | `service_data/gitea/` | ✓ |
+| Forgejo | `forgejo` | 3002 / 2223 | `service_data/forgejo/` | ✓ |
+| GitLab CE | `gitlab` | 8085 / 2224 | `service_data/gitlab/` | ✓ |
+| Uptime Kuma | `uptime-kuma` | 3001 | `service_data/uptime-kuma/` | ✓ |
+| Stirling PDF (Full) | `stirling-pdf` | 8089 | `service_data/stirling-pdf/` | Manual |
+| Headscale | `headscale` | 8086 | `service_data/headscale/` | Manual |
 
 ---
 
@@ -67,6 +69,7 @@ Add these in Nginx Proxy Manager → Proxy Hosts.
 | `mealie.yourdomain.com` | `mealie` | `9000` | — | |
 | `gitea.yourdomain.com` | `gitea` | `3000` | — | |
 | `forgejo.yourdomain.com` | `forgejo` | `3000` | — | |
+| `gitlab.yourdomain.com` | `gitlab` | `80` | — | |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | — | |
 | `dozzle.yourdomain.com` | `dozzle` | `8080` | — | |
 | `photos.yourdomain.com` | `immich-server` | `2283` | — | Alias for Immich |
@@ -131,6 +134,11 @@ Users will see a browser login prompt before reaching the app.
 - Setup wizard skipped automatically (`GITEA__security__INSTALL_LOCK=true` in compose)
 - Registration disabled by default (`DISABLE_REGISTRATION=true` in `.env`)
 - To allow signups: set `DISABLE_REGISTRATION=false` in `.env` and restart
+- Actions (CI/CD) enabled by default (`GITEA__actions__ENABLED=true` in compose)
+- Actions runner is optional — set `GITEA_RUNNER_TOKEN` in `.env` (from Site Admin → Runners → Create Runner), then:
+  ```bash
+  sh homeserver.sh dev up gitea --profile runner
+  ```
 
 ### Forgejo
 
@@ -141,6 +149,28 @@ Users will see a browser login prompt before reaching the app.
 - Setup wizard skipped automatically (`FORGEJO__security__INSTALL_LOCK=true` in compose)
 - Registration disabled by default (`DISABLE_REGISTRATION=true` in `.env`)
 - To allow signups: set `DISABLE_REGISTRATION=false` in `.env` and restart
+- Actions (CI/CD) enabled by default (`FORGEJO__actions__ENABLED=true` in compose)
+- Actions runner is optional — start then register:
+  ```bash
+  sh homeserver.sh dev up forgejo --profile runner
+  docker exec -it forgejo-runner forgejo-runner register
+  ```
+
+### GitLab CE
+
+- Full DevOps platform — heavier than Gitea/Forgejo (~4GB RAM minimum)
+- Built-in Postgres, Redis, and nginx — no separate database container needed
+- All config via `GITLAB_OMNIBUS_CONFIG` in compose (Ruby format)
+- SSH clone port: `2224` (mapped from container's 22)
+- Web port: `8085` (NPM proxies to `gitlab:80` internally)
+- Admin password set on first browser visit at `/users/sign_in`
+- Registration disabled by default (`SIGNUP_ENABLED=false` in `.env`)
+- To allow signups: set `SIGNUP_ENABLED=true` in `.env` and restart
+- GitLab Runner is optional — start with `--profile runner`, then register it:
+  ```bash
+  sh homeserver.sh dev up gitlab --profile runner
+  docker exec -it gitlab-runner gitlab-runner register
+  ```
 
 ### Dozzle
 

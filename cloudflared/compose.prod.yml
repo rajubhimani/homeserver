@@ -1,0 +1,4 @@
+# cloudflared needs no port bindings — it connects outbound to Cloudflare's edge.
+# This file exists only to satisfy the three-file compose pattern.
+services:
+  cloudflared: {}

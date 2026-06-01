@@ -1,0 +1,20 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    env_file: .env
+    # --metrics exposes a local health endpoint cloudflared can probe itself
+    command: tunnel --no-autoupdate --metrics localhost:9002 run --token ${TUNNEL_TOKEN}
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "localhost:9002", "ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

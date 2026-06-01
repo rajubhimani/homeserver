@@ -18,17 +18,24 @@
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_DATA_ROOT="$BASE_DIR/service_data"
 
+# Load global config from root .env if present
+if [ -f "$BASE_DIR/.env" ]; then
+  # shellcheck disable=SC1090
+  . "$BASE_DIR/.env"
+fi
+DOMAIN="${DOMAIN:-yourdomain.com}"
+
 # Startup order — sequential, infrastructure first, monitoring last
-SERVICES_UP="dozzle nginx landing nextcloud vaultwarden gitea forgejo immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma"
+SERVICES_UP="dozzle cloudflared nginx landing nextcloud vaultwarden gitea forgejo gitlab immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma"
 
 # Shutdown order — reverse
-SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich forgejo gitea vaultwarden nextcloud landing nginx dozzle"
+SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich gitlab forgejo gitea vaultwarden nextcloud landing nginx cloudflared dozzle"
 
 # Core group — infrastructure-only subset
 SERVICES_CORE="dozzle nginx landing nextcloud"
 
 # Extra services — valid but not in default 'all' list (start manually)
-SERVICES_EXTRA="stirling-pdf wg-easy headscale openvpn portainer dockge"
+SERVICES_EXTRA="stirling-pdf nginx-plain wg-easy headscale openvpn portainer dockge"
 
 # Timeout in seconds to wait for a service to become healthy
 HEALTH_TIMEOUT=180
@@ -140,19 +147,19 @@ do_up() {
 
   if [ -n "$profile" ]; then
     info "Starting $service ($env) --profile $profile..."
-    DATA_ROOT="$data_root" docker compose $files --profile "$profile" up -d
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d
   else
     info "Starting $service ($env)..."
-    DATA_ROOT="$data_root" docker compose $files up -d
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d
   fi
   compose_rc=$?
 
   if [ $compose_rc -ne 0 ]; then
     # Capture output only on failure to detect zombie docker-proxy port conflicts
     if [ -n "$profile" ]; then
-      compose_err=$(DATA_ROOT="$data_root" docker compose $files --profile "$profile" up -d 2>&1)
+      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d 2>&1)
     else
-      compose_err=$(DATA_ROOT="$data_root" docker compose $files up -d 2>&1)
+      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d 2>&1)
     fi
     port=$(printf "%s" "$compose_err" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
     if [ -n "$port" ]; then
@@ -160,9 +167,9 @@ do_up() {
       sudo fuser -k "${port}/tcp" 2>/dev/null
       sleep 1
       if [ -n "$profile" ]; then
-        DATA_ROOT="$data_root" docker compose $files --profile "$profile" up -d
+        DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d
       else
-        DATA_ROOT="$data_root" docker compose $files up -d
+        DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d
       fi
       compose_rc=$?
     fi
@@ -189,10 +196,10 @@ do_down() {
 
   if [ -n "$profile" ]; then
     info "Stopping $service --profile $profile..."
-    DATA_ROOT="$data_root" docker compose $files --profile "$profile" down
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" down
   else
     info "Stopping $service..."
-    DATA_ROOT="$data_root" docker compose $files --profile ml down 2>/dev/null || DATA_ROOT="$data_root" docker compose $files down
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile ml down 2>/dev/null || DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files down
   fi
 
   success "$service stopped"
@@ -212,12 +219,12 @@ do_update() {
   data_root="$SERVICE_DATA_ROOT/$service"
 
   info "Pulling latest images for $service..."
-  DATA_ROOT="$data_root" docker compose $files pull
+  DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files pull
   pull_rc=$?
   [ $pull_rc -ne 0 ] && warn "Pull had issues for $service — continuing with recreate anyway"
 
   info "Recreating $service ($env)..."
-  DATA_ROOT="$data_root" docker compose $files up -d --force-recreate
+  DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d --force-recreate
   compose_rc=$?
   [ $compose_rc -ne 0 ] && return 1
 
@@ -236,7 +243,7 @@ do_logs() {
   fi
 
   files=$(compose_files "$service" "$env")
-  DATA_ROOT="$SERVICE_DATA_ROOT/$service" docker compose $files logs -f
+  DATA_ROOT="$SERVICE_DATA_ROOT/$service" DOMAIN="$DOMAIN" docker compose $files logs -f
 }
 
 show_help() {

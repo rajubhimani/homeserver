@@ -23,6 +23,7 @@ services:
     image: redis:7-alpine
     container_name: nextcloud-redis
     restart: unless-stopped
+    command: redis-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -54,6 +55,12 @@ services:
       - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
       - ${USER_DATA_ROOT}:/mnt/seagate
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     depends_on:
       nextcloud-db:
         condition: service_healthy
