@@ -556,8 +556,9 @@
       const badge = card.querySelector('.status');
       const text = badge.querySelector('.status-text');
       try {
-        const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000) });
-        const up = res.status < 500;
+        const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000), redirect: 'manual' });
+        // manual redirect: 0=opaque(redirect), 200-499=up, 500+=down
+        const up = res.status === 0 || (res.status >= 200 && res.status < 500);
         badge.className = `status ${up ? 'online' : 'offline'}`;
         text.textContent = up ? 'online' : 'offline';
       } catch {

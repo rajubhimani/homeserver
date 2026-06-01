@@ -32,8 +32,8 @@ services:
       FORGEJO__database__NAME: ${POSTGRES_DB}
       FORGEJO__database__USER: ${POSTGRES_USER}
       FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}
-      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN}
-      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL}
+      FORGEJO__server__DOMAIN: forgejo.${DOMAIN}
+      FORGEJO__server__ROOT_URL: https://forgejo.${DOMAIN}
       FORGEJO__server__SSH_PORT: 2223
       FORGEJO__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
       FORGEJO__security__INSTALL_LOCK: "true"
@@ -61,7 +61,7 @@ services:
     profiles:
       - runner
     environment:
-      FORGEJO_INSTANCE_URL: ${FORGEJO_ROOT_URL}
+      FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data

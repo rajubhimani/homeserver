@@ -3,14 +3,21 @@ services:
     image: gitlab/gitlab-ce:latest
     container_name: gitlab
     restart: unless-stopped
-    hostname: ${GITLAB_HOSTNAME}
+    hostname: gitlab.${DOMAIN}
     env_file: .env
     environment:
       GITLAB_OMNIBUS_CONFIG: |
-        external_url '${GITLAB_EXTERNAL_URL}'
-        gitlab_rails['gitlab_ssh_host'] = '${GITLAB_HOSTNAME}'
+        external_url 'https://gitlab.${DOMAIN}'
+        gitlab_rails['gitlab_ssh_host'] = 'gitlab.${DOMAIN}'
         gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2224}
         gitlab_rails['gitlab_signup_enabled'] = ${SIGNUP_ENABLED:-false}
+        # Cloudflare terminates TLS — serve plain HTTP internally
+        nginx['listen_https'] = false
+        nginx['listen_port'] = 80
+        nginx['proxy_set_headers'] = {
+          "X-Forwarded-Proto" => "https",
+          "X-Forwarded-Ssl" => "on"
+        }
     volumes:
       - ${DATA_ROOT}/config:/etc/gitlab
       - ${DATA_ROOT}/logs:/var/log/gitlab

@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DOMAIN: ${VAULTWARDEN_DOMAIN}
+      DOMAIN: https://vault.${DOMAIN}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED:-false}
     volumes:

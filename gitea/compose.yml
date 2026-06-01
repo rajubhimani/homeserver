@@ -30,8 +30,8 @@ services:
       GITEA__database__NAME: ${POSTGRES_DB}
       GITEA__database__USER: ${POSTGRES_USER}
       GITEA__database__PASSWD: ${POSTGRES_PASSWORD}
-      GITEA__server__DOMAIN: ${GITEA_DOMAIN}
-      GITEA__server__ROOT_URL: ${GITEA_ROOT_URL}
+      GITEA__server__DOMAIN: gitea.${DOMAIN}
+      GITEA__server__ROOT_URL: https://gitea.${DOMAIN}
       GITEA__server__SSH_PORT: 2222
       GITEA__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
       GITEA__security__INSTALL_LOCK: "true"
@@ -59,7 +59,7 @@ services:
     profiles:
       - runner
     environment:
-      GITEA_INSTANCE_URL: ${GITEA_ROOT_URL}
+      GITEA_INSTANCE_URL: https://gitea.${DOMAIN}
       GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
