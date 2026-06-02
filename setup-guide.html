@@ -401,7 +401,7 @@
       <ul class="nav-list">
         <li><a href="#tunnel"><span class="nav-num">01</span>Cloudflare Tunnel</a></li>
         <li><a href="#docker"><span class="nav-num">02</span>Docker Network</a></li>
-        <li><a href="#npm"><span class="nav-num">03</span>Nginx Proxy Manager</a></li>
+        <li><a href="#proxy"><span class="nav-num">03</span>Reverse Proxy</a></li>
         <li><a href="#immich"><span class="nav-num">04</span>Immich</a></li>
         <li><a href="#nextcloud"><span class="nav-num">05</span>Nextcloud</a></li>
         <li><a href="#landing"><span class="nav-num">06</span>Landing Page</a></li>
@@ -416,7 +416,7 @@
     <div class="hero">
       <div class="hero-badge"><span class="hero-badge-dot"></span>Self-hosted · Ubuntu 24.04</div>
       <h1>PrajnaTech<br><em>Setup Guide</em></h1>
-      <p class="hero-desc">Complete homeserver setup — Cloudflare Tunnel, Docker, Nginx Proxy Manager, Immich, Nextcloud, and DNS configuration.</p>
+      <p class="hero-desc">Complete homeserver setup — Cloudflare Tunnel, Docker, nginx-plain reverse proxy, Immich, Nextcloud, dynamic landing page, and DNS configuration.</p>
     </div>
 
     <!-- 01 Cloudflare Tunnel -->
@@ -534,67 +534,70 @@ sudo systemctl restart cloudflared</pre>
     <span class="kw">external</span>: <span class="hl">true</span></pre>
       </div>
 
-      <h3>Startup order</h3>
+      <h3>Startup tiers</h3>
       <ul class="steps">
-        <li class="step"><span class="step-num">01</span><div class="step-content"><div class="step-title">NPM first</div><div class="step-desc">Nginx Proxy Manager must be up before traffic can be routed.</div></div></li>
-        <li class="step"><span class="step-num">02</span><div class="step-content"><div class="step-title">Nextcloud</div><div class="step-desc">Postgres DB starts first via healthcheck dependency.</div></div></li>
-        <li class="step"><span class="step-num">03</span><div class="step-content"><div class="step-title">Immich</div><div class="step-desc">Depends on Postgres and Redis — both must be healthy.</div></div></li>
-        <li class="step"><span class="step-num">04</span><div class="step-content"><div class="step-title">Landing page</div><div class="step-desc">Static Nginx container, start anytime.</div></div></li>
+        <li class="step"><span class="step-num">MIN</span><div class="step-content"><div class="step-title">dozzle → cloudflared → nginx-plain → landing</div><div class="step-desc">Infrastructure — must be up first. Start with <code>sh homeserver.sh dev up min</code>.</div></div></li>
+        <li class="step"><span class="step-num">CORE</span><div class="step-content"><div class="step-title">nextcloud</div><div class="step-desc">Always-on app layer. Start with <code>sh homeserver.sh dev up core</code> (includes min).</div></div></li>
+        <li class="step"><span class="step-num">ALL</span><div class="step-content"><div class="step-title">immich, jellyfin, gitea, forgejo, gitlab, and all other services</div><div class="step-desc">Optional services. Start with <code>sh homeserver.sh dev up all</code>. <code>down all</code> always stops everything.</div></div></li>
       </ul>
     </section>
 
-    <!-- 03 NPM -->
-    <section class="section" id="npm">
+    <!-- 03 Reverse Proxy -->
+    <section class="section" id="proxy">
       <div class="section-header">
         <span class="section-num">03</span>
-        <h2>Nginx Proxy Manager</h2>
+        <h2>Reverse Proxy</h2>
       </div>
 
-      <p>NPM is the single entry point for all HTTP traffic. Cloudflare Tunnel points to NPM on port 80, and NPM routes to each container by name.</p>
+      <p>The reverse proxy is the single entry point for all HTTP traffic. Cloudflare Tunnel connects to it on port 80, and it routes requests to each container by name via the shared Docker network. Run only one proxy at a time.</p>
 
-      <h3>docker-compose.yml</h3>
+      <h3>Option A — nginx-plain (default)</h3>
+      <p>Config-file based. Domain is injected from <code>.env</code> at startup via <code>envsubst</code>. No UI — edit the template file to add services.</p>
+
       <div class="code-block">
-        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
-        <pre><span class="kw">services</span>:
-  <span class="hl">nginx-proxy-manager</span>:
-    <span class="kw">image</span>: jc21/nginx-proxy-manager:latest
-    <span class="kw">container_name</span>: nginx-proxy-manager
-    <span class="kw">restart</span>: unless-stopped
-    <span class="kw">ports</span>:
-      - <span class="str">"80:80"</span>
-      - <span class="str">"443:443"</span>
-      - <span class="str">"81:81"</span>
-    <span class="kw">volumes</span>:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
-    <span class="kw">networks</span>:
-      - homeserver
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre><span class="cm"># Set your domain once in root .env</span>
+echo "DOMAIN=yourdomain.com" > .env
 
-<span class="kw">networks</span>:
-  homeserver:
-    <span class="kw">external</span>: <span class="hl">true</span></pre>
+<span class="cm"># Start nginx-plain (includes in SERVICES_MIN)</span>
+sh homeserver.sh dev up min</pre>
       </div>
 
-      <div class="note info">
-        <span class="note-icon">→</span>
-        Default login: <strong>admin@example.com</strong> / <strong>changeme</strong> — change immediately on first login.
+      <p>Each service already has a <code>server_name &lt;service&gt;.${DOMAIN}</code> block in <code>nginx-plain/templates/default.conf.template</code>. To add a new service, add a <code>server</code> block and restart.</p>
+
+      <h3>Option B — Nginx Proxy Manager (optional)</h3>
+      <p>UI-based proxy with web interface. Start instead of nginx-plain — both cannot run simultaneously.</p>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>sh homeserver.sh dev up nginx</pre>
       </div>
 
-      <h3>Add proxy hosts in NPM UI (http://localhost:81)</h3>
+      <p>Admin UI at <code>http://localhost:81</code>. Default login: <strong>admin@example.com</strong> / <strong>changeme</strong> — change immediately.</p>
+
+      <h3>Proxy host table (all services)</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Domain</th><th>Forward Hostname</th><th>Forward Port</th><th>SSL</th></tr></thead>
+          <thead><tr><th>Domain</th><th>Forward Hostname</th><th>Port</th></tr></thead>
           <tbody>
-            <tr><td>immich.yourdomain.com</td><td>immich-server</td><td>2283</td><td><span class="tag">none</span></td></tr>
-            <tr><td>nextcloud.yourdomain.com</td><td>nextcloud</td><td>80</td><td><span class="tag">none</span></td></tr>
-            <tr><td>yourdomain.com</td><td>landing</td><td>80</td><td><span class="tag">none</span></td></tr>
+            <tr><td>yourdomain.com</td><td>landing</td><td>80</td></tr>
+            <tr><td>nextcloud.yourdomain.com</td><td>nextcloud</td><td>80</td></tr>
+            <tr><td>immich.yourdomain.com</td><td>immich-server</td><td>2283</td></tr>
+            <tr><td>jellyfin.yourdomain.com</td><td>jellyfin</td><td>8096</td></tr>
+            <tr><td>vault.yourdomain.com</td><td>vaultwarden</td><td>80</td></tr>
+            <tr><td>paperless.yourdomain.com</td><td>paperless</td><td>8000</td></tr>
+            <tr><td>gitea.yourdomain.com</td><td>gitea</td><td>3000</td></tr>
+            <tr><td>forgejo.yourdomain.com</td><td>forgejo</td><td>3000</td></tr>
+            <tr><td>gitlab.yourdomain.com</td><td>gitlab</td><td>80</td></tr>
+            <tr><td>mail.yourdomain.com</td><td>stalwart</td><td>8080</td></tr>
+            <tr><td>dozzle.yourdomain.com</td><td>dozzle</td><td>8080</td></tr>
           </tbody>
         </table>
       </div>
 
       <div class="note warn">
         <span class="note-icon">!</span>
-        No SSL needed — Cloudflare Tunnel handles TLS termination at the edge. Traffic from tunnel to NPM is plain HTTP internally.
+        No SSL certs needed in the proxy — Cloudflare Tunnel handles TLS at the edge. All internal traffic is plain HTTP.
       </div>
     </section>
 
@@ -777,36 +780,35 @@ curl http://localhost:2283/api/server/ping</pre>
         <h2>Landing Page</h2>
       </div>
 
-      <p>A static landing page served by Nginx Alpine, showing all running services with links.</p>
+      <p>A dynamic service dashboard served by Nginx Alpine. Shows all services with live status indicators — green when up, red when down. All text (domain, site name, tagline) is injected from <code>.env</code> at container start — no hardcoded values in the repo.</p>
 
-      <h3>docker-compose.yml</h3>
+      <h3>Configure landing/.env</h3>
       <div class="code-block">
-        <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
-        <pre><span class="kw">services</span>:
-  <span class="hl">landing</span>:
-    <span class="kw">image</span>: nginx:alpine
-    <span class="kw">container_name</span>: landing
-    <span class="kw">restart</span>: unless-stopped
-    <span class="kw">volumes</span>:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
-    <span class="kw">networks</span>:
-      - homeserver
-
-<span class="kw">networks</span>:
-  homeserver:
-    <span class="kw">external</span>: <span class="hl">true</span></pre>
+        <div class="code-header"><span class="code-lang">.env</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
+        <pre>DOMAIN=yourdomain.com
+SITE_NAME=MyServer
+TAGLINE=Your data, your hardware, your control.
+AUTHOR=Your Name
+LOCATION=Your City</pre>
       </div>
 
-      <h3>Deploy</h3>
+      <h3>Start</h3>
       <div class="code-block">
         <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div>
-        <pre>mkdir -p ~/docker/landing
-cp index.html ~/docker/landing/
-cd ~/docker/landing
-docker compose up -d</pre>
+        <pre>sh homeserver.sh dev up landing</pre>
       </div>
 
-      <p>Then add proxy host in NPM: <code>yourdomain.com</code> → <code>landing:80</code></p>
+      <h3>How live status works</h3>
+      <p>The browser fetches <code>/health/&lt;service&gt;</code> (same-origin). Nginx proxies each request to the real container on the internal Docker network. If a container is down, nginx returns <code>502</code> and the badge turns red.</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">flow</span></div>
+        <pre>Browser → /health/nextcloud → nginx (landing) → nextcloud:80</pre>
+      </div>
+
+      <div class="note info">
+        <span class="note-icon">→</span>
+        nginx-plain routes <code>yourdomain.com</code> → <code>landing:80</code> automatically — no manual proxy host config needed.
+      </div>
     </section>
 
     <!-- 07 DNS -->
@@ -843,7 +845,7 @@ docker compose up -d</pre>
       <h3>Traffic flow</h3>
       <div class="code-block">
         <div class="code-header"><span class="code-lang">flow</span></div>
-        <pre>Browser → Cloudflare Edge (TLS) → cloudflared tunnel → NPM:80 → container</pre>
+        <pre>Browser → Cloudflare Edge (TLS) → cloudflared tunnel → nginx-plain:80 → container</pre>
       </div>
     </section>
 

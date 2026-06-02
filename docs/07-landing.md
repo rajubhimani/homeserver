@@ -4,58 +4,72 @@
 
 ---
 
-A service dashboard served by Nginx Alpine. Shows all services with **live status indicators** — green when up, red when down, rechecked every 60 seconds.
+A service dashboard served by Nginx Alpine. Shows all services with **live status indicators** —
+green when up, red when down, rechecked every 60 seconds.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | Dashboard UI with status badges |
+| `index.html` | Dashboard UI template with placeholders |
+| `entrypoint.sh` | Replaces placeholders with `.env` values at startup |
 | `nginx.conf` | Serves HTML + `/health/*` proxy endpoints |
 | `docker-compose.yml` | Base config (no ports) |
 | `compose.dev.yml` | Exposes port `8080` on all interfaces |
 | `compose.prod.yml` | Exposes port `8080` on `127.0.0.1` only |
+| `.env` | `DOMAIN`, `SITE_NAME`, `TAGLINE`, `AUTHOR`, `LOCATION` |
+
+## Dynamic configuration
+
+The landing page is fully dynamic — no domain or personal info is hardcoded.
+Set these in `landing/.env`:
+
+```env
+DOMAIN=yourdomain.com
+SITE_NAME=MyServer
+TAGLINE=Your data, your hardware, your control.
+AUTHOR=Your Name
+LOCATION=Your City
+```
+
+`entrypoint.sh` runs `sed` at container start to replace placeholders in `index.html`
+before nginx serves it.
 
 ## How live status works
 
-The browser fetches `/health/<service>` (same-origin, no CORS issues). Nginx proxies each request to the real container on the internal Docker network and returns the actual HTTP status. If a container is down, nginx gets a connection refused and returns `502` — the badge turns red.
+The browser fetches `/health/<service>` (same-origin, no CORS issues).
+Nginx proxies each request to the real container via the internal Docker network.
 
 ```text
-Browser → /health/immich → nginx (landing) → immich-server:2283
+Browser → /health/nextcloud → nginx (landing) → nextcloud:80
 ```
 
-Health endpoints are defined in `nginx.conf` using Docker's internal DNS (`127.0.0.11`) with `set $upstream` to defer resolution — so the landing container starts even if other services are down.
+Health endpoints are in `nginx.conf`. Docker's internal DNS (`127.0.0.11`) with
+`set $upstream` defers resolution — the landing container starts even if other services are down.
+
+Redirects (e.g. GitLab's 302) are treated as online using `redirect: 'manual'` in the
+JS fetch call — opaque responses count as up.
 
 ## Start
 
 ```bash
-# dev (port 8080 exposed)
-./homeserver.sh landing dev
-
-# prod (port 8080 on localhost only, NPM proxies)
-./homeserver.sh landing prod
+sh homeserver.sh dev up landing
 ```
 
 ## Access
 
-**Cloudflare path:** `https://yourdomain.com` (NPM proxy host → `landing:80`)  
-**Tailscale path:** `http://100.x.x.x:8080`
-
-## Update content
-
-Edit `~/homeserver/landing/index.html` directly — the file is volume-mounted so changes appear on the next browser refresh (no container restart needed).
-
-> Cache-Control headers are set to `no-store` so browsers always fetch the latest version.
+- **Cloudflare path:** `https://yourdomain.com` (nginx-plain proxies `landing:80`)
+- **Tailscale / dev path:** `http://<server-ip>:8080`
 
 ## Add a new service to the dashboard
 
-1. Add a card in `index.html` with `data-service="<name>"`
-2. Add a `/health/<name>` location in `nginx.conf` pointing to the container
-3. Restart the landing container to reload the nginx config:
+1. Add a card in `landing/index.html` under the appropriate section
+2. Add the service subdomain to `SERVICE_SUBDOMAINS` in the `<script>` block
+3. Add a `/health/<service>` location block in `landing/nginx.conf`
+4. Restart landing to reload nginx:
 
 ```bash
-cd ~/homeserver/landing
-docker compose down && docker compose -f docker-compose.yml -f compose.dev.yml up -d
+sh homeserver.sh dev up landing
 ```
 
 ---

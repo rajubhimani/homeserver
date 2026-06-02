@@ -31,20 +31,15 @@ DB_URL=postgresql://immich:your_strong_password@immich-database:5432/immich
 
 ## Start
 
-**Production (Cloudflare)** — no ports exposed, NPM routes via Docker network:
-
 ```bash
-cd ~/homeserver/immich
-docker compose up -d
-docker compose logs -f immich-server
+sh homeserver.sh dev up immich
+sh homeserver.sh dev logs immich
 ```
 
-**Testing (Tailscale)** — exposes port 2283 via dev override:
+For prod (ports on localhost only):
 
 ```bash
-cd ~/homeserver/immich
-docker compose -f compose.yml -f compose.dev.yml up -d
-docker compose logs -f immich-server
+sh homeserver.sh prod up immich
 ```
 
 **Cloudflare path:** open `https://immich.yourdomain.com`  

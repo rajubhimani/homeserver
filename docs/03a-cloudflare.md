@@ -1,6 +1,6 @@
 # 03a — Cloudflare Tunnel + DNS
 
-[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Nginx Proxy Manager →](04-nginx.md)
+[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Reverse Proxy →](04-nginx.md)
 
 ---
 
@@ -9,10 +9,10 @@ Cloudflare Tunnel creates an outbound connection from your server to Cloudflare'
 **Traffic flow:**
 
 ```text
-Browser → Cloudflare Edge (TLS) → cloudflared → NPM:80 → container
+Browser → Cloudflare Edge (TLS) → cloudflared → nginx-plain:80 → container
 ```
 
-Cloudflare terminates TLS — no SSL certs needed inside NPM.
+Cloudflare terminates TLS — no SSL certs needed inside the reverse proxy.
 
 ---
 
@@ -59,7 +59,7 @@ ingress:
   - service: http_status:404
 ```
 
-All traffic hits NPM on port 80. NPM routes to the correct container by domain name.
+All traffic hits the reverse proxy (nginx-plain by default) on port 80, which routes to the correct container by domain name.
 
 ## Install as system service
 
@@ -103,7 +103,7 @@ In **Cloudflare Dashboard → DNS**, add these three records. Replace `<tunnel-i
 | CNAME | `www` | `<tunnel-id>.cfargotunnel.com` | Proxied |
 | CNAME | `*` | `<tunnel-id>.cfargotunnel.com` | Proxied |
 
-The wildcard `*` covers all subdomains — immich, nextcloud, anything you add later. Don't add per-service records; NPM handles routing internally.
+The wildcard `*` covers all subdomains — immich, nextcloud, anything you add later. Don't add per-service records; the reverse proxy handles routing internally.
 
 ---
 
@@ -114,7 +114,8 @@ The wildcard `*` covers all subdomains — immich, nextcloud, anything you add l
 | Landing | `https://yourdomain.com` |
 | Nextcloud | `https://nextcloud.yourdomain.com` |
 | Immich | `https://immich.yourdomain.com` |
-| NPM Admin | `http://localhost:81` or via SSH tunnel |
+| Dozzle | `https://dozzle.yourdomain.com` |
+| NPM admin (if using NPM) | `http://localhost:81` via SSH tunnel |
 
 ---
 
@@ -122,4 +123,4 @@ The wildcard `*` covers all subdomains — immich, nextcloud, anything you add l
 
 ---
 
-[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Nginx Proxy Manager →](04-nginx.md)
+[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Reverse Proxy →](04-nginx.md)
