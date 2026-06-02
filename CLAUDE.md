@@ -10,7 +10,7 @@ A self-hosted personal cloud stack managed with Docker Compose. Each service liv
 
 Set your domain once in the root `.env` — `homeserver.sh` injects it into every service automatically:
 
-```
+```bash
 # .env (repo root)
 DOMAIN=yourdomain.com
 ```
@@ -46,6 +46,7 @@ sh homeserver.sh dev logs <service>
 ```
 
 **Environments:**
+
 - `dev` — ports bound to all interfaces (direct access by IP)
 - `prod` — ports bound to `127.0.0.1` only (Nginx Proxy Manager handles external access)
 
@@ -60,6 +61,7 @@ sh homeserver.sh dev logs <service>
 - `down all` always stops every tier in reverse order — automatically complete, no list to maintain
 
 **IMPORTANT — adding a new service:**
+
 - **Always add to `SERVICES_EXTRA` first** — never directly to `SERVICES_MIN` or `SERVICES_CORE`
 - Only move to `SERVICES_CORE` when explicitly asked (service confirmed stable and always-on)
 - Only move to `SERVICES_MIN` for pure infrastructure (reverse proxy, tunnel, log viewer)
@@ -95,14 +97,15 @@ All services join the external `homeserver` Docker bridge network. NPM resolves 
 6. Add the service name to `SERVICES_EXTRA` in `homeserver.sh` — always extra first, move to `SERVICES_CORE` only when explicitly asked; `down all` derives shutdown order automatically
 7. Add a card to `landing/index.html` under the appropriate section and add its subdomain to `SERVICE_SUBDOMAINS` in the script block
 8. Add a `/health/<service>` proxy route to `landing/nginx.conf` pointing to `http://<container>:<port>` — without this the landing page card always shows offline
-8. Add NPM proxy host entry in `docs/11-services-reference.md`
-9. Add a service row in `docs/11-services-reference.md` and `setup.md`
-10. Document setup steps in `docs/10-new-services.md`
-11. Add a `healthcheck` to the service container in `compose.yml` (see healthcheck patterns below)
-11. If the service has optional sub-services (e.g. runners added via `--profile`), document them in **all** relevant doc sections in the same pass — never update compose files without updating the matching docs
-12. Every service container must have a `healthcheck` — use the service's own health endpoint where available, otherwise a simple HTTP probe or process check. This enables reliable `depends_on: condition: service_healthy` ordering and makes `docker ps` show real status
+9. Add NPM proxy host entry in `docs/11-services-reference.md`
+10. Add a service row in `docs/11-services-reference.md` and `setup.md`
+11. Document setup steps in `docs/10-new-services.md`
+12. Add a `healthcheck` to the service container in `compose.yml` (see healthcheck patterns below)
+13. If the service has optional sub-services (e.g. runners added via `--profile`), document them in **all** relevant doc sections in the same pass — never update compose files without updating the matching docs
+14. Every service container must have a `healthcheck` — use the service's own health endpoint where available, otherwise a simple HTTP probe or process check. This enables reliable `depends_on: condition: service_healthy` ordering and makes `docker ps` show real status
 
 **Healthcheck patterns by service type:**
+
 - nginx-based: `wget -q --spider http://localhost/ || exit 1`
 - HTTP app: `curl -f http://localhost:<port>/health || exit 1`
 - Dozzle: `["/dozzle", "healthcheck"]`
@@ -114,6 +117,7 @@ All services join the external `homeserver` Docker bridge network. NPM resolves 
 ## Services with PostgreSQL
 
 Services that need Postgres (nextcloud, paperless, mealie, gitea, forgejo) include:
+
 - `forgejo-db` / `gitea-db` / etc. container using `postgres:18`
 - `postgres-init/init.sh` that grants schema ownership — required due to PostgreSQL 15+ default privilege changes
 - Healthcheck on the DB so the app container waits until it's ready
@@ -132,7 +136,7 @@ Two options — **run only one at a time**, both bind to port 80/443:
 
 ## Traffic flow
 
-```
+```text
 Browser → Cloudflare Edge (TLS) → cloudflared (container) → nginx / NPM :80 → <container>
 ```
 
@@ -176,6 +180,7 @@ Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve 
 **Next available ports:** web `8102`, SSH `2225`
 
 When adding a new service:
+
 - Pick a web port not in the table above — update this table immediately
 - If the service has SSH, pick the next SSH port (`2225`, `2226`, …)
 - Never reuse a port, even for manual-only services — they may run alongside `all`
@@ -184,7 +189,7 @@ When adding a new service:
 
 All persistent service data lives under a single `service_data/` directory at the repo root, with one subfolder per service:
 
-```
+```text
 service_data/        ← gitignored entirely
   forgejo/
     postgres/        ← DB files
@@ -198,9 +203,11 @@ service_data/        ← gitignored entirely
 
 - **Always set** `DATA_ROOT=../service_data/<service>` in the service's `.env`
 - **Always create** the subdirectories before first start:
+
   ```bash
   mkdir -p service_data/<service>/postgres service_data/<service>/app
   ```
+
 - Volume paths in `compose.yml` use `${DATA_ROOT}/postgres`, `${DATA_ROOT}/app`, etc. — no service name prefix needed
 - `service_data/` is in `.gitignore` — never committed
 - `homeserver.sh` always injects `DATA_ROOT` as an absolute path (`$BASE_DIR/service_data/<service>`) overriding the `.env` value — so the `.env` relative path is only a fallback for running `docker compose` directly
@@ -228,6 +235,7 @@ Each service with public signup has a toggle in its `.env`:
 | GitLab | `SIGNUP_ENABLED` | `false` | `true` |
 
 All default to **disabled**. To re-enable, update the value in `.env` and restart the service:
+
 ```bash
 sh homeserver.sh dev up <service>
 ```

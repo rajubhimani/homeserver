@@ -33,11 +33,13 @@ NEXTCLOUD_TRUSTED_DOMAINS=
 ### Trusted domains by access path
 
 **Cloudflare path:**
+
 ```env
 NEXTCLOUD_TRUSTED_DOMAINS=localhost nextcloud.yourdomain.com
 ```
 
 **Tailscale path:**
+
 ```env
 NEXTCLOUD_TRUSTED_DOMAINS=localhost 192.168.1.100 100.x.x.x
 ```
@@ -49,6 +51,7 @@ NEXTCLOUD_TRUSTED_DOMAINS=localhost 192.168.1.100 100.x.x.x
 ## Start
 
 **Production (Cloudflare)** — no ports exposed, NPM routes via Docker network:
+
 ```bash
 cd ~/homeserver/nextcloud
 docker compose up -d
@@ -57,6 +60,7 @@ docker compose logs -f nextcloud
 ```
 
 **Testing (Tailscale)** — exposes port 8081 via dev override:
+
 ```bash
 cd ~/homeserver/nextcloud
 docker compose -f compose.yml -f compose.dev.yml up -d

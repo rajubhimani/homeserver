@@ -11,12 +11,14 @@ NPM is the single entry point for all HTTP traffic. It routes to each container 
 The base `compose.yml` has no ports. Use the override matching your setup:
 
 **Production (Cloudflare):**
+
 ```bash
 cd ~/homeserver/nginx
 docker compose -f compose.yml -f compose.prod.yml up -d
 ```
 
 **Testing (Tailscale):**
+
 ```bash
 cd ~/homeserver/nginx
 docker compose -f compose.yml -f compose.dev.yml up -d

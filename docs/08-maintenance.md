@@ -48,6 +48,7 @@ sh homeserver.sh dev down stirling-pdf
 Pull latest images and recreate containers:
 
 **All services at once:**
+
 ```bash
 # dev
 find ~/homeserver -maxdepth 2 -name "*compose.yml" | xargs -I{} sh -c 'docker compose -f {} pull 2>/dev/null'; ./homeserver.sh all dev
@@ -57,6 +58,7 @@ find ~/homeserver -maxdepth 2 -name "*compose.yml" | xargs -I{} sh -c 'docker co
 ```
 
 **Individual service:**
+
 ```bash
 cd ~/homeserver/immich
 docker compose pull && ./homeserver.sh immich dev
@@ -179,6 +181,5 @@ docker --context homeserver ps  # one-off without switching
 - **Docker context is global** — switching affects all terminal windows
 
 ---
-
 
 [← Landing Page](07-landing.md) | [Home](../setup.md)

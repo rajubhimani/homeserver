@@ -7,6 +7,7 @@
 Cloudflare Tunnel creates an outbound connection from your server to Cloudflare's edge. No inbound ports need to be open.
 
 **Traffic flow:**
+
 ```text
 Browser → Cloudflare Edge (TLS) → cloudflared → NPM:80 → container
 ```

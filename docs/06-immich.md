@@ -32,6 +32,7 @@ DB_URL=postgresql://immich:your_strong_password@immich-database:5432/immich
 ## Start
 
 **Production (Cloudflare)** — no ports exposed, NPM routes via Docker network:
+
 ```bash
 cd ~/homeserver/immich
 docker compose up -d
@@ -39,6 +40,7 @@ docker compose logs -f immich-server
 ```
 
 **Testing (Tailscale)** — exposes port 2283 via dev override:
+
 ```bash
 cd ~/homeserver/immich
 docker compose -f compose.yml -f compose.dev.yml up -d
@@ -81,11 +83,13 @@ Install the **Immich** app (Android / iOS — free).
 ### Server URL by access path
 
 **Cloudflare path:**
+
 ```text
 https://immich.yourdomain.com
 ```
 
 **Tailscale path:**
+
 ```text
 http://100.x.x.x:2283
 ```

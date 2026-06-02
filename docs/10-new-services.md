@@ -36,6 +36,7 @@ sh homeserver.sh dev up jellyfin
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | First visit | Open `http://<ip>:8096` — setup wizard creates the admin account |
@@ -71,6 +72,7 @@ sh homeserver.sh dev up vaultwarden
 | Admin panel | `http://<ip>:8200/admin` → enter `ADMIN_TOKEN` |
 
 **Inviting users (no SMTP needed):**
+
 1. Admin panel → Users → Invite User → enter email
 2. Share `http://<ip>:8200/#/signup` with the invited email address
 
@@ -105,6 +107,7 @@ sh homeserver.sh dev up paperless
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | Env vars ✓ | `PAPERLESS_ADMIN_USER` / `PAPERLESS_ADMIN_PASSWORD` — auto-created on first start |
@@ -135,6 +138,7 @@ sh homeserver.sh dev up stirling-pdf-lite
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | Env vars ✓ | `STIRLING_ADMIN_USER` / `STIRLING_ADMIN_PASSWORD` — set at startup |
@@ -185,6 +189,7 @@ sh homeserver.sh dev up mealie
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | Default credentials | `changeme@example.com` / `MyPassword` — **change immediately** after first login |
@@ -219,12 +224,14 @@ sh homeserver.sh dev up gitea
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | CLI ✓ | `docker exec -it gitea gitea admin user create --username admin --password yourpassword --email admin@example.com --admin` |
 | First visit | Remove `GITEA__security__INSTALL_LOCK: "true"` from `compose.yml`, restart, browse to `http://<ip>:3000` — setup wizard appears with an admin form at the bottom |
 
 **Actions runner (optional):**
+
 1. Site Admin → Runners → Create Runner → copy the token
 2. Set `GITEA_RUNNER_TOKEN=<token>` in `.env`
 3. `sh homeserver.sh dev up gitea --profile runner`
@@ -258,12 +265,14 @@ sh homeserver.sh dev up forgejo
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | CLI ✓ | `docker exec -it forgejo forgejo admin user create --username admin --password yourpassword --email admin@example.com --admin` |
 | First visit | Remove `FORGEJO__security__INSTALL_LOCK: "true"` from `compose.yml`, restart, browse to `http://<ip>:3001` — setup wizard appears with an admin form at the bottom |
 
 **Actions runner (optional):**
+
 ```bash
 sh homeserver.sh dev up forgejo --profile runner
 docker exec -it forgejo-runner forgejo-runner register
@@ -298,6 +307,7 @@ sh homeserver.sh dev up gitlab
 GitLab takes ~2–3 minutes to fully start on first launch.
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | First visit ✓ | Browse to `http://<ip>:8085` — prompted to set the `root` password on first login |
@@ -305,6 +315,7 @@ GitLab takes ~2–3 minutes to fully start on first launch.
 | CLI | `docker exec -it gitlab gitlab-rake "gitlab:password:reset[root]"` — works any time, including after first start |
 
 **Actions runner (optional):**
+
 ```bash
 sh homeserver.sh dev up gitlab --profile runner
 docker exec -it gitlab-runner gitlab-runner register
@@ -324,6 +335,7 @@ sh homeserver.sh dev up uptime-kuma
 ```
 
 **Admin account:**
+
 | Method | How |
 | --- | --- |
 | First visit ✓ | Browse to `http://<ip>:3001` — create the admin account on first launch |

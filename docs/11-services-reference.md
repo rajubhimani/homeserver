@@ -136,6 +136,7 @@ Users will see a browser login prompt before reaching the app.
 - To allow signups: set `DISABLE_REGISTRATION=false` in `.env` and restart
 - Actions (CI/CD) enabled by default (`GITEA__actions__ENABLED=true` in compose)
 - Actions runner is optional — set `GITEA_RUNNER_TOKEN` in `.env` (from Site Admin → Runners → Create Runner), then:
+
   ```bash
   sh homeserver.sh dev up gitea --profile runner
   ```
@@ -151,6 +152,7 @@ Users will see a browser login prompt before reaching the app.
 - To allow signups: set `DISABLE_REGISTRATION=false` in `.env` and restart
 - Actions (CI/CD) enabled by default (`FORGEJO__actions__ENABLED=true` in compose)
 - Actions runner is optional — start then register:
+
   ```bash
   sh homeserver.sh dev up forgejo --profile runner
   docker exec -it forgejo-runner forgejo-runner register
@@ -167,6 +169,7 @@ Users will see a browser login prompt before reaching the app.
 - Registration disabled by default (`SIGNUP_ENABLED=false` in `.env`)
 - To allow signups: set `SIGNUP_ENABLED=true` in `.env` and restart
 - GitLab Runner is optional — start with `--profile runner`, then register it:
+
   ```bash
   sh homeserver.sh dev up gitlab --profile runner
   docker exec -it gitlab-runner gitlab-runner register
