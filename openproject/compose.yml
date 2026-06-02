@@ -1,0 +1,26 @@
+services:
+  openproject:
+    image: openproject/openproject:17
+    container_name: openproject
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OPENPROJECT_HOST__NAME: openproject.${DOMAIN}
+      OPENPROJECT_HTTPS: "false"
+      OPENPROJECT_DEFAULT__LANGUAGE: en
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+    volumes:
+      - ${DATA_ROOT}/pgdata:/var/openproject/pgdata
+      - ${DATA_ROOT}/assets:/var/openproject/assets
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health_checks/default || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

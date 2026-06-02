@@ -1,0 +1,4 @@
+services:
+  ntfy:
+    ports:
+      - "8092:80"

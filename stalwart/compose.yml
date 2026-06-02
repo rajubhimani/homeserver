@@ -1,0 +1,23 @@
+services:
+  stalwart:
+    image: stalwartlabs/stalwart:latest
+    container_name: stalwart
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      STALWART_PUBLIC_URL: https://mail.${DOMAIN}
+    volumes:
+      - ${DATA_ROOT}/config:/etc/stalwart
+      - ${DATA_ROOT}/data:/var/lib/stalwart
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8080/ > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

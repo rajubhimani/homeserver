@@ -2,18 +2,18 @@
 # homeserver.sh — manage all homeserver services
 #
 # Usage:
-#   ./homeserver.sh <env> <up|down|logs|update> <service|all> [service2 ...] [--profile <name>]
+#   ./homeserver.sh <env> <up|down|logs|update> <min|core|all|running|service...> [--profile <name>]
 #
-# Examples:
-#   ./homeserver.sh dev up all
-#   ./homeserver.sh prod up all
-#   ./homeserver.sh dev up landing mealie
-#   ./homeserver.sh prod up nextcloud immich jellyfin
-#   ./homeserver.sh dev down all
-#   ./homeserver.sh dev down landing mealie
-#   ./homeserver.sh dev up immich --profile ml
-#   ./homeserver.sh dev down immich --profile ml
-#   ./homeserver.sh dev logs immich
+# Service tiers:
+#   min  — bare minimum to run the server (dozzle, nginx-plain, landing)
+#   core — full default stack, includes min (starts with 'up core' or 'up all')
+#   all  — core + extra (everything); down all always stops everything
+#   extra — optional/manual services, not started by 'up core'
+#
+# IMPORTANT: When adding a new service —
+#   - Add to SERVICES_CORE if it should auto-start with 'up core'
+#   - Add to SERVICES_EXTRA if it is optional/manual
+#   - That is all — 'up all' and 'down all' derive everything automatically
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_DATA_ROOT="$BASE_DIR/service_data"
@@ -25,22 +25,33 @@ if [ -f "$BASE_DIR/.env" ]; then
 fi
 DOMAIN="${DOMAIN:-yourdomain.com}"
 
-# Startup order — sequential, infrastructure first, monitoring last
-SERVICES_UP="dozzle cloudflared nginx landing nextcloud vaultwarden gitea forgejo gitlab immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma"
+# ── Service tiers ─────────────────────────────────────────────────
+# MIN ⊂ CORE ⊂ ALL (ALL = CORE + EXTRA)
 
-# Shutdown order — reverse
-SERVICES_DOWN="uptime-kuma mealie stirling-pdf stirling-pdf-lite paperless jellyfin immich gitlab forgejo gitea vaultwarden nextcloud landing nginx cloudflared dozzle"
+# ── Service tiers (additive: each tier builds on the previous) ────
+#
+#   up min  = MIN
+#   up core = MIN + CORE
+#   up all  = MIN + CORE + EXTRA
+#
+#   down min/core/all = same sets, reversed
+#
+# NEW SERVICES ALWAYS GO INTO SERVICES_EXTRA FIRST.
+# Move to SERVICES_CORE only when explicitly asked to.
 
-# Core group — infrastructure-only subset
-SERVICES_CORE="dozzle nginx landing nextcloud"
+# Infrastructure — reverse proxy, tunnel, log viewer, landing page
+SERVICES_MIN="dozzle cloudflared nginx-plain landing"
 
-# Extra services — valid but not in default 'all' list (start manually)
-SERVICES_EXTRA="stirling-pdf nginx-plain wg-easy headscale openvpn portainer dockge"
+# Always-on apps added on top of MIN (currently just nextcloud)
+SERVICES_CORE="nextcloud"
+
+# Everything else — started with 'up all' or individually
+SERVICES_EXTRA="vaultwarden gitea forgejo gitlab immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma stirling-pdf nginx stalwart snappymail roundcube syncthing authentik ntfy miniflux audiobookshelf conduit openproject plane crater wg-easy headscale openvpn portainer dockge"
 
 # Timeout in seconds to wait for a service to become healthy
 HEALTH_TIMEOUT=180
 
-# Colors
+# ── Colors ────────────────────────────────────────────────────────
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
@@ -54,12 +65,19 @@ error()   { printf "${RED}✖ %s${RESET}\n" "$*"; }
 warn()    { printf "${YELLOW}⚠ %s${RESET}\n" "$*"; }
 header()  { printf "\n${BOLD}%s${RESET}\n\n" "$*"; }
 
+# ── Helpers ───────────────────────────────────────────────────────
+
+# Reverse a space-separated list
+reverse_list() {
+  printf "%s" "$1" | tr ' ' '\n' | awk 'NF{a[++n]=$0} END{for(i=n;i>=1;i--)printf "%s ",a[i]}' | sed 's/ $//'
+}
+
 base_file() {
   [ "$1" = "landing" ] && echo "docker-compose.yml" || echo "compose.yml"
 }
 
 is_valid_service() {
-  for s in $SERVICES_UP $SERVICES_EXTRA; do
+  for s in $SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -86,17 +104,27 @@ compose_files_all() {
   echo "$files"
 }
 
-# Wait for a service to become healthy or running
-# Returns 0 on success, 1 on failure/timeout
+# Returns currently running services across all tiers, preserving startup order
+get_running_services() {
+  running_containers=$(docker ps --format "{{.Names}}")
+  result=""
+  for svc in $SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA; do
+    if printf "%s" "$running_containers" | grep -qE "^${svc}(-|$)"; then
+      result="$result $svc"
+    fi
+  done
+  printf "%s" "$result"
+}
+
+# ── Wait for healthy ──────────────────────────────────────────────
+
 wait_healthy() {
   service=$1
   elapsed=0
   interval=5
 
-  # get the main container name for this service
   container=$(docker ps -a --format "{{.Names}}" | grep "^${service}$" | head -1)
   if [ -z "$container" ]; then
-    # try common naming patterns
     container=$(docker ps -a --format "{{.Names}}" | grep "^${service}-" | grep -v "db\|redis\|worker" | head -1)
   fi
   [ -z "$container" ] && container="$service"
@@ -120,7 +148,6 @@ wait_healthy() {
       printf " dependency failed${RESET}\n"
       return 1
     fi
-    # unhealthy = keep waiting; some services temporarily fail checks during boot
 
     sleep $interval
     elapsed=$((elapsed + interval))
@@ -130,6 +157,8 @@ wait_healthy() {
   printf " timeout after ${HEALTH_TIMEOUT}s${RESET}\n"
   return 1
 }
+
+# ── Actions ───────────────────────────────────────────────────────
 
 do_up() {
   service=$1
@@ -155,7 +184,6 @@ do_up() {
   compose_rc=$?
 
   if [ $compose_rc -ne 0 ]; then
-    # Capture output only on failure to detect zombie docker-proxy port conflicts
     if [ -n "$profile" ]; then
       compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d 2>&1)
     else
@@ -246,36 +274,48 @@ do_logs() {
   DATA_ROOT="$SERVICE_DATA_ROOT/$service" DOMAIN="$DOMAIN" docker compose $files logs -f
 }
 
+# ── Help ──────────────────────────────────────────────────────────
+
 show_help() {
   printf "\n"
   printf "${BOLD}  homeserver.sh — manage homeserver Docker services${RESET}\n"
   printf "\n"
   printf "  ${BOLD}Usage:${RESET}\n"
-  printf "    ./homeserver.sh <env> <up|down|logs> <service|all> [service2 ...] [--profile <name>]\n"
+  printf "    ./homeserver.sh <env> <up|down|logs|update> <tier|service...> [--profile <name>]\n"
   printf "\n"
   printf "  ${BOLD}Environments:${RESET}\n"
   printf "    dev    ports on all interfaces (direct access)\n"
   printf "    prod   ports on 127.0.0.1 only (nginx proxy handles external)\n"
   printf "\n"
+  printf "  ${BOLD}Tiers:${RESET}\n"
+  printf "    min     bare minimum — dozzle, nginx-plain, landing\n"
+  printf "    core    full default stack (includes min)\n"
+  printf "    all     core + extra — starts/stops everything\n"
+  printf "    running update only — currently running services\n"
+  printf "\n"
   printf "  ${BOLD}Examples:${RESET}\n"
-  printf "    ./homeserver.sh dev up all                      start all sequentially (dev)\n"
-  printf "    ./homeserver.sh prod up all                     start all sequentially (prod)\n"
-  printf "    ./homeserver.sh dev up core                     start core only (dozzle nginx landing nextcloud)\n"
+  printf "    ./homeserver.sh dev up min                      start bare minimum\n"
+  printf "    ./homeserver.sh dev up core                     start full default stack\n"
+  printf "    ./homeserver.sh dev up all                      start everything (core + extra)\n"
+  printf "    ./homeserver.sh dev down min                    stop minimum (reverse order)\n"
   printf "    ./homeserver.sh dev down core                   stop core (reverse order)\n"
+  printf "    ./homeserver.sh dev down all                    stop everything (reverse order)\n"
   printf "    ./homeserver.sh dev up landing mealie           start specific services\n"
-  printf "    ./homeserver.sh dev down all                    stop all (reverse order)\n"
-  printf "    ./homeserver.sh dev down landing mealie         stop specific\n"
-  printf "    ./homeserver.sh dev up immich --profile ml      add ML to running immich\n"
-  printf "    ./homeserver.sh dev down immich --profile ml    remove only ML\n"
+  printf "    ./homeserver.sh dev down landing mealie         stop specific services\n"
+  printf "    ./homeserver.sh dev up immich --profile ml      add ML profile to immich\n"
+  printf "    ./homeserver.sh dev down immich --profile ml    remove ML profile\n"
   printf "    ./homeserver.sh dev logs immich                 follow logs\n"
-  printf "    ./homeserver.sh dev update all                  pull latest images and recreate all\n"
-  printf "    ./homeserver.sh dev update running              pull and recreate only currently running services\n"
-  printf "    ./homeserver.sh dev update jellyfin             pull and update a single service\n"
+  printf "    ./homeserver.sh dev update all                  pull latest and recreate all\n"
+  printf "    ./homeserver.sh dev update running              update only currently running\n"
+  printf "    ./homeserver.sh dev update jellyfin             update a single service\n"
   printf "\n"
-  printf "  ${BOLD}Startup order (all):${RESET}\n"
-  printf "    %s\n" "$SERVICES_UP"
+  printf "  ${BOLD}MIN (infrastructure):${RESET}\n"
+  printf "    %s\n" "$SERVICES_MIN"
   printf "\n"
-  printf "  ${BOLD}Manual-only services (not in all):${RESET}\n"
+  printf "  ${BOLD}CORE (always-on apps, added on top of min):${RESET}\n"
+  printf "    %s\n" "$SERVICES_CORE"
+  printf "\n"
+  printf "  ${BOLD}EXTRA (optional, started with 'up all' or individually):${RESET}\n"
   printf "    %s\n" "$SERVICES_EXTRA"
   printf "\n"
   printf "  ${BOLD}Health timeout:${RESET} ${HEALTH_TIMEOUT}s per service\n"
@@ -316,6 +356,7 @@ SERVICES_TO_RUN=""
 PROFILE=""
 RUN_ALL=0
 RUN_CORE=0
+RUN_MIN=0
 RUN_RUNNING=0
 
 while [ $# -gt 0 ]; do
@@ -328,15 +369,10 @@ while [ $# -gt 0 ]; do
       fi
       PROFILE="$1"
       ;;
-    all)
-      RUN_ALL=1
-      ;;
-    core)
-      RUN_CORE=1
-      ;;
-    running)
-      RUN_RUNNING=1
-      ;;
+    all)     RUN_ALL=1 ;;
+    core)    RUN_CORE=1 ;;
+    min)     RUN_MIN=1 ;;
+    running) RUN_RUNNING=1 ;;
     *)
       if is_valid_service "$1"; then
         SERVICES_TO_RUN="$SERVICES_TO_RUN $1"
@@ -350,28 +386,13 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ $RUN_ALL -eq 0 ] && [ $RUN_CORE -eq 0 ] && [ $RUN_RUNNING -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
+if [ $RUN_ALL -eq 0 ] && [ $RUN_CORE -eq 0 ] && [ $RUN_MIN -eq 0 ] && [ $RUN_RUNNING -eq 0 ] && [ -z "$SERVICES_TO_RUN" ]; then
   error "No services specified"
   show_help
   exit 1
 fi
 
-# ── Helpers ───────────────────────────────────────────────────────
-
-# Returns the subset of SERVICES_UP that have at least one running container,
-# preserving startup order.
-get_running_services() {
-  running_containers=$(docker ps --format "{{.Names}}")
-  result=""
-  for svc in $SERVICES_UP $SERVICES_EXTRA; do
-    if printf "%s" "$running_containers" | grep -qE "^${svc}(-|$)"; then
-      result="$result $svc"
-    fi
-  done
-  printf "%s" "$result"
-}
-
-# ── Pre-flight checks ─────────────────────────────────────────────
+# ── Pre-flight ────────────────────────────────────────────────────
 
 ensure_network() {
   if ! docker network inspect homeserver >/dev/null 2>&1; then
@@ -383,80 +404,95 @@ ensure_network() {
 
 # ── Execute ───────────────────────────────────────────────────────
 
+run_list() {
+  action_fn=$1
+  list=$2
+  env=$3
+  profile=$4
+  label=$5
+
+  FAILED=""
+  for service in $list; do
+    $action_fn "$service" "$env" "$profile"
+    if [ $? -ne 0 ]; then
+      error "$service FAILED"
+      FAILED="$FAILED $service"
+    else
+      [ "$action_fn" = "do_up" ] && success "$service started"
+      [ "$action_fn" = "do_update" ] && success "$service updated"
+    fi
+    printf "\n"
+  done
+
+  printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+  if [ -z "$FAILED" ]; then
+    success "$label completed successfully"
+  else
+    warn "Completed with failures:"
+    for f in $FAILED; do error "  $f"; done
+    printf "\n  Run ${CYAN}sh homeserver.sh $ENV logs <service>${RESET} to investigate\n"
+  fi
+  printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n\n"
+}
+
 case "$ACTION" in
   up)
     ensure_network
-    header "Starting services in $ENV mode..."
-
-    # pick ordered list or custom list
     if [ $RUN_ALL -eq 1 ]; then
-      list="$SERVICES_UP"
+      header "Starting all services (min + core + extra) in $ENV mode..."
+      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
-      list="$SERVICES_CORE"
+      header "Starting core services (min + core) in $ENV mode..."
+      run_list do_up "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+    elif [ $RUN_MIN -eq 1 ]; then
+      header "Starting min services in $ENV mode..."
+      run_list do_up "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
     else
-      list="$SERVICES_TO_RUN"
+      header "Starting services in $ENV mode..."
+      run_list do_up "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
     fi
-
-    FAILED=""
-    for service in $list; do
-      do_up "$service" "$ENV" "$PROFILE"
-      if [ $? -ne 0 ]; then
-        error "$service FAILED"
-        FAILED="$FAILED $service"
-      else
-        success "$service started"
-      fi
-      printf "\n"
-    done
-
-    # summary
-    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
-    if [ -z "$FAILED" ]; then
-      success "All services started successfully"
-    else
-      warn "Completed with failures:"
-      for f in $FAILED; do
-        error "  $f"
-      done
-      printf "\n  Run ${CYAN}sh homeserver.sh $ENV logs <service>${RESET} to investigate\n"
-    fi
-    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n\n"
     ;;
 
   down)
-    header "Stopping services..."
-
     if [ $RUN_ALL -eq 1 ]; then
-      list="$SERVICES_DOWN"
+      header "Stopping all services (reverse order)..."
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA")
+      for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     elif [ $RUN_CORE -eq 1 ]; then
-      list="$(echo "$SERVICES_CORE" | tr ' ' '\n' | tac | tr '\n' ' ')"
+      header "Stopping core services (reverse order)..."
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE")
+      for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
+    elif [ $RUN_MIN -eq 1 ]; then
+      header "Stopping min services (reverse order)..."
+      list=$(reverse_list "$SERVICES_MIN")
+      for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     else
-      list="$SERVICES_TO_RUN"
+      header "Stopping services..."
+      for service in $SERVICES_TO_RUN; do do_down "$service" "$ENV" "$PROFILE"; done
     fi
-
-    for service in $list; do
-      do_down "$service" "$ENV" "$PROFILE"
-    done
-
     printf "\n"
     success "Done"
     ;;
 
   logs)
     service=$(echo "$SERVICES_TO_RUN" | awk '{print $1}')
-    [ $RUN_ALL -eq 1 ] && service=$(echo "$SERVICES_UP" | awk '{print $1}')
+    [ $RUN_ALL -eq 1 ] && service=$(echo "$SERVICES_MIN" | awk '{print $1}')
     do_logs "$service" "$ENV"
     ;;
 
   update)
     ensure_network
-    header "Updating services in $ENV mode..."
-
     if [ $RUN_ALL -eq 1 ]; then
-      list="$SERVICES_UP"
+      header "Updating all services (min + core + extra) in $ENV mode..."
+      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
-      list="$SERVICES_CORE"
+      header "Updating core services (min + core) in $ENV mode..."
+      run_list do_update "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+    elif [ $RUN_MIN -eq 1 ]; then
+      header "Updating min services in $ENV mode..."
+      run_list do_update "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
     elif [ $RUN_RUNNING -eq 1 ]; then
+      header "Updating running services in $ENV mode..."
       list=$(get_running_services)
       if [ -z "$list" ]; then
         warn "No running services detected"
@@ -464,32 +500,10 @@ case "$ACTION" in
       fi
       info "Detected running services:$list"
       printf "\n"
+      run_list do_update "$list" "$ENV" "$PROFILE" "Running services"
     else
-      list="$SERVICES_TO_RUN"
+      header "Updating services in $ENV mode..."
+      run_list do_update "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
     fi
-
-    FAILED=""
-    for service in $list; do
-      do_update "$service" "$ENV"
-      if [ $? -ne 0 ]; then
-        error "$service FAILED"
-        FAILED="$FAILED $service"
-      else
-        success "$service updated"
-      fi
-      printf "\n"
-    done
-
-    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
-    if [ -z "$FAILED" ]; then
-      success "All services updated successfully"
-    else
-      warn "Completed with failures:"
-      for f in $FAILED; do
-        error "  $f"
-      done
-      printf "\n  Run ${CYAN}sh homeserver.sh $ENV logs <service>${RESET} to investigate\n"
-    fi
-    printf "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n\n"
     ;;
 esac

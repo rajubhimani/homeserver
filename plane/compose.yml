@@ -1,0 +1,177 @@
+services:
+  plane-db:
+    image: postgres:15.7-alpine
+    container_name: plane-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ${DATA_ROOT}/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  plane-redis:
+    image: valkey/valkey:7.2-alpine
+    container_name: plane-redis
+    restart: unless-stopped
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
+    volumes:
+      - ${DATA_ROOT}/redisdata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  plane-mq:
+    image: rabbitmq:3.13-alpine
+    container_name: plane-mq
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-plane}
+    volumes:
+      - ${DATA_ROOT}/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - homeserver
+
+  plane-minio:
+    image: minio/minio:latest
+    container_name: plane-minio
+    restart: unless-stopped
+    env_file: .env
+    command: server /data --console-address ":9090"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ${DATA_ROOT}/uploads:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - homeserver
+
+  plane-api:
+    image: makeplane/plane-backend:stable
+    container_name: plane-api
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-api.sh
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      REDIS_URL: redis://plane-redis:6379/
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@plane-mq/${RABBITMQ_VHOST:-plane}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_S3_ENDPOINT_URL: http://plane-minio:9000
+      AWS_S3_BUCKET_NAME: uploads
+      WEB_URL: https://plane.${DOMAIN}
+      CORS_ALLOWED_ORIGINS: https://plane.${DOMAIN}
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  plane-worker:
+    image: makeplane/plane-backend:stable
+    container_name: plane-worker
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-worker.sh
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      REDIS_URL: redis://plane-redis:6379/
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@plane-mq/${RABBITMQ_VHOST:-plane}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_S3_ENDPOINT_URL: http://plane-minio:9000
+      AWS_S3_BUCKET_NAME: uploads
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  plane-beat:
+    image: makeplane/plane-backend:stable
+    container_name: plane-beat
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-beat.sh
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      REDIS_URL: redis://plane-redis:6379/
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@plane-mq/${RABBITMQ_VHOST:-plane}
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  plane-web:
+    image: makeplane/plane-frontend:stable
+    container_name: plane-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: https://plane.${DOMAIN}
+      NEXT_PUBLIC_ADMIN_BASE_URL: https://plane.${DOMAIN}
+    depends_on:
+      - plane-api
+    networks:
+      - homeserver
+
+  plane-proxy:
+    image: makeplane/plane-proxy:stable
+    container_name: plane-proxy
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NGINX_PORT: "80"
+      FILE_SIZE_LIMIT: "5m"
+      BUCKET_NAME: uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      - plane-api
+      - plane-web
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

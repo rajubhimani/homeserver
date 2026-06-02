@@ -6,5 +6,7 @@ sed \
   -e "s/AUTHOR_PLACEHOLDER/${AUTHOR}/g" \
   -e "s/LOCATION_PLACEHOLDER/${LOCATION}/g" \
   -e "s/YEAR_PLACEHOLDER/${YEAR}/g" \
+  -e "s/SITE_NAME_PLACEHOLDER/${SITE_NAME}/g" \
+  -e "s/TAGLINE_PLACEHOLDER/${TAGLINE}/g" \
   /template/index.html > /usr/share/nginx/html/index.html
 exec nginx -g 'daemon off;'

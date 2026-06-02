@@ -1,0 +1,15 @@
+services:
+  stalwart:
+    ports:
+      # Admin UI
+      - "8091:8080"
+      # SMTP (receiving)
+      - "25:25"
+      # SMTP submission (sending from mail clients)
+      - "587:587"
+      - "465:465"
+      # IMAP
+      - "143:143"
+      - "993:993"
+      # Sieve (mail filtering rules)
+      - "4190:4190"
