@@ -2,7 +2,8 @@
 # homeserver.sh — manage all homeserver services
 #
 # Usage:
-#   ./homeserver.sh <env> <up|down|logs|update> <min|core|all|running|service...> [--profile <name>]
+#   ./homeserver.sh <env> <up|down|restart|logs|update> <min|core|all|running|service...> [--profile <name>]
+#   ./homeserver.sh <env> -r <service...>  (shorthand for restart)
 #
 # Service tiers:
 #   min  — bare minimum to run the server (dozzle, nginx-plain, landing)
@@ -260,6 +261,34 @@ do_update() {
   return $?
 }
 
+do_restart() {
+  service=$1
+  env=$2
+  profile=$3
+  dir="$BASE_DIR/$service"
+
+  if [ ! -d "$dir" ]; then
+    error "Service '$service' not found"
+    return 1
+  fi
+
+  files=$(compose_files "$service" "$env")
+  data_root="$SERVICE_DATA_ROOT/$service"
+
+  if [ -n "$profile" ]; then
+    info "Restarting $service ($env) --profile $profile..."
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d --force-recreate
+  else
+    info "Restarting $service ($env)..."
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d --force-recreate
+  fi
+  compose_rc=$?
+  [ $compose_rc -ne 0 ] && return 1
+
+  wait_healthy "$service"
+  return $?
+}
+
 do_logs() {
   service=$1
   env=$2
@@ -281,7 +310,10 @@ show_help() {
   printf "${BOLD}  homeserver.sh — manage homeserver Docker services${RESET}\n"
   printf "\n"
   printf "  ${BOLD}Usage:${RESET}\n"
-  printf "    ./homeserver.sh <env> <up|down|logs|update> <tier|service...> [--profile <name>]\n"
+  printf "    ./homeserver.sh <env> <up|down|restart|logs|update> <tier|service...> [--profile <name>]\n"
+  printf "    ./homeserver.sh <env> -u <service...>                     (up shorthand)\n"
+  printf "    ./homeserver.sh <env> -d <service...>                     (down shorthand)\n"
+  printf "    ./homeserver.sh <env> -r <service...>                     (restart shorthand)\n"
   printf "\n"
   printf "  ${BOLD}Environments:${RESET}\n"
   printf "    dev    ports on all interfaces (direct access)\n"
@@ -304,7 +336,9 @@ show_help() {
   printf "    ./homeserver.sh dev down landing mealie         stop specific services\n"
   printf "    ./homeserver.sh dev up immich --profile ml      add ML profile to immich\n"
   printf "    ./homeserver.sh dev down immich --profile ml    remove ML profile\n"
-  printf "    ./homeserver.sh dev logs immich                 follow logs\n"
+  printf "    ./homeserver.sh dev restart nginx-plain          restart a service (re-runs entrypoint)
+    ./homeserver.sh dev -r nginx-plain              same, shorthand
+    ./homeserver.sh dev logs immich                 follow logs\n"
   printf "    ./homeserver.sh dev update all                  pull latest and recreate all\n"
   printf "    ./homeserver.sh dev update running              update only currently running\n"
   printf "    ./homeserver.sh dev update jellyfin             update a single service\n"
@@ -344,9 +378,9 @@ case "$ENV" in
 esac
 
 case "$ACTION" in
-  up|down|logs|update) ;;
+  up|-u|down|-d|restart|-r|logs|update) ;;
   *)
-    error "Unknown action '$ACTION' — use up, down, logs, or update"
+    error "Unknown action '$ACTION' — use up, down, restart, logs, or update"
     show_help
     exit 1
     ;;
@@ -436,7 +470,7 @@ run_list() {
 }
 
 case "$ACTION" in
-  up)
+  up|-u)
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Starting all services (min + core + extra) in $ENV mode..."
@@ -453,7 +487,7 @@ case "$ACTION" in
     fi
     ;;
 
-  down)
+  down|-d)
     if [ $RUN_ALL -eq 1 ]; then
       header "Stopping all services (reverse order)..."
       list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA")
@@ -472,6 +506,23 @@ case "$ACTION" in
     fi
     printf "\n"
     success "Done"
+    ;;
+
+  restart|-r)
+    ensure_network
+    if [ $RUN_ALL -eq 1 ]; then
+      header "Restarting all services in $ENV mode..."
+      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+    elif [ $RUN_CORE -eq 1 ]; then
+      header "Restarting core services in $ENV mode..."
+      run_list do_restart "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+    elif [ $RUN_MIN -eq 1 ]; then
+      header "Restarting min services in $ENV mode..."
+      run_list do_restart "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+    else
+      header "Restarting services in $ENV mode..."
+      run_list do_restart "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
+    fi
     ;;
 
   logs)

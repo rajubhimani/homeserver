@@ -2,6 +2,40 @@
 # Use Docker's internal DNS — resolves container names at request time
 resolver 127.0.0.11 valid=10s;
 
+# ── Internal health check — never proxied, used by Docker healthcheck ─────────
+server {
+    listen 80;
+    server_name _;
+    location /_health {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+    location / {
+        return 444;
+    }
+}
+
+# ── Landing page ──────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    return 301 https://www.${DOMAIN}$request_uri;
+}
+
+server {
+    listen 80;
+    server_name www.${DOMAIN};
+    location / {
+        set $upstream http://landing:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
 # ── OpenProject ──────────────────────────────────────────────────────────────
 server {
     listen 80;
@@ -200,20 +234,6 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
-    }
-}
-
-# ── Landing page ──────────────────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name ${DOMAIN} www.${DOMAIN};
-    location / {
-        set $upstream http://landing:80;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 

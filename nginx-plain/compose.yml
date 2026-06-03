@@ -12,7 +12,7 @@ services:
       - ./templates:/etc/nginx/templates:ro
       - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost/_health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
