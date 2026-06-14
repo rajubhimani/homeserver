@@ -85,7 +85,7 @@ services:
       - ${DATA_ROOT}/config:/var/www/html/config
       - ${DATA_ROOT}/data:/var/www/html/data
       - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
-      - ${USER_DATA_ROOT}:/mnt/seagate
+      # - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
       - nextcloud
     networks:

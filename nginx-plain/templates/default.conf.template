@@ -289,7 +289,7 @@ server {
 # ── Vaultwarden ───────────────────────────────────────────────────────────────
 server {
     listen 80;
-    server_name vault.${DOMAIN} vaultwarden.${DOMAIN};
+    server_name vaultwarden.${DOMAIN};
     location / {
         set $upstream http://vaultwarden:80;
         proxy_pass $upstream;

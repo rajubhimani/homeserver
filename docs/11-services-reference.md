@@ -89,7 +89,7 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `immich.yourdomain.com` | `immich-server` | `2283` |
 | `photos.yourdomain.com` | `immich-server` | `2283` |
 | `jellyfin.yourdomain.com` | `jellyfin` | `8096` |
-| `vault.yourdomain.com` | `vaultwarden` | `80` |
+| `vaultwarden.yourdomain.com` | `vaultwarden` | `80` |
 | `paperless.yourdomain.com` | `paperless` | `8000` |
 | `stirling-pdf.yourdomain.com` | `stirling-pdf-lite` | `8080` |
 | `mealie.yourdomain.com` | `mealie` | `9000` |
