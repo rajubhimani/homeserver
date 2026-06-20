@@ -63,7 +63,7 @@ services:
     environment:
       FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data
     depends_on:
       - forgejo

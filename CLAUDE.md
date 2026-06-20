@@ -8,14 +8,24 @@ A self-hosted personal cloud stack managed with Docker Compose. Each service liv
 
 ## Global configuration
 
-Set your domain once in the root `.env` — `homeserver.sh` injects it into every service automatically:
+Set your domain and runtime once in the root `.env` — `homeserver.sh` injects them into every service automatically:
 
 ```bash
 # .env (repo root)
 DOMAIN=yourdomain.com
+
+# Container runtime: 'docker' (default) or 'podman'
+RUNTIME=docker
+
+# Socket path — change for Podman:
+#   rootful:  /run/podman/podman.sock
+#   rootless: /run/user/1000/podman/podman.sock
+DOCKER_SOCKET=/var/run/docker.sock
 ```
 
 `homeserver.sh` also injects `DATA_ROOT` per service. Never hardcode the domain in individual service `.env` files — use `${DOMAIN}` references where possible.
+
+Services that mount the container socket (dozzle, portainer, dockge, gitea, forgejo, gitlab, authentik) use `${DOCKER_SOCKET}` — set it in the root `.env` to switch between Docker and Podman sockets.
 
 ## Managing services
 

@@ -25,6 +25,7 @@ if [ -f "$BASE_DIR/.env" ]; then
   . "$BASE_DIR/.env"
 fi
 DOMAIN="${DOMAIN:-yourdomain.com}"
+RUNTIME="${RUNTIME:-docker}"
 
 # ── Service tiers ─────────────────────────────────────────────────
 # MIN ⊂ CORE ⊂ ALL (ALL = CORE + EXTRA)
@@ -107,7 +108,7 @@ compose_files_all() {
 
 # Returns currently running services across all tiers, preserving startup order
 get_running_services() {
-  running_containers=$(docker ps --format "{{.Names}}")
+  running_containers=$($RUNTIME ps --format "{{.Names}}")
   result=""
   for svc in $SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA; do
     if printf "%s" "$running_containers" | grep -qE "^${svc}(-|$)"; then
@@ -124,17 +125,17 @@ wait_healthy() {
   elapsed=0
   interval=5
 
-  container=$(docker ps -a --format "{{.Names}}" | grep "^${service}$" | head -1)
+  container=$($RUNTIME ps -a --format "{{.Names}}" | grep "^${service}$" | head -1)
   if [ -z "$container" ]; then
-    container=$(docker ps -a --format "{{.Names}}" | grep "^${service}-" | grep -v "db\|redis\|worker" | head -1)
+    container=$($RUNTIME ps -a --format "{{.Names}}" | grep "^${service}-" | grep -v "db\|redis\|worker" | head -1)
   fi
   [ -z "$container" ] && container="$service"
 
   printf "  ${CYAN}waiting for %s to be ready..." "$service"
 
   while [ $elapsed -lt $HEALTH_TIMEOUT ]; do
-    status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
-    health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null)
+    status=$($RUNTIME inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
+    health=$($RUNTIME inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null)
 
     if [ "$health" = "healthy" ]; then
       printf " ready (${elapsed}s)${RESET}\n"
@@ -177,28 +178,28 @@ do_up() {
 
   if [ -n "$profile" ]; then
     info "Starting $service ($env) --profile $profile..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d
   else
     info "Starting $service ($env)..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d
   fi
   compose_rc=$?
 
   if [ $compose_rc -ne 0 ]; then
     if [ -n "$profile" ]; then
-      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d 2>&1)
+      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d 2>&1)
     else
-      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d 2>&1)
+      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d 2>&1)
     fi
     port=$(printf "%s" "$compose_err" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
     if [ -n "$port" ]; then
-      warn "Port $port in use — freeing zombie docker-proxy and retrying..."
+      warn "Port $port in use — freeing process and retrying..."
       sudo fuser -k "${port}/tcp" 2>/dev/null
       sleep 1
       if [ -n "$profile" ]; then
-        DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d
+        DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d
       else
-        DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d
+        DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d
       fi
       compose_rc=$?
     fi
@@ -225,10 +226,10 @@ do_down() {
 
   if [ -n "$profile" ]; then
     info "Stopping $service --profile $profile..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" down
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" down
   else
     info "Stopping $service..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile ml down 2>/dev/null || DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files down
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile ml down 2>/dev/null || DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files down
   fi
 
   success "$service stopped"
@@ -248,12 +249,12 @@ do_update() {
   data_root="$SERVICE_DATA_ROOT/$service"
 
   info "Pulling latest images for $service..."
-  DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files pull
+  DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files pull
   pull_rc=$?
   [ $pull_rc -ne 0 ] && warn "Pull had issues for $service — continuing with recreate anyway"
 
   info "Recreating $service ($env)..."
-  DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d --force-recreate
+  DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d --force-recreate
   compose_rc=$?
   [ $compose_rc -ne 0 ] && return 1
 
@@ -277,10 +278,10 @@ do_restart() {
 
   if [ -n "$profile" ]; then
     info "Restarting $service ($env) --profile $profile..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files --profile "$profile" up -d --force-recreate
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d --force-recreate
   else
     info "Restarting $service ($env)..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" docker compose $files up -d --force-recreate
+    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d --force-recreate
   fi
   compose_rc=$?
   [ $compose_rc -ne 0 ] && return 1
@@ -300,14 +301,14 @@ do_logs() {
   fi
 
   files=$(compose_files "$service" "$env")
-  DATA_ROOT="$SERVICE_DATA_ROOT/$service" DOMAIN="$DOMAIN" docker compose $files logs -f
+  DATA_ROOT="$SERVICE_DATA_ROOT/$service" DOMAIN="$DOMAIN" $RUNTIME compose $files logs -f
 }
 
 # ── Help ──────────────────────────────────────────────────────────
 
 show_help() {
   printf "\n"
-  printf "${BOLD}  homeserver.sh — manage homeserver Docker services${RESET}\n"
+  printf "${BOLD}  homeserver.sh — manage homeserver services (runtime: $RUNTIME)${RESET}\n"
   printf "\n"
   printf "  ${BOLD}Usage:${RESET}\n"
   printf "    ./homeserver.sh <env> <up|down|restart|logs|update> <tier|service...> [--profile <name>]\n"
@@ -429,9 +430,9 @@ fi
 # ── Pre-flight ────────────────────────────────────────────────────
 
 ensure_network() {
-  if ! docker network inspect homeserver >/dev/null 2>&1; then
-    warn "Docker network 'homeserver' not found — creating..."
-    docker network create homeserver >/dev/null
+  if ! $RUNTIME network inspect homeserver >/dev/null 2>&1; then
+    warn "Network 'homeserver' not found — creating..."
+    $RUNTIME network create homeserver >/dev/null
     success "Network 'homeserver' created"
   fi
 }

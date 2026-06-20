@@ -62,7 +62,7 @@ services:
       GITEA_INSTANCE_URL: https://gitea.${DOMAIN}
       GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_TOKEN}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data
     depends_on:
       - gitea

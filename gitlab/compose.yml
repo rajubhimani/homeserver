@@ -33,7 +33,7 @@ services:
     profiles:
       - runner
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-config:/etc/gitlab-runner
     depends_on:
       - gitlab

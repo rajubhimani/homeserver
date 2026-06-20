@@ -78,7 +78,7 @@ services:
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/media:/media
       - ${DATA_ROOT}/templates:/templates
       - ${DATA_ROOT}/certs:/certs
