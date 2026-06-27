@@ -2,3 +2,5 @@ services:
   miniflux:
     security_opt:
       - label=disable
+    depends_on:
+      - miniflux-db

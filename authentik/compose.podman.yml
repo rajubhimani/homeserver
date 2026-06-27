@@ -8,6 +8,12 @@ services:
   authentik-server:
     security_opt:
       - label=disable
+    depends_on:
+      - authentik-db
+      - authentik-redis
   authentik-worker:
     security_opt:
       - label=disable
+    depends_on:
+      - authentik-db
+      - authentik-redis

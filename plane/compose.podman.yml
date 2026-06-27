@@ -14,12 +14,21 @@ services:
   plane-api:
     security_opt:
       - label=disable
+    depends_on:
+      - plane-db
+      - plane-redis
   plane-worker:
     security_opt:
       - label=disable
+    depends_on:
+      - plane-db
+      - plane-redis
   plane-beat:
     security_opt:
       - label=disable
+    depends_on:
+      - plane-db
+      - plane-redis
   plane-web:
     security_opt:
       - label=disable

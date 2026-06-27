@@ -481,13 +481,13 @@ case "$ACTION" in
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Starting all services (min + core + extra) in $ENV mode..."
-      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
       header "Starting core services (min + core) in $ENV mode..."
-      run_list do_up "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Core services"
     elif [ $RUN_MIN -eq 1 ]; then
       header "Starting min services in $ENV mode..."
-      run_list do_up "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+      run_list do_up "$SERVICES_MIN $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Min services"
     else
       header "Starting services in $ENV mode..."
       run_list do_up "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
@@ -497,15 +497,15 @@ case "$ACTION" in
   down|-d)
     if [ $RUN_ALL -eq 1 ]; then
       header "Stopping all services (reverse order)..."
-      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA")
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN")
       for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     elif [ $RUN_CORE -eq 1 ]; then
       header "Stopping core services (reverse order)..."
-      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE")
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN")
       for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     elif [ $RUN_MIN -eq 1 ]; then
       header "Stopping min services (reverse order)..."
-      list=$(reverse_list "$SERVICES_MIN")
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_TO_RUN")
       for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     else
       header "Stopping services..."
@@ -519,13 +519,13 @@ case "$ACTION" in
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Restarting all services in $ENV mode..."
-      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
       header "Restarting core services in $ENV mode..."
-      run_list do_restart "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Core services"
     elif [ $RUN_MIN -eq 1 ]; then
       header "Restarting min services in $ENV mode..."
-      run_list do_restart "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+      run_list do_restart "$SERVICES_MIN $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Min services"
     else
       header "Restarting services in $ENV mode..."
       run_list do_restart "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
@@ -542,13 +542,13 @@ case "$ACTION" in
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Updating all services (min + core + extra) in $ENV mode..."
-      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
       header "Updating core services (min + core) in $ENV mode..."
-      run_list do_update "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Core services"
     elif [ $RUN_MIN -eq 1 ]; then
       header "Updating min services in $ENV mode..."
-      run_list do_update "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+      run_list do_update "$SERVICES_MIN $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Min services"
     elif [ $RUN_RUNNING -eq 1 ]; then
       header "Updating running services in $ENV mode..."
       list=$(get_running_services)

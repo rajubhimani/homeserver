@@ -2,3 +2,5 @@ services:
   mealie:
     security_opt:
       - label=disable
+    depends_on:
+      - mealie-db

@@ -159,8 +159,8 @@ Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve 
 
 | Service | Dev port | Container port |
 | --- | --- | --- |
-| Nginx Proxy Manager | 80 / 443 | 80 / 443 |
-| Nginx Plain (dev) | 8180 / 8443 | 80 / 443 |
+| Nginx Proxy Manager | 8180 / 8443 / 8181 (admin) | 80 / 443 / 81 |
+| Nginx Plain | 8180 / 8443 | 80 / 443 |
 | Landing | 8080 | 80 |
 | Dozzle | 9999 | 8080 |
 | Nextcloud | 8081 | 80 |
