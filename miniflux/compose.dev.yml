@@ -1,0 +1,4 @@
+services:
+  miniflux:
+    ports:
+      - "8093:8080"

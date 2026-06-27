@@ -7,7 +7,7 @@
 Three independent VPN services. Start any combination depending on what you need.
 
 | Service | Use case | Clients | Port |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **wg-easy** | WireGuard — modern, fast, split or full tunnel | All platforms | `51820/udp`, UI: `51821` |
 | **headscale** | Mesh network — peer-to-peer, no bottleneck | Tailscale app on all platforms | `8085`, Admin: `9090` |
 | **openvpn** | OpenVPN — broadest compatibility, corporate firewalls | All platforms | `1194/udp` |
@@ -35,6 +35,7 @@ cp wg-easy/.env.example wg-easy/.env
 ```
 
 Edit `wg-easy/.env`:
+
 - `WG_HOST` — your server's public IP or domain name
 - `WG_PASSWORD_HASH` — paste the hash from step 1
 - `WG_ALLOWED_IPS` — controls what traffic goes through VPN:
@@ -64,7 +65,7 @@ From the web UI you can add employees (one config per person/device), and they d
 ### Client apps
 
 | Platform | App |
-|---|---|
+| --- | --- |
 | Windows / Mac / Linux | [wireguard.com/install](https://www.wireguard.com/install/) |
 | iOS / Android | WireGuard app from App Store / Play Store |
 
@@ -77,12 +78,14 @@ Change `WG_ALLOWED_IPS` in `.env` then restart:
 ```
 
 Split tunnel example (employees only reach your LAN, their normal internet is unaffected):
-```
+
+```env
 WG_ALLOWED_IPS=192.168.1.0/24
 ```
 
 Full tunnel (all employee internet goes through your server — useful for security/filtering):
-```
+
+```env
 WG_ALLOWED_IPS=0.0.0.0/0,::/0
 ```
 
@@ -103,6 +106,7 @@ nano headscale/config/config.yaml
 ```
 
 Set `server_url` to your public domain (must be HTTPS in prod):
+
 ```yaml
 server_url: https://headscale.yourdomain.com
 ```
@@ -153,6 +157,7 @@ Log in with the API key from step 4.
 Employees install the Tailscale app, then run:
 
 **Mac / Linux:**
+
 ```bash
 tailscale up --login-server=https://headscale.yourdomain.com --authkey=<preauthkey>
 ```
@@ -164,9 +169,9 @@ tailscale up --login-server=https://headscale.yourdomain.com --authkey=<preauthk
 ### Client apps
 
 | Platform | App |
-|---|---|
+| --- | --- |
 | Windows / Mac | [tailscale.com/download](https://tailscale.com/download) |
-| Linux | `curl -fsSL https://tailscale.com/install.sh | sh` |
+| Linux | `curl -fsSL https://tailscale.com/install.sh \| sh` |
 | iOS / Android | Tailscale app from App Store / Play Store |
 
 ### Useful commands
@@ -255,7 +260,7 @@ docker run --rm -it \
 ### Client apps
 
 | Platform | App |
-|---|---|
+| --- | --- |
 | Windows | OpenVPN Connect or OpenVPN GUI |
 | Mac | Tunnelblick or OpenVPN Connect |
 | Linux | `sudo apt install openvpn` then `sudo openvpn --config alice.ovpn` |
@@ -270,7 +275,7 @@ Employees import the `.ovpn` file into their app — that's it.
 Add these proxy hosts in Nginx Proxy Manager:
 
 | Domain | Forward to | Port |
-|---|---|---|
+| --- | --- | --- |
 | `vpn.yourdomain.com` | `wg-easy` | `51821` |
 | `headscale.yourdomain.com` | `headscale` | `8080` |
 | `headscale-admin.yourdomain.com` | `headscale-admin` | `80` |

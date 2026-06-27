@@ -1,7 +1,7 @@
 services:
   headscale:
     ports:
-      - "8085:8080/tcp"
+      - "8086:8080/tcp"
   headscale-admin:
     ports:
       - "9090:80/tcp"

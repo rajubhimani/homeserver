@@ -1,0 +1,5 @@
+services:
+  gitlab:
+    ports:
+      - "8085:80"
+      - "2224:22"

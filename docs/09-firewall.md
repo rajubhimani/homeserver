@@ -17,7 +17,7 @@ The correct fix is to **bind ports to a specific IP in the compose override**, n
 
 This stack uses **compose override files** to manage port bindings per environment. The base `compose.yml` for each service has no `ports:` block. You add ports by merging an override at startup.
 
-```
+```text
 nginx/
 ├── compose.yml          ← base (no ports)
 ├── compose.prod.yml     ← ports bound to 127.0.0.1
@@ -188,7 +188,7 @@ cd ~/homeserver/immich
 docker compose down && docker compose up -d
 ```
 
-3. Reset and replace UFW rules:
+1. Reset and replace UFW rules:
 
 ```bash
 sudo ufw reset

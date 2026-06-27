@@ -1,0 +1,4 @@
+services:
+  stirling-pdf:
+    security_opt:
+      - label=disable

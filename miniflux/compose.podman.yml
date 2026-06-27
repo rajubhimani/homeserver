@@ -1,0 +1,4 @@
+services:
+  miniflux:
+    security_opt:
+      - label=disable

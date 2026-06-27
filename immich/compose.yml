@@ -40,6 +40,8 @@ services:
     image: valkey/valkey:9-alpine
     container_name: immich-redis
     restart: unless-stopped
+    # Disable RDB snapshots — no disk persistence needed for cache/queue data
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s

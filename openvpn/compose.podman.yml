@@ -1,0 +1,4 @@
+services:
+  openvpn:
+    security_opt:
+      - label=disable

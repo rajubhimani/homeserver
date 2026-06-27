@@ -1,0 +1,5 @@
+services:
+  nginx-plain:
+    ports:
+      - "8180:80"
+      - "8443:443"

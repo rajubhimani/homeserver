@@ -3,9 +3,16 @@ services:
     image: jc21/nginx-proxy-manager:latest
     container_name: nginx-proxy-manager
     restart: unless-stopped
+    env_file: .env
     volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
+      - ${DATA_ROOT}/data:/data
+      - ${DATA_ROOT}/letsencrypt:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:81/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - homeserver
 

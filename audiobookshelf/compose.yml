@@ -1,0 +1,25 @@
+services:
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ${DATA_ROOT}/config:/config
+      - ${DATA_ROOT}/metadata:/metadata
+      - ${DATA_ROOT}/audiobooks:/audiobooks
+      - ${DATA_ROOT}/podcasts:/podcasts
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

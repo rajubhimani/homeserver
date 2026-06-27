@@ -5,6 +5,12 @@ services:
     restart: unless-stopped
     volumes:
       - ${DATA_ROOT}/data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - homeserver
 

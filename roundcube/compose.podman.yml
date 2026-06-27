@@ -1,0 +1,4 @@
+services:
+  roundcube:
+    security_opt:
+      - label=disable

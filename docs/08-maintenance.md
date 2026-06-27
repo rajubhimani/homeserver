@@ -9,23 +9,21 @@
 All services are managed via `homeserver.sh` in the repo root.
 
 ```bash
-# Usage: sh homeserver.sh <env> <up|down|logs> <service|all|core> [--profile <name>]
-
-# Start all services (sequential, infrastructure first)
-sh homeserver.sh dev up all
-sh homeserver.sh prod up all
-
-# Start core only (dozzle, nginx, landing, nextcloud)
-sh homeserver.sh dev up core
+# Tiers — MIN ⊂ CORE ⊂ ALL
+sh homeserver.sh dev up min          # infrastructure only
+sh homeserver.sh dev up core         # min + nextcloud
+sh homeserver.sh dev up all          # everything
+sh homeserver.sh dev down min
 sh homeserver.sh dev down core
+sh homeserver.sh dev down all        # stops every service, reverse order
 
 # Start / stop specific services
 sh homeserver.sh dev up jellyfin
 sh homeserver.sh dev down mealie
 sh homeserver.sh dev up landing nextcloud
 
-# Stop all (reverse order)
-sh homeserver.sh dev down all
+# Production (ports on 127.0.0.1 only)
+sh homeserver.sh prod up all
 
 # Follow logs
 sh homeserver.sh dev logs immich
@@ -34,9 +32,10 @@ sh homeserver.sh dev logs immich
 sh homeserver.sh dev up immich --profile ml
 sh homeserver.sh dev down immich --profile ml
 
-# Manual-only services (not in 'all')
-sh homeserver.sh dev up stirling-pdf
-sh homeserver.sh dev down stirling-pdf
+# Update running services to latest images
+sh homeserver.sh dev update running
+sh homeserver.sh dev update all
+sh homeserver.sh dev update jellyfin
 ```
 
 > The shared `homeserver` Docker network is created automatically if missing on every `up` command.
@@ -48,18 +47,22 @@ sh homeserver.sh dev down stirling-pdf
 Pull latest images and recreate containers:
 
 **All services at once:**
-```bash
-# dev
-find ~/homeserver -maxdepth 2 -name "*compose.yml" | xargs -I{} sh -c 'docker compose -f {} pull 2>/dev/null'; ./homeserver.sh all dev
 
-# prod
-find ~/homeserver -maxdepth 2 -name "*compose.yml" | xargs -I{} sh -c 'docker compose -f {} pull 2>/dev/null'; ./homeserver.sh all prod
+```bash
+sh homeserver.sh dev update all
+sh homeserver.sh prod update all
+```
+
+**Only currently running services:**
+
+```bash
+sh homeserver.sh dev update running
 ```
 
 **Individual service:**
+
 ```bash
-cd ~/homeserver/immich
-docker compose pull && ./homeserver.sh immich dev
+sh homeserver.sh dev update immich
 ```
 
 ---
@@ -152,7 +155,7 @@ docker --context homeserver ps  # one-off without switching
 
 | Problem | Fix |
 | --- | --- |
-| Container not starting | `./homeserver.sh <service> dev` |
+| Container not starting | `sh homeserver.sh dev up <service>` then check `sh homeserver.sh dev logs <service>` |
 | `network homeserver not found` | `homeserver.sh` auto-creates it — or run `docker network create homeserver` manually |
 | Data drive not mounted | `sudo mount -a` |
 | Tunnel not routing | `sudo systemctl restart cloudflared` → `journalctl -u cloudflared -f` |
@@ -170,7 +173,7 @@ docker --context homeserver ps  # one-off without switching
 
 - **Passwords in `.env`** — avoid `$`, `'`, `!`. Use alphanumeric or escape `$` as `$$`
 - **Shared network** — must exist before any `docker compose up`. Re-create with `docker network create homeserver`
-- **No SSL in NPM (Cloudflare path)** — Cloudflare terminates TLS. Adding certs in NPM causes double-encryption
+- **No SSL in the reverse proxy (Cloudflare path)** — Cloudflare terminates TLS. Adding certs causes double-encryption
 - **Immich admin** — must be created via browser on first launch, not env vars
 - **Vaultwarden signups** — disabled by default. Invite users via `/admin` panel
 - **Mealie default login** — `changeme@example.com` / `MyPassword` — change immediately
@@ -179,6 +182,5 @@ docker --context homeserver ps  # one-off without switching
 - **Docker context is global** — switching affects all terminal windows
 
 ---
-
 
 [← Landing Page](07-landing.md) | [Home](../setup.md)

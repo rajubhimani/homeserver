@@ -1,0 +1,4 @@
+services:
+  openproject:
+    ports:
+      - "8099:80"

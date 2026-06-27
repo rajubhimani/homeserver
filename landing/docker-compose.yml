@@ -3,9 +3,18 @@ services:
     image: nginx:alpine
     container_name: landing
     restart: unless-stopped
+    env_file: .env
+    entrypoint: ["/entrypoint.sh"]
     volumes:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./index.html:/template/index.html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - homeserver
 

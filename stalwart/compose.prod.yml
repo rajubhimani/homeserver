@@ -1,0 +1,12 @@
+services:
+  stalwart:
+    ports:
+      # Admin UI — nginx-plain proxies mail.yourdomain.com → stalwart:8080
+      - "127.0.0.1:8091:8080"
+      # Mail ports must be publicly accessible (not via Cloudflare Tunnel)
+      - "25:25"
+      - "587:587"
+      - "465:465"
+      - "143:143"
+      - "993:993"
+      - "4190:4190"

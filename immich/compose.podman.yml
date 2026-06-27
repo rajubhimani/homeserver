@@ -1,0 +1,16 @@
+services:
+  immich-server:
+    security_opt:
+      - label=disable
+  immich-machine-learning:
+    security_opt:
+      - label=disable
+  immich-redis:
+    security_opt:
+      - label=disable
+  immich-database:
+    security_opt:
+      - label=disable
+  immich-offline-remover:
+    security_opt:
+      - label=disable

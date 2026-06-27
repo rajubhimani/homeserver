@@ -1,0 +1,4 @@
+services:
+  vaultwarden:
+    security_opt:
+      - label=disable

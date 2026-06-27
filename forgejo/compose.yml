@@ -32,11 +32,18 @@ services:
       FORGEJO__database__NAME: ${POSTGRES_DB}
       FORGEJO__database__USER: ${POSTGRES_USER}
       FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}
-      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN}
-      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL}
+      FORGEJO__server__DOMAIN: forgejo.${DOMAIN}
+      FORGEJO__server__ROOT_URL: https://forgejo.${DOMAIN}
       FORGEJO__server__SSH_PORT: 2223
       FORGEJO__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
       FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__actions__ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ${DATA_ROOT}/app:/data
       - /etc/timezone:/etc/timezone:ro
@@ -44,6 +51,22 @@ services:
     depends_on:
       forgejo-db:
         condition: service_healthy
+    networks:
+      - homeserver
+
+  forgejo-runner:
+    image: codeberg.org/forgejo/runner:latest
+    container_name: forgejo-runner
+    restart: unless-stopped
+    profiles:
+      - runner
+    environment:
+      FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${DATA_ROOT}/runner-data:/data
+    depends_on:
+      - forgejo
     networks:
       - homeserver
 

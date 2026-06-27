@@ -1,0 +1,4 @@
+services:
+  ntfy:
+    security_opt:
+      - label=disable

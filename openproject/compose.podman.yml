@@ -1,0 +1,4 @@
+services:
+  openproject:
+    security_opt:
+      - label=disable

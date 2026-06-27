@@ -1,6 +1,6 @@
 # 05 — Nextcloud
 
-[← Nginx Proxy Manager](04-nginx.md) | [Home](../setup.md) | [Next: Immich →](06-immich.md)
+[← Reverse Proxy](04-nginx.md) | [Home](../setup.md) | [Next: Immich →](06-immich.md)
 
 ---
 
@@ -33,34 +33,33 @@ NEXTCLOUD_TRUSTED_DOMAINS=
 ### Trusted domains by access path
 
 **Cloudflare path:**
+
 ```env
 NEXTCLOUD_TRUSTED_DOMAINS=localhost nextcloud.yourdomain.com
 ```
 
 **Tailscale path:**
+
 ```env
 NEXTCLOUD_TRUSTED_DOMAINS=localhost 192.168.1.100 100.x.x.x
 ```
 
-> `NEXTCLOUD_TRUSTED_PROXIES: nginx-proxy-manager` is already set in `compose.yml` — required for correct client IP forwarding through NPM.
+> `NEXTCLOUD_TRUSTED_PROXIES` is already set in `compose.yml` — required for correct client IP forwarding through the reverse proxy.
 
 ---
 
 ## Start
 
-**Production (Cloudflare)** — no ports exposed, NPM routes via Docker network:
 ```bash
-cd ~/homeserver/nextcloud
-docker compose up -d
-docker compose logs -f nextcloud
+sh homeserver.sh dev up nextcloud
+sh homeserver.sh dev logs nextcloud
 # ready when you see: Apache configured
 ```
 
-**Testing (Tailscale)** — exposes port 8081 via dev override:
+For prod (ports on localhost only):
+
 ```bash
-cd ~/homeserver/nextcloud
-docker compose -f compose.yml -f compose.dev.yml up -d
-docker compose logs -f nextcloud
+sh homeserver.sh prod up nextcloud
 ```
 
 **Cloudflare path:** open `https://nextcloud.yourdomain.com`  
@@ -110,4 +109,4 @@ One account per family member. They log in via the same URL you use.
 
 ---
 
-[← Nginx Proxy Manager](04-nginx.md) | [Home](../setup.md) | [Next: Immich →](06-immich.md)
+[← Reverse Proxy](04-nginx.md) | [Home](../setup.md) | [Next: Immich →](06-immich.md)

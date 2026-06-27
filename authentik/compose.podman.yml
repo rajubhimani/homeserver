@@ -1,0 +1,13 @@
+services:
+  authentik-db:
+    security_opt:
+      - label=disable
+  authentik-redis:
+    security_opt:
+      - label=disable
+  authentik-server:
+    security_opt:
+      - label=disable
+  authentik-worker:
+    security_opt:
+      - label=disable

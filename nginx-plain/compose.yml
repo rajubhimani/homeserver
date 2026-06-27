@@ -1,0 +1,25 @@
+services:
+  nginx-plain:
+    image: nginx:alpine
+    container_name: nginx-plain
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DOMAIN: ${DOMAIN}
+    # nginx:alpine automatically processes templates/*.conf.template via envsubst
+    # and writes results to /etc/nginx/conf.d/ on startup
+    volumes:
+      - ./templates:/etc/nginx/templates:ro
+      - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/_health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

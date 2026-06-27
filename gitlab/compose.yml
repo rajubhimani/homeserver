@@ -1,0 +1,45 @@
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab
+    restart: unless-stopped
+    hostname: gitlab.${DOMAIN}
+    env_file: .env
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://gitlab.${DOMAIN}'
+        gitlab_rails['gitlab_ssh_host'] = 'gitlab.${DOMAIN}'
+        gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2224}
+        gitlab_rails['gitlab_signup_enabled'] = ${SIGNUP_ENABLED:-false}
+        # Cloudflare terminates TLS — serve plain HTTP internally
+        nginx['listen_https'] = false
+        nginx['listen_port'] = 80
+        nginx['proxy_set_headers'] = {
+          "X-Forwarded-Proto" => "https",
+          "X-Forwarded-Ssl" => "on"
+        }
+    volumes:
+      - ${DATA_ROOT}/config:/etc/gitlab
+      - ${DATA_ROOT}/logs:/var/log/gitlab
+      - ${DATA_ROOT}/data:/var/opt/gitlab
+    shm_size: 256m
+    networks:
+      - homeserver
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    container_name: gitlab-runner
+    restart: unless-stopped
+    profiles:
+      - runner
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${DATA_ROOT}/runner-config:/etc/gitlab-runner
+    depends_on:
+      - gitlab
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

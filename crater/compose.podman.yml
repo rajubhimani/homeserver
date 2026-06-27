@@ -1,0 +1,4 @@
+services:
+  crater:
+    security_opt:
+      - label=disable

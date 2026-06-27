@@ -1,3 +1,4 @@
+.DS_Store
 /._data
 /._immich
 /._nextcloud
@@ -9,6 +10,4 @@ service_data/
 *.pem
 ._*
 *.sqlite
-/nginx/data
-/nginx/letsencrypt
 test/*

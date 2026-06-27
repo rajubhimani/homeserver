@@ -23,6 +23,7 @@ services:
     image: redis:8-alpine
     container_name: paperless-redis
     restart: unless-stopped
+    command: redis-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -43,7 +44,7 @@ services:
       PAPERLESS_DBUSER: ${POSTGRES_USER}
       PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
-      PAPERLESS_URL: ${PAPERLESS_URL}
+      PAPERLESS_URL: https://paperless.${DOMAIN}
       PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
       PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
       PAPERLESS_TIME_ZONE: ${TZ}

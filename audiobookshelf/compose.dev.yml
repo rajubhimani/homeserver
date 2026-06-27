@@ -1,0 +1,4 @@
+services:
+  audiobookshelf:
+    ports:
+      - "8094:80"

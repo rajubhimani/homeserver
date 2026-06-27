@@ -4,7 +4,7 @@ services:
     container_name: portainer
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/data:/data
     networks:
       - homeserver

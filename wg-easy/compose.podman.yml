@@ -1,0 +1,4 @@
+services:
+  wg-easy:
+    security_opt:
+      - label=disable

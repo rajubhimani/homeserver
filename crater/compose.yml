@@ -1,0 +1,52 @@
+services:
+  crater-db:
+    image: mariadb:10.11
+    container_name: crater-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ${DATA_ROOT}/db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - homeserver
+
+  crater:
+    image: foralabs/crater:latest
+    container_name: crater
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: crater-db
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      APP_URL: https://crater.${DOMAIN}
+      APP_KEY: ${APP_KEY}
+    volumes:
+      - ${DATA_ROOT}/uploads:/var/www/html/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      crater-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

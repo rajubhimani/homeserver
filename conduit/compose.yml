@@ -1,0 +1,21 @@
+services:
+  conduit:
+    image: matrixconduit/matrix-conduit:latest
+    container_name: conduit
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CONDUIT_CONFIG: /etc/conduit.toml
+      CONDUIT_SERVER_NAME: matrix.${DOMAIN}
+      CONDUIT_ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+    volumes:
+      - ${DATA_ROOT}/data:/var/lib/matrix-conduit
+      - ./conduit.toml:/etc/conduit.toml:ro
+    # Conduit is distroless — no shell or HTTP tools available for healthcheck
+    # Container health is monitored via restart policy and Docker process status
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

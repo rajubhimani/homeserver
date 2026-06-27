@@ -1,0 +1,4 @@
+services:
+  dozzle:
+    security_opt:
+      - label=disable

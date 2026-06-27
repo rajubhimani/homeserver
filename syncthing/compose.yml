@@ -1,0 +1,25 @@
+services:
+  syncthing:
+    image: lscr.io/linuxserver/syncthing:latest
+    container_name: syncthing
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ${DATA_ROOT}/config:/config
+      - ${DATA_ROOT}/data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8384/rest/noauth/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

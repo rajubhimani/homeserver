@@ -1,0 +1,10 @@
+services:
+  paperless-db:
+    security_opt:
+      - label=disable
+  paperless-redis:
+    security_opt:
+      - label=disable
+  paperless:
+    security_opt:
+      - label=disable

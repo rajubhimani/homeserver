@@ -1,6 +1,6 @@
 # 03b — Tailscale (Testing)
 
-[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Nginx Proxy Manager →](04-nginx.md)
+[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Reverse Proxy →](04-nginx.md)
 
 ---
 
@@ -34,9 +34,11 @@ tailscale ip -4
 
 | Service | URL |
 | --- | --- |
-| NPM Admin | `http://100.x.x.x:81` |
-| Nextcloud | `http://100.x.x.x:8080` |
+| Landing | `http://100.x.x.x:8080` |
+| Nextcloud | `http://100.x.x.x:8081` |
 | Immich | `http://100.x.x.x:2283` |
+| Dozzle | `http://100.x.x.x:9999` |
+| NPM admin (if using NPM) | `http://100.x.x.x:81` |
 | SSH | `ssh user@100.x.x.x` |
 
 > Replace `100.x.x.x` with your actual Tailscale IP everywhere in the remaining steps.
@@ -64,4 +66,4 @@ When you're ready to go production, follow [03a — Cloudflare Tunnel](03a-cloud
 
 ---
 
-[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Nginx Proxy Manager →](04-nginx.md)
+[← Choose Access](03-access.md) | [Home](../setup.md) | [Next: Reverse Proxy →](04-nginx.md)

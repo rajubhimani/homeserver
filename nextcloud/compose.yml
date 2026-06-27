@@ -23,6 +23,7 @@ services:
     image: redis:7-alpine
     container_name: nextcloud-redis
     restart: unless-stopped
+    command: redis-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -43,7 +44,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
       NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
-      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost *.${DOMAIN}
       NEXTCLOUD_TRUSTED_PROXIES: nginx-proxy-manager
       REDIS_HOST: nextcloud-redis
       REDIS_HOST_PORT: 6379
@@ -54,6 +55,12 @@ services:
       - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
       - ${USER_DATA_ROOT}:/mnt/seagate
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     depends_on:
       nextcloud-db:
         condition: service_healthy
@@ -78,7 +85,7 @@ services:
       - ${DATA_ROOT}/config:/var/www/html/config
       - ${DATA_ROOT}/data:/var/www/html/data
       - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
-      - ${USER_DATA_ROOT}:/mnt/seagate
+      # - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
       - nextcloud
     networks:
