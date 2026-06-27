@@ -1,0 +1,4 @@
+services:
+  dockge:
+    security_opt:
+      - label=disable

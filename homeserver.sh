@@ -26,6 +26,10 @@ if [ -f "$BASE_DIR/.env" ]; then
 fi
 DOMAIN="${DOMAIN:-yourdomain.com}"
 RUNTIME="${RUNTIME:-docker}"
+DOCKER_SOCKET="${DOCKER_SOCKET:-/var/run/docker.sock}"
+export DOCKER_SOCKET
+export DOCKER_HOST="unix://$DOCKER_SOCKET"
+export CONTAINER_HOST="unix://$DOCKER_SOCKET"
 
 # ── Service tiers ─────────────────────────────────────────────────
 # MIN ⊂ CORE ⊂ ALL (ALL = CORE + EXTRA)
@@ -92,6 +96,7 @@ compose_files() {
   base=$(base_file "$service")
   files="-f $dir/$base"
   [ -f "$dir/compose.${env}.yml" ] && files="$files -f $dir/compose.${env}.yml"
+  [ "$RUNTIME" = "podman" ] && [ -f "$dir/compose.podman.yml" ] && files="$files -f $dir/compose.podman.yml"
   echo "$files"
 }
 
@@ -103,6 +108,7 @@ compose_files_all() {
   for e in dev prod; do
     [ -f "$dir/compose.${e}.yml" ] && files="$files -f $dir/compose.${e}.yml"
   done
+  [ "$RUNTIME" = "podman" ] && [ -f "$dir/compose.podman.yml" ] && files="$files -f $dir/compose.podman.yml"
   echo "$files"
 }
 

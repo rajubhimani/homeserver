@@ -1,0 +1,4 @@
+services:
+  jellyfin:
+    security_opt:
+      - label=disable

@@ -1,0 +1,10 @@
+services:
+  gitea-db:
+    security_opt:
+      - label=disable
+  gitea:
+    security_opt:
+      - label=disable
+  gitea-runner:
+    security_opt:
+      - label=disable

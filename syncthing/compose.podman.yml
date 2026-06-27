@@ -1,0 +1,4 @@
+services:
+  syncthing:
+    security_opt:
+      - label=disable

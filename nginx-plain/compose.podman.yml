@@ -1,0 +1,6 @@
+services:
+  nginx-plain:
+    security_opt:
+      - label=disable
+    environment:
+      NGINX_RESOLVER: "10.89.0.1"

@@ -100,6 +100,7 @@ All services join the external `homeserver` Docker bridge network. NPM resolves 
 ## Adding a new service
 
 1. Create `<service>/compose.yml`, `compose.dev.yml`, `compose.prod.yml`, `.env`, and `.env.example`
+   - If the service mounts host paths or the Docker socket, also create `compose.podman.yml` with `security_opt: label=disable` (SELinux fix for Podman)
 2. Set `DATA_ROOT=../service_data/<service>` in **both** `.env` and `.env.example`
 3. Every env var added to `.env` must also be added to `.env.example` with its default value and a comment — they must always stay in sync
 4. If the service supports registration control, always add the appropriate toggle to both `.env` and `.env.example` (see Registration toggle table below)
@@ -159,6 +160,7 @@ Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve 
 | Service | Dev port | Container port |
 | --- | --- | --- |
 | Nginx Proxy Manager | 80 / 443 | 80 / 443 |
+| Nginx Plain (dev) | 8180 / 8443 | 80 / 443 |
 | Landing | 8080 | 80 |
 | Dozzle | 9999 | 8080 |
 | Nextcloud | 8081 | 80 |

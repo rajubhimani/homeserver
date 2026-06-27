@@ -1,0 +1,4 @@
+services:
+  mealie:
+    security_opt:
+      - label=disable

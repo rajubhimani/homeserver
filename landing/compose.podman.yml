@@ -1,0 +1,4 @@
+services:
+  landing:
+    security_opt:
+      - label=disable

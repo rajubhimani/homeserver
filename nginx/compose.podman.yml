@@ -1,0 +1,4 @@
+services:
+  nginx:
+    security_opt:
+      - label=disable

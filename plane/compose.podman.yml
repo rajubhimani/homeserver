@@ -1,0 +1,28 @@
+services:
+  plane-db:
+    security_opt:
+      - label=disable
+  plane-redis:
+    security_opt:
+      - label=disable
+  plane-mq:
+    security_opt:
+      - label=disable
+  plane-minio:
+    security_opt:
+      - label=disable
+  plane-api:
+    security_opt:
+      - label=disable
+  plane-worker:
+    security_opt:
+      - label=disable
+  plane-beat:
+    security_opt:
+      - label=disable
+  plane-web:
+    security_opt:
+      - label=disable
+  plane-proxy:
+    security_opt:
+      - label=disable

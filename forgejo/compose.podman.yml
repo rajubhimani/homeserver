@@ -1,0 +1,10 @@
+services:
+  forgejo-db:
+    security_opt:
+      - label=disable
+  forgejo:
+    security_opt:
+      - label=disable
+  forgejo-runner:
+    security_opt:
+      - label=disable

@@ -1,6 +1,6 @@
 # Auto-generated from template — domain injected from DOMAIN env var at startup
 # Use Docker's internal DNS — resolves container names at request time
-resolver 127.0.0.11 valid=10s;
+resolver ${NGINX_RESOLVER} valid=10s;
 
 # ── Internal health check — never proxied, used by Docker healthcheck ─────────
 server {
