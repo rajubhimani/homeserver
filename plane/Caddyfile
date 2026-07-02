@@ -1,0 +1,46 @@
+{
+    servers {
+        max_header_size 25MB
+        client_ip_headers X-Forwarded-For X-Real-IP
+        trusted_proxies static 0.0.0.0/0
+    }
+}
+
+(plane_proxy) {
+    request_body {
+        max_size {$FILE_SIZE_LIMIT}
+    }
+
+    redir /spaces /spaces/ permanent
+    reverse_proxy /spaces/* plane-space:3000 {
+        header_up X-Forwarded-Proto https
+    }
+
+    redir /god-mode /god-mode/ permanent
+    reverse_proxy /god-mode/* plane-admin:3000 {
+        header_up X-Forwarded-Proto https
+    }
+
+    reverse_proxy /api/* plane-api:8000 {
+        header_up X-Forwarded-Proto https
+    }
+    reverse_proxy /auth/* plane-api:8000 {
+        header_up X-Forwarded-Proto https
+    }
+    reverse_proxy /static/* plane-api:8000 {
+        header_up X-Forwarded-Proto https
+    }
+    reverse_proxy /{$BUCKET_NAME}/* plane-minio:9000 {
+        header_up X-Forwarded-Proto https
+    }
+    reverse_proxy /{$BUCKET_NAME} plane-minio:9000 {
+        header_up X-Forwarded-Proto https
+    }
+    reverse_proxy /* plane-web:3000 {
+        header_up X-Forwarded-Proto https
+    }
+}
+
+:80 {
+    import plane_proxy
+}

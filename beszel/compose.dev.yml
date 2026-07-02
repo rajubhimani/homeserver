@@ -1,0 +1,4 @@
+services:
+  beszel:
+    ports:
+      - "8106:8090"

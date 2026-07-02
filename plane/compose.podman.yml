@@ -11,25 +11,37 @@ services:
   plane-minio:
     security_opt:
       - label=disable
+  plane-migrator:
+    security_opt:
+      - label=disable
   plane-api:
     security_opt:
       - label=disable
     depends_on:
       - plane-db
       - plane-redis
+      - plane-mq
   plane-worker:
     security_opt:
       - label=disable
     depends_on:
       - plane-db
       - plane-redis
+      - plane-mq
   plane-beat:
     security_opt:
       - label=disable
     depends_on:
       - plane-db
       - plane-redis
+      - plane-mq
   plane-web:
+    security_opt:
+      - label=disable
+  plane-admin:
+    security_opt:
+      - label=disable
+  plane-space:
     security_opt:
       - label=disable
   plane-proxy:

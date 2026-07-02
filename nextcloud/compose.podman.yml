@@ -2,6 +2,9 @@ services:
   nextcloud-db:
     security_opt:
       - label=disable
+  nextcloud-redis:
+    security_opt:
+      - label=disable
   nextcloud:
     security_opt:
       - label=disable

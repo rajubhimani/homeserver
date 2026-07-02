@@ -1,12 +1,12 @@
 services:
   conduit:
-    image: matrixconduit/matrix-conduit:latest
+    image: matrixconduit/matrix-conduit:v0.10.12
     container_name: conduit
     restart: unless-stopped
     env_file: .env
     environment:
       CONDUIT_CONFIG: /etc/conduit.toml
-      CONDUIT_SERVER_NAME: matrix.${DOMAIN}
+      CONDUIT_SERVER_NAME: conduit.${DOMAIN}
       CONDUIT_ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
     volumes:
       - ${DATA_ROOT}/data:/var/lib/matrix-conduit

@@ -1,6 +1,6 @@
 services:
   snappymail:
-    image: djmaze/snappymail:latest
+    image: djmaze/snappymail:v2.38.2
     container_name: snappymail
     restart: unless-stopped
     env_file: .env

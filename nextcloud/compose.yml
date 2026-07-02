@@ -1,6 +1,6 @@
 services:
   nextcloud-db:
-    image: postgres:18
+    image: postgres:18.4
     container_name: nextcloud-db
     restart: unless-stopped
     env_file: .env
@@ -8,32 +8,37 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     volumes:
       - ${DATA_ROOT}/postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
     networks:
       - homeserver
 
   nextcloud-redis:
-    image: redis:7-alpine
+    image: redis:8.8-alpine
     container_name: nextcloud-redis
     restart: unless-stopped
     command: redis-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
     networks:
       - homeserver
 
   nextcloud:
-    image: nextcloud:latest
+    image: nextcloud:34
     container_name: nextcloud
     restart: unless-stopped
     env_file: .env
@@ -71,7 +76,7 @@ services:
       - homeserver
 
   nextcloud-cron:
-    image: nextcloud:latest
+    image: nextcloud:34
     container_name: nextcloud-cron
     restart: unless-stopped
     env_file: .env
@@ -88,7 +93,8 @@ services:
       - ${DATA_ROOT}/custom_apps:/var/www/html/custom_apps
       # - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
-      - nextcloud
+      nextcloud:
+        condition: service_healthy
     networks:
       - homeserver
 

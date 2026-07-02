@@ -4,6 +4,61 @@
 
 ---
 
+## Rootless Podman — Privileged Ports
+
+Rootless Podman cannot bind to ports below 1024. This stack handles this by remapping privileged ports to high ports on the host side, using the same pattern as nginx (80 → 8180, 443 → 8443).
+
+Services affected and their remapped host ports:
+
+| Service | Standard port | Host port | Protocol |
+| --- | --- | --- | --- |
+| nginx-plain | 80 | 8180 | HTTP |
+| nginx-plain | 443 | 8443 | HTTPS |
+| Stalwart SMTP | 25 | 8025 | TCP |
+| Stalwart submission | 587 | 8587 | TCP |
+| Stalwart SMTPS | 465 | 8465 | TCP |
+| Stalwart IMAP | 143 | 8143 | TCP |
+| Stalwart IMAPS | 993 | 8993 | TCP |
+
+Port 4190 (Sieve) and all admin/UI ports bind directly — they are above 1024.
+
+### Forwarding standard ports to remapped ports
+
+External clients and mail servers connect to the standard ports. A firewall redirect rule on the host transparently forwards them to the remapped ports.
+
+**Fedora / RHEL (firewalld):**
+```bash
+sudo firewall-cmd --permanent --add-forward-port=port=25:proto=tcp:toport=8025
+sudo firewall-cmd --permanent --add-forward-port=port=587:proto=tcp:toport=8587
+sudo firewall-cmd --permanent --add-forward-port=port=465:proto=tcp:toport=8465
+sudo firewall-cmd --permanent --add-forward-port=port=143:proto=tcp:toport=8143
+sudo firewall-cmd --permanent --add-forward-port=port=993:proto=tcp:toport=8993
+sudo firewall-cmd --reload
+```
+
+**Ubuntu / Debian (iptables):**
+```bash
+sudo iptables -t nat -A PREROUTING -p tcp --dport 25 -j REDIRECT --to-port 8025
+sudo iptables -t nat -A PREROUTING -p tcp --dport 587 -j REDIRECT --to-port 8587
+sudo iptables -t nat -A PREROUTING -p tcp --dport 465 -j REDIRECT --to-port 8465
+sudo iptables -t nat -A PREROUTING -p tcp --dport 143 -j REDIRECT --to-port 8143
+sudo iptables -t nat -A PREROUTING -p tcp --dport 993 -j REDIRECT --to-port 8993
+# Make persistent across reboots
+sudo apt install -y iptables-persistent
+sudo netfilter-persistent save
+```
+
+Verify the rules are active:
+```bash
+# Fedora
+sudo firewall-cmd --list-forward-ports
+
+# Ubuntu
+sudo iptables -t nat -L PREROUTING -n -v
+```
+
+---
+
 ## The Docker / UFW problem
 
 Docker writes iptables rules directly and **bypasses UFW entirely**. A `ufw deny 80` rule will not stop a container that has `ports: - "80:80"` — Docker opens that port regardless.

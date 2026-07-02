@@ -17,10 +17,10 @@
 | Paperless-ngx | Document management | Scansnap cloud |
 | Stirling PDF | PDF toolkit | Adobe Acrobat |
 | Mealie | Recipe manager | Recipe apps |
-| Gitea | Git hosting | GitHub |
-| Forgejo | Git hosting (Gitea fork) | GitHub |
+| Forgejo | Git hosting | GitHub |
 | GitLab CE | Full DevOps platform | GitHub / GitLab.com |
 | Uptime Kuma | Service monitoring | Pingdom |
+| Beszel | Server resource monitoring | Netdata / Datadog |
 | Stalwart | Mail server (SMTP + IMAP) | Gmail / Fastmail |
 | Snappymail | Webmail (fast, minimal) | Gmail web |
 | Roundcube | Webmail (full-featured) | Gmail web |
@@ -32,7 +32,8 @@
 | Conduit | Matrix chat server | Discord / Slack |
 | OpenProject | Project management | Jira / Asana |
 | Plane | Issue tracking | Linear / Jira |
-| Crater | Invoicing | FreshBooks |
+| InvoiceShelf | Invoicing | FreshBooks |
+| Firefly III | Personal finance manager | YNAB / Mint |
 | Dozzle | Docker log viewer | — |
 | nginx-plain | Reverse proxy (default) | Manual nginx config |
 | Nginx Proxy Manager | Reverse proxy (optional, UI-based) | — |
@@ -81,7 +82,7 @@ Go through these in order. Each doc links to the next.
 | [05](docs/05-nextcloud.md) | Nextcloud | File storage, family accounts, external storage |
 | [06](docs/06-immich.md) | Immich | Photo backup, mobile app, face recognition (optional) |
 | [07](docs/07-landing.md) | Landing Page | Service dashboard showing live status for all services |
-| [08](docs/08-maintenance.md) | Maintenance | Monthly updates, health checks, remote management, troubleshooting |
+| [08](docs/08-maintenance.md) | Maintenance | Monthly updates, health checks, remote management, resource-constrained hosts, troubleshooting |
 | [09](docs/09-firewall.md) | Firewall | UFW rules, port binding strategy (dev vs prod) |
 | [10](docs/10-new-services.md) | New Services | Add any service from the stack — step-by-step for each |
 | [11](docs/11-services-reference.md) | Services Reference | All ports, proxy config, per-service notes |
@@ -154,7 +155,6 @@ sh homeserver.sh prod up all
 ├── stirling-pdf/
 ├── stirling-pdf-lite/
 ├── mealie/
-├── gitea/
 ├── forgejo/
 ├── gitlab/
 ├── uptime-kuma/
@@ -170,10 +170,12 @@ sh homeserver.sh prod up all
 ├── conduit/
 ├── openproject/
 ├── plane/
-├── crater/
+├── invoiceshelf/
+├── firefly/
 ├── wg-easy/
 ├── headscale/
-└── openvpn/
+├── openvpn/
+└── beszel/
 ```
 
 Service data (gitignored):
@@ -188,7 +190,6 @@ service_data/
 ├── stirling-pdf/     (configs/, logs/, customFiles/, pipeline/, tessdata/)
 ├── stirling-pdf-lite/ (configs/, logs/, customFiles/, pipeline/)
 ├── mealie/           (postgres/, data/)
-├── gitea/            (postgres/, data/)
 ├── forgejo/          (postgres/, app/)
 ├── gitlab/           (config/, logs/, data/)
 ├── uptime-kuma/      (data/)
@@ -203,5 +204,7 @@ service_data/
 ├── conduit/          (data/)
 ├── openproject/      (pgdata/, assets/)
 ├── plane/            (postgres/, uploads/, logs/)
-└── crater/           (data/)
+├── invoiceshelf/     (db/, uploads/)
+├── firefly/          (postgres/, upload/)
+└── beszel/           (data/, socket/, agent/)
 ```

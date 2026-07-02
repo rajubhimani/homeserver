@@ -1,0 +1,31 @@
+services:
+  appflowy-db:
+    security_opt:
+      - label=disable
+  appflowy-redis:
+    security_opt:
+      - label=disable
+  appflowy-minio:
+    security_opt:
+      - label=disable
+  appflowy-minio-setup:
+    security_opt:
+      - label=disable
+  appflowy-gotrue:
+    security_opt:
+      - label=disable
+  appflowy-cloud:
+    security_opt:
+      - label=disable
+  appflowy-web:
+    security_opt:
+      - label=disable
+  appflowy-admin:
+    security_opt:
+      - label=disable
+  appflowy-nginx:
+    security_opt:
+      - label=disable
+    depends_on:
+      - appflowy-cloud
+      - appflowy-web

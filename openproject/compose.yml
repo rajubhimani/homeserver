@@ -1,14 +1,16 @@
 services:
   openproject:
-    image: openproject/openproject:17
+    image: openproject/openproject:17.5.1
     container_name: openproject
     restart: unless-stopped
     env_file: .env
     environment:
       OPENPROJECT_HOST__NAME: openproject.${DOMAIN}
-      OPENPROJECT_HTTPS: "false"
+      OPENPROJECT_HTTPS: "true"
       OPENPROJECT_DEFAULT__LANGUAGE: en
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      # 0=disabled, 2=email activation, 3=manual admin, 4=automatic
+      OPENPROJECT_SELF__REGISTRATION: ${SELF_REGISTRATION:-2}
     volumes:
       - ${DATA_ROOT}/pgdata:/var/openproject/pgdata
       - ${DATA_ROOT}/assets:/var/openproject/assets

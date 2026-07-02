@@ -45,6 +45,16 @@ NEXTCLOUD_TRUSTED_DOMAINS=localhost 192.168.1.100 100.x.x.x
 ```
 
 > `NEXTCLOUD_TRUSTED_PROXIES` is already set in `compose.yml` — required for correct client IP forwarding through the reverse proxy.
+>
+> **This env var only takes effect during Nextcloud's first-time initialization.** If you're adding it to (or changing `DOMAIN`/network config on) an **already-initialized** Nextcloud, the env var change alone does nothing — you must set it directly via `occ`, which writes straight to `config.php` on the persistent data volume:
+>
+> ```bash
+> docker exec nextcloud php occ config:system:set trusted_proxies 0 --value="172.18.0.0/16"   # match: docker network inspect homeserver
+> docker exec nextcloud php occ config:system:set overwriteprotocol --value="https"
+> docker exec nextcloud php occ config:system:set overwrite.cli.url --value="https://nextcloud.yourdomain.com"
+> ```
+>
+> Symptoms of missing this: Nextcloud reports unhealthy, `/status.php` returns 503, redirect loops, or broken links — because Nextcloud thinks every request behind the proxy is plain HTTP.
 
 ---
 

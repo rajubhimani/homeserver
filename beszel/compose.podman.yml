@@ -1,0 +1,7 @@
+services:
+  beszel:
+    security_opt:
+      - label=disable
+  beszel-agent:
+    security_opt:
+      - label=disable

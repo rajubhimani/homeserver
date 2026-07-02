@@ -1,6 +1,6 @@
 services:
   paperless-db:
-    image: postgres:18
+    image: postgres:18.4
     container_name: paperless-db
     restart: unless-stopped
     env_file: .env
@@ -8,32 +8,37 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     volumes:
       - ${DATA_ROOT}/postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
     networks:
       - homeserver
 
   paperless-redis:
-    image: redis:8-alpine
+    image: redis:8.8-alpine
     container_name: paperless-redis
     restart: unless-stopped
     command: redis-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
     networks:
       - homeserver
 
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.20.15
     container_name: paperless
     restart: unless-stopped
     env_file: .env

@@ -5,6 +5,11 @@ php /var/www/html/occ config:system:get installed 2>/dev/null | grep -q 'true' |
 php /var/www/html/occ config:system:set overwrite.cli.url --value="https://nextcloud.${DOMAIN:-localhost}"
 php /var/www/html/occ config:system:set overwriteprotocol --value="https"
 
+# Trusted domains — localhost + the configured domain
+php /var/www/html/occ config:system:set trusted_domains 0 --value="localhost"
+php /var/www/html/occ config:system:set trusted_domains 1 --value="nextcloud.${DOMAIN:-localhost}"
+php /var/www/html/occ config:system:set trusted_domains 2 --value="*.${DOMAIN:-localhost}"
+
 # Trust all RFC 1918 private ranges — works with both Docker and Podman networks
 php /var/www/html/occ config:system:set trusted_proxies 0 --value="127.0.0.1"
 php /var/www/html/occ config:system:set trusted_proxies 1 --value="10.0.0.0/8"

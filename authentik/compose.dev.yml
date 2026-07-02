@@ -2,4 +2,4 @@ services:
   authentik-server:
     ports:
       - "8088:9000"
-      - "9443:9443"
+      - "9444:9443"

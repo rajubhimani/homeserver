@@ -1,6 +1,0 @@
-services:
-  crater:
-    security_opt:
-      - label=disable
-    depends_on:
-      - crater-db
