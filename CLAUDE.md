@@ -25,7 +25,7 @@ DOCKER_SOCKET=/var/run/docker.sock
 
 `homeserver.sh` also injects `DATA_ROOT` per service. Never hardcode the domain in individual service `.env` files — use `${DOMAIN}` references where possible.
 
-Services that mount the container socket (dozzle, portainer, dockge, gitea, forgejo, gitlab, authentik) use `${DOCKER_SOCKET}` — set it in the root `.env` to switch between Docker and Podman sockets.
+Services that mount the container socket (dozzle, portainer, dockge, forgejo, gitlab, authentik) use `${DOCKER_SOCKET}` — set it in the root `.env` to switch between Docker and Podman sockets.
 
 ## Managing services
 
@@ -77,11 +77,11 @@ sh homeserver.sh dev logs <service>
 - Only move to `SERVICES_MIN` for pure infrastructure (reverse proxy, tunnel, log viewer)
 - Never maintain a separate `SERVICES_DOWN` list — shutdown order is computed by reversing `MIN + CORE + EXTRA`
 
-**SERVICES_MIN (infrastructure):** dozzle → cloudflared → nginx-plain → landing
+**SERVICES_MIN (infrastructure):** dozzle → beszel → cloudflared → nginx-plain → landing
 
-**SERVICES_CORE (always-on apps, added on top of MIN):** nextcloud
+**SERVICES_CORE (always-on apps, added on top of MIN):** nextcloud → vaultwarden → forgejo → firefly → immich
 
-**SERVICES_EXTRA (optional — start with `up all` or individually):** vaultwarden → gitea → forgejo → gitlab → immich → jellyfin → paperless → stirling-pdf-lite → mealie → uptime-kuma → … (all other services)
+**SERVICES_EXTRA (optional — start with `up all` or individually):** dockge → portainer → uptime-kuma → openproject → gitlab → jellyfin → paperless → stirling-pdf-lite → mealie → … → appflowy → plane (all other services — appflowy and plane were demoted from core since together they account for 19 of 40 containers on this resource-constrained host; dockge/portainer/uptime-kuma are grouped first since they're management/monitoring tools, same reasoning as beszel in MIN)
 
 ## Compose file pattern
 
@@ -107,32 +107,38 @@ All services join the external `homeserver` Docker bridge network. NPM resolves 
 5. Create `service_data/<service>/` subdirectories before first start (see Data directory convention below)
 6. Add the service name to `SERVICES_EXTRA` in `homeserver.sh` — always extra first, move to `SERVICES_CORE` only when explicitly asked; `down all` derives shutdown order automatically
 7. Add a card to `landing/index.html` under the appropriate section and add its subdomain to `SERVICE_SUBDOMAINS` in the script block
-8. Add a `/health/<service>` proxy route to `landing/nginx.conf` pointing to `http://<container>:<port>` — without this the landing page card always shows offline
+8. Add a `/health/<service>` proxy route to `landing/nginx.conf` pointing to `http://<container>:<port>` — without this the landing page card always shows offline. If the app validates the `Host` header (trusted domains/allowed hosts/CSRF origin checks), a bare `proxy_pass $upstream/;` will 400 forever since it arrives with an untrusted Host — add `proxy_set_header Host localhost;` to that location block (see Nextcloud note below for the incident this caused)
 9. Add NPM proxy host entry in `docs/11-services-reference.md`
 10. Add a service row in `docs/11-services-reference.md` and `setup.md`
 11. Document setup steps in `docs/10-new-services.md`
 12. Add a `healthcheck` to the service container in `compose.yml` (see healthcheck patterns below)
 13. If the service has optional sub-services (e.g. runners added via `--profile`), document them in **all** relevant doc sections in the same pass — never update compose files without updating the matching docs
 14. Every service container must have a `healthcheck` — use the service's own health endpoint where available, otherwise a simple HTTP probe or process check. This enables reliable `depends_on: condition: service_healthy` ordering and makes `docker ps` show real status
+15. Check the service's **own documented env var/config for "behind a reverse proxy" or "force HTTPS"** (e.g. Firefly III's `TRUSTED_PROXIES`+`APP_URL`, OpenProject's `OPENPROJECT_HTTPS`, Nextcloud's `trusted_proxies`+`overwriteprotocol` via `occ`, Forgejo's `ROOT_URL`) — setting `X-Forwarded-Proto: https` in the proxy config (see Traffic flow below) is necessary but often not sufficient; many apps also need their own app-level setting confirming the original request was HTTPS, independent of the proxy header. Check the official docs for each new service rather than guessing — this class of bug causes unhealthy/503/broken-links symptoms that look unrelated to the actual cause.
 
 **Healthcheck patterns by service type:**
 
 - nginx-based: `wget -q --spider http://localhost/ || exit 1`
 - HTTP app: `curl -f http://localhost:<port>/health || exit 1`
 - Dozzle: `["/dozzle", "healthcheck"]`
-- Gitea/Forgejo: `curl -f http://localhost:3000/api/healthz || exit 1`
+- Forgejo: `curl -f http://localhost:3000/api/healthz || exit 1`
 - Nextcloud: `curl -f http://localhost/status.php || exit 1`
 - Postgres: `pg_isready -U ${POSTGRES_USER}`
 - Redis/Valkey: `redis-cli ping` / `valkey-cli ping`
 
 ## Services with PostgreSQL
 
-Services that need Postgres (nextcloud, paperless, mealie, gitea, forgejo) include:
+Services that need Postgres (nextcloud, paperless, mealie, forgejo, firefly, authentik, miniflux, plane, immich) include:
 
-- `forgejo-db` / `gitea-db` / etc. container using `postgres:18`
+- `forgejo-db` / etc. container using `postgres:18`
 - `postgres-init/init.sh` that grants schema ownership — required due to PostgreSQL 15+ default privilege changes
 - Healthcheck on the DB so the app container waits until it's ready
 - Postgres data volume path: `${DATA_ROOT}/postgres:/var/lib/postgresql`
+- **Memory tuning (required on resource-constrained hosts):** every Postgres container gets a `command:` override with real Postgres tuning parameters, plus a `deploy.resources.limits.memory` cgroup cap as a backstop — not the cap alone. A hard memory cap without tuning the app's own settings just means Postgres tries to use more than the cap and gets OOM-killed under load; tuning `shared_buffers`/`work_mem`/`max_connections` down means it rarely approaches the cap at all.
+  - **Light tier** (single consumer — authentik, mealie, paperless, forgejo, firefly, miniflux): `postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB`, memory limit `384M`
+  - **Heavier tier** (multiple concurrent consumers — nextcloud, plane, immich): same but `max_connections=50` and `effective_cache_size=384MB`, memory limit `512M`
+  - **immich-db is special**: its image (`ghcr.io/immich-app/postgres`) has a default `Cmd` of `postgres -c config_file=/etc/postgresql/postgresql.conf` — that custom config file is required for `shared_preload_libraries` (pgvector/vectorchord). Any `command:` override on this container **must keep** `-c config_file=/etc/postgresql/postgresql.conf` as the first flag and add tuning flags after it — a full override without it silently falls back to the default config path and breaks vector search extensions. Verify with `docker exec immich-db psql -U <user> -c "SELECT extname, extversion FROM pg_extension;"` — should list `vector` and `vchord`.
+  - After changing a `command:`/`deploy:` block, only the DB container needs recreating — use `docker compose -f compose.yml -f compose.prod.yml up -d --no-deps <db-service-name>` from the service directory instead of `homeserver.sh up <service>`, which waits on the *entire* dependent stack (app containers with `depends_on: condition: service_healthy`) and can hang for minutes if the healthcheck is flaky under host load.
 
 ## Reverse proxy — pick one
 
@@ -153,14 +159,21 @@ Browser → Cloudflare Edge (TLS) → cloudflared (container) → nginx / NPM :8
 
 Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve services by Docker container name on the `homeserver` network. `cloudflared` connects **outbound only** — no ports need to be opened on the firewall.
 
+**IMPORTANT — always hardcode `X-Forwarded-Proto: https`:** Since Cloudflare always terminates TLS and every internal hop is plain HTTP, never use dynamic scheme detection (nginx `$scheme`, Caddy's default `header_up` behavior) for the `X-Forwarded-Proto` header — it will always evaluate to `http`, even though the original request was HTTPS. This breaks any backend that derives its own scheme from that header (e.g. Laravel apps generating absolute URLs, which then get blocked by browser CSP/mixed-content rules). Hardcode it instead:
+
+- nginx: `proxy_set_header X-Forwarded-Proto https;`
+- Caddy: `header_up X-Forwarded-Proto https` inside the `reverse_proxy` block
+
+Apply this in every reverse proxy config that sits in front of a container — `nginx-plain/templates/default.conf.template`, any service's own internal nginx/Caddy config (e.g. `appflowy/nginx.conf`, `plane/Caddyfile`), and any new service's proxy added in the future.
+
 ## Port reference
 
 **IMPORTANT — always check this table before assigning ports to a new service. Every host dev port must be unique. SSH ports must also be unique.**
 
 | Service | Dev port | Container port |
 | --- | --- | --- |
-| Nginx Proxy Manager | 80 / 443 | 80 / 443 |
-| Nginx Plain (dev) | 8180 / 8443 | 80 / 443 |
+| Nginx Proxy Manager | 8180 / 8443 / 8181 (admin) | 80 / 443 / 81 |
+| Nginx Plain | 8180 / 8443 | 80 / 443 |
 | Landing | 8080 | 80 |
 | Dozzle | 9999 | 8080 |
 | Nextcloud | 8081 | 80 |
@@ -171,7 +184,6 @@ Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve 
 | Stirling PDF Lite | 8090 | 8080 |
 | Stirling PDF (Full) | 8089 | 8080 |
 | Mealie | 9925 | 9000 |
-| Gitea | 3000 / 2222 (SSH) | 3000 / 22 |
 | Forgejo | 3002 / 2223 (SSH) | 3000 / 22 |
 | GitLab | 8085 / 2224 (SSH) | 80 / 22 |
 | Uptime Kuma | 3001 | 3001 |
@@ -182,14 +194,18 @@ Cloudflare terminates TLS. Internal traffic is plain HTTP. Both proxies resolve 
 | Ntfy | 8092 | 80 |
 | Miniflux | 8093 | 8080 |
 | Audiobookshelf | 8094 | 80 |
-| Conduit (Matrix) | 8095 / 8448 (federation) | 6167 |
+| Conduit (Matrix) | 8095 / 8448 (fed.) | 6167 |
 | Snappymail | 8097 | 8888 |
 | Roundcube | 8098 | 80 |
 | OpenProject | 8099 | 80 |
 | Plane | 8100 | 80 |
-| Crater | 8101 | 80 |
+| InvoiceShelf | 8101 | 8080 |
+| Firefly III | 8102 | 8080 |
+| AppFlowy | 8103 | 80 |
+| Firefly III Importer | 8104 | 8080 |
+| Beszel | 8106 | 8090 |
 
-**Next available ports:** web `8102`, SSH `2225`
+**Next available ports:** web `8107`, SSH `2225`
 
 When adding a new service:
 
@@ -206,9 +222,6 @@ service_data/        ← gitignored entirely
   forgejo/
     postgres/        ← DB files
     app/             ← app data
-  gitea/
-    postgres/
-    data/
   nextcloud/
     ...
 ```
@@ -227,12 +240,23 @@ service_data/        ← gitignored entirely
 
 ## Key service notes
 
-- **Nextcloud**: uses partial volume mounts — do not mount full `/var/www/html`. Has a `before-starting` hook that runs rsync on startup.
+- **Nextcloud**: uses partial volume mounts — do not mount full `/var/www/html`. Has a `before-starting` hook that runs rsync on startup. `NEXTCLOUD_TRUSTED_PROXIES` in compose.yml is only applied by the official image during **first-time initialization** — if Nextcloud was already set up before that env var existed (or before `DOMAIN`/network changes), it silently has no effect on an existing install. Fix/verify with `occ` directly (persists to `config.php` on the data volume, survives restarts):
+  ```bash
+  docker exec nextcloud php occ config:system:set trusted_proxies 0 --value="172.18.0.0/16"   # match `docker network inspect homeserver`
+  docker exec nextcloud php occ config:system:set overwriteprotocol --value="https"
+  docker exec nextcloud php occ config:system:set overwrite.cli.url --value="https://nextcloud.${DOMAIN}"
+  ```
+  Missing `overwriteprotocol`/`trusted_proxies` causes Nextcloud to think every request is plain HTTP behind the proxy — manifests as unhealthy status, 503s, redirect loops, or broken links.
+  Nextcloud also validates the `Host` header against `trusted_domains` on **every** request, including from `landing/nginx.conf`'s `/health/nextcloud` proxy — that block originally did `proxy_pass http://nextcloud:80/;` (bare root, no `Host` override), which arrives with an untrusted `Host` and gets rejected with a 400. Root cause traced 2026-07-02: the landing page's client-side status poller hit this endpoint every ~30s continuously, all day, producing a stream of 400s in Nextcloud's access log with the *proxy's* IP (not a real client) — easy to mistake for a performance/DB problem when it's actually just a broken health check. Fixed by pointing it at `/status.php` (the same lightweight endpoint Nextcloud's own Docker healthcheck already uses successfully) with `proxy_set_header Host localhost;` explicitly set. **General lesson for any new service's `/health/<service>` block**: if the app validates the `Host` header (trusted domains/allowed hosts/CSRF origin checks — Nextcloud, and potentially others), a bare `proxy_pass $upstream/;` health check will silently 400 forever; explicitly set `proxy_set_header Host localhost;` (or whatever the app trusts) on that specific location block.
 - **Immich**: uses a custom Postgres image with pgvector (`ghcr.io/immich-app/postgres`). ML profile is opt-in.
 - **Stirling PDF**: Lite (`latest-ultra-lite`) is always on; Full (`latest`) is manual-only due to ~1.5GB RAM usage.
-- **Forgejo**: image `codeberg.org/forgejo/forgejo:15`. Config env vars use `FORGEJO__` prefix. SSH on host port 2223. Setup wizard skipped via `FORGEJO__security__INSTALL_LOCK=true`.
-- **Gitea**: config env vars use `GITEA__` prefix. SSH on host port 2222. Setup wizard skipped via `GITEA__security__INSTALL_LOCK=true`.
+- **Forgejo**: image `codeberg.org/forgejo/forgejo:15`. Config env vars use `FORGEJO__` prefix. SSH on host port 2223. Setup wizard skipped via `FORGEJO__security__INSTALL_LOCK=true`. `FORGEJO__server__ROOT_URL` must be `https://forgejo.${DOMAIN}` (not http) since Cloudflare always terminates TLS.
 - **Vaultwarden**: signups disabled by default (`SIGNUPS_ALLOWED=false`); invite users via `/admin` panel.
+- **Firefly III**: `APP_KEY` and `STATIC_CRON_TOKEN` must each be exactly 32 characters. Registration is controlled via web UI at `/settings/configuration` after first login. Includes an alpine cron container for recurring transactions. `APP_URL` must be `https://firefly.${DOMAIN}` and `TRUSTED_PROXIES` must be `"**"` — both required by Firefly III's own docs for it to generate `https://` links instead of `http://` (mismatched scheme gets blocked by the browser's CSP `connect-src` on things like the transaction-delete API call).
+- **OpenProject**: `OPENPROJECT_HTTPS` must be `"true"` when running behind Cloudflare/any TLS-terminating proxy — this is OpenProject's own documented env var for telling Rails the connection is secure (independent of the `X-Forwarded-Proto` header sent by the proxy). Leaving it `"false"` while the proxy claims `https` is contradictory and causes broken links/redirect issues.
+- **Plane**: needs 5 frontend/backend images, not 3 — `plane-web` (`makeplane/plane-frontend`) serves the main app only; `/god-mode/*` (onboarding, instance admin) and `/spaces/*` (public views) are served by **separate containers**: `plane-admin` (`makeplane/plane-admin`) and `plane-space` (`makeplane/plane-space`). Routing everything through `plane-web` (as an early version of this setup did) serves the wrong React bundle at those paths — causes a React hydration error (#423) and onboarding buttons that silently do nothing (no request leaves the browser). The official `Caddyfile` (extract from the `makeplane/plane-proxy` image with `docker run --rm --entrypoint cat makeplane/plane-proxy:vX /etc/caddy/Caddyfile`) is the source of truth for this routing — it 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then routes each to its own container on port 3000. `plane-api` also needs `APP_BASE_URL`, `ADMIN_BASE_URL`, `SPACE_BASE_URL` (all `https://plane.${DOMAIN}` in this single-domain setup) in addition to `WEB_URL`/`CORS_ALLOWED_ORIGINS` — without them `GET /api/instances/` returns `null` for those fields. `plane-mq` (RabbitMQ) needs `start_period: 60s` on its healthcheck — a fresh vhost/mnesia init can take >30s, and the default was too tight, especially on a loaded host. Editing the mounted `Caddyfile` alone does **not** reload `plane-proxy` — compose only recreates a container when the *service definition* changes, not when a bind-mounted file's contents change, so `docker restart plane-proxy` is required after any Caddyfile edit.
+- **AppFlowy**: GoTrue's own migrations always fully-qualify their schema (`{{Namespace}}.users`, baked into the Go template, default namespace `auth`), so they're unaffected by `search_path`. But GoTrue's everyday runtime queries (login, etc.) and its own internal migration-tracking table lookup are unqualified and depend on the DB connection's `search_path` resolving to `auth` — without it you get `relation "users" does not exist` on login even though the tables clearly exist. AppFlowy Cloud (the Rust service)'s sqlx migrations, on the other hand, assume unqualified names resolve to `public` — a later migration hardcodes `public.af_user`. Since both services share the same DB role, a role-wide `ALTER ROLE ... SET search_path` (an earlier version of this setup) forces one choice for both and breaks the other. Fix: scope `search_path=auth,public` to **only** GoTrue's own connection string via the Postgres URI's `options` param (`?options=-c%20search_path%3Dauth%2Cpublic` on `GOTRUE_DB_DATABASE_URL`), leaving `APPFLOWY_DATABASE_URL` (and the role default) at plain `public`. If GoTrue's `auth.schema_migrations` bookkeeping table ever falls out of sync with the real applied-migrations history (e.g. it ran for a while without the search_path option and built up a separate `public.schema_migrations` ledger), it'll try to replay old migrations against tables that already reflect the final schema and crash on column mismatches — reconcile by copying missing versions from `public.schema_migrations` into `auth.schema_migrations` before restarting GoTrue. Also: recreating `appflowy-gotrue` alone leaves `appflowy-nginx` with a stale cached IP for it (502s on `/gotrue/*`) — `docker restart appflowy-nginx` after any gotrue container recreation.
+- **Beszel**: two containers — `beszel` (hub, web UI + storage) and `beszel-agent` (monitors this Docker host). The agent uses `network_mode: host` instead of joining the `homeserver` bridge network — it's the only service that does — because Beszel only reports real host network throughput when it can see the host's own network namespace; on the bridge network it would only see its own virtual interface. It talks to the hub over a shared local Unix socket (`${DATA_ROOT}/socket`), not the Docker network, so it has no need to resolve other containers by name. Because of the host-network mode, the agent's `HUB_URL` must point at the hub's published host port (`http://localhost:8106`), not its container port (`8090`) — update it if the hub's port mapping ever changes. `TOKEN`/`KEY` in `beszel-agent`'s environment are blank on first start — the agent refuses to run without them and crash-loops (`Failed to load public keys: no key provided`) until you log into the hub once, pair the agent (hub UI → add a system, or Settings → Tokens for a universal token), set `BESZEL_AGENT_TOKEN`/`BESZEL_AGENT_KEY` in `beszel/.env`, and restart it. The crash-loop is expected/harmless (`restart: unless-stopped`), not a bug.
 
 ## Registration toggle per service
 
@@ -241,15 +265,16 @@ Each service with public signup has a toggle in its `.env`:
 | Service | Env var | Disable value | Allow value |
 | --- | --- | --- | --- |
 | Forgejo | `DISABLE_REGISTRATION` | `true` | `false` |
-| Gitea | `DISABLE_REGISTRATION` | `true` | `false` |
 | Vaultwarden | `SIGNUPS_ALLOWED` | `false` | `true` |
 | Mealie | `ALLOW_SIGNUP` | `false` | `true` |
 | GitLab | `SIGNUP_ENABLED` | `false` | `true` |
+| Conduit | `ALLOW_REGISTRATION` | `false` | `true` |
+| OpenProject | `SELF_REGISTRATION` | `0` | `4` (2=email, 3=manual, 4=auto) |
 
-All default to **disabled**. To re-enable, update the value in `.env` and restart the service:
+All default to **enabled**. To disable, update the value in `.env` and restart the service:
 
 ```bash
 sh homeserver.sh dev up <service>
 ```
 
-Services with no public signup (Nextcloud, Immich, Paperless, Jellyfin, Uptime Kuma) are always admin-managed — no toggle needed.
+Services with no public signup (Nextcloud, Immich, Paperless, Jellyfin, Uptime Kuma, Firefly III) are always admin-managed — no toggle needed.

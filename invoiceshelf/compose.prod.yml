@@ -1,0 +1,4 @@
+services:
+  invoiceshelf:
+    ports:
+      - "127.0.0.1:8101:8080"

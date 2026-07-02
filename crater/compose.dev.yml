@@ -1,4 +1,0 @@
-services:
-  crater:
-    ports:
-      - "8101:80"

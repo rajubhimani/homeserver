@@ -4,9 +4,12 @@ services:
       # Admin UI — nginx-plain proxies mail.yourdomain.com → stalwart:8080
       - "127.0.0.1:8091:8080"
       # Mail ports must be publicly accessible (not via Cloudflare Tunnel)
-      - "25:25"
-      - "587:587"
-      - "465:465"
-      - "143:143"
-      - "993:993"
+      # All ports below 1024 remapped — rootless Podman can't bind privileged ports
+      # Firewall must forward each standard port to the remapped host port
+      - "8025:25"
+      - "8587:587"
+      - "8465:465"
+      - "8143:143"
+      - "8993:993"
+      # Sieve (not privileged, binds directly)
       - "4190:4190"

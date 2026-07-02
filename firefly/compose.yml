@@ -1,0 +1,119 @@
+services:
+  firefly-db:
+    image: postgres:18.4
+    container_name: firefly-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - ${DATA_ROOT}/postgres:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  firefly-permissions:
+    image: alpine:3.21
+    container_name: firefly-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/storage:/var/www/html/storage
+    # www-data UID/GID is 33 in Debian-based images (used by fireflyiii/core)
+    command: chown -R 33:33 /var/www/html/storage
+
+  firefly:
+    image: fireflyiii/core:version-6.6.3
+    container_name: firefly
+    restart: unless-stopped
+    user: "0:0"
+    env_file: .env
+    environment:
+      APP_URL: https://firefly.${DOMAIN}
+      DB_CONNECTION: pgsql
+      DB_HOST: firefly-db
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      TRUSTED_PROXIES: "**"
+      CACHE_DRIVER: file
+      SESSION_DRIVER: file
+      DEFAULT_LANGUAGE: en_US
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ${DATA_ROOT}/storage:/var/www/html/storage
+      - ${DATA_ROOT}/storage/upload:/var/www/html/storage/upload
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    depends_on:
+      firefly-db:
+        condition: service_healthy
+      firefly-permissions:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+  firefly-importer:
+    image: fireflyiii/data-importer:version-2.3
+    container_name: firefly-importer
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FIREFLY_III_URL: http://firefly:8080
+      VANITY_URL: https://firefly.${DOMAIN}
+      FIREFLY_III_CLIENT_ID: ${FIREFLY_III_CLIENT_ID:-}
+      TRUSTED_PROXIES: "**"
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - firefly-importer-upload:/var/www/html/storage/upload
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      firefly:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  firefly-cron:
+    image: alpine:3.21
+    container_name: firefly-cron
+    restart: unless-stopped
+    env_file: .env
+    # Calls the Firefly cron endpoint daily at 03:00 to process recurring transactions
+    command: >-
+      sh -c "apk add --no-cache curl tzdata &&
+             echo '0 3 * * * curl -s http://firefly:8080/api/v1/cron/$$STATIC_CRON_TOKEN' | crontab - &&
+             crond -f -l 8"
+    depends_on:
+      firefly:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  firefly-importer-upload:
+
+networks:
+  homeserver:
+    external: true

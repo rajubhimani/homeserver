@@ -1,7 +1,7 @@
 services:
-  crater-db:
+  invoiceshelf-db:
     image: mariadb:10.11
-    container_name: crater-db
+    container_name: invoiceshelf-db
     restart: unless-stopped
     env_file: .env
     environment:
@@ -13,36 +13,38 @@ services:
       - ${DATA_ROOT}/db:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 30s
     networks:
       - homeserver
 
-  crater:
-    image: foralabs/crater:latest
-    container_name: crater
+  invoiceshelf:
+    image: invoiceshelf/invoiceshelf:2.4
+    container_name: invoiceshelf
     restart: unless-stopped
     env_file: .env
+    user: "0:0"
     environment:
-      DB_HOST: crater-db
+      DB_CONNECTION: mysql
+      DB_HOST: invoiceshelf-db
       DB_PORT: 3306
       DB_DATABASE: ${MYSQL_DATABASE}
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
-      APP_URL: https://crater.${DOMAIN}
+      APP_URL: https://invoiceshelf.${DOMAIN}
       APP_KEY: ${APP_KEY}
     volumes:
       - ${DATA_ROOT}/uploads:/var/www/html/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     depends_on:
-      crater-db:
+      invoiceshelf-db:
         condition: service_healthy
     networks:
       - homeserver

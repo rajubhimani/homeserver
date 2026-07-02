@@ -1,6 +1,6 @@
 services:
   forgejo-db:
-    image: postgres:18
+    image: postgres:18.4
     container_name: forgejo-db
     restart: unless-stopped
     env_file: .env
@@ -8,19 +8,24 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     volumes:
       - ${DATA_ROOT}/postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
     networks:
       - homeserver
 
   forgejo:
-    image: codeberg.org/forgejo/forgejo:15
+    image: codeberg.org/forgejo/forgejo:15.0.3
     container_name: forgejo
     restart: unless-stopped
     env_file: .env
@@ -40,13 +45,12 @@ services:
       FORGEJO__actions__ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 30s
     volumes:
       - ${DATA_ROOT}/app:/data
-      - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     depends_on:
       forgejo-db:
@@ -55,7 +59,7 @@ services:
       - homeserver
 
   forgejo-runner:
-    image: codeberg.org/forgejo/runner:latest
+    image: codeberg.org/forgejo/runner:v12.12.0
     container_name: forgejo-runner
     restart: unless-stopped
     profiles:
@@ -66,7 +70,8 @@ services:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data
     depends_on:
-      - forgejo
+      forgejo:
+        condition: service_healthy
     networks:
       - homeserver
 

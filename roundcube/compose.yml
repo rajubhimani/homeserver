@@ -1,6 +1,6 @@
 services:
   roundcube:
-    image: roundcube/roundcubemail:latest
+    image: roundcube/roundcubemail:1.7.1-apache
     container_name: roundcube
     restart: unless-stopped
     env_file: .env

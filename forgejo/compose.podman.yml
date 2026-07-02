@@ -5,6 +5,8 @@ services:
   forgejo:
     security_opt:
       - label=disable
+    depends_on:
+      - forgejo-db
   forgejo-runner:
     security_opt:
       - label=disable

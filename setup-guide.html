@@ -538,7 +538,7 @@ sudo systemctl restart cloudflared</pre>
       <ul class="steps">
         <li class="step"><span class="step-num">MIN</span><div class="step-content"><div class="step-title">dozzle → cloudflared → nginx-plain → landing</div><div class="step-desc">Infrastructure — must be up first. Start with <code>sh homeserver.sh dev up min</code>.</div></div></li>
         <li class="step"><span class="step-num">CORE</span><div class="step-content"><div class="step-title">nextcloud</div><div class="step-desc">Always-on app layer. Start with <code>sh homeserver.sh dev up core</code> (includes min).</div></div></li>
-        <li class="step"><span class="step-num">ALL</span><div class="step-content"><div class="step-title">immich, jellyfin, gitea, forgejo, gitlab, and all other services</div><div class="step-desc">Optional services. Start with <code>sh homeserver.sh dev up all</code>. <code>down all</code> always stops everything.</div></div></li>
+        <li class="step"><span class="step-num">ALL</span><div class="step-content"><div class="step-title">immich, jellyfin, forgejo, gitlab, and all other services</div><div class="step-desc">Optional services. Start with <code>sh homeserver.sh dev up all</code>. <code>down all</code> always stops everything.</div></div></li>
       </ul>
     </section>
 
@@ -586,7 +586,6 @@ sh homeserver.sh dev up min</pre>
             <tr><td>jellyfin.yourdomain.com</td><td>jellyfin</td><td>8096</td></tr>
             <tr><td>vaultwarden.yourdomain.com</td><td>vaultwarden</td><td>80</td></tr>
             <tr><td>paperless.yourdomain.com</td><td>paperless</td><td>8000</td></tr>
-            <tr><td>gitea.yourdomain.com</td><td>gitea</td><td>3000</td></tr>
             <tr><td>forgejo.yourdomain.com</td><td>forgejo</td><td>3000</td></tr>
             <tr><td>gitlab.yourdomain.com</td><td>gitlab</td><td>80</td></tr>
             <tr><td>mail.yourdomain.com</td><td>stalwart</td><td>8080</td></tr>

@@ -2,6 +2,9 @@ services:
   immich-server:
     security_opt:
       - label=disable
+    depends_on:
+      - immich-redis
+      - immich-database
   immich-machine-learning:
     security_opt:
       - label=disable

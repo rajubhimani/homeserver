@@ -1,6 +1,6 @@
 services:
   nginx-proxy-manager:
-    image: jc21/nginx-proxy-manager:latest
+    image: jc21/nginx-proxy-manager:2.15.1
     container_name: nginx-proxy-manager
     restart: unless-stopped
     env_file: .env
@@ -9,7 +9,7 @@ services:
       - ${DATA_ROOT}/letsencrypt:/etc/letsencrypt
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:81/ || exit 1"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 30s

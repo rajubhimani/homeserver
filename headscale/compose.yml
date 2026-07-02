@@ -1,6 +1,6 @@
 services:
   headscale:
-    image: headscale/headscale:latest
+    image: headscale/headscale:v0.29
     container_name: headscale
     restart: unless-stopped
     command: serve
@@ -11,7 +11,7 @@ services:
       - homeserver
 
   headscale-admin:
-    image: goodieshq/headscale-admin:latest
+    image: goodieshq/headscale-admin:v0.27
     container_name: headscale-admin
     restart: unless-stopped
     networks:

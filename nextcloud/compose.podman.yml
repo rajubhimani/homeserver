@@ -1,4 +1,16 @@
 services:
+  nextcloud-db:
+    security_opt:
+      - label=disable
+  nextcloud-redis:
+    security_opt:
+      - label=disable
   nextcloud:
+    security_opt:
+      - label=disable
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+  nextcloud-cron:
     security_opt:
       - label=disable

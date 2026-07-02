@@ -8,3 +8,6 @@ services:
   paperless:
     security_opt:
       - label=disable
+    depends_on:
+      - paperless-db
+      - paperless-redis

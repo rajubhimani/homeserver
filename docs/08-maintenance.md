@@ -85,6 +85,71 @@ sudo systemctl status cloudflared
 
 ---
 
+## Running on a resource-constrained host
+
+If your server is a repurposed desktop/laptop (shared with other work, low core count, 8-16GB RAM) rather than a dedicated machine, `up all` can easily oversubscribe it — Postgres instances, Immich, and multi-container stacks like Plane add up fast. Check first, then apply the fixes below only where they help.
+
+**Check current load before assuming a service is broken:**
+
+```bash
+uptime           # load average — compare against `nproc`
+free -h           # used / free / swap
+docker stats --no-stream   # per-container CPU/memory
+```
+
+A container reporting "unhealthy" right after a restart batch is often just the healthcheck probe itself failing to get CPU-scheduled in time under load — not a real failure. Check `docker logs <container>` for the app's own "ready" message before assuming the config is wrong.
+
+**1. Run fewer services at once.** This is the first and biggest lever — see the `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA` tiers in `homeserver.sh` (documented in `CLAUDE.md`). Use `up core` day-to-day and bring up `SERVICES_EXTRA` services individually only when actively using them, instead of `up all`.
+
+**2. Tune every Postgres container's own memory settings, plus a hard cap as a backstop.** A memory cap alone (`deploy.resources.limits.memory`) isn't enough — Postgres doesn't know the cap exists and will try to use its defaults, getting OOM-killed under load (migrations, vacuum, big queries). Tune the internal settings too so it paces itself:
+
+```yaml
+services:
+  <service>-db:
+    image: postgres:18.4
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    # ...existing environment/volumes/healthcheck
+```
+
+Use `max_connections=20` / cap `384M` for single-consumer services (most of them). Use `max_connections=50` / cap `512M` for services with multiple concurrent DB consumers (Nextcloud, Plane, Immich — each has more than one container talking to its DB).
+
+> **immich-db is a special case.** Its image (`ghcr.io/immich-app/postgres`) defaults to `Cmd: postgres -c config_file=/etc/postgresql/postgresql.conf` — that custom config file is required for pgvector/vectorchord's `shared_preload_libraries`. Any `command:` override on it must **keep** `-c config_file=/etc/postgresql/postgresql.conf` as the first flag and add tuning flags after it:
+> ```yaml
+> command: postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+> ```
+> Before overriding `command:` on any vendor-customized Postgres image, check its real default first: `docker inspect <image> --format '{{.Config.Cmd}}'`. Overriding it blind can silently drop required flags.
+>
+> After changing a DB-only `command:`/`deploy:` block, you only need to recreate that one container — this is much faster than a full service restart, which would otherwise wait on every dependent container's healthcheck:
+> ```bash
+> cd <service>/
+> DATA_ROOT="../service_data/<service>" DOMAIN="yourdomain.com" docker compose -f compose.yml -f compose.prod.yml up -d --no-deps <service>-db
+> ```
+>
+> Verify the tuning actually applied (don't just trust `docker ps`):
+> ```bash
+> docker exec <service>-db psql -U <postgres-user> -c "SHOW max_connections; SHOW shared_buffers;"
+> ```
+
+**3. Throttle Immich's job concurrency — via the Admin UI, not env vars.** `IMMICH_CONCURRENCY_*` environment variables do not exist in Immich and are silently ignored if set — this is a live database setting, not a compose/env change:
+
+1. Log into Immich as an admin.
+2. Go to **Administration → Settings → Job Settings**.
+3. You'll see a concurrency slider/number for each job type: Thumbnail Generation, Metadata Extraction, Video Conversion, Face Detection, Smart Search, etc.
+4. Set the ones you want throttled (Thumbnail Generation, Metadata Extraction, Video Conversion) down to `1` on a low-core-count host — don't exceed your CPU core count for any of them.
+5. Save — takes effect immediately for new jobs, no restart needed.
+
+**4. If your swap is zram (common on modern Fedora/desktop setups), raise `vm.swappiness` instead of lowering it.** Check with `zramctl` and `swapon --show` — if your swap device is `/dev/zram0`, it's compressed RAM, not slow disk. The usual advice to keep swappiness low (Fedora's default is often already conservative, e.g. `10`) is aimed at disk-backed swap. For zram, a higher value (100-180) makes the kernel offload cold pages to it earlier, freeing real RAM sooner instead of waiting until the system is already under pressure:
+```bash
+cat /proc/sys/vm/swappiness   # check current value
+sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl.d/ to persist)
+```
+
+---
+
 ## Remote Management from Mac
 
 Docker context lets you run all `docker` commands on the server directly from your Mac terminal.

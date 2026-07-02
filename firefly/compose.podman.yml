@@ -1,0 +1,16 @@
+services:
+  firefly-db:
+    security_opt:
+      - label=disable
+  firefly-permissions:
+    security_opt:
+      - label=disable
+  firefly:
+    security_opt:
+      - label=disable
+  firefly-importer:
+    security_opt:
+      - label=disable
+  firefly-cron:
+    security_opt:
+      - label=disable

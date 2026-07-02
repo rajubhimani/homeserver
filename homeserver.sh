@@ -46,13 +46,20 @@ export CONTAINER_HOST="unix://$DOCKER_SOCKET"
 # Move to SERVICES_CORE only when explicitly asked to.
 
 # Infrastructure — reverse proxy, tunnel, log viewer, landing page
-SERVICES_MIN="dozzle cloudflared nginx-plain landing"
+SERVICES_MIN="dozzle beszel cloudflared nginx-plain landing"
 
-# Always-on apps added on top of MIN (currently just nextcloud)
-SERVICES_CORE="nextcloud"
+# Always-on apps added on top of MIN
+SERVICES_CORE="nextcloud vaultwarden forgejo firefly immich"
 
 # Everything else — started with 'up all' or individually
-SERVICES_EXTRA="vaultwarden gitea forgejo gitlab immich jellyfin paperless stirling-pdf-lite mealie uptime-kuma stirling-pdf nginx stalwart snappymail roundcube syncthing authentik ntfy miniflux audiobookshelf conduit openproject plane crater wg-easy headscale openvpn portainer dockge"
+SERVICES_EXTRA="dockge portainer uptime-kuma openproject gitlab jellyfin paperless stirling-pdf-lite mealie stirling-pdf stalwart snappymail roundcube syncthing authentik ntfy miniflux audiobookshelf conduit wg-easy headscale openvpn invoiceshelf appflowy plane"
+
+# ── Proxy mutex ───────────────────────────────────────────────────
+# nginx-plain and nginx (NPM) both bind to ports 80/443 — only one
+# can run at a time. nginx-plain is the default (always in MIN).
+# nginx (NPM) is manual-only — never auto-started by any tier.
+# Starting either one automatically stops the other.
+PROXY_STANDBY="nginx"
 
 # Timeout in seconds to wait for a service to become healthy
 HEALTH_TIMEOUT=180
@@ -83,10 +90,25 @@ base_file() {
 }
 
 is_valid_service() {
-  for s in $SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA; do
+  for s in $SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $PROXY_STANDBY; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
+}
+
+stop_proxy_conflict() {
+  service=$1
+  env=$2
+  case "$service" in
+    nginx-plain) conflict="nginx" ;;
+    nginx)       conflict="nginx-plain" ;;
+    *)           return 0 ;;
+  esac
+  if $RUNTIME ps --format "{{.Names}}" | grep -qE "^${conflict}(-|$)"; then
+    warn "Stopping $conflict — only one proxy can run at a time..."
+    do_down "$conflict" "$env"
+    printf "\n"
+  fi
 }
 
 compose_files() {
@@ -179,25 +201,34 @@ do_up() {
     return 1
   fi
 
+  # sh has no local variables — do_down (called inside stop_proxy_conflict or
+  # the landing auto-restart) overwrites global service/env/profile. Save and restore.
+  _up_svc="$service" _up_env="$env" _up_prof="$profile"
+  stop_proxy_conflict "$service" "$env"
+  # Landing bakes env vars into HTML at startup; nginx-plain runs envsubst on
+  # templates. Both need a full container restart to pick up config changes.
+  case "$_up_svc" in
+    landing|nginx-plain) do_down "$_up_svc" "$_up_env" ;;
+  esac
+  service="$_up_svc" env="$_up_env" profile="$_up_prof"
+
   files=$(compose_files "$service" "$env")
   data_root="$SERVICE_DATA_ROOT/$service"
 
+  # Capture output so we can inspect errors (port conflicts, Podman quirks).
+  # `up -d` output is brief (container names, errors) so buffering is fine.
   if [ -n "$profile" ]; then
     info "Starting $service ($env) --profile $profile..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d
+    compose_out=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d 2>&1)
   else
     info "Starting $service ($env)..."
-    DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d
+    compose_out=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d 2>&1)
   fi
   compose_rc=$?
+  printf "%s\n" "$compose_out"
 
   if [ $compose_rc -ne 0 ]; then
-    if [ -n "$profile" ]; then
-      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files --profile "$profile" up -d 2>&1)
-    else
-      compose_err=$(DATA_ROOT="$data_root" DOMAIN="$DOMAIN" $RUNTIME compose $files up -d 2>&1)
-    fi
-    port=$(printf "%s" "$compose_err" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
+    port=$(printf "%s" "$compose_out" | grep -oE 'listen tcp [^:]+:([0-9]+)' | grep -oE '[0-9]+$' | head -1)
     if [ -n "$port" ]; then
       warn "Port $port in use — freeing process and retrying..."
       sudo fuser -k "${port}/tcp" 2>/dev/null
@@ -209,7 +240,13 @@ do_up() {
       fi
       compose_rc=$?
     fi
-    [ $compose_rc -ne 0 ] && return 1
+    # Podman quirk: 'internal libpod error' is thrown during dependency-chain
+    # tracking but containers still start. Fall through to wait_healthy to
+    # verify actual container state rather than treating it as a hard failure.
+    if [ $compose_rc -ne 0 ]; then
+      printf "%s" "$compose_out" | grep -q "internal libpod error" || return 1
+      warn "Podman dependency tracking error — checking container status..."
+    fi
   fi
 
   wait_healthy "$service"
@@ -359,6 +396,9 @@ show_help() {
   printf "  ${BOLD}EXTRA (optional, started with 'up all' or individually):${RESET}\n"
   printf "    %s\n" "$SERVICES_EXTRA"
   printf "\n"
+  printf "  ${BOLD}PROXY (manual-only — never auto-started, mutex with nginx-plain):${RESET}\n"
+  printf "    %s\n" "$PROXY_STANDBY"
+  printf "\n"
   printf "  ${BOLD}Health timeout:${RESET} ${HEALTH_TIMEOUT}s per service\n"
   printf "\n"
 }
@@ -481,13 +521,13 @@ case "$ACTION" in
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Starting all services (min + core + extra) in $ENV mode..."
-      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
       header "Starting core services (min + core) in $ENV mode..."
-      run_list do_up "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+      run_list do_up "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Core services"
     elif [ $RUN_MIN -eq 1 ]; then
       header "Starting min services in $ENV mode..."
-      run_list do_up "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+      run_list do_up "$SERVICES_MIN $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Min services"
     else
       header "Starting services in $ENV mode..."
       run_list do_up "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
@@ -497,15 +537,15 @@ case "$ACTION" in
   down|-d)
     if [ $RUN_ALL -eq 1 ]; then
       header "Stopping all services (reverse order)..."
-      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA")
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN")
       for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     elif [ $RUN_CORE -eq 1 ]; then
       header "Stopping core services (reverse order)..."
-      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE")
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN")
       for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     elif [ $RUN_MIN -eq 1 ]; then
       header "Stopping min services (reverse order)..."
-      list=$(reverse_list "$SERVICES_MIN")
+      list=$(reverse_list "$SERVICES_MIN $SERVICES_TO_RUN")
       for service in $list; do do_down "$service" "$ENV" "$PROFILE"; done
     else
       header "Stopping services..."
@@ -519,13 +559,13 @@ case "$ACTION" in
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Restarting all services in $ENV mode..."
-      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
       header "Restarting core services in $ENV mode..."
-      run_list do_restart "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+      run_list do_restart "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Core services"
     elif [ $RUN_MIN -eq 1 ]; then
       header "Restarting min services in $ENV mode..."
-      run_list do_restart "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+      run_list do_restart "$SERVICES_MIN $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Min services"
     else
       header "Restarting services in $ENV mode..."
       run_list do_restart "$SERVICES_TO_RUN" "$ENV" "$PROFILE" "Services"
@@ -542,13 +582,13 @@ case "$ACTION" in
     ensure_network
     if [ $RUN_ALL -eq 1 ]; then
       header "Updating all services (min + core + extra) in $ENV mode..."
-      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA" "$ENV" "$PROFILE" "All services"
+      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_EXTRA $SERVICES_TO_RUN" "$ENV" "$PROFILE" "All services"
     elif [ $RUN_CORE -eq 1 ]; then
       header "Updating core services (min + core) in $ENV mode..."
-      run_list do_update "$SERVICES_MIN $SERVICES_CORE" "$ENV" "$PROFILE" "Core services"
+      run_list do_update "$SERVICES_MIN $SERVICES_CORE $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Core services"
     elif [ $RUN_MIN -eq 1 ]; then
       header "Updating min services in $ENV mode..."
-      run_list do_update "$SERVICES_MIN" "$ENV" "$PROFILE" "Min services"
+      run_list do_update "$SERVICES_MIN $SERVICES_TO_RUN" "$ENV" "$PROFILE" "Min services"
     elif [ $RUN_RUNNING -eq 1 ]; then
       header "Updating running services in $ENV mode..."
       list=$(get_running_services)

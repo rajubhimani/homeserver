@@ -1,0 +1,7 @@
+services:
+  firefly:
+    ports:
+      - "127.0.0.1:8102:8080"
+  firefly-importer:
+    ports:
+      - "127.0.0.1:8104:8080"

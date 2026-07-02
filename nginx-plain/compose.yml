@@ -1,6 +1,6 @@
 services:
   nginx-plain:
-    image: nginx:alpine
+    image: nginx:1.28-alpine
     container_name: nginx-plain
     restart: unless-stopped
     env_file: .env
@@ -13,7 +13,7 @@ services:
       - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/_health || exit 1"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 10s

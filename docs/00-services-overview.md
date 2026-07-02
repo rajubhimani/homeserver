@@ -36,8 +36,7 @@ Your self-hosted stack replaces dozens of paid SaaS products. This guide maps ea
 
 | Service | Replaces | What it does |
 | --- | --- | --- |
-| **Gitea** | GitHub, Bitbucket | Lightweight Git hosting. Repos, issues, pull requests, CI/CD (Actions). Fast and low on resources (~100 MB RAM). |
-| **Forgejo** | GitHub, Bitbucket | Community fork of Gitea — same features, fully open governance. Actions runner for CI/CD pipelines. |
+| **Forgejo** | GitHub, Bitbucket | Lightweight self-hosted Git hosting. Repos, issues, pull requests, CI/CD (Actions). Open governance, ~100 MB RAM. |
 | **GitLab CE** | GitHub Enterprise, GitLab.com | Full DevOps platform — repos, CI/CD, container registry, wiki, issue boards. Heavy (~4 GB RAM) but feature-complete. |
 
 ## Project Management & Invoicing
@@ -46,7 +45,8 @@ Your self-hosted stack replaces dozens of paid SaaS products. This guide maps ea
 | --- | --- | --- |
 | **OpenProject** | Jira, Asana, Monday.com | Project management with Gantt charts, agile boards, time tracking, and team wikis. Good for structured/waterfall projects. |
 | **Plane** | Linear, Jira, Trello | Modern project tracker — cycles, modules, views, and a clean UI. Best for agile/sprint-based teams. |
-| **Crater** | FreshBooks, QuickBooks, Zoho Invoice | Invoicing and expense tracking. Create clients, send invoices, track payments. Good for freelancers and small businesses. |
+| **InvoiceShelf** | FreshBooks, QuickBooks, Zoho Invoice | Invoicing and expense tracking. Create clients, send invoices, track payments. Good for freelancers and small businesses. |
+| **Firefly III** | YNAB, Mint, Quicken | Personal finance manager. Track income, expenses, budgets, and multiple accounts. Recurring transactions with automated cron. |
 
 ## Email
 

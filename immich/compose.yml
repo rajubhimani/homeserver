@@ -1,6 +1,6 @@
 services:
   immich-server:
-    image: ghcr.io/immich-app/immich-server:release
+    image: ghcr.io/immich-app/immich-server:v2.7.5
     container_name: immich-server
     restart: unless-stopped
     env_file: .env
@@ -13,9 +13,11 @@ services:
       REDIS_HOSTNAME: immich-redis
     volumes:
       - ${UPLOAD_LOCATION}:/usr/src/app/upload
-      - ${PHOTOS_LOCATION}:/mnt/photos:ro
-      - ${VIDEOS_LOCATION}:/mnt/videos:ro
+      # Uncomment when PHOTOS_LOCATION / VIDEOS_LOCATION are set in .env
+      # - ${PHOTOS_LOCATION}:/mnt/photos:ro
+      # - ${VIDEOS_LOCATION}:/mnt/videos:ro
       - /etc/localtime:/etc/localtime:ro
+      - immich-server-data:/data
     depends_on:
       immich-database:
         condition: service_healthy
@@ -25,7 +27,7 @@ services:
       - homeserver
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:release
+    image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
     container_name: immich-ml
     restart: unless-stopped
     env_file: .env
@@ -37,14 +39,14 @@ services:
       - homeserver
 
   immich-redis:
-    image: valkey/valkey:9-alpine
+    image: valkey/valkey:9.1-alpine
     container_name: immich-redis
     restart: unless-stopped
     # Disable RDB snapshots — no disk persistence needed for cache/queue data
     command: valkey-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
     networks:
@@ -59,13 +61,18 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_DB: ${DB_DATABASE_NAME}
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     volumes:
       - ${DB_DATA_LOCATION}:/var/lib/postgresql
     shm_size: 128mb
     healthcheck:
       test: >-
         pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -73,7 +80,7 @@ services:
       - homeserver
 
   immich-offline-remover:
-    image: ghcr.io/tenekev/immich-offline-files-remover:latest
+    image: ghcr.io/tenekev/immich-offline-files-remover@sha256:73ee3a92c99cd1e43dda62d0dd5546515ad84422dbbd3988b066a1d159d53d3c
     container_name: immich-offline-remover
     restart: unless-stopped
     environment:
@@ -86,6 +93,7 @@ services:
 
 volumes:
   immich-model-cache:
+  immich-server-data:
 
 networks:
   homeserver:

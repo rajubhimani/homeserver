@@ -11,3 +11,4 @@ service_data/
 ._*
 *.sqlite
 test/*
+backup/*

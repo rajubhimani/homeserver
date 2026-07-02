@@ -1,10 +1,9 @@
 services:
-  gitea-db:
+  invoiceshelf-db:
     security_opt:
       - label=disable
-  gitea:
+  invoiceshelf:
     security_opt:
       - label=disable
-  gitea-runner:
-    security_opt:
-      - label=disable
+    depends_on:
+      - invoiceshelf-db

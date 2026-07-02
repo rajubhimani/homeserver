@@ -1,6 +1,16 @@
 services:
+  syncthing-permissions:
+    image: alpine:3.21
+    container_name: syncthing-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/config:/config
+    # linuxserver images use abc (PUID 1000, PGID 1000)
+    command: chown -R 1000:1000 /config
+
   syncthing:
-    image: lscr.io/linuxserver/syncthing:latest
+    image: lscr.io/linuxserver/syncthing:2.1.1
     container_name: syncthing
     restart: unless-stopped
     env_file: .env
@@ -17,6 +27,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    depends_on:
+      syncthing-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 

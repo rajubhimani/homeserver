@@ -1,4 +1,7 @@
 services:
+  syncthing-permissions:
+    security_opt:
+      - label=disable
   syncthing:
     security_opt:
       - label=disable

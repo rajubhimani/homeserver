@@ -1,6 +1,6 @@
 services:
   openvpn:
-    image: kylemanna/openvpn
+    image: kylemanna/openvpn:2.4
     container_name: openvpn
     restart: unless-stopped
     env_file: .env
