@@ -52,7 +52,7 @@ SERVICES_MIN="dozzle beszel cloudflared nginx-plain landing"
 SERVICES_CORE="nextcloud vaultwarden forgejo firefly immich"
 
 # Everything else — started with 'up all' or individually
-SERVICES_EXTRA="dockge portainer uptime-kuma openproject gitlab jellyfin paperless stirling-pdf-lite mealie stirling-pdf stalwart snappymail roundcube syncthing authentik ntfy miniflux audiobookshelf conduit wg-easy headscale openvpn invoiceshelf appflowy plane"
+SERVICES_EXTRA="dockge portainer uptime-kuma openproject gitlab jellyfin paperless stirling-pdf-lite mealie stirling-pdf stalwart snappymail roundcube syncthing authentik ntfy miniflux audiobookshelf conduit wg-easy headscale openvpn invoiceshelf appflowy plane guacamole"
 
 # ── Proxy mutex ───────────────────────────────────────────────────
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one

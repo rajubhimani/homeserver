@@ -1,0 +1,4 @@
+services:
+  guacamole:
+    ports:
+      - "8107:8080"

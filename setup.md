@@ -10,31 +10,35 @@
 
 | Service | Purpose | Replaces |
 | --- | --- | --- |
-| Nextcloud | File storage + sharing | Google Drive |
-| Immich | Photo management | Google Photos |
-| Jellyfin | Media streaming | Netflix / Plex |
-| Vaultwarden | Password manager | 1Password / LastPass |
-| Paperless-ngx | Document management | Scansnap cloud |
-| Stirling PDF | PDF toolkit | Adobe Acrobat |
-| Mealie | Recipe manager | Recipe apps |
-| Forgejo | Git hosting | GitHub |
-| GitLab CE | Full DevOps platform | GitHub / GitLab.com |
-| Uptime Kuma | Service monitoring | Pingdom |
-| Beszel | Server resource monitoring | Netdata / Datadog |
-| Stalwart | Mail server (SMTP + IMAP) | Gmail / Fastmail |
-| Snappymail | Webmail (fast, minimal) | Gmail web |
-| Roundcube | Webmail (full-featured) | Gmail web |
-| Syncthing | Peer-to-peer file sync | Dropbox Sync |
-| Authentik | Identity provider / SSO | Okta / Auth0 |
-| Ntfy | Push notifications | Pushover |
-| Miniflux | RSS reader | Feedly |
-| Audiobookshelf | Audiobooks + podcasts | Audible |
-| Conduit | Matrix chat server | Discord / Slack |
-| OpenProject | Project management | Jira / Asana |
-| Plane | Issue tracking | Linear / Jira |
-| InvoiceShelf | Invoicing | FreshBooks |
-| Firefly III | Personal finance manager | YNAB / Mint |
-| Dozzle | Docker log viewer | — |
+| [Nextcloud](docs/services/nextcloud.md) | File storage + sharing | Google Drive |
+| [Immich](docs/services/immich.md) | Photo management | Google Photos |
+| [Jellyfin](docs/services/jellyfin.md) | Media streaming | Netflix / Plex |
+| [Vaultwarden](docs/services/vaultwarden.md) | Password manager | 1Password / LastPass |
+| [Paperless-ngx](docs/services/paperless.md) | Document management | Scansnap cloud |
+| [Stirling PDF](docs/services/stirling-pdf.md) | PDF toolkit | Adobe Acrobat |
+| [Mealie](docs/services/mealie.md) | Recipe manager | Recipe apps |
+| [Forgejo](docs/services/forgejo.md) | Git hosting | GitHub |
+| [GitLab CE](docs/services/gitlab.md) | Full DevOps platform | GitHub / GitLab.com |
+| [Uptime Kuma](docs/services/uptime-kuma.md) | Service monitoring | Pingdom |
+| [Beszel](docs/services/beszel.md) | Server resource monitoring | Netdata / Datadog |
+| [Stalwart](docs/services/stalwart.md) | Mail server (SMTP + IMAP) | Gmail / Fastmail |
+| [Snappymail](docs/services/snappymail.md) | Webmail (fast, minimal) | Gmail web |
+| [Roundcube](docs/services/roundcube.md) | Webmail (full-featured) | Gmail web |
+| [Syncthing](docs/services/syncthing.md) | Peer-to-peer file sync | Dropbox Sync |
+| [Authentik](docs/services/authentik.md) | Identity provider / SSO | Okta / Auth0 |
+| [Ntfy](docs/services/ntfy.md) | Push notifications | Pushover |
+| [Miniflux](docs/services/miniflux.md) | RSS reader | Feedly |
+| [Audiobookshelf](docs/services/audiobookshelf.md) | Audiobooks + podcasts | Audible |
+| [Conduit](docs/services/conduit.md) | Matrix chat server | Discord / Slack |
+| [OpenProject](docs/services/openproject.md) | Project management | Jira / Asana |
+| [Plane](docs/services/plane.md) | Issue tracking | Linear / Jira |
+| [InvoiceShelf](docs/services/invoiceshelf.md) | Invoicing | FreshBooks |
+| [Firefly III](docs/services/firefly.md) | Personal finance manager | YNAB / Mint |
+| [AppFlowy](docs/services/appflowy.md) | Notion alternative | Notion |
+| [Portainer](docs/services/portainer.md) | Container management UI | — |
+| [Dockge](docs/services/dockge.md) | Compose stack manager UI | — |
+| [Guacamole](docs/services/guacamole.md) | Remote desktop gateway (VNC/RDP/SSH) | TeamViewer / AnyDesk |
+| [Dozzle](docs/services/dozzle.md) | Docker log viewer | — |
 | nginx-plain | Reverse proxy (default) | Manual nginx config |
 | Nginx Proxy Manager | Reverse proxy (optional, UI-based) | — |
 | Landing page | Service dashboard with live status | — |
