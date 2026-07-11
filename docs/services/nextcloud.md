@@ -5,44 +5,53 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** `service_data/nextcloud/`
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly)
 
 ## Setup
 
 ```bash
 cp nextcloud/.env.example nextcloud/.env
-sh homeserver.sh dev up nextcloud
+uv run homeserver.py dev up nextcloud
 ```
 
 **Admin password in `.env` must not contain `$`** — Docker Compose interprets `$VAR` patterns as variable references and silently mangles passwords containing `$`. Use `openssl rand -hex 20` to generate a safe password.
 
 ## Architecture notes
 
-- Uses **partial volume mounts** (config, data, custom_apps, version.php) — do **not** mount the full `/var/www/html`
-- Has a `before-starting` hook that runs `rsync` on every startup to populate PHP files
-- Trusted proxies are set in compose — required for correct IP forwarding behind nginx
+- Uses **partial volume mounts** (`config`, `data`, `custom_apps`) — do **not** mount the full `/var/www/html`
+- `nextcloud/hooks/before-starting/00-sync-php.sh` runs `rsync` on every startup to populate PHP files into the partial mount
+- `nextcloud/hooks/before-starting/02-configure-proxy.sh` runs `occ config:system:set` for `trusted_proxies`, `trusted_domains`, `overwriteprotocol`, and `overwrite.cli.url` on **every** startup (skipped only pre-install) — this is why those don't need to be set manually and won't drift even if `DOMAIN`/network config changes later. If you ever need a value this hook doesn't set (e.g. a raw Tailscale IP in `trusted_domains` for IP-only access with no domain), edit that script directly — a one-off `docker exec ... occ config:system:set` gets silently overwritten by the hook on the next restart.
 
-## Trusted proxies / HTTPS gotcha — `occ` is the real fix
+## Troubleshooting: unhealthy / 503 / redirect loops behind the proxy
 
-`NEXTCLOUD_TRUSTED_PROXIES` in `compose.yml` is only applied by the official image during **first-time initialization**. If Nextcloud was already set up before that env var existed (or before `DOMAIN`/network changes), it silently has no effect on an existing install. Fix/verify with `occ` directly instead — this persists to `config.php` on the data volume and survives restarts:
+Symptom: Nextcloud thinks every request is plain HTTP even though Cloudflare/nginx terminates HTTPS in front of it — manifests as unhealthy status, 503s, redirect loops, or broken links.
 
-```bash
-docker exec nextcloud php occ config:system:set trusted_proxies 0 --value="172.18.0.0/16"   # match `docker network inspect homeserver`
-docker exec nextcloud php occ config:system:set overwriteprotocol --value="https"
-docker exec nextcloud php occ config:system:set overwrite.cli.url --value="https://nextcloud.${DOMAIN}"
-```
+**Check first:** is `02-configure-proxy.sh` (above) actually running? `docker exec nextcloud php occ config:system:get overwriteprotocol` should print `https`. If it prints something else or errors, the hook didn't run (e.g. hooks volume not mounted, script not executable) — fix that rather than patching `config.php` by hand, since a manual fix won't survive the hook overwriting it on the next restart.
 
-Missing `overwriteprotocol`/`trusted_proxies` causes Nextcloud to think every request is plain HTTP behind the proxy — manifests as unhealthy status, 503s, redirect loops, or broken links.
+## Troubleshooting: landing page shows Nextcloud unhealthy but the container looks fine
 
-## Incident: health-check 400s mistaken for a performance problem (2026-07-02)
+Nextcloud validates the `Host` header against `trusted_domains` on **every** request, including health-check probes. If `landing/nginx.conf`'s `/health/nextcloud` block ever regresses to a bare `proxy_pass http://nextcloud:80/;` (no `Host` override), every probe arrives with an untrusted `Host` and gets rejected with a 400 — showing up as a stream of 400s in Nextcloud's access log from the *proxy's* IP, easy to mistake for a performance/DB problem when it's actually just the health check itself being wrong.
 
-Nextcloud validates the `Host` header against `trusted_domains` on **every** request, including from `landing/nginx.conf`'s `/health/nextcloud` proxy. That block originally did `proxy_pass http://nextcloud:80/;` (bare root, no `Host` override), which arrives with an untrusted `Host` and gets rejected with a 400.
-
-Root cause traced 2026-07-02: the landing page's client-side status poller hit this endpoint every ~30s continuously, all day, producing a stream of 400s in Nextcloud's access log with the *proxy's* IP (not a real client) — easy to mistake for a performance/DB problem when it's actually just a broken health check.
-
-**Fix:** point the health check at `/status.php` (the same lightweight endpoint Nextcloud's own Docker healthcheck already uses successfully) with `proxy_set_header Host localhost;` explicitly set.
+**Fix:** the health check must hit `/status.php` (the same lightweight endpoint Nextcloud's own Docker healthcheck uses) with `proxy_set_header Host localhost;` explicitly set.
 
 **General lesson for any service's `/health/<service>` block:** if the app validates the `Host` header (trusted domains/allowed hosts/CSRF origin checks — Nextcloud, and potentially others), a bare `proxy_pass $upstream/;` health check will silently 400 forever; explicitly set `proxy_set_header Host localhost;` (or whatever the app trusts) on that specific location block.
+
+## Why `html`/`config`/`data`/`custom_apps` are named volumes, not bind mounts
+
+Nextcloud enforces two checks a Windows bind mount can't reliably satisfy — see the `homeserver-postgres` skill for the general Windows-`chown`-reliability caveat this is an instance of:
+
+1. **`config.php` must be owned by `www-data` (UID 33).** If `chown` fails on the bind mount, install/upgrade loops forever on `Console has to be executed with the user that owns the file config/config.php` ("Retrying install...").
+2. **`data/` must be group-accessible but not world-readable** (`chmod 0770`). If ownership is stuck wrong (per #1), no combination of permission bits gives `www-data` access without also being world-readable — which Nextcloud refuses to start with anyway.
+
+Named volumes sidestep both checks entirely (daemon-managed, no host-filesystem ownership translation). **Trade-off:** `data/` (your actual files) is no longer directly browsable from Windows Explorer — only through the Nextcloud web UI/app, same as any NAS.
+
+**Migrating existing bind-mounted data into a named volume** (e.g. moving an install from Linux/Mac onto Windows):
+
+```bash
+docker volume create nextcloud_nextcloud-config
+docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to alpine sh -c "cp -a /from/. /to/ && chown -R 33:33 /to"
+# repeat for data (nextcloud_nextcloud-data) and html (nextcloud_nextcloud-html)
+```
 
 ---
 

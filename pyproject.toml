@@ -1,0 +1,12 @@
+[project]
+name = "homeserver"
+version = "0.1.0"
+description = "Homeserver stack management CLI"
+requires-python = ">=3.14,<3.15"
+dependencies = []
+
+[project.optional-dependencies]
+# Optional DOCKER_BACKEND=python-on-whales — typed exceptions/structured
+# errors for compose operations instead of parsed CLI text. Install with:
+#   uv sync --extra docker-sdk
+docker-sdk = ["python-on-whales>=0.81,<0.82"]

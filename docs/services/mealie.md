@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Recipe manager and meal planner.
-**Port:** `9925` (host) → `9000` (container) | **Data:** `service_data/mealie/` | **Requires:** Postgres
+**Port:** `9925` (host) → `9000` (container) | **Data:** `service_data/data/mealie/` | **Requires:** Postgres
 
 ## Setup
 
 ```bash
 cp mealie/.env.example mealie/.env
 # set POSTGRES_PASSWORD
-sh homeserver.sh dev up mealie
+uv run homeserver.py dev up mealie
 ```
 
 ## Default credentials

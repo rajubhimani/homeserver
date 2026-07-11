@@ -19,14 +19,14 @@ Config lives in `nginx-plain/templates/default.conf.template`.
 At container start, nginx substitutes `${DOMAIN}` with the value from root `.env`.
 
 ```bash
-sh homeserver.sh dev up nginx-plain
+uv run homeserver.py dev up nginx-plain
 ```
 
 Every service already has a `server_name <service>.${DOMAIN}` block in the template.
 To add a new service: edit the template, add a `server` block, then recreate the container:
 
 ```bash
-sh homeserver.sh dev up nginx-plain
+uv run homeserver.py dev up nginx-plain
 # (docker compose recreates the container, envsubst re-runs)
 ```
 
@@ -39,7 +39,7 @@ No UI — all config is in the template file.
 UI-based proxy with a web interface for adding proxy hosts and managing Let's Encrypt certs.
 
 ```bash
-sh homeserver.sh dev up nginx
+uv run homeserver.py dev up nginx
 ```
 
 Admin UI:
@@ -63,9 +63,9 @@ The Forward Hostname is the Docker **container name** — NPM resolves via the `
 
 To switch from `nginx-plain` to NPM (or back):
 
-1. Stop the current proxy: `sh homeserver.sh dev down nginx-plain` (or `nginx`)
-2. In `homeserver.sh`, move the service between `SERVICES_MIN` / `SERVICES_CORE` as needed
-3. Start the new proxy: `sh homeserver.sh dev up nginx`
+1. Stop the current proxy: `uv run homeserver.py dev down nginx-plain` (or `nginx`)
+2. In `homeserver.py`, move the service between `SERVICES_MIN` / `SERVICES_CORE` as needed
+3. Start the new proxy: `uv run homeserver.py dev up nginx`
 
 Both are in `SERVICES_EXTRA` by default except `nginx-plain` which is in `SERVICES_MIN`.
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** All-in-one mail server — SMTP, IMAP, and admin UI in one container.
-**Port:** `8091` (admin/web) → `8080` | **Data:** `service_data/stalwart/`
+**Port:** `8091` (admin/web) → `8080` | **Data:** `service_data/data/stalwart/`
 **Other ports:** `25` (SMTP), `587` (submission), `143` (IMAP), `993` (IMAPS)
 
 ## Setup
@@ -13,7 +13,7 @@
 ```bash
 cp stalwart/.env.example stalwart/.env
 # set STALWART_PUBLIC_URL=https://mail.yourdomain.com
-sh homeserver.sh dev up stalwart
+uv run homeserver.py dev up stalwart
 ```
 
 Run the setup wizard at `http://<ip>:8091/setup` on first start.
@@ -44,29 +44,7 @@ Ports 25 and 143 are privileged (< 1024) — rootless Podman cannot bind them di
 | Sieve | `4190` | `4190` | no |
 | Admin UI | `8091` | `8080` | no |
 
-External clients and mail servers still connect on the standard ports — add permanent firewall forwarding rules so the OS redirects them to the remapped host ports:
-
-**Fedora / RHEL (firewalld):**
-```bash
-sudo firewall-cmd --permanent --add-forward-port=port=25:proto=tcp:toport=8025
-sudo firewall-cmd --permanent --add-forward-port=port=587:proto=tcp:toport=8587
-sudo firewall-cmd --permanent --add-forward-port=port=465:proto=tcp:toport=8465
-sudo firewall-cmd --permanent --add-forward-port=port=143:proto=tcp:toport=8143
-sudo firewall-cmd --permanent --add-forward-port=port=993:proto=tcp:toport=8993
-sudo firewall-cmd --reload
-```
-
-**Ubuntu / Debian (iptables):**
-```bash
-sudo iptables -t nat -A PREROUTING -p tcp --dport 25 -j REDIRECT --to-port 8025
-sudo iptables -t nat -A PREROUTING -p tcp --dport 587 -j REDIRECT --to-port 8587
-sudo iptables -t nat -A PREROUTING -p tcp --dport 465 -j REDIRECT --to-port 8465
-sudo iptables -t nat -A PREROUTING -p tcp --dport 143 -j REDIRECT --to-port 8143
-sudo iptables -t nat -A PREROUTING -p tcp --dport 993 -j REDIRECT --to-port 8993
-# Make persistent across reboots
-sudo apt install -y iptables-persistent
-sudo netfilter-persistent save
-```
+External clients and mail servers still connect on the standard ports — add permanent firewall forwarding rules so the OS redirects them to the remapped host ports. See [`docs/09-firewall.md`](../09-firewall.md) for the exact `firewalld`/`iptables` commands (same rules Stalwart needs, listed there once for every remapped service).
 
 ---
 

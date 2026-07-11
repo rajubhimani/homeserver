@@ -15,7 +15,7 @@ Two variants, run independently:
 
 ```bash
 cp stirling-pdf-lite/.env.example stirling-pdf-lite/.env
-sh homeserver.sh dev up stirling-pdf-lite
+uv run homeserver.py dev up stirling-pdf-lite
 ```
 
 `STIRLING_ADMIN_USER` / `STIRLING_ADMIN_PASSWORD` in `.env` set the admin login at startup.
@@ -25,8 +25,8 @@ sh homeserver.sh dev up stirling-pdf-lite
 Not part of `all` — start manually when needed, stop when done to free RAM:
 
 ```bash
-sh homeserver.sh dev up stirling-pdf
-sh homeserver.sh dev down stirling-pdf
+uv run homeserver.py dev up stirling-pdf
+uv run homeserver.py dev down stirling-pdf
 ```
 
 ---

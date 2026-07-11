@@ -5,13 +5,13 @@
 ---
 
 **Purpose:** Push notifications to phone/desktop via simple HTTP requests.
-**Port:** `8092` (host) → `80` (container) | **Data:** `service_data/ntfy/`
+**Port:** `8092` (host) → `80` (container) | **Data:** `service_data/data/ntfy/`
 
 ## Setup
 
 ```bash
 cp ntfy/.env.example ntfy/.env
-sh homeserver.sh dev up ntfy
+uv run homeserver.py dev up ntfy
 ```
 
 ## Usage

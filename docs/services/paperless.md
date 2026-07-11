@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Scan, OCR, and archive documents with full-text search.
-**Port:** `8010` (host) → `8000` (container) | **Data:** `service_data/paperless/` | **Requires:** Postgres + Redis
+**Port:** `8010` (host) → `8000` (container) | **Data:** `service_data/data/paperless/` | **Requires:** Postgres + Redis
 
 ## Setup
 
 ```bash
 cp paperless/.env.example paperless/.env
 # set POSTGRES_PASSWORD, PAPERLESS_SECRET_KEY, PAPERLESS_ADMIN_USER/PASSWORD
-sh homeserver.sh dev up paperless
+uv run homeserver.py dev up paperless
 ```
 
 ## Admin account
@@ -25,7 +25,7 @@ docker exec -it paperless python manage.py createsuperuser
 
 ## Usage notes
 
-- Consumption folder: drop PDFs into `service_data/paperless/consume/` to auto-import
+- Consumption folder: drop PDFs into `service_data/data/paperless/consume/` to auto-import
 - No public signup — always admin-managed
 
 ---

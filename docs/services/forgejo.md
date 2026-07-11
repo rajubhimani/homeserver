@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Community-driven Git hosting — repos, issues, pull requests, CI/CD (Actions).
-**Port:** `3002` (web), `2223` (SSH) | **Data:** `service_data/forgejo/` | **Requires:** Postgres
+**Port:** `3002` (web), `2223` (SSH) | **Data:** `service_data/data/forgejo/` | **Requires:** Postgres
 
 ## Setup
 
 ```bash
 cp forgejo/.env.example forgejo/.env
 # set POSTGRES_PASSWORD, FORGEJO_DOMAIN, FORGEJO_ROOT_URL
-sh homeserver.sh dev up forgejo
+uv run homeserver.py dev up forgejo
 ```
 
 ## Create an admin user
@@ -32,7 +32,7 @@ docker exec -it forgejo forgejo admin user create --username admin --password yo
 ## Actions runner (optional)
 
 ```bash
-sh homeserver.sh dev up forgejo --profile runner
+uv run homeserver.py dev up forgejo --profile runner
 docker exec -it forgejo-runner forgejo-runner register
 ```
 

@@ -11,8 +11,8 @@ All services follow the same three-file compose pattern:
 - `compose.prod.yml` — ports on `127.0.0.1` only (reverse proxy handles external)
 - `.env` — secrets and paths (copy from `.env.example`)
 
-Use `homeserver.sh` to manage them (see [Maintenance](08-maintenance.md)).
-New services always go into `SERVICES_EXTRA` in `homeserver.sh` first.
+Use `homeserver.py` to manage them (see [Maintenance](08-maintenance.md)).
+New services always go into `SERVICES_EXTRA` in `homeserver.py` first.
 
 ---
 
@@ -42,6 +42,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Miniflux | [docs/services/miniflux.md](services/miniflux.md) |
 | Audiobookshelf | [docs/services/audiobookshelf.md](services/audiobookshelf.md) |
 | Conduit (Matrix) | [docs/services/conduit.md](services/conduit.md) |
+| Element | [docs/services/element.md](services/element.md) |
 | OpenProject | [docs/services/openproject.md](services/openproject.md) |
 | Plane | [docs/services/plane.md](services/plane.md) |
 | InvoiceShelf | [docs/services/invoiceshelf.md](services/invoiceshelf.md) |

@@ -30,6 +30,7 @@
 | [Miniflux](docs/services/miniflux.md) | RSS reader | Feedly |
 | [Audiobookshelf](docs/services/audiobookshelf.md) | Audiobooks + podcasts | Audible |
 | [Conduit](docs/services/conduit.md) | Matrix chat server | Discord / Slack |
+| [Element](docs/services/element.md) | Web client for Conduit | Discord / Slack web app |
 | [OpenProject](docs/services/openproject.md) | Project management | Jira / Asana |
 | [Plane](docs/services/plane.md) | Issue tracking | Linear / Jira |
 | [InvoiceShelf](docs/services/invoiceshelf.md) | Invoicing | FreshBooks |
@@ -62,11 +63,12 @@ Cloudflare handles TLS. Internal traffic is plain HTTP.
 
 ## Requirements
 
-- Any x86-64 machine (laptop, mini PC, old desktop)
+- Any x86-64 machine (laptop, mini PC, old desktop) — Linux, Mac, or Windows all work
 - Minimum 4 GB RAM (8 GB+ recommended)
 - One drive for OS + Docker (SSD preferred)
 - One drive for data (internal or USB, formatted ext4)
-- Ubuntu 24.04 LTS (or any Debian-based distro)
+- Ubuntu 24.04 LTS (or any Debian-based distro) for the primary/production deployment target described below — Docker Desktop works fine on Mac/Windows for development
+- [uv](https://docs.astral.sh/uv/) to run `homeserver.py` (`uv sync` once, then `uv run homeserver.py ...`) — no other dependencies, it's stdlib-only. `pyproject.toml` pins the exact Python minor version (currently 3.14); `uv` downloads a matching interpreter automatically if you don't already have one, so you don't need to install Python yourself
 - A domain on Cloudflare — or use [Tailscale](docs/03b-tailscale.md) for local/testing access
 
 ---
@@ -113,31 +115,33 @@ Quick links for day-to-day use once the stack is running.
 
 ```bash
 # Service tiers — MIN ⊂ CORE ⊂ ALL
-sh homeserver.sh dev up min          # infrastructure only (dozzle, cloudflared, nginx-plain, landing)
-sh homeserver.sh dev up core         # min + nextcloud
-sh homeserver.sh dev up all          # everything (core + all extra services)
+uv run homeserver.py dev up min          # infrastructure only (dozzle, cloudflared, nginx-plain, landing)
+uv run homeserver.py dev up core         # min + nextcloud
+uv run homeserver.py dev up all          # everything (core + all extra services)
 
-sh homeserver.sh dev down min        # stop min (reverse order)
-sh homeserver.sh dev down core       # stop core (reverse order)
-sh homeserver.sh dev down all        # stop everything
+uv run homeserver.py dev down min        # stop min (reverse order)
+uv run homeserver.py dev down core       # stop core (reverse order)
+uv run homeserver.py dev down all        # stop everything
 
 # Start / stop one service
-sh homeserver.sh dev up jellyfin
-sh homeserver.sh dev down jellyfin
+uv run homeserver.py dev up jellyfin
+uv run homeserver.py dev down jellyfin
 
 # Follow logs
-sh homeserver.sh dev logs nextcloud
+uv run homeserver.py dev logs nextcloud
 
 # Immich with face recognition
-sh homeserver.sh dev up immich --profile ml
+uv run homeserver.py dev up immich --profile ml
 
 # Pull latest images and recreate
-sh homeserver.sh dev update all
-sh homeserver.sh dev update running  # only currently running services
+uv run homeserver.py dev update all
+uv run homeserver.py dev update running  # only currently running services
 
 # Production (ports bound to 127.0.0.1 only)
-sh homeserver.sh prod up all
+uv run homeserver.py prod up all
 ```
+
+**Backups are automatic:** `down` snapshots a service's data every time it stops (add `--no-backup` to skip). See the `homeserver-backups` skill for `snapshots`/`restore --snapshot`/retention config — this is the safety net for both routine restarts and migrating to a different machine.
 
 ---
 
@@ -145,7 +149,7 @@ sh homeserver.sh prod up all
 
 ```text
 ~/homeserver/
-├── homeserver.sh
+├── homeserver.py          ← manage all services (uv run homeserver.py ...)
 ├── .env                   ← set DOMAIN= here once
 ├── nginx-plain/           ← default reverse proxy
 ├── nginx/                 ← optional: Nginx Proxy Manager
@@ -172,6 +176,7 @@ sh homeserver.sh prod up all
 ├── miniflux/
 ├── audiobookshelf/
 ├── conduit/
+├── element/
 ├── openproject/
 ├── plane/
 ├── invoiceshelf/

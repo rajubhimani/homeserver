@@ -51,8 +51,8 @@ sudo ufw allow 51820/udp
 **4. Start**
 
 ```bash
-./homeserver.sh dev up wg-easy      # dev
-./homeserver.sh prod up wg-easy     # prod
+uv run homeserver.py dev up wg-easy      # dev
+uv run homeserver.py prod up wg-easy     # prod
 ```
 
 ### Web UI
@@ -74,7 +74,7 @@ From the web UI you can add employees (one config per person/device), and they d
 Change `WG_ALLOWED_IPS` in `.env` then restart:
 
 ```bash
-./homeserver.sh dev down wg-easy && ./homeserver.sh dev up wg-easy
+uv run homeserver.py dev down wg-easy && uv run homeserver.py dev up wg-easy
 ```
 
 Split tunnel example (employees only reach your LAN, their normal internet is unaffected):
@@ -120,7 +120,7 @@ cp headscale/.env.example headscale/.env
 **3. Start**
 
 ```bash
-./homeserver.sh dev up headscale
+uv run homeserver.py dev up headscale
 ```
 
 **4. Create an API key for the admin UI**
@@ -232,7 +232,7 @@ sudo ufw allow 1194/udp
 **5. Start**
 
 ```bash
-./homeserver.sh dev up openvpn
+uv run homeserver.py dev up openvpn
 ```
 
 ### Add an employee

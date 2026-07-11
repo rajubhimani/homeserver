@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-sh homeserver.sh dev up dozzle
+uv run homeserver.py dev up dozzle
 ```
 
 ## Notes

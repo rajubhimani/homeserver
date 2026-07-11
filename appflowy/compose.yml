@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - ${DATA_ROOT}/postgres:/var/lib/postgresql/data
+      - appflowy-postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 60s
@@ -24,7 +24,10 @@ services:
     restart: unless-stopped
     command: redis-server --save "" --stop-writes-on-bgsave-error no
     volumes:
-      - ${DATA_ROOT}/redis:/data
+      # --save "" disables persistence, so nothing is actually written here —
+      # this mount exists only so the image's own `VOLUME /data` declaration
+      # doesn't cause Docker to silently create an anonymous volume instead.
+      - appflowy-redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 60s
@@ -182,6 +185,10 @@ services:
         condition: service_started
     networks:
       - homeserver
+
+volumes:
+  appflowy-postgres:
+  appflowy-redis:
 
 networks:
   homeserver:

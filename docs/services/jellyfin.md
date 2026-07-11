@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Stream movies, TV shows, and music from your server.
-**Port:** `8096` (host) → `8096` (container) | **Data:** `service_data/jellyfin/`
+**Port:** `8096` (host) → `8096` (container) | **Data:** `service_data/data/jellyfin/`
 
 ## Setup
 
 ```bash
 cp jellyfin/.env.example jellyfin/.env
 # set MEDIA_ROOT to your media drive path
-sh homeserver.sh dev up jellyfin
+uv run homeserver.py dev up jellyfin
 ```
 
 ## First login

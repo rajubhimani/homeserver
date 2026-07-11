@@ -11,7 +11,7 @@
 
 ```bash
 cp dockge/.env.example dockge/.env
-sh homeserver.sh dev up dockge
+uv run homeserver.py dev up dockge
 ```
 
 ## Notes

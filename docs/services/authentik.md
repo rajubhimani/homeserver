@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Identity provider — SSO, OAuth2, OIDC, SAML for all your other services.
-**Port:** `8088` (host) → `9000` (container, `authentik-server`) | **Data:** `service_data/authentik/` | **Requires:** Postgres + Redis
+**Port:** `8088` (host) → `9000` (container, `authentik-server`) | **Data:** `service_data/data/authentik/` | **Requires:** Postgres + Redis
 
 ## Setup
 
@@ -13,7 +13,7 @@
 cp authentik/.env.example authentik/.env
 # generate: openssl rand -hex 32 → AUTHENTIK_SECRET_KEY
 # set POSTGRES_PASSWORD
-sh homeserver.sh dev up authentik
+uv run homeserver.py dev up authentik
 ```
 
 `AUTHENTIK_SECRET_KEY` must be set **before** first start.

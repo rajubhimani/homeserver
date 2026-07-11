@@ -21,8 +21,12 @@ services:
     volumes:
       - ${DATA_ROOT}/config:/etc/gitlab
       - ${DATA_ROOT}/logs:/var/log/gitlab
-      - ${DATA_ROOT}/data:/var/opt/gitlab
+      - gitlab-data:/var/opt/gitlab
     shm_size: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 6G
     networks:
       - homeserver
 
@@ -35,10 +39,18 @@ services:
     volumes:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-config:/etc/gitlab-runner
+      # Image also declares VOLUME /home/gitlab-runner (runner user's home,
+      # used for job cache) — mount it to a named volume so Docker doesn't
+      # silently create an anonymous one.
+      - gitlab-runner-home:/home/gitlab-runner
     depends_on:
       - gitlab
     networks:
       - homeserver
+
+volumes:
+  gitlab-data:
+  gitlab-runner-home:
 
 networks:
   homeserver:

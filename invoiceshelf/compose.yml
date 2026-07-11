@@ -10,7 +10,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
-      - ${DATA_ROOT}/db:/var/lib/mysql
+      - invoiceshelf-db:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
       interval: 60s
@@ -48,6 +48,9 @@ services:
         condition: service_healthy
     networks:
       - homeserver
+
+volumes:
+  invoiceshelf-db:
 
 networks:
   homeserver:

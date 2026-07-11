@@ -13,7 +13,9 @@ cd ~/homeserver/immich
 
 ```env
 UPLOAD_LOCATION=/mnt/seagate/immich
-DB_DATA_LOCATION=/mnt/seagate/postgres-immich
+# Postgres data lives in a named Docker volume (declared in compose.yml), not
+# a bind mount — no path to set here. Back it up with
+# `uv run homeserver.py <env> backup immich`.
 
 # Generate with: openssl rand -hex 32
 IMMICH_SECRET=your_hex_secret_here
@@ -32,14 +34,14 @@ DB_URL=postgresql://immich:your_strong_password@immich-database:5432/immich
 ## Start
 
 ```bash
-sh homeserver.sh dev up immich
-sh homeserver.sh dev logs immich
+uv run homeserver.py dev up immich
+uv run homeserver.py dev logs immich
 ```
 
 For prod (ports on localhost only):
 
 ```bash
-sh homeserver.sh prod up immich
+uv run homeserver.py prod up immich
 ```
 
 **Cloudflare path:** open `https://immich.yourdomain.com`  

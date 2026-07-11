@@ -292,6 +292,20 @@ server {
     }
 }
 
+# ── Element (Matrix web client) ───────────────────────────────────────────────
+server {
+    listen 80;
+    server_name element.${DOMAIN};
+    location / {
+        set $upstream http://element:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
 # ── Snappymail (webmail) ──────────────────────────────────────────────────────
 server {
     listen 80;

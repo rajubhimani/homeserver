@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Open-source issue tracker and project management.
-**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/plane/` | **Requires:** ~4 GB RAM
+**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** ~4 GB RAM
 
 ## Setup
 
@@ -13,7 +13,7 @@
 cp plane/.env.example plane/.env
 # generate: openssl rand -hex 32 → SECRET_KEY
 # set POSTGRES_PASSWORD, RABBITMQ passwords, MINIO credentials
-sh homeserver.sh dev up plane
+uv run homeserver.py dev up plane
 ```
 
 ## First login

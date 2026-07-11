@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Audiobook and podcast server with mobile app support.
-**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/audiobookshelf/`
+**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/`
 
 ## Setup
 
 ```bash
 cp audiobookshelf/.env.example audiobookshelf/.env
 # set AUDIOBOOKS_PATH and PODCASTS_PATH to your media locations
-sh homeserver.sh dev up audiobookshelf
+uv run homeserver.py dev up audiobookshelf
 ```
 
 ## First login

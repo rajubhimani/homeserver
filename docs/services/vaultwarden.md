@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Self-hosted password manager (Bitwarden-compatible).
-**Port:** `8200` (host) → `80` (container) | **Data:** `service_data/vaultwarden/`
+**Port:** `8200` (host) → `80` (container) | **Data:** `service_data/data/vaultwarden/`
 
 ## Setup
 
 ```bash
 cp vaultwarden/.env.example vaultwarden/.env
 # set ADMIN_TOKEN (openssl rand -base64 48)
-sh homeserver.sh dev up vaultwarden
+uv run homeserver.py dev up vaultwarden
 ```
 
 ## Admin panel

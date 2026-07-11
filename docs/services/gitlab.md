@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Full DevOps platform — Git, CI/CD, registry, issue tracking.
-**Port:** `8085` (web), `2224` (SSH) | **Data:** `service_data/gitlab/` | **Requires:** ~4 GB RAM minimum
+**Port:** `8085` (web), `2224` (SSH) | **Data:** `service_data/data/gitlab/` | **Requires:** ~4 GB RAM minimum
 
 ## Setup
 
 ```bash
 cp gitlab/.env.example gitlab/.env
 # set GITLAB_HOSTNAME, GITLAB_EXTERNAL_URL
-sh homeserver.sh dev up gitlab
+uv run homeserver.py dev up gitlab
 ```
 
 GitLab takes 2–3 minutes to fully start on first launch.
@@ -29,11 +29,13 @@ docker exec -it gitlab gitlab-rake "gitlab:password:reset[root]"
 
 - All config goes through `GITLAB_OMNIBUS_CONFIG` in compose (Ruby format)
 - SSH clone port: `2224`; HTTP-only internally (`nginx['listen_https'] = false`) since Cloudflare/nginx-plain terminates TLS in front
+- **Bundled Postgres/Redis** — the omnibus `gitlab-ce` image runs its own internal Postgres and Redis inside the single `gitlab` container; there's no separate `gitlab-db` container the way most other services in this stack have. Its data lives in the named volume `gitlab-data` (`/var/opt/gitlab`), which already follows the same named-volume-not-bind-mount rule as a standalone DB container, for the same reason (see the `homeserver-postgres` skill).
+- **Memory cap:** `deploy.resources.limits.memory: 6G` — set above the ~4 GB minimum quoted at the top of this doc to leave headroom for CI/Sidekiq/Gitaly spikes, since omnibus bundles many components (Postgres, Redis, Puma, Sidekiq, Gitaly, Workhorse, its own nginx) that aren't individually tuned down the way a standalone Postgres container's `command:` flags would be — this is a backstop cap, not app-level tuning. Raise it if the container gets OOM-killed under real load; recreate just this container after changing it: `docker compose -f compose.yml -f compose.prod.yml up -d --no-deps gitlab`.
 
 ## Runner (optional)
 
 ```bash
-sh homeserver.sh dev up gitlab --profile runner
+uv run homeserver.py dev up gitlab --profile runner
 docker exec -it gitlab-runner gitlab-runner register
 ```
 

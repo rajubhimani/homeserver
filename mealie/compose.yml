@@ -14,7 +14,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - ${DATA_ROOT}/postgres:/var/lib/postgresql
+      - mealie-postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -46,6 +46,9 @@ services:
         condition: service_healthy
     networks:
       - homeserver
+
+volumes:
+  mealie-postgres:
 
 networks:
   homeserver:

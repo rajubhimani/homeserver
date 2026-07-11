@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Full-featured webmail with plugins, address book, and calendar.
-**Port:** `8098` (host) → `80` (container) | **Data:** `service_data/roundcube/`
+**Port:** `8098` (host) → `80` (container) | **Data:** `service_data/data/roundcube/`
 
 ## Setup
 
 ```bash
 cp roundcube/.env.example roundcube/.env
 # set ROUNDCUBEMAIL_DEFAULT_HOST=stalwart, ROUNDCUBEMAIL_SMTP_SERVER=stalwart
-sh homeserver.sh dev up roundcube
+uv run homeserver.py dev up roundcube
 ```
 
 ## Login

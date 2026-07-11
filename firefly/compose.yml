@@ -14,7 +14,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - ${DATA_ROOT}/postgres:/var/lib/postgresql
+      - firefly-postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -113,6 +113,7 @@ services:
 
 volumes:
   firefly-importer-upload:
+  firefly-postgres:
 
 networks:
   homeserver:

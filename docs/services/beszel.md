@@ -5,13 +5,13 @@
 ---
 
 **Purpose:** Lightweight server monitoring — CPU, memory, disk, network, and Docker container stats with alerts.
-**Port:** `8106` (host) → `8090` (container) | **Data:** `service_data/beszel/`
+**Port:** `8106` (host) → `8090` (container) | **Data:** `service_data/data/beszel/`
 
 ## Setup
 
 ```bash
 cp beszel/.env.example beszel/.env
-sh homeserver.sh dev up beszel
+uv run homeserver.py dev up beszel
 ```
 
 Two containers start: `beszel` (hub, web UI + storage) and `beszel-agent` (monitors this Docker host). The agent **crash-loops** until it has a token/key pair from the hub — this is expected (`restart: unless-stopped` just keeps retrying) and stops once you pair it below.
@@ -25,7 +25,7 @@ Two containers start: `beszel` (hub, web UI + storage) and `beszel-agent` (monit
    BESZEL_AGENT_TOKEN=<token from hub>
    BESZEL_AGENT_KEY=<public key from hub>
    ```
-4. Restart: `sh homeserver.sh dev up beszel`
+4. Restart: `uv run homeserver.py dev up beszel`
 
 The system indicator in the hub UI turns green once the agent connects.
 

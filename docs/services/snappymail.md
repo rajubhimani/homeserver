@@ -5,13 +5,13 @@
 ---
 
 **Purpose:** Fast, lightweight webmail client — good default for daily use.
-**Port:** `8097` (host) → `8888` (container) | **Data:** `service_data/snappymail/`
+**Port:** `8097` (host) → `8888` (container) | **Data:** `service_data/data/snappymail/`
 
 ## Setup
 
 ```bash
 cp snappymail/.env.example snappymail/.env
-sh homeserver.sh dev up snappymail
+uv run homeserver.py dev up snappymail
 ```
 
 ## Admin panel

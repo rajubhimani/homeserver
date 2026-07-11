@@ -11,7 +11,7 @@
 
 ```bash
 cp portainer/.env.example portainer/.env
-sh homeserver.sh dev up portainer
+uv run homeserver.py dev up portainer
 ```
 
 ## First login

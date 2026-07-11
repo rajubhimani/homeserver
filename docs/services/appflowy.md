@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Open-source Notion alternative — docs, databases, kanban, and AI writing tools.
-**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/appflowy/` | **Requires:** ~2 GB RAM
+**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** ~2 GB RAM
 
 ## Setup
 
@@ -13,8 +13,8 @@
 cp appflowy/.env.example appflowy/.env
 # generate: openssl rand -hex 32 → GOTRUE_JWT_SECRET
 # set POSTGRES_PASSWORD and MINIO_ROOT_PASSWORD
-mkdir -p service_data/appflowy/{postgres,redis,minio}
-sh homeserver.sh dev up appflowy
+mkdir -p service_data/data/appflowy/{postgres,redis,minio}
+uv run homeserver.py dev up appflowy
 ```
 
 ## First login
@@ -85,10 +85,10 @@ docker restart appflowy-gotrue appflowy-cloud
 ### Full data wipe and fresh start
 
 ```bash
-sh homeserver.sh prod down appflowy
-sudo rm -rf ~/homeserver/service_data/appflowy/
-mkdir -p ~/homeserver/service_data/appflowy/{postgres,redis,minio}
-sh homeserver.sh prod up appflowy
+uv run homeserver.py prod down appflowy
+sudo rm -rf ~/homeserver/service_data/data/appflowy/
+mkdir -p ~/homeserver/service_data/data/appflowy/{postgres,redis,minio}
+uv run homeserver.py prod up appflowy
 ```
 
 After a clean wipe, `postgres-init/init.sh` runs automatically on the DB's first boot, sets `search_path`, and everything works without manual steps.

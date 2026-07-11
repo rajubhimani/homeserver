@@ -10,21 +10,23 @@ Quick reference for all services — ports and proxy config. For setup steps, cr
 
 ## Service Tiers
 
-Services are grouped into three additive tiers. Each tier builds on the previous.
+Services are grouped into additive tiers, plus a manual-only group. Each tier builds on the previous.
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `sh homeserver.sh dev up min` | dozzle, cloudflared, nginx-plain, landing, beszel |
-| `core` | `sh homeserver.sh dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, appflowy, plane |
-| `all` | `sh homeserver.sh dev up all` | core + every extra service |
+| `min` | `uv run homeserver.py dev up min` | dozzle, beszel, cloudflared, nginx-plain, landing |
+| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich |
+| `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
 `down all` always stops everything in reverse order — no list to maintain.
 
 **Extra services** (started with `up all` or individually):
-dockge, portainer, openproject, gitlab, jellyfin, paperless, stirling-pdf-lite,
-mealie, uptime-kuma, stirling-pdf, stalwart, snappymail, roundcube, syncthing, authentik, ntfy,
-miniflux, audiobookshelf, conduit, wg-easy,
-headscale, openvpn, invoiceshelf, guacamole, and more.
+dockge, portainer, uptime-kuma, openproject, jellyfin, paperless, stirling-pdf-lite,
+mealie, stalwart, snappymail, roundcube, syncthing, authentik, ntfy,
+miniflux, audiobookshelf, conduit, element, invoiceshelf, appflowy, plane, guacamole.
+
+**Manual-only services** (never started by any tier — start individually with `up <service>`):
+wg-easy, headscale, openvpn (VPN — deliberate-start-only by nature), gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
 
 ---
 
@@ -46,14 +48,15 @@ headscale, openvpn, invoiceshelf, guacamole, and more.
 | Forgejo | `forgejo` | 3002 / 2223 (SSH) | 3000 / 22 | core |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | extra |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | extra |
-| Headscale | `headscale` | 8086 | 8080 | extra (manual) |
+| Headscale | `headscale` | 8086 / 9090 (admin UI) | 8080 / 80 | extra (manual) |
 | Syncthing | `syncthing` | 8087 | 8384 | extra |
-| Authentik | `authentik-server` | 8088 | 9000 | extra |
+| Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | extra |
 | Stalwart Mail | `stalwart` | 8091 | 8080 | extra |
 | Ntfy | `ntfy` | 8092 | 80 | extra |
 | Miniflux | `miniflux` | 8093 | 8080 | extra |
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
 | Conduit (Matrix) | `conduit` | 8095 / 8448 (fed.) | 6167 | extra |
+| Element | `element` | 8108 | 80 | extra |
 | Snappymail | `snappymail` | 8097 | 8888 | extra |
 | Roundcube | `roundcube` | 8098 | 80 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |
@@ -63,7 +66,14 @@ headscale, openvpn, invoiceshelf, guacamole, and more.
 | AppFlowy | `appflowy-nginx` | 8103 | 80 | extra |
 | Beszel | `beszel` | 8106 | 8090 | min |
 | Guacamole | `guacamole` | 8107 | 8080 | extra |
+| Dockge | `dockge` | 5001 | 5001 | extra |
+| Portainer | `portainer` | 9000 / 9443 | 9000 / 9443 | extra |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 / 81 (admin) | same | extra (optional) |
+| WireGuard Easy | `wg-easy` | 51820 (UDP) / 51821 | 51820 (UDP) / 51821 | manual |
+| OpenVPN | `openvpn` | 1194 (UDP) | 1194 (UDP) | manual |
+| Stalwart mail ports | `stalwart` | 8025/8143/8465/8587/8993 | 25/143/465/587/993 | extra (see [`09-firewall.md`](09-firewall.md)) |
+
+**Next available ports:** web `8109`, SSH `2225`. Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -82,7 +92,7 @@ No UI — edit the template file and recreate the container to reload.
 UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 
 > Run only one proxy at a time — both bind to ports 80/443.
-> To switch: replace `nginx-plain` with `nginx` in `SERVICES_CORE` in `homeserver.sh`.
+> To switch: replace `nginx-plain` with `nginx` in `SERVICES_MIN` in `homeserver.py`.
 
 **Forward Hostname** = Docker container name (NPM resolves via `homeserver` network).
 **Scheme** = `http` for all (Cloudflare handles TLS).
@@ -111,6 +121,7 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `miniflux.yourdomain.com` | `miniflux` | `8080` |
 | `audiobookshelf.yourdomain.com` | `audiobookshelf` | `80` |
 | `conduit.yourdomain.com` | `conduit` | `6167` |
+| `element.yourdomain.com` | `element` | `80` |
 | `openproject.yourdomain.com` | `openproject` | `80` |
 | `plane.yourdomain.com` | `plane-proxy` | `80` |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` |
