@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Open-source issue tracker and project management.
-**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** ~4 GB RAM
+**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** Postgres + Redis + RabbitMQ + MinIO, ~4GB RAM minimum / 8GB recommended per Plane's own docs (developers.plane.so) | **Memory:** DB capped 512M in compose.yml; other 10 containers: no hard limit set; measured idle ~1.4GB total across all 11 containers — `plane-worker` (Celery, 8 prefork processes) is by far the heaviest single container at ~703MB idle, and the one most likely to grow further under real task load
 
 ## Setup
 

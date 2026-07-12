@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Scan, OCR, and archive documents with full-text search.
-**Port:** `8010` (host) → `8000` (container) | **Data:** `service_data/data/paperless/` | **Requires:** Postgres + Redis
+**Port:** `8010` (host) → `8000` (container) | **Data:** `service_data/data/paperless/` | **Requires:** Postgres + Redis | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~582MB total (app 521 + db 53 + redis 8) — closely matches community-reported idle figures (~600-900MB). **OCR ingestion of scanned documents spikes this to 1.5-2GB + 100% CPU on one core**, not reflected in the idle number
 
 ## Setup
 

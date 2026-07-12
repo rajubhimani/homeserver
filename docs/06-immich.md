@@ -4,96 +4,20 @@
 
 ---
 
-## Create .env
-
 ```bash
 mkdir -p ~/homeserver/immich
 cd ~/homeserver/immich
-```
-
-```env
-UPLOAD_LOCATION=/mnt/seagate/immich
-# Postgres data lives in a named Docker volume (declared in compose.yml), not
-# a bind mount — no path to set here. Back it up with
-# `uv run homeserver.py <env> backup immich`.
-
-# Generate with: openssl rand -hex 32
-IMMICH_SECRET=your_hex_secret_here
-
-# Postgres
-DB_PASSWORD=your_strong_password
-DB_USERNAME=immich
-DB_DATABASE_NAME=immich
-DB_URL=postgresql://immich:your_strong_password@immich-database:5432/immich
-```
-
-> ⚠️ `DB_URL` must use `immich-database` as the hostname — not `localhost`.
-
----
-
-## Start
-
-```bash
+cp .env.example .env
+# edit .env: set UPLOAD_LOCATION, IMMICH_SECRET, DB_PASSWORD, DB_URL
 uv run homeserver.py dev up immich
-uv run homeserver.py dev logs immich
 ```
 
-For prod (ports on localhost only):
-
-```bash
-uv run homeserver.py prod up immich
-```
-
-**Cloudflare path:** open `https://immich.yourdomain.com`  
+**Cloudflare path:** open `https://immich.yourdomain.com`
 **Tailscale path:** open `http://100.x.x.x:2283`
 
 > ⚠️ Immich does not support creating the admin account via env vars — use the browser on first launch.
 
----
-
-## Machine Learning (optional)
-
-ML enables facial recognition and smart search. Disabled by default via `profiles: [ml]` to save RAM.
-
-**Disable in UI** (recommended for low-resource setups):
-
-```text
-Admin → Administration → Machine Learning → toggle off → Save
-```
-
-**Enable ML:**
-
-```bash
-docker compose --profile ml up -d
-```
-
-Then in UI: `Admin → Machine Learning → toggle on → Save`
-
-Run initial jobs under `Admin → Jobs`: Smart Search → Run All, Face Detection → Run All.
-
----
-
-## Mobile App Setup
-
-Install the **Immich** app (Android / iOS — free).
-
-### Server URL by access path
-
-**Cloudflare path:**
-
-```text
-https://immich.yourdomain.com
-```
-
-**Tailscale path:**
-
-```text
-http://100.x.x.x:2283
-```
-
-> Tailscale backup only runs when the device is connected to the tailnet. Cloudflare path works anywhere.
-
-Login with the user's account, then enable auto-backup in app settings.
+**Full setup detail (env var reference, ML setup, mobile app config, architecture, troubleshooting) lives in [`docs/services/immich.md`](services/immich.md)** — this page is just the walkthrough step to get it running.
 
 ---
 

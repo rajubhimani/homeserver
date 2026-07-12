@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Lightweight server monitoring — CPU, memory, disk, network, and Docker container stats with alerts.
-**Port:** `8106` (host) → `8090` (container) | **Data:** `service_data/data/beszel/`
+**Port:** `8106` (host) → `8090` (container) | **Data:** `service_data/data/beszel/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~48MB (hub + agent combined)
 
 ## Setup
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Docker Compose stack manager UI.
-**Port:** `5001`
+**Port:** `5001` | **Requires:** — | **Memory:** no hard limit set; measured idle ~132MB
 
 ## Setup
 

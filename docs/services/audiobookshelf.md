@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Audiobook and podcast server with mobile app support.
-**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/`
+**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~36MB
 
 ## Setup
 

@@ -5,16 +5,58 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly)
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~685MB total (app 612 + db 35 + redis 16 + cron 22) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
 
 ## Setup
 
 ```bash
 cp nextcloud/.env.example nextcloud/.env
-uv run homeserver.py dev up nextcloud
+```
+
+Edit `nextcloud/.env`:
+
+```env
+DATA_ROOT=/mnt/seagate
+USER_DATA_ROOT=/mnt/seagate
+
+# Postgres
+POSTGRES_DB=nextcloud
+POSTGRES_USER=nextcloud
+POSTGRES_PASSWORD=your_strong_password
+
+# Nextcloud admin
+NEXTCLOUD_ADMIN_USER=admin
+NEXTCLOUD_ADMIN_PASSWORD=your_strong_password
 ```
 
 **Admin password in `.env` must not contain `$`** — Docker Compose interprets `$VAR` patterns as variable references and silently mangles passwords containing `$`. Use `openssl rand -hex 20` to generate a safe password.
+
+```bash
+uv run homeserver.py dev up nextcloud
+```
+
+**Access:** Cloudflare path `https://nextcloud.yourdomain.com` | Tailscale path `http://100.x.x.x:8081` — login with your admin credentials.
+
+## Enable External Storage
+
+```text
+Apps → search "External storage support" → Enable
+
+Settings → Administration → External Storage → Add Storage
+  Folder name: Seagate
+  Storage type: Local
+  Configuration: /mnt/seagate
+  Available for: All users
+→ click checkmark (green = working)
+```
+
+## Create Family Accounts
+
+```text
+Top right avatar → Administration → Users → New User
+```
+
+One account per family member. They log in via the same URL you use.
 
 ## Architecture notes
 

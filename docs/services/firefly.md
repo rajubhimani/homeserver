@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Personal finance manager — income, expenses, budgets, accounts, recurring transactions.
-**Port:** `8102` (host) → `8080` (container) | **Data:** `service_data/data/firefly/` (app storage) + named volume `firefly-postgres` (DB) | **Requires:** Postgres
+**Port:** `8102` (host) → `8080` (container) | **Data:** `service_data/data/firefly/` (app storage) + named volume `firefly-postgres` (DB) | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~177MB total (importer 55 + cron 2 + app 93 + db 27)
 
 ## Setup
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Open-source invoicing and billing — the actively maintained community successor to Crater (same Laravel + MariaDB stack, same data format; the original `foralabs/crater` image was made private).
-**Port:** `8101` (host) → `8080` (container) | **Data:** `service_data/data/invoiceshelf/` | **Requires:** MariaDB
+**Port:** `8101` (host) → `8080` (container) | **Data:** `service_data/data/invoiceshelf/` | **Requires:** MariaDB | **Memory:** no hard limit set; measured idle ~172MB total (app 63 + db 109)
 
 ## Setup
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Docker container management UI.
-**Port:** `9000` (HTTP) or `9443` (HTTPS)
+**Port:** `9000` (HTTP) or `9443` (HTTPS) | **Requires:** — | **Memory:** no hard limit set; measured idle ~17.5MB
 
 ## Setup
 
