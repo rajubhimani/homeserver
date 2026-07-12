@@ -14,7 +14,7 @@ services:
         limits:
           memory: 512M
     volumes:
-      - ${DATA_ROOT}/pgdata:/var/lib/postgresql/data
+      - plane-postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 60s
@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
     command: valkey-server --save "" --stop-writes-on-bgsave-error no
     volumes:
-      - ${DATA_ROOT}/redisdata:/data
+      - plane-redis:/data
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 60s
@@ -48,7 +48,7 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-plane}
     volumes:
-      - ${DATA_ROOT}/rabbitmq:/var/lib/rabbitmq
+      - plane-rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 15s
@@ -244,6 +244,11 @@ services:
         condition: service_started
     networks:
       - homeserver
+
+volumes:
+  plane-postgres:
+  plane-redis:
+  plane-rabbitmq:
 
 networks:
   homeserver:

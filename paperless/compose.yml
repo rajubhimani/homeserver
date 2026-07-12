@@ -14,7 +14,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - ${DATA_ROOT}/postgres:/var/lib/postgresql
+      - paperless-postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -61,6 +61,15 @@ services:
       PAPERLESS_EXPORT_DIR: /paperless/export
     volumes:
       - ${DATA_ROOT}/app:/paperless
+      # PAPERLESS_DATA_DIR/MEDIA_ROOT/CONSUMPTION_DIR/EXPORT_DIR above redirect
+      # paperless to /paperless/* (bind-mounted), so the image's own default
+      # paths below are unused — but the image still declares VOLUME on them,
+      # so mount them to named volumes or Docker silently creates anonymous
+      # ones for each.
+      - paperless-consume-unused:/usr/src/paperless/consume
+      - paperless-data-unused:/usr/src/paperless/data
+      - paperless-export-unused:/usr/src/paperless/export
+      - paperless-media-unused:/usr/src/paperless/media
     depends_on:
       paperless-db:
         condition: service_healthy
@@ -68,6 +77,13 @@ services:
         condition: service_healthy
     networks:
       - homeserver
+
+volumes:
+  paperless-postgres:
+  paperless-consume-unused:
+  paperless-data-unused:
+  paperless-export-unused:
+  paperless-media-unused:
 
 networks:
   homeserver:

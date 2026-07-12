@@ -1,16 +1,16 @@
 services:
   syncthing-permissions:
-    image: alpine:3.21
+    image: alpine:3.24
     container_name: syncthing-permissions
     restart: "no"
     user: "0:0"
     volumes:
-      - ${DATA_ROOT}/config:/config
+      - syncthing-config:/config
     # linuxserver images use abc (PUID 1000, PGID 1000)
     command: chown -R 1000:1000 /config
 
   syncthing:
-    image: lscr.io/linuxserver/syncthing:2.1.1
+    image: lscr.io/linuxserver/syncthing:2.1.2
     container_name: syncthing
     restart: unless-stopped
     env_file: .env
@@ -19,7 +19,7 @@ services:
       PGID: 1000
       TZ: ${TZ:-Asia/Kolkata}
     volumes:
-      - ${DATA_ROOT}/config:/config
+      - syncthing-config:/config
       - ${DATA_ROOT}/data:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8384/rest/noauth/health || exit 1"]
@@ -32,6 +32,9 @@ services:
         condition: service_completed_successfully
     networks:
       - homeserver
+
+volumes:
+  syncthing-config:
 
 networks:
   homeserver:

@@ -53,7 +53,7 @@ JS fetch call — opaque responses count as up.
 ## Start
 
 ```bash
-sh homeserver.sh dev up landing
+uv run homeserver.py dev up landing
 ```
 
 ## Access
@@ -69,7 +69,7 @@ sh homeserver.sh dev up landing
 4. Restart landing to reload nginx:
 
 ```bash
-sh homeserver.sh dev up landing
+uv run homeserver.py dev up landing
 ```
 
 ---

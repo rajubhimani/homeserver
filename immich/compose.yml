@@ -1,6 +1,6 @@
 services:
   immich-server:
-    image: ghcr.io/immich-app/immich-server:v2.7.5
+    image: ghcr.io/immich-app/immich-server:v3.0.2
     container_name: immich-server
     restart: unless-stopped
     env_file: .env
@@ -11,6 +11,14 @@ services:
       DB_DATABASE_NAME: ${DB_DATABASE_NAME}
       IMMICH_SECRET: ${IMMICH_SECRET}
       REDIS_HOSTNAME: immich-redis
+      # Windows Docker Desktop bind mounts have been observed failing Immich's
+      # own create->read->overwrite mount-integrity check on `upload/` (a
+      # write succeeds, the very next read of the same file returns ENOENT) —
+      # this is Immich's officially documented escape hatch for that case
+      # (see https://docs.immich.app/administration/system-integrity). Does
+      # not affect actual file read/write during normal use, only this
+      # startup self-check.
+      IMMICH_IGNORE_MOUNT_CHECK_ERRORS: ${IMMICH_IGNORE_MOUNT_CHECK_ERRORS:-false}
     volumes:
       - ${UPLOAD_LOCATION}:/usr/src/app/upload
       # Uncomment when PHOTOS_LOCATION / VIDEOS_LOCATION are set in .env
@@ -27,7 +35,7 @@ services:
       - homeserver
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
+    image: ghcr.io/immich-app/immich-machine-learning:v3.0.2
     container_name: immich-ml
     restart: unless-stopped
     env_file: .env
@@ -67,7 +75,7 @@ services:
         limits:
           memory: 512M
     volumes:
-      - ${DB_DATA_LOCATION}:/var/lib/postgresql
+      - immich-postgres:/var/lib/postgresql
     shm_size: 128mb
     healthcheck:
       test: >-
@@ -94,6 +102,7 @@ services:
 volumes:
   immich-model-cache:
   immich-server-data:
+  immich-postgres:
 
 networks:
   homeserver:

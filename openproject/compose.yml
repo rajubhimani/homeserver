@@ -1,6 +1,6 @@
 services:
   openproject:
-    image: openproject/openproject:17.5.1
+    image: openproject/openproject:17.6.0
     container_name: openproject
     restart: unless-stopped
     env_file: .env
@@ -12,8 +12,12 @@ services:
       # 0=disabled, 2=email activation, 3=manual admin, 4=automatic
       OPENPROJECT_SELF__REGISTRATION: ${SELF_REGISTRATION:-2}
     volumes:
-      - ${DATA_ROOT}/pgdata:/var/openproject/pgdata
+      - openproject-pgdata:/var/openproject/pgdata
       - ${DATA_ROOT}/assets:/var/openproject/assets
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80/health_checks/default || exit 1"]
       interval: 30s
@@ -22,6 +26,9 @@ services:
       start_period: 120s
     networks:
       - homeserver
+
+volumes:
+  openproject-pgdata:
 
 networks:
   homeserver:

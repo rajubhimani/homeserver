@@ -1,4 +1,0 @@
-services:
-  snappymail:
-    ports:
-      - "8097:8888"

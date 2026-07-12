@@ -1,6 +1,6 @@
 services:
   stirling-pdf-lite:
-    image: stirlingtools/stirling-pdf:2.13.2-ultra-lite
+    image: stirlingtools/stirling-pdf:2.14.2-ultra-lite
     container_name: stirling-pdf-lite
     restart: unless-stopped
     env_file: .env

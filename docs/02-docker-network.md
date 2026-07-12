@@ -25,7 +25,7 @@ All services communicate via a single external Docker network. Create it once be
 docker network create homeserver
 ```
 
-> `homeserver.sh` auto-creates the network if missing — you only need to run this manually on a fresh machine before the first `up`.
+> `homeserver.py` auto-creates the network if missing — you only need to run this manually on a fresh machine before the first `up`.
 
 Every `compose.yml` in this stack references it as:
 

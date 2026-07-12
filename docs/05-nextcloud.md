@@ -23,53 +23,26 @@ POSTGRES_PASSWORD=your_strong_password
 # Nextcloud admin
 NEXTCLOUD_ADMIN_USER=admin
 NEXTCLOUD_ADMIN_PASSWORD=your_strong_password
-
-# Trusted domains — see your access path below
-NEXTCLOUD_TRUSTED_DOMAINS=
 ```
 
 > ⚠️ Avoid `$`, `'`, `!` in passwords — they cause `.env` parsing issues. Use alphanumeric or escape `$` as `$$`.
 
-### Trusted domains by access path
-
-**Cloudflare path:**
-
-```env
-NEXTCLOUD_TRUSTED_DOMAINS=localhost nextcloud.yourdomain.com
-```
-
-**Tailscale path:**
-
-```env
-NEXTCLOUD_TRUSTED_DOMAINS=localhost 192.168.1.100 100.x.x.x
-```
-
-> `NEXTCLOUD_TRUSTED_PROXIES` is already set in `compose.yml` — required for correct client IP forwarding through the reverse proxy.
->
-> **This env var only takes effect during Nextcloud's first-time initialization.** If you're adding it to (or changing `DOMAIN`/network config on) an **already-initialized** Nextcloud, the env var change alone does nothing — you must set it directly via `occ`, which writes straight to `config.php` on the persistent data volume:
->
-> ```bash
-> docker exec nextcloud php occ config:system:set trusted_proxies 0 --value="172.18.0.0/16"   # match: docker network inspect homeserver
-> docker exec nextcloud php occ config:system:set overwriteprotocol --value="https"
-> docker exec nextcloud php occ config:system:set overwrite.cli.url --value="https://nextcloud.yourdomain.com"
-> ```
->
-> Symptoms of missing this: Nextcloud reports unhealthy, `/status.php` returns 503, redirect loops, or broken links — because Nextcloud thinks every request behind the proxy is plain HTTP.
+**Trusted domains/proxies and HTTPS detection are configured automatically** — `nextcloud/hooks/before-starting/02-configure-proxy.sh` sets `trusted_domains` (`localhost`, `nextcloud.${DOMAIN}`, `*.${DOMAIN}`), `trusted_proxies`, and `overwriteprotocol=https` via `occ` on every startup, so there's nothing to set in `.env` for the Cloudflare path. **Tailscale IP-only access** (no domain) isn't covered by that wildcard — if you need it, add a `trusted_domains` line for your Tailscale IP/hostname directly in that script. See [`docs/services/nextcloud.md`](services/nextcloud.md) if this ever needs troubleshooting.
 
 ---
 
 ## Start
 
 ```bash
-sh homeserver.sh dev up nextcloud
-sh homeserver.sh dev logs nextcloud
+uv run homeserver.py dev up nextcloud
+uv run homeserver.py dev logs nextcloud
 # ready when you see: Apache configured
 ```
 
 For prod (ports on localhost only):
 
 ```bash
-sh homeserver.sh prod up nextcloud
+uv run homeserver.py prod up nextcloud
 ```
 
 **Cloudflare path:** open `https://nextcloud.yourdomain.com`  
@@ -81,18 +54,11 @@ Login with your admin credentials.
 
 ## Volume Notes
 
-Nextcloud uses **partial volume mounts** (not the full `/var/www/html`):
-
-| Host path | Container path | Purpose |
-| --- | --- | --- |
-| `data/nextcloud/config` | `/var/www/html/config` | Config including `config.php` |
-| `data/nextcloud/data` | `/var/www/html/data` | User files |
-| `data/nextcloud/custom_apps` | `/var/www/html/custom_apps` | User-installed apps |
-| `data/nextcloud/version.php` | `/var/www/html/version.php` | Prevents false "new instance" detection on restart |
-
-A `before-starting` hook (`nextcloud/hooks/before-starting/00-sync-php.sh`) runs rsync on every startup to populate the PHP files from the image into the container.
+Nextcloud uses **partial volume mounts** (not the full `/var/www/html`) — `html`, `config`, `data`, and `custom_apps` are each their own **named Docker volume** (`nextcloud-html`, `nextcloud-config`, `nextcloud-data`, `nextcloud-custom-apps`; see `nextcloud/compose.yml`), not host bind mounts. A `before-starting` hook (`nextcloud/hooks/before-starting/00-sync-php.sh`) runs rsync on every startup to populate the PHP files from the image into the container.
 
 > **Why not mount the full `/var/www/html`?** Docker's seccomp profile blocks `lchown` on symlinks. Nextcloud's rsync tries to chown `.map.license` symlinks, fails, and crash-loops. Partial mounts avoid this entirely.
+
+See [`docs/services/nextcloud.md`](services/nextcloud.md) for why these are named volumes rather than bind mounts, and how to migrate existing data into them.
 
 ---
 

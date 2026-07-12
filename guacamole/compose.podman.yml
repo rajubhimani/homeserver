@@ -1,0 +1,4 @@
+services:
+  guacamole-db:
+    security_opt:
+      - label=disable

@@ -1,4 +1,0 @@
-services:
-  conduit:
-    security_opt:
-      - label=disable

@@ -1,5 +1,0 @@
-services:
-  conduit:
-    ports:
-      - "8095:6167"
-      - "8448:8448"

@@ -1,7 +1,0 @@
-services:
-  headscale:
-    ports:
-      - "8086:8080/tcp"
-  headscale-admin:
-    ports:
-      - "9090:80/tcp"
