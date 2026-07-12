@@ -1,6 +1,6 @@
 services:
   immich-server:
-    image: ghcr.io/immich-app/immich-server:v2.7.5
+    image: ghcr.io/immich-app/immich-server:v3.0.2
     container_name: immich-server
     restart: unless-stopped
     env_file: .env
@@ -35,7 +35,7 @@ services:
       - homeserver
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
+    image: ghcr.io/immich-app/immich-machine-learning:v3.0.2
     container_name: immich-ml
     restart: unless-stopped
     env_file: .env

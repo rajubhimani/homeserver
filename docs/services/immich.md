@@ -23,6 +23,7 @@ Admin account is created on first browser visit — no env var needed.
 - Mobile app: connect to `https://immich.yourdomain.com` or `https://photos.yourdomain.com`
 - ML (face recognition) is opt-in: `uv run homeserver.py dev up immich --profile ml`
 - Uses a custom Postgres image with pgvector (`ghcr.io/immich-app/postgres`) — see the `homeserver-postgres` skill for why its `command:` override must keep `-c config_file=/etc/postgresql/postgresql.conf` as the first flag
+- Major version bumps (e.g. v2 → v3) break compatibility with older mobile app builds — the server only supports the matching major client version. Update the mobile app(s) before or right after bumping the server's major version. Minor/patch bumps don't have this constraint.
 
 ## Troubleshooting: `immich-server` crash-loops with `Failed to read .../.immich: ENOENT`
 
