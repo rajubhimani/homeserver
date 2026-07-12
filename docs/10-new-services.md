@@ -33,16 +33,10 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | GitLab CE | [docs/services/gitlab.md](services/gitlab.md) |
 | Uptime Kuma | [docs/services/uptime-kuma.md](services/uptime-kuma.md) |
 | Dozzle | [docs/services/dozzle.md](services/dozzle.md) |
-| Stalwart Mail | [docs/services/stalwart.md](services/stalwart.md) |
-| Snappymail | [docs/services/snappymail.md](services/snappymail.md) |
-| Roundcube | [docs/services/roundcube.md](services/roundcube.md) |
 | Syncthing | [docs/services/syncthing.md](services/syncthing.md) |
 | Authentik | [docs/services/authentik.md](services/authentik.md) |
-| Ntfy | [docs/services/ntfy.md](services/ntfy.md) |
 | Miniflux | [docs/services/miniflux.md](services/miniflux.md) |
 | Audiobookshelf | [docs/services/audiobookshelf.md](services/audiobookshelf.md) |
-| Conduit (Matrix) | [docs/services/conduit.md](services/conduit.md) |
-| Element | [docs/services/element.md](services/element.md) |
 | OpenProject | [docs/services/openproject.md](services/openproject.md) |
 | Plane | [docs/services/plane.md](services/plane.md) |
 | InvoiceShelf | [docs/services/invoiceshelf.md](services/invoiceshelf.md) |
@@ -53,7 +47,6 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Portainer CE | [docs/services/portainer.md](services/portainer.md) |
 | Dockge | [docs/services/dockge.md](services/dockge.md) |
 
-Headscale, WG-Easy, and OpenVPN are covered together in [12 — VPN](12-vpn.md) instead, since they're part of one cohesive access-setup guide rather than standalone services.
 
 ---
 

@@ -46,8 +46,8 @@ Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `d
 
 - **SERVICES_MIN** (infrastructure): dozzle → beszel → cloudflared → nginx-plain → landing
 - **SERVICES_CORE** (always-on apps, on top of MIN): nextcloud → vaultwarden → forgejo → firefly → immich
-- **SERVICES_EXTRA** (`up all` or individually): dockge → portainer → uptime-kuma → openproject → jellyfin → paperless → stirling-pdf-lite → mealie → stalwart → snappymail → roundcube → syncthing → authentik → ntfy → miniflux → audiobookshelf → conduit → element → invoiceshelf → appflowy → plane → guacamole
-- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): wg-easy, headscale, openvpn (VPN, deliberate-start-only), gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory)
+- **SERVICES_EXTRA** (`up all` or individually): dockge → portainer → uptime-kuma → openproject → jellyfin → paperless → stirling-pdf-lite → mealie → syncthing → authentik → miniflux → audiobookshelf → invoiceshelf → appflowy → plane → guacamole
+- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory)
 
 Adding or moving a service between tiers, wiring up a new service end-to-end (landing page, health route, docs, ports): **see the `homeserver-add-service` skill.**
 

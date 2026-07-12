@@ -162,38 +162,6 @@ server {
     }
 }
 
-# ── WG-Easy (WireGuard VPN) ───────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name wg-easy.${DOMAIN};
-    location / {
-        set $upstream http://wg-easy:51821;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-
-# ── Headscale (Tailscale coordination server) ────────────────────────────────
-server {
-    listen 80;
-    server_name headscale.${DOMAIN};
-    location / {
-        set $upstream http://headscale:8080;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
 
 # ── Syncthing ────────────────────────────────────────────────────────────────
 server {
@@ -223,26 +191,6 @@ server {
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-    }
-}
-
-# ── Ntfy ──────────────────────────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name ntfy.${DOMAIN};
-    location / {
-        set $upstream http://ntfy:80;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        # SSE support for real-time notifications
-        proxy_set_header Connection "";
-        proxy_http_version 1.1;
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 3600s;
     }
 }
 
@@ -277,77 +225,6 @@ server {
     }
 }
 
-# ── Conduit (Matrix) ──────────────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name conduit.${DOMAIN};
-    location / {
-        set $upstream http://conduit:6167;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        client_max_body_size 20M;
-    }
-}
-
-# ── Element (Matrix web client) ───────────────────────────────────────────────
-server {
-    listen 80;
-    server_name element.${DOMAIN};
-    location / {
-        set $upstream http://element:80;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-
-# ── Snappymail (webmail) ──────────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name webmail.${DOMAIN} snappymail.${DOMAIN};
-    location / {
-        set $upstream http://snappymail:8888;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-
-# ── Roundcube (webmail) ───────────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name roundcube.${DOMAIN};
-    location / {
-        set $upstream http://roundcube:80;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-
-# ── Stalwart Mail ─────────────────────────────────────────────────────────────
-server {
-    listen 80;
-    server_name mail.${DOMAIN};
-    location / {
-        set $upstream http://stalwart:8080;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-}
 
 # ── Nextcloud ─────────────────────────────────────────────────────────────────
 server {

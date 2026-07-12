@@ -1,4 +1,0 @@
-services:
-  element:
-    ports:
-      - "8108:80"

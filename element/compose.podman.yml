@@ -1,4 +1,0 @@
-services:
-  element:
-    security_opt:
-      - label=disable

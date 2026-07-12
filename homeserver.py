@@ -113,21 +113,20 @@ SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich"]
 
 SERVICES_EXTRA = [
     "dockge", "portainer", "uptime-kuma", "openproject", "jellyfin", "paperless",
-    "stirling-pdf-lite", "mealie", "stalwart", "snappymail", "roundcube",
-    "syncthing", "authentik", "ntfy", "miniflux", "audiobookshelf", "conduit",
-    "element", "invoiceshelf", "appflowy", "plane", "guacamole",
+    "stirling-pdf-lite", "mealie",
+    "syncthing", "authentik", "miniflux", "audiobookshelf",
+    "invoiceshelf", "appflowy", "plane", "guacamole",
 ]
 
 # Manual-only — never started by 'up min/core/all' (or their down/restart/
 # update/backup/restore equivalents). Start individually with 'up <service>'.
-#   - wg-easy/headscale/openvpn: VPN, deliberate-start-only by nature
 #   - gitlab: redundant with forgejo (same git-hosting role) at far higher
 #     memory cost — forgejo is the default; start gitlab only when actually
 #     needed for something forgejo doesn't cover
 #   - stirling-pdf (full): redundant with stirling-pdf-lite (same PDF
 #     toolset) at ~2x the memory (OCR/LibreOffice extras) — lite is the
 #     default; start the full image only when those extras are actually needed
-SERVICES_MANUAL = ["wg-easy", "headscale", "openvpn", "gitlab", "stirling-pdf"]
+SERVICES_MANUAL = ["gitlab", "stirling-pdf"]
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is

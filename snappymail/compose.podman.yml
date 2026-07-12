@@ -1,4 +1,0 @@
-services:
-  snappymail:
-    security_opt:
-      - label=disable

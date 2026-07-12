@@ -1,4 +1,0 @@
-services:
-  roundcube:
-    ports:
-      - "8098:80"

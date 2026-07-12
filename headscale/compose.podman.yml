@@ -1,4 +1,0 @@
-services:
-  headscale:
-    security_opt:
-      - label=disable

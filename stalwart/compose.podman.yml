@@ -1,4 +1,0 @@
-services:
-  stalwart:
-    security_opt:
-      - label=disable
