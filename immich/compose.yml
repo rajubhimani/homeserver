@@ -69,11 +69,11 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_DB: ${DB_DATABASE_NAME}
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=512MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=256MB -c effective_cache_size=1536MB
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 2G
     volumes:
       - immich-postgres:/var/lib/postgresql
     shm_size: 128mb
