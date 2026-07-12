@@ -1,6 +1,6 @@
 services:
   syncthing-permissions:
-    image: alpine:3.21
+    image: alpine:3.24
     container_name: syncthing-permissions
     restart: "no"
     user: "0:0"
@@ -10,7 +10,7 @@ services:
     command: chown -R 1000:1000 /config
 
   syncthing:
-    image: lscr.io/linuxserver/syncthing:2.1.1
+    image: lscr.io/linuxserver/syncthing:2.1.2
     container_name: syncthing
     restart: unless-stopped
     env_file: .env
