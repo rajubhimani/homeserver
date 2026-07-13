@@ -109,13 +109,13 @@ if os.path.exists(DOCKER_SOCKET):
 
 SERVICES_MIN = ["dozzle", "beszel", "cloudflared", "nginx-plain", "landing"]
 
-SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich"]
+SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole"]
 
 SERVICES_EXTRA = [
-    "dockge", "portainer", "uptime-kuma", "openproject", "jellyfin", "paperless",
+    "dockge", "portainer", "uptime-kuma", "openproject", "paperless",
     "stirling-pdf-lite", "mealie",
     "syncthing", "authentik", "miniflux", "audiobookshelf",
-    "invoiceshelf", "appflowy", "plane", "guacamole",
+    "invoiceshelf", "appflowy", "plane",
 ]
 
 # Manual-only — never started by 'up min/core/all' (or their down/restart/
