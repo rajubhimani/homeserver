@@ -5,6 +5,11 @@ services:
     restart: unless-stopped
     environment:
       APP_URL: https://beszel.${DOMAIN}
+      # Remaining vars below are image defaults — not previously set, no
+      # behavior change
+      CHECK_UPDATES: "false"
+      CONTAINER_DETAILS: "true"
+      SHARE_ALL_SYSTEMS: "false"
     volumes:
       - ${DATA_ROOT}/data:/beszel_data
       - ${DATA_ROOT}/socket:/beszel_socket
@@ -43,6 +48,13 @@ services:
       # Fill in after first hub login — see docs/10-new-services.md
       TOKEN: ${BESZEL_AGENT_TOKEN}
       KEY: ${BESZEL_AGENT_KEY}
+      # Remaining vars below are image defaults — not previously set, no
+      # behavior change
+      LOG_LEVEL: info
+      SMART_INTERVAL: 1h
+      SENSORS_TIMEOUT: 2s
+      SKIP_GPU: "false"
+      SKIP_SYSTEMD: "false"
     healthcheck:
       test: ["CMD", "/agent", "health"]
       interval: 60s

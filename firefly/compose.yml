@@ -48,6 +48,11 @@ services:
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Pinned here rather than in the shared .env — firefly-importer and firefly-cron
+      # also load .env via env_file, and their own upstream defaults for these differ
+      # (importer defaults to APP_ENV=local, MAIL_MAILER=empty)
+      APP_ENV: production
+      MAIL_MAILER: log
       TRUSTED_PROXIES: "**"
       CACHE_DRIVER: file
       SESSION_DRIVER: file
