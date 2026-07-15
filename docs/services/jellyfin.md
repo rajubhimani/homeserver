@@ -46,6 +46,14 @@ Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct
 
 **Fix:** `uv run jellyfin/apply-tuning.py` (sets `database.xml` → `LockingBehavior` to `Optimistic`, or override via `JELLYFIN_LOCKING_BEHAVIOR` in `.env` — see **Apply performance/reliability tuning** above). `Optimistic` retries writes automatically on lock conflicts instead of failing outright — confirmed this eliminated all `database is locked` errors in this deployment during an active large-library scan. If `Optimistic` isn't enough, Jellyfin's own docs describe a `Pessimistic` mode (serializes all writes, single-writer exclusivity) as the next step — significant performance cost, only worth trying if `Optimistic` doesn't hold; set `JELLYFIN_LOCKING_BEHAVIOR=Pessimistic` and re-run the script.
 
+## Troubleshooting: streaming/SyncPlay hangs for ~1-2 minutes (not a scan)
+
+**Symptom:** playback appears to freeze (pause/seek/stop feels unresponsive) for roughly a minute or two during normal viewing, no scan running. Logs show `Jellyfin.Database.Implementations.Locking.OptimisticLockBehavior: Operation failed retry N` (N incrementing every ~30s) bridging the gap between two session-state log lines (e.g. two `Playback stopped reported by app ...` lines ~2 minutes apart) — the request being retried is a session/progress write, not a scan write.
+
+**Root cause:** same underlying SQLite contention as the scan issue above, triggered instead by a burst of concurrent write-heavy activity outside of scans — e.g. a SyncPlay group with 2+ users pausing/seeking together, concurrent transcode sessions, and subtitle-extraction ffmpeg jobs all landing on the DB at once. `Optimistic` mode (the fix above) retries these writes with a fixed ~30s backoff instead of failing, so the request eventually succeeds, but the client is left waiting the whole time — that wait is what reads as a hang.
+
+**Tried and reverted: `JELLYFIN_LOCKING_BEHAVIOR=Pessimistic`.** This is the next escalation Jellyfin's own docs suggest, and it was tested live in this deployment. **Result: worse, not better.** Under the same kind of rapid-seek/concurrent-transcode load, `Pessimistic`'s single-writer serialization caused an outright failed request — `Jellyfin.Api.Middleware.ExceptionMiddleware: Error processing request: Unexpected end of request content. URL POST /Sessions/Playing/Progress` — instead of `Optimistic`'s slow-but-eventually-successful retry. The client gave up waiting on the serialized write queue before it was serviced. **Bottom line: stick with `Optimistic`.** A `Pessimistic` write queue is worse for this deployment's actual load pattern (multiple concurrent playback/transcode sessions) than occasional multi-retry stalls are — don't re-try `Pessimistic` for this symptom without a materially different load pattern to justify re-testing.
+
 ## Scan speed / CPU utilization tuning
 
 **Symptom:** library scans sit at <1% CPU on an idle, multi-core host and take a long time, even though cores are sitting unused. This is a widely-reported Jellyfin pattern (see jellyfin/jellyfin discussion #7249) — most of a scan's per-item work is waiting on TheMovieDB's network response, not compute, and Jellyfin's own auto-scaling for scan concurrency (`0` = auto in `system.xml`) has multiple open issues about under-delivering in practice (jellyfin/jellyfin#12203, #13531).
@@ -61,6 +69,18 @@ Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct
 **Root cause:** `ImageExtractionTimeoutMs` in `system.xml` defaults to a ~10-second ceiling (`0` = default). This is tight for CPU-decoded HEVC/10-bit content (no hardware acceleration is configured for this deployment — see the `**Memory:**` note at the top of this doc), and gets worse under concurrent load: raising `LibraryScanFanoutConcurrency`/`LibraryMetadataRefreshConcurrency` (above) means multiple `ffmpeg` processes now run at once during a scan, and a live transcode/playback session running at the same time adds even more CPU contention on top of that — any of these alone can push a single extraction past the 10s ceiling.
 
 **Fix:** `uv run jellyfin/apply-tuning.py` (sets `ImageExtractionTimeoutMs` to `30000`, up from the ~10s default — override via `JELLYFIN_IMAGE_EXTRACTION_TIMEOUT_MS` in `.env`). Community reports (jellyfin.org forum, jellyfin/jellyfin#8440, #13116) confirm 30s as a commonly-needed value for HEVC/10-bit content under load; not yet confirmed long-term in this deployment, but the specific errors stopped appearing immediately after applying it.
+
+## Fixed: `MEDIA_ROOT` was nested inside `DATA_ROOT`, so every backup archived the whole media library
+
+**Symptom:** `uv run homeserver.py dev backup jellyfin` (and any auto-snapshot on `down`) took an extremely long time and produced a huge `service_data.tar.gz`, even though `config/` + `cache/` together are only ~3.5GB.
+
+**Root cause:** this deployment's `.env` had `MEDIA_ROOT=../service_data/data/jellyfin/media` — nested *inside* `DATA_ROOT` (`service_data/data/jellyfin/`) instead of pointing at an external path like `.env.example`'s documented default (`/mnt/seagate/media`). `backup_service()` in `homeserver.py` tars the entire `DATA_ROOT` directory on every backup/auto-snapshot, so the whole movie/TV library was being re-archived every time alongside the actual config/db.
+
+**Fix:** moved media out to `service_data/media/jellyfin/` — a sibling of `service_data/data/`, structurally outside anything `backup_service()` sweeps — and updated `MEDIA_ROOT` accordingly. The container's mount target (`/media`) didn't change, only the host-side source path, so no library rescan was needed; Jellyfin's internal paths are relative to the container mount point, not the host path. Confirmed fix: a backup taken after the move completed immediately with no media in the archive. This is now a documented convention (see the `homeserver-add-service` skill, step 2) for any service with a second, large secondary data root — `immich`'s `UPLOAD_LOCATION` had the identical bug, fixed the same way (see `docs/services/immich.md`); `dockge`'s `DOCKGE_STACKS_DIR` had the same pattern too (fixed, though it had no live deployment to migrate).
+
+## See also: Postgres-backend test instance
+
+[`docs/services/jellyfin-pgsql-test.md`](jellyfin-pgsql-test.md) — a separate, manual-only Jellyfin instance running on a community Postgres fork, built specifically to test whether Postgres avoids the `OptimisticLockBehavior` write-stall documented above. Confirmed a real bug in that fork along the way (crash-loops on restart once it has data) — see that doc for the full investigation.
 
 ---
 

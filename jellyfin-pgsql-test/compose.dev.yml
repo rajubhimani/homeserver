@@ -1,0 +1,4 @@
+services:
+  jellyfin-pgsql-test:
+    ports:
+      - "0.0.0.0:8097:8096"

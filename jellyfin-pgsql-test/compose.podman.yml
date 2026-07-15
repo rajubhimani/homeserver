@@ -1,0 +1,4 @@
+services:
+  jellyfin-pgsql-test:
+    security_opt:
+      - label=disable

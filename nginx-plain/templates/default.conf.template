@@ -278,6 +278,23 @@ server {
     }
 }
 
+# ── Jellyfin Postgres test instance (SERVICES_MANUAL, see docs/services/jellyfin-pgsql-test.md) ──
+server {
+    listen 80;
+    server_name jellyfin-test.${DOMAIN};
+    location / {
+        set $upstream http://jellyfin-pgsql-test:8096;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 600s;
+    }
+}
+
 # ── Vaultwarden ───────────────────────────────────────────────────────────────
 server {
     listen 80;

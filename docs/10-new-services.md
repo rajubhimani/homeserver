@@ -25,6 +25,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Nextcloud | [docs/services/nextcloud.md](services/nextcloud.md) |
 | Immich | [docs/services/immich.md](services/immich.md) |
 | Jellyfin | [docs/services/jellyfin.md](services/jellyfin.md) |
+| Jellyfin Postgres test | [docs/services/jellyfin-pgsql-test.md](services/jellyfin-pgsql-test.md) |
 | Vaultwarden | [docs/services/vaultwarden.md](services/vaultwarden.md) |
 | Paperless-ngx | [docs/services/paperless.md](services/paperless.md) |
 | Stirling PDF (Lite + Full) | [docs/services/stirling-pdf.md](services/stirling-pdf.md) |

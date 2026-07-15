@@ -313,6 +313,47 @@
 
     .card-link svg { width: 11px; height: 11px; flex-shrink: 0; }
 
+    .card-link-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-weight: 500;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-link-secondary:hover { color: var(--pt-accent); }
+
+    .test-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      background: var(--pt-accent);
+      color: #fff;
+      opacity: 0.75;
+      flex-shrink: 0;
+    }
+
+    .test-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+      background: #999;
+      transition: background 0.3s;
+    }
+
+    .test-dot.online  { background: var(--pt-accent); }
+    .test-dot.offline { background: #c0392b; }
+
     /* ── Footer ────────────────────────────────────────────────────── */
     .footer {
       text-align: center;
@@ -459,6 +500,9 @@
         <p class="card-desc">Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.</p>
         <a class="card-link" href="#" target="_blank">
           <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="card-link-secondary" href="#" data-testsub="jellyfin-test" data-testhealth="jellyfin-pgsql-test" target="_blank">
+          <span class="test-badge">TEST</span><span class="test-dot"></span> Postgres backend test
         </a>
       </div>
 
@@ -920,6 +964,12 @@
           link.insertBefore(document.createTextNode(label), link.firstChild);
         }
       });
+      // Secondary "testing instance" links — not part of SERVICE_SUBDOMAINS
+      // since they share a card with their main service rather than getting
+      // their own (see docs/services/jellyfin-pgsql-test.md).
+      document.querySelectorAll('#card-pool .card-link-secondary[data-testsub]').forEach(link => {
+        link.href = `https://${link.dataset.testsub}.${DOMAIN}`;
+      });
     }
 
     let activeTab = 'online';
@@ -965,21 +1015,40 @@
       applyTabVisibility();
     }
 
+    async function pingHealth(service) {
+      try {
+        const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000), redirect: 'manual', cache: 'no-store' });
+        return res.status === 0 || (res.status >= 200 && res.status < 500);
+      } catch {
+        return false;
+      }
+    }
+
     async function checkService(card) {
       const service = card.dataset.service;
       const badge = card.querySelector('.status');
       const text  = badge.querySelector('.status-text');
-      try {
-        const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000), redirect: 'manual', cache: 'no-store' });
-        const up = res.status === 0 || (res.status >= 200 && res.status < 500);
-        badge.className = `status ${up ? 'online' : 'offline'}`;
-        text.textContent = up ? 'online' : 'offline';
-        placeCard(card, up);
-      } catch {
-        badge.className = 'status offline';
-        text.textContent = 'offline';
-        placeCard(card, false);
-      }
+      // Any card can carry one or more secondary "test instance" links —
+      // just add <a class="card-link-secondary" data-testsub="foo-test">
+      // to that service's card and it's automatically OR'd into the main
+      // status (online if the main instance OR any test instance is up).
+      const testLinks = Array.from(card.querySelectorAll('.card-link-secondary[data-testsub]'));
+
+      const [mainUp, testResults] = await Promise.all([
+        pingHealth(service),
+        Promise.all(testLinks.map(link => pingHealth(link.dataset.testhealth || link.dataset.testsub))),
+      ]);
+
+      testLinks.forEach((link, i) => {
+        const dot = link.querySelector('.test-dot');
+        if (dot) dot.className = `test-dot ${testResults[i] ? 'online' : 'offline'}`;
+      });
+
+      const up = mainUp || testResults.some(Boolean);
+
+      badge.className = `status ${up ? 'online' : 'offline'}`;
+      text.textContent = up ? 'online' : 'offline';
+      placeCard(card, up);
     }
 
     // On re-check, move cards back to pool first so they can be re-sorted

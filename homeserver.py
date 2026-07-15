@@ -126,7 +126,7 @@ SERVICES_EXTRA = [
 #   - stirling-pdf (full): redundant with stirling-pdf-lite (same PDF
 #     toolset) at ~2x the memory (OCR/LibreOffice extras) — lite is the
 #     default; start the full image only when those extras are actually needed
-SERVICES_MANUAL = ["gitlab", "stirling-pdf"]
+SERVICES_MANUAL = ["gitlab", "stirling-pdf", "jellyfin-pgsql-test"]
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is

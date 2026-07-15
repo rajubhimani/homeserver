@@ -89,6 +89,14 @@ Login with the user's account, then enable auto-backup in app settings.
 
 **If this recurs even at 2GB:** check `docker inspect immich-db --format '{{.State.OOMKilled}}'` right after — `true` confirms the same failure mode, and the limit should be raised further rather than assumed fixed. No forensic OOM-kill logging exists in this stack by default (Windows/WSL2's kernel ring buffer rolls over, and container recreation resets `OOMKilled`/`RestartCount`), so catching it live via `docker stats` during an active upload is the reliable way to confirm before raising the cap again.
 
+## Fixed: `UPLOAD_LOCATION` was nested inside `DATA_ROOT`, so every backup archived the whole photo/video library
+
+**Symptom:** `uv run homeserver.py dev backup immich` (and any auto-snapshot on `down`) took a very long time and produced a huge `service_data.tar.gz`, dominated by the actual photo/video library rather than app config.
+
+**Root cause:** `UPLOAD_LOCATION=../service_data/data/immich/upload` was nested *inside* `DATA_ROOT` (`service_data/data/immich/`). `backup_service()` in `homeserver.py` tars the entire `DATA_ROOT` directory on every backup/auto-snapshot, so the whole `library/`/`thumbs/`/`encoded-video/`/`upload/` tree was being re-archived every time. Found via the identical bug on `jellyfin`'s `MEDIA_ROOT` — see `docs/services/jellyfin.md`.
+
+**Fix:** moved the upload tree to `service_data/uploads/immich/` — a sibling of `service_data/data/`, structurally outside anything `backup_service()` sweeps — and updated `UPLOAD_LOCATION` accordingly. The container's mount target (`/usr/src/app/upload`) didn't change, only the host-side source path. Confirmed intact after the move: 28,683 files still present under `library/` from inside the container, `immich-server`/`immich-db` both came back healthy. This convention is now documented in the `homeserver-add-service` skill (step 2) for any service with a second, large secondary data root.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
