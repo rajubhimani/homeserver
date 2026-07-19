@@ -47,6 +47,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Guacamole | [docs/services/guacamole.md](services/guacamole.md) |
 | Portainer CE | [docs/services/portainer.md](services/portainer.md) |
 | Dockge | [docs/services/dockge.md](services/dockge.md) |
+| Ollama + Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
 
 
 ---

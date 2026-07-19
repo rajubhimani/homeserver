@@ -115,7 +115,7 @@ SERVICES_EXTRA = [
     "dockge", "portainer", "uptime-kuma", "openproject", "paperless",
     "stirling-pdf-lite", "mealie",
     "syncthing", "authentik", "miniflux", "audiobookshelf",
-    "invoiceshelf", "appflowy", "plane",
+    "invoiceshelf", "appflowy", "plane", "ollama", "open-webui",
 ]
 
 # Manual-only — never started by 'up min/core/all' (or their down/restart/

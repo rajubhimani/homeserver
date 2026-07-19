@@ -18,6 +18,7 @@
 | [Paperless-ngx](docs/services/paperless.md) | Document management | Scansnap cloud |
 | [Stirling PDF](docs/services/stirling-pdf.md) | PDF toolkit | Adobe Acrobat |
 | [Mealie](docs/services/mealie.md) | Recipe manager | Recipe apps |
+| [Open WebUI + Ollama](docs/services/open-webui.md) | Local LLM chat interface | ChatGPT |
 | [Forgejo](docs/services/forgejo.md) | Git hosting | GitHub |
 | [GitLab CE](docs/services/gitlab.md) | Full DevOps platform | GitHub / GitLab.com |
 | [Uptime Kuma](docs/services/uptime-kuma.md) | Service monitoring | Pingdom |
@@ -169,6 +170,8 @@ uv run homeserver.py prod up all
 ├── plane/
 ├── invoiceshelf/
 ├── firefly/
+├── ollama/
+├── open-webui/
 └── beszel/
 ```
 
@@ -196,5 +199,7 @@ service_data/
 ├── plane/            (postgres/, uploads/, logs/)
 ├── invoiceshelf/     (db/, uploads/)
 ├── firefly/          (postgres/, upload/)
+├── ollama/           (empty — models live outside this tree, in service_data/models/ollama/, kept out of DATA_ROOT so backups don't sweep multi-GB model files)
+├── open-webui/       (data/)
 └── beszel/           (data/, socket/, agent/)
 ```

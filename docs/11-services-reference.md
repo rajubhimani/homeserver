@@ -23,7 +23,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 **Extra services** (started with `up all` or individually):
 dockge, portainer, uptime-kuma, openproject, paperless, stirling-pdf-lite,
 mealie, syncthing, authentik,
-miniflux, audiobookshelf, invoiceshelf, appflowy, plane.
+miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
@@ -59,12 +59,14 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
 | AppFlowy | `appflowy-nginx` | 8103 | 80 | extra |
 | Plane | `plane-proxy` | 8100 | 80 | extra |
+| Ollama | `ollama` | 8110 | 11434 | extra (`--profile docker-ollama`) |
+| Open WebUI | `open-webui` | 8109 | 8080 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | extra (manual) |
 | Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
 | Jellyfin Postgres test | `jellyfin-pgsql-test` | 8097 | 8096 | extra (manual) |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 / 81 (admin) | same | extra (optional) |
 
-**Next available ports:** web `8109`, SSH `2225`. Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8111`, SSH `2225`. Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -114,6 +116,7 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `plane.yourdomain.com` | `plane-proxy` | `80` | extra |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
 | `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | extra |
+| `open-webui.yourdomain.com` | `open-webui` | `8080` | extra |
 | `gitlab.yourdomain.com` | `gitlab` | `80` | extra (manual) |
 | `jellyfin-test.yourdomain.com` | `jellyfin-pgsql-test` | `8096` | extra (manual) |
 
