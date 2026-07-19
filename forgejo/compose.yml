@@ -25,7 +25,7 @@ services:
       - homeserver
 
   forgejo:
-    image: codeberg.org/forgejo/forgejo:15.0.4
+    image: codeberg.org/forgejo/forgejo:16.0.0
     container_name: forgejo
     restart: unless-stopped
     env_file: .env
@@ -42,6 +42,10 @@ services:
       FORGEJO__server__SSH_PORT: 2223
       FORGEJO__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
       FORGEJO__security__INSTALL_LOCK: "true"
+      # v16+ no longer trusts all proxies by default (was REVERSE_PROXY_TRUSTED_PROXIES=*
+      # in the image) — scope it to the internal Docker network so nginx-plain's
+      # X-Forwarded-For/X-Real-IP are still honored correctly.
+      FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES: 172.18.0.0/16
       FORGEJO__actions__ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
