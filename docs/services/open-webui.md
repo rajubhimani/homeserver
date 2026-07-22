@@ -33,6 +33,11 @@ or containerized, is never exposed publicly).
   `down`/`backup`) never sweeps up the model weights. See `MODELS_ROOT` in `ollama/.env`.
 - `service_data/data/open-webui/data/` — chat history, user accounts, settings (small, gets
   backed up normally).
+- `service_data/models/open-webui/cache/` — embedding model cache (`sentence-transformers/
+  all-MiniLM-L6-v2`, ~1.7GB once downloaded). Same reasoning as `ollama`'s `MODELS_ROOT`
+  above: kept outside `service_data/data/open-webui/` so it isn't re-archived on every
+  backup/snapshot. Fully regenerable — deleting it just re-downloads the model on next use.
+  See `MODELS_ROOT` in `open-webui/.env`.
 
 ## Setup (default: native host Ollama)
 
