@@ -10,6 +10,7 @@ services:
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
     volumes:
       - ${DATA_ROOT}/data:/app/backend/data
+      - ${MODELS_ROOT}:/app/backend/data/cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
