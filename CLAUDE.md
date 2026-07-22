@@ -8,6 +8,8 @@ A self-hosted personal cloud stack managed with Docker Compose. Each service liv
 
 There is no shell-script entrypoint — an earlier `homeserver.sh` was retired once `homeserver.py` reached full feature parity. Don't recreate one; that's a deliberate new decision to make with the user, not a default to fall back to.
 
+**Any change to a service's `.env` or `compose.yml` must land hand-in-hand with `.env.example` and `docs/services/<service>.md` in the same pass, never as a follow-up.** A code change that "works" but leaves `.env.example` stale (breaks a fresh clone) or the doc stale (silently wrong reference material) is not done — treat it the same as a missing test. This applies to every `.env`/compose edit, not just new-service setup or the specific pattern the `homeserver-add-service` skill walks through.
+
 ## Global configuration
 
 Set your domain and runtime once in the root `.env` — `homeserver.py` injects them into every service automatically:
