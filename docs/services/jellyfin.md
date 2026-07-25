@@ -70,6 +70,23 @@ Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct
 
 **Fix:** `uv run jellyfin/apply-tuning.py` (sets `ImageExtractionTimeoutMs` to `30000`, up from the ~10s default — override via `JELLYFIN_IMAGE_EXTRACTION_TIMEOUT_MS` in `.env`). Community reports (jellyfin.org forum, jellyfin/jellyfin#8440, #13116) confirm 30s as a commonly-needed value for HEVC/10-bit content under load; not yet confirmed long-term in this deployment, but the specific errors stopped appearing immediately after applying it.
 
+## Troubleshooting: playback stutters/hangs between frames in Firefox but not Chrome (HEVC content)
+
+**Symptom:** video judders or briefly hangs every ~10-60s during playback of HEVC/H.265 (x265) content, specifically in Firefox on Windows — the same title plays smoothly in Chrome/Edge. Server-side metrics look fine during the stutter (CPU low, disk idle, no ffmpeg errors/retries in `docker logs <jellyfin container>`).
+
+**Root cause:** Chrome has no HEVC support at all, so Jellyfin transcodes the video to H.264 for it — H.264 has universal hardware decode, so it's smooth. Firefox on Windows, however, can claim HEVC support via the OS's Media Foundation decoder, so Jellyfin sees that and sends the video with `-codec:v:0 copy` (direct stream, no transcode — confirmed via `docker logs`). Firefox's actual use of that OS decoder path is inconsistent and often falls back to software HEVC decode, which struggles with 10-bit HEVC at higher resolutions — the judder is client-side decode, not a server/network issue.
+
+**Fix:** disable Firefox's HEVC capability advertisement so Jellyfin transcodes to H.264 for it too, same as Chrome. The exact pref name has changed across Firefox versions, so set both:
+
+1. `about:config` → search `media.hevc.enabled` → set to `false`/`0`
+2. `about:config` → search `media.wmf.hevc.enabled` → set to `0`
+3. Fully quit Firefox (not just close the tab/window — HEVC capability is cached per-session) and relaunch.
+4. Reload the Jellyfin page fresh so it re-runs its `canPlayType()` capability probe against the server.
+
+Confirm the fix took by checking the ffmpeg command in `docker logs` — it should now show `-codec:v:0 libx264` (or similar) instead of `-codec:v:0 copy` for HEVC source content. Confirmed working in this deployment (`media.wmf.hevc.enabled` was the effective pref).
+
+If still direct-streaming after both prefs are set, Windows' own "HEVC Video Extensions" (Microsoft Store codec pack), if installed, can make Firefox report HEVC support independent of these prefs — uninstalling/disabling that extension is the next step, or just manually cap the stream quality/bitrate in the Jellyfin Web player's playback settings per-session as a workaround.
+
 ## Fixed: `MEDIA_ROOT` was nested inside `DATA_ROOT`, so every backup archived the whole media library
 
 **Symptom:** `uv run homeserver.py dev backup jellyfin` (and any auto-snapshot on `down`) took an extremely long time and produced a huge `service_data.tar.gz`, even though `config/` + `cache/` together are only ~3.5GB.
