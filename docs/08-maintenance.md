@@ -216,6 +216,63 @@ sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl
 
 ---
 
+## Reclaiming disk space (Docker Desktop on Windows / WSL2)
+
+Docker Desktop's WSL2 VHDX only grows, never shrinks automatically — even after you delete images/volumes, the backing disk file stays large until you reclaim it manually. Do this periodically if `C:` (or wherever the VHDX lives) is filling up.
+
+**1. Check what's actually using space, then prune.** Compacting only shrinks the file to match what's used *inside* it — pruning first is what makes compacting worthwhile:
+
+```powershell
+docker system df -v              # see what's using space, per image/container/volume
+docker system prune -a --volumes -f
+docker builder prune -a -f
+wsl --shutdown
+```
+
+> `--volumes` deletes unnamed/anonymous volumes too — this is safe for build caches and dangling layers, but double-check you don't have unmounted named volumes here you still want.
+
+**2. Find and check the current VHDX size.** The path/filename depends on Docker Desktop version:
+
+- Newer (4.20+, WSL disk mount): `%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx`
+- Older: `%LOCALAPPDATA%\Docker\wsl\data\ext4.vhdx`
+
+```powershell
+wsl --shutdown
+Get-Item "$env:LOCALAPPDATA\Docker\wsl\disk\docker_data.vhdx" | Select-Object Name, @{N='SizeGB';E={[math]::Round($_.Length/1GB,2)}}
+```
+
+**3. Compact it via `diskpart`:**
+
+```powershell
+wsl --shutdown
+diskpart
+```
+
+Inside the `diskpart` prompt:
+
+```text
+select vdisk file="C:\Users\<you>\AppData\Local\Docker\wsl\disk\docker_data.vhdx"
+attach vdisk readonly
+compact vdisk
+detach vdisk
+exit
+```
+
+Then re-run the `Get-Item` check from step 2 to confirm it shrank.
+
+**If `diskpart` barely shrinks it:** the newer `wsl\disk\` layout sometimes holds onto space more stubbornly than the older `ext4.vhdx` did. Export/reimport is more reliable there:
+
+```powershell
+wsl --shutdown
+wsl --export docker-desktop-data "D:\docker-backup.tar"
+wsl --unregister docker-desktop-data
+wsl --import docker-desktop-data "C:\Docker\wsl-data" "D:\docker-backup.tar" --version 2
+```
+
+After reimporting, open Docker Desktop → **Settings → Resources → Advanced** and confirm the disk image location points at the new import path — some versions recreate a fresh VHDX at the default location on next launch instead of picking up the import.
+
+---
+
 ## Troubleshooting
 
 Reactive fixes, keyed by symptom:
