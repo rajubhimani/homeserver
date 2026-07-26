@@ -49,7 +49,6 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Dockge | [docs/services/dockge.md](services/dockge.md) |
 | Ollama + Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
 
-
 ---
 
 [← Firewall](09-firewall.md) | [Home](../setup.md) | [Next: Services Reference →](11-services-reference.md)

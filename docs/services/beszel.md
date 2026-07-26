@@ -21,10 +21,12 @@ Two containers start: `beszel` (hub, web UI + storage) and `beszel-agent` (monit
 1. Browse to `http://<ip>:8106` — create the admin account on first launch
 2. Hub UI → **Add System** (or **Settings → Tokens** for a universal token) → copy the token + public key
 3. Set them in `beszel/.env`:
+
    ```bash
    BESZEL_AGENT_TOKEN=<token from hub>
    BESZEL_AGENT_KEY=<public key from hub>
    ```
+
 4. Restart: `uv run homeserver.py dev up beszel`
 
 The system indicator in the hub UI turns green once the agent connects.

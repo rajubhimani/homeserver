@@ -45,6 +45,7 @@ One-time setup after Firefly III is running:
 2. Redirect URL: `https://firefly-import.yourdomain.com/callback` — uncheck "Keep a secret?"
 3. Copy the resulting **Client ID** (a UUID like `019f0fc9-379d-73bf-bc43-7ec7c6fb4ac9`)
 4. Set `FIREFLY_III_CLIENT_ID=<uuid>` in `firefly/.env` and restart the importer:
+
    ```bash
    uv run homeserver.py prod up firefly
    ```

@@ -184,18 +184,22 @@ services:
 Use `max_connections=20` / cap `384M` for single-consumer services (most of them). Use `max_connections=50` / cap `512M` for services with multiple concurrent DB consumers (Nextcloud, Plane, Immich — each has more than one container talking to its DB).
 
 > **immich-db is a special case.** Its image (`ghcr.io/immich-app/postgres`) defaults to `Cmd: postgres -c config_file=/etc/postgresql/postgresql.conf` — that custom config file is required for pgvector/vectorchord's `shared_preload_libraries`. Any `command:` override on it must **keep** `-c config_file=/etc/postgresql/postgresql.conf` as the first flag and add tuning flags after it:
+>
 > ```yaml
 > command: postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
 > ```
+>
 > Before overriding `command:` on any vendor-customized Postgres image, check its real default first: `docker inspect <image> --format '{{.Config.Cmd}}'`. Overriding it blind can silently drop required flags.
 >
 > After changing a DB-only `command:`/`deploy:` block, you only need to recreate that one container — this is much faster than a full service restart, which would otherwise wait on every dependent container's healthcheck:
+>
 > ```bash
 > cd <service>/
 > DATA_ROOT="../service_data/<service>" DOMAIN="yourdomain.com" docker compose -f compose.yml -f compose.prod.yml up -d --no-deps <service>-db
 > ```
 >
 > Verify the tuning actually applied (don't just trust `docker ps`):
+>
 > ```bash
 > docker exec <service>-db psql -U <postgres-user> -c "SHOW max_connections; SHOW shared_buffers;"
 > ```
@@ -209,6 +213,7 @@ Use `max_connections=20` / cap `384M` for single-consumer services (most of them
 5. Save — takes effect immediately for new jobs, no restart needed.
 
 **4. If your swap is zram (common on modern Fedora/desktop setups), raise `vm.swappiness` instead of lowering it.** Check with `zramctl` and `swapon --show` — if your swap device is `/dev/zram0`, it's compressed RAM, not slow disk. The usual advice to keep swappiness low (Fedora's default is often already conservative, e.g. `10`) is aimed at disk-backed swap. For zram, a higher value (100-180) makes the kernel offload cold pages to it earlier, freeing real RAM sooner instead of waiting until the system is already under pressure:
+
 ```bash
 cat /proc/sys/vm/swappiness   # check current value
 sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl.d/ to persist)
