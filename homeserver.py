@@ -1285,15 +1285,18 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
         return False
     success("  restore complete")
 
+    up_ok = True
     if was_running:
-        do_up(service, env, profile)
+        up_ok = do_up(service, env, profile)
+        if not up_ok:
+            error(f"  restore succeeded but bringing {service} back up failed — the DB has your data, but check `dev logs {service}` and re-run `dev up {service}` yourself")
 
     old_full_vol = f"{service}_{old_vol}"
     warn(
         f"Old volume '{old_full_vol}' left in place — verify {service} actually works "
         f"(not just that it started), then remove it: docker volume rm {old_full_vol}"
     )
-    return True
+    return up_ok
 
 
 def do_logs(service: str, env: str) -> None:

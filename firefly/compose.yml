@@ -1,6 +1,6 @@
 services:
   firefly-db:
-    image: postgres:18.4
+    image: postgres:18.4-alpine
     container_name: firefly-db
     restart: unless-stopped
     env_file: .env
@@ -14,7 +14,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - firefly-postgres:/var/lib/postgresql
+      - firefly-postgres-alpine:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -118,7 +118,7 @@ services:
 
 volumes:
   firefly-importer-upload:
-  firefly-postgres:
+  firefly-postgres-alpine:
 
 networks:
   homeserver:
