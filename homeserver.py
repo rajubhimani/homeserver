@@ -54,8 +54,11 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 # service_data/data/<service>/  — live data, bind-mounted into containers
 # service_data/backup/<service>/<YYYYMMDD-HHMMSS>/  — timestamped snapshots
+# service_data/db_dump/<service>/<YYYYMMDD-HHMMSS>/  — logical Postgres dumps,
+#   used by 'migrate' (e.g. Debian->Alpine image migration) — see 'dump'/'migrate'
 SERVICE_DATA_ROOT = BASE_DIR / "service_data" / "data"
 BACKUP_ROOT = BASE_DIR / "service_data" / "backup"
+DB_DUMP_ROOT = BASE_DIR / "service_data" / "db_dump"
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -197,12 +200,40 @@ class DockerBackend(ABC):
     @abstractmethod
     def compose_up(
         self, files: list[Path], env: dict[str, str], profile: str | None,
-        force_recreate: bool = False, exclude: list[str] | None = None,
+        force_recreate: bool = False, exclude: list[str] | None = None, only: list[str] | None = None,
     ) -> tuple[bool, str]:
         """Returns (success, combined stdout+stderr) — the caller inspects the
         text for port-conflict/Podman-quirk patterns regardless of backend.
         exclude: container names to scale to 0 (started normally otherwise) —
-        e.g. immich-ml's --no-ml, see do_up."""
+        e.g. immich-ml's --no-ml, see do_up. only: start just these container
+        names instead of the whole project — e.g. do_migrate standing up a
+        fresh <service>-db alone before the app container touches it."""
+
+    @abstractmethod
+    def db_pg_dump(self, container: str, user: str, db: str) -> tuple[bool, bytes, str]:
+        """Runs pg_dump -F c (custom format) inside container, captured directly
+        via subprocess rather than writing to a container-internal path — see
+        do_dump for why (Windows/Git-Bash MSYS path-mangling on POSIX-looking
+        container paths). Returns (success, dump_bytes, stderr_text)."""
+
+    @abstractmethod
+    def db_pg_restore(self, container: str, user: str, db: str, dump: bytes) -> tuple[bool, str]:
+        """Streams dump_bytes into pg_restore inside container. Returns
+        (success, stderr_text)."""
+
+    @abstractmethod
+    def db_pg_dumpall_roles(self, container: str, user: str) -> tuple[bool, bytes, str]:
+        """Runs pg_dumpall --roles-only inside container — captures CREATE
+        ROLE definitions (with passwords), which a per-database pg_dump never
+        does since roles are cluster-wide, not database-scoped. Returns
+        (success, sql_bytes, stderr_text)."""
+
+    @abstractmethod
+    def db_psql_apply(self, container: str, user: str, db: str, sql: bytes) -> tuple[bool, str]:
+        """Streams plain SQL into psql inside container (no ON_ERROR_STOP —
+        used for the roles dump above, where 'role already exists' for
+        roles the fresh cluster's own initdb already created is expected
+        and harmless). Returns (success, stderr_text)."""
 
     @abstractmethod
     def compose_down(self, files: list[Path], env: dict[str, str], profile: str | None) -> bool: ...
@@ -272,14 +303,63 @@ class SubprocessBackend(DockerBackend):
             args += ["--profile", profile]
         return args
 
-    def compose_up(self, files, env, profile, force_recreate=False, exclude=None):
+    def compose_up(self, files, env, profile, force_recreate=False, exclude=None, only=None):
         args = self._compose_args(files, profile) + ["up", "-d"]
         if force_recreate:
             args.append("--force-recreate")
         for name in exclude or []:
             args += ["--scale", f"{name}=0"]
+        if only:
+            args += list(only)
         proc = self._run(args, env=env)
         return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
+
+    def db_pg_dump(self, container, user, db):
+        # Bytes mode (not _run's text=True) — custom-format dumps are binary.
+        proc = subprocess.run(
+            [RUNTIME, "exec", container, "pg_dump", "-U", user, "-d", db, "-F", "c"],
+            capture_output=True,
+        )
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
+    def db_pg_restore(self, container, user, db, dump):
+        # --clean --if-exists: the target is always a container we just
+        # created for this migration, so drop-then-recreate is safe even
+        # when the image's own docker-entrypoint-initdb.d/ already bootstrapped
+        # a schema (e.g. guacamole's 01-schema.sql) before the restore runs.
+        # --no-owner only (deliberately NOT --no-privileges): the dump's
+        # captured GRANT statements are exactly what a secondary role (e.g.
+        # Nextcloud's own ad-hoc 'oc_admin', not the connecting POSTGRES_USER)
+        # needs on these objects — stripping them left oc_admin able to log
+        # in (roles dump/apply handles that) but with zero table privileges.
+        # This only works because roles are applied *before* this restore
+        # runs (see do_migrate) — do that first or these GRANTs fail on a
+        # role that doesn't exist yet.
+        proc = subprocess.run(
+            [
+                RUNTIME, "exec", "-i", container, "pg_restore", "-U", user, "-d", db,
+                "--no-owner", "--clean", "--if-exists",
+            ],
+            input=dump, capture_output=True,
+        )
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def db_pg_dumpall_roles(self, container, user):
+        proc = subprocess.run(
+            [RUNTIME, "exec", container, "pg_dumpall", "-U", user, "--roles-only"],
+            capture_output=True,
+        )
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
+    def db_psql_apply(self, container, user, db, sql):
+        # No ON_ERROR_STOP: 'role already exists' for roles the fresh
+        # cluster's own initdb/POSTGRES_USER already created is expected —
+        # psql skips the failing statement and keeps applying the rest.
+        proc = subprocess.run(
+            [RUNTIME, "exec", "-i", container, "psql", "-U", user, "-d", db],
+            input=sql, capture_output=True,
+        )
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
     def compose_down(self, files, env, profile):
         proc = self._run(self._compose_args(files, profile) + ["down"], env=env)
@@ -397,17 +477,67 @@ class PythonOnWhalesBackend(DockerBackend):
             os.environ.clear()
             os.environ.update(old)
 
-    def compose_up(self, files, env, profile, force_recreate=False, exclude=None):
+    def compose_up(self, files, env, profile, force_recreate=False, exclude=None, only=None):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
         scales = {name: 0 for name in exclude} if exclude else None
         try:
             with self._env(env):
-                client.compose.up(detach=True, force_recreate=force_recreate, wait=False, scales=scales)
+                client.compose.up(detach=True, force_recreate=force_recreate, wait=False, scales=scales, services=only)
             return True, ""
         except DockerException as e:
             out = f"{e.stderr or ''}\n{e.stdout or ''}"
             return False, out
+
+    def db_pg_dump(self, container, user, db):
+        # Raw subprocess rather than python-on-whales here — this backend's
+        # main value (typed compose exceptions) doesn't apply to a plain
+        # binary-stdio docker exec, and both backends ending up identical
+        # for this one primitive is fine (see DockerBackend docstring).
+        proc = subprocess.run(
+            [RUNTIME, "exec", container, "pg_dump", "-U", user, "-d", db, "-F", "c"],
+            capture_output=True,
+        )
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
+    def db_pg_restore(self, container, user, db, dump):
+        # --clean --if-exists: the target is always a container we just
+        # created for this migration, so drop-then-recreate is safe even
+        # when the image's own docker-entrypoint-initdb.d/ already bootstrapped
+        # a schema (e.g. guacamole's 01-schema.sql) before the restore runs.
+        # --no-owner only (deliberately NOT --no-privileges): the dump's
+        # captured GRANT statements are exactly what a secondary role (e.g.
+        # Nextcloud's own ad-hoc 'oc_admin', not the connecting POSTGRES_USER)
+        # needs on these objects — stripping them left oc_admin able to log
+        # in (roles dump/apply handles that) but with zero table privileges.
+        # This only works because roles are applied *before* this restore
+        # runs (see do_migrate) — do that first or these GRANTs fail on a
+        # role that doesn't exist yet.
+        proc = subprocess.run(
+            [
+                RUNTIME, "exec", "-i", container, "pg_restore", "-U", user, "-d", db,
+                "--no-owner", "--clean", "--if-exists",
+            ],
+            input=dump, capture_output=True,
+        )
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def db_pg_dumpall_roles(self, container, user):
+        proc = subprocess.run(
+            [RUNTIME, "exec", container, "pg_dumpall", "-U", user, "--roles-only"],
+            capture_output=True,
+        )
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
+    def db_psql_apply(self, container, user, db, sql):
+        # No ON_ERROR_STOP: 'role already exists' for roles the fresh
+        # cluster's own initdb/POSTGRES_USER already created is expected —
+        # psql skips the failing statement and keeps applying the rest.
+        proc = subprocess.run(
+            [RUNTIME, "exec", "-i", container, "psql", "-U", user, "-d", db],
+            input=sql, capture_output=True,
+        )
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
     def compose_down(self, files, env, profile):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
@@ -660,6 +790,35 @@ def wait_healthy(service: str) -> bool:
     return False
 
 
+def wait_container_healthy(container: str, timeout: int = HEALTH_TIMEOUT) -> bool:
+    """Like wait_healthy but for one exact container name — no fuzzy matching,
+    used by do_migrate to wait on a freshly-started <service>-db alone."""
+    print(f"  {CYAN}waiting for {container} to be ready...", end="", flush=True)
+
+    elapsed = 0
+    interval = 5
+    while elapsed < timeout:
+        status = BACKEND.container_status(container) or ""
+        health = BACKEND.container_health(container)
+
+        if health == "healthy":
+            print(f" ready ({elapsed}s){RESET}")
+            return True
+        if health == "none" and status == "running":
+            print(f" ready ({elapsed}s){RESET}")
+            return True
+        if status in ("exited", "dead"):
+            print(f" exited{RESET}")
+            return False
+
+        time.sleep(interval)
+        elapsed += interval
+        print(".", end="", flush=True)
+
+    print(f" timeout after {timeout}s{RESET}")
+    return False
+
+
 # ── Backup / snapshots ───────────────────────────────────────────────
 
 
@@ -695,17 +854,31 @@ def backup_service(service: str) -> None:
     snap_dir.mkdir(parents=True, exist_ok=True)
     info(f"Backing up {service} -> service_data/backup/{service}/{ts}/")
 
+    # Timestamp in the filename too (not just the parent dir) so a file keeps
+    # its identity if ever copied/moved out of its snapshot folder.
     for v in vols:
-        if BACKEND.tar_volume_to(v, snap_dir, f"{v}.tar.gz"):
-            success(f"  {v} -> service_data/backup/{service}/{ts}/{v}.tar.gz")
+        fname = f"{v}_{ts}.tar.gz"
+        if BACKEND.tar_volume_to(v, snap_dir, fname):
+            success(f"  {v} -> service_data/backup/{service}/{ts}/{fname}")
         else:
             error(f"  failed to back up volume {v}")
 
     if service_data_dir.is_dir():
-        BACKEND.tar_dir_to(service_data_dir, snap_dir, "service_data.tar.gz")
-        success(f"  service_data -> service_data/backup/{service}/{ts}/service_data.tar.gz")
+        fname = f"service_data_{ts}.tar.gz"
+        BACKEND.tar_dir_to(service_data_dir, snap_dir, fname)
+        success(f"  service_data -> service_data/backup/{service}/{ts}/{fname}")
 
     prune_snapshots(service)
+
+
+def list_dumps(service: str) -> list[Path]:
+    """Dump directories for a service, oldest first — mirrors list_snapshots.
+    Not subject to BACKUP_RETENTION pruning: these are one-off manual dumps
+    for a migration, not part of the regular snapshot rotation."""
+    svc_dir = DB_DUMP_ROOT / service
+    if not svc_dir.is_dir():
+        return []
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir())
 
 
 def do_snapshots(service: str) -> None:
@@ -891,8 +1064,15 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
 
     info(f"Restoring {service} from snapshot {backup_dir.name}...")
     ok = True
+    ts_suffix = f"_{backup_dir.name}"
     for f in sorted(backup_dir.glob("*.tar.gz")):
         base = f.name[: -len(".tar.gz")]
+        # Newer snapshots suffix the filename with the timestamp too (e.g.
+        # 'service_data_20260730-071152.tar.gz') — strip it to recover the
+        # plain name. Older snapshots (pre-dating this) have no suffix, so
+        # this is a no-op for them — both forms restore correctly.
+        if base.endswith(ts_suffix):
+            base = base[: -len(ts_suffix)]
         if base == "service_data":
             service_data_dir = SERVICE_DATA_ROOT / service
             if BACKEND.untar_into_dir(f, service_data_dir):
@@ -915,6 +1095,205 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
         do_up(service, env, profile)
 
     return ok
+
+
+def do_dump(service: str, env: str, profile: str | None) -> bool:
+    """Logical pg_dump of <service>-db into service_data/db_dump/<service>/<ts>/
+    — the source dump 'migrate' restores from for a Debian->Alpine (or any
+    other Postgres image) migration. Requires the DB container running."""
+    db_container = f"{service}-db"
+    if BACKEND.container_status(db_container) != "running":
+        error(f"{db_container} is not running — start {service} first")
+        return False
+
+    service_env = load_env_file(BASE_DIR / service / ".env")
+    user = service_env.get("POSTGRES_USER")
+    db = service_env.get("POSTGRES_DB")
+    if not user or not db:
+        error(f"{service}/.env has no POSTGRES_USER/POSTGRES_DB — not a standard Postgres service")
+        return False
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    dump_dir = DB_DUMP_ROOT / service / ts
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    # Timestamp in the filename too (not just the parent dir) — same
+    # reasoning as backup_service, so the file keeps its identity if ever
+    # copied out of its dump folder.
+    fname = f"{service}_{ts}.dump"
+    dump_file = dump_dir / fname
+
+    info(f"Dumping {db_container} ({user}/{db}) -> service_data/db_dump/{service}/{ts}/{fname}")
+    ok, data, err = BACKEND.db_pg_dump(db_container, user, db)
+    if not ok:
+        error(f"  pg_dump failed: {err}")
+        return False
+
+    dump_file.write_bytes(data)
+    success(f"  dumped {len(data):,} bytes")
+
+    # Roles are cluster-wide, not captured by the per-database dump above —
+    # an app can authenticate as a role that isn't POSTGRES_USER (e.g. one
+    # created ad-hoc during its own first-run setup, like Nextcloud's
+    # 'oc_admin'), and without this that role silently never gets recreated
+    # in a migrated/restored cluster. Best-effort: don't fail the whole dump
+    # if this one part doesn't work, since pg_dump above already succeeded.
+    roles_ok, roles_data, roles_err = BACKEND.db_pg_dumpall_roles(db_container, user)
+    if roles_ok:
+        roles_file = dump_dir / f"{service}_roles_{ts}.sql"
+        roles_file.write_bytes(roles_data)
+        success(f"  dumped roles ({len(roles_data):,} bytes)")
+    else:
+        warn(f"  pg_dumpall --roles-only failed (continuing without it): {roles_err}")
+
+    return True
+
+
+def do_migrate(service: str, env: str, profile: str | None, image_override: str | None = None) -> bool:
+    """Migrate <service>-db to a different Postgres image using the latest
+    dump from 'dump' — never reuses the old volume's data files directly
+    (glibc/musl collation mismatch risk), see homeserver-postgres skill.
+    Stops the service, swaps compose.yml's image tag and renames the
+    postgres volume, starts the DB alone on a fresh volume, restores the
+    dump into it, then brings the rest of the service back up. Leaves the
+    old volume in place — remove it manually once you've verified this
+    worked (see the message printed at the end).
+
+    image_override (--image): explicit target tag or full 'repo:tag'. Without
+    it, the image line must be the plain official 'postgres:<tag>' (no
+    registry/path prefix) and the default transform is appending '-alpine'.
+    A prefixed image (a custom/extended build, e.g. immich's vectorchord/
+    pgvector fork) is never auto-inferred — there's no way to know whether
+    that specific fork even publishes an alpine (or any other) variant, so
+    --image is required for those."""
+    dumps = list_dumps(service)
+    if not dumps:
+        error(f"No dump found for {service} — run 'dump {service}' first")
+        return False
+    dump_files = sorted(dumps[-1].glob("*.dump"))
+    if not dump_files:
+        error(f"Dump file missing in {dumps[-1]}")
+        return False
+    dump_file = dump_files[0]
+
+    compose_path = BASE_DIR / service / "compose.yml"
+    if not compose_path.is_file():
+        error(f"{compose_path} not found")
+        return False
+    text = compose_path.read_text(encoding="utf-8")
+
+    # Captures an optional registry/path prefix separately from the bare
+    # "postgres" repo name, so the plain official image (no prefix) and a
+    # custom/extended fork (any prefix) can be told apart and handled
+    # differently — see image_override docs above.
+    m = re.search(r"image:\s*((?:[\w./-]+/)?postgres):([\w.-]+)\n", text)
+    if not m:
+        error(f"No '.../postgres:<tag>' image line found in {service}/compose.yml — not a Postgres service")
+        return False
+    repo, tag = m.group(1), m.group(2)
+    old_full = f"{repo}:{tag}"
+
+    if image_override:
+        new_full = image_override if ":" in image_override else f"{repo}:{image_override}"
+        if new_full == old_full:
+            error(f"{service}-db is already on {old_full}")
+            return False
+        new_tag = new_full.split(":", 1)[1]  # only used for the volume-name suffix below
+    elif repo != "postgres":
+        error(
+            f"{service}-db uses a custom Postgres image ({old_full}) — auto '-alpine' inference only "
+            "applies to the plain official image. Specify the target explicitly: --image <repo:tag>"
+        )
+        return False
+    elif tag.endswith("-alpine"):
+        error(f"{service}-db is already on an alpine tag ({old_full}) — pass --image for a different target")
+        return False
+    else:
+        new_tag = f"{tag}-alpine"
+        new_full = f"{repo}:{new_tag}"
+
+    vol_m = re.search(r"-\s*([\w-]+):/var/lib/postgresql\b", text)
+    if not vol_m:
+        error(f"Could not find the Postgres volume mount (:/var/lib/postgresql) in {service}/compose.yml")
+        return False
+    old_vol = vol_m.group(1)
+    # Keep the plain '-alpine' suffix for the default case (matches the
+    # already-established naming on forgejo/guacamole/nextcloud); a custom
+    # --image target gets its sanitized tag as the suffix instead, since
+    # 'alpine' alone wouldn't mean anything for e.g. a version bump.
+    vol_suffix = "alpine" if new_tag == f"{tag}-alpine" else re.sub(r"[^a-zA-Z0-9]+", "-", new_tag).strip("-")
+    new_vol = f"{old_vol}-{vol_suffix}"
+
+    service_env = load_env_file(BASE_DIR / service / ".env")
+    user = service_env.get("POSTGRES_USER")
+    db = service_env.get("POSTGRES_DB")
+    if not user or not db:
+        error(f"{service}/.env has no POSTGRES_USER/POSTGRES_DB")
+        return False
+
+    info(f"Migrating {service}-db: {old_full} -> {new_full} (volume {old_vol} -> {new_vol})")
+
+    was_running = service in get_running_services()
+    do_down(service, env, profile, no_backup=False)
+
+    # Two targeted, anchored substitutions rather than a blanket rename of
+    # every occurrence of old_vol — avoids accidentally touching another
+    # volume name that happens to share old_vol as a prefix.
+    new_text = text.replace(f"image: {old_full}", f"image: {new_full}", 1)
+    new_text, n1 = re.subn(
+        rf"^(\s*-\s*){re.escape(old_vol)}(:/var/lib/postgresql\b)", rf"\g<1>{new_vol}\g<2>",
+        new_text, count=1, flags=re.MULTILINE,
+    )
+    new_text, n2 = re.subn(
+        rf"^(\s*){re.escape(old_vol)}(:\s*)$", rf"\g<1>{new_vol}\g<2>",
+        new_text, count=1, flags=re.MULTILINE,
+    )
+    if n1 == 0 or n2 == 0:
+        error(f"Couldn't safely rename volume '{old_vol}' in compose.yml (mount line found: {bool(n1)}, declaration found: {bool(n2)}) — aborting before writing anything")
+        return False
+    compose_path.write_text(new_text, encoding="utf-8")
+
+    files = compose_files(service, env)
+    cenv = compose_env(service)
+    db_container = f"{service}-db"
+
+    info(f"Starting fresh {db_container} on the new volume...")
+    ok, out = BACKEND.compose_up(files, cenv, None, only=[db_container])
+    if not ok:
+        error(f"  failed to start {db_container}: {out}")
+        return False
+    if not wait_container_healthy(db_container):
+        error(f"  {db_container} did not become healthy on the fresh volume")
+        return False
+
+    # Apply the roles dump (if 'dump' captured one) before the main restore,
+    # so any role the app authenticates as beyond POSTGRES_USER (e.g.
+    # Nextcloud's ad-hoc 'oc_admin') exists before the app ever tries to
+    # connect. Best-effort — older dumps predating this fix won't have one.
+    roles_files = sorted(dumps[-1].glob("*_roles_*.sql"))
+    if roles_files:
+        info(f"Applying roles from {roles_files[0].name}...")
+        ok, err = BACKEND.db_psql_apply(db_container, user, db, roles_files[0].read_bytes())
+        if not ok:
+            warn(f"  applying roles had issues (continuing — 'role already exists' for POSTGRES_USER/postgres is expected): {err}")
+        else:
+            success("  roles applied")
+
+    info(f"Restoring {dump_file.parent.name} into {db_container}...")
+    ok, err = BACKEND.db_pg_restore(db_container, user, db, dump_file.read_bytes())
+    if not ok:
+        error(f"  pg_restore failed: {err}")
+        return False
+    success("  restore complete")
+
+    if was_running:
+        do_up(service, env, profile)
+
+    old_full_vol = f"{service}_{old_vol}"
+    warn(
+        f"Old volume '{old_full_vol}' left in place — verify {service} actually works "
+        f"(not just that it started), then remove it: docker volume rm {old_full_vol}"
+    )
+    return True
 
 
 def do_logs(service: str, env: str) -> None:
@@ -976,6 +1355,10 @@ def show_help() -> None:
     print("    python homeserver.py dev restore mealie              restore the latest snapshot")
     print("    python homeserver.py dev restore mealie --snapshot 20260710-160628")
     print("                                                         restore a specific snapshot")
+    print("    python homeserver.py dev dump forgejo                logical pg_dump -> service_data/db_dump/forgejo/<ts>/")
+    print("    python homeserver.py dev migrate forgejo             migrate forgejo-db to postgres-alpine using the latest dump")
+    print("    python homeserver.py dev migrate immich --image ghcr.io/immich-app/postgres:18-vectorchord0.6.0-pgvector0.9.0")
+    print("                                                         explicit target — required for non-official Postgres images")
     print()
     print(f"  {BOLD}MIN (infrastructure):{RESET}")
     print(f"    {' '.join(SERVICES_MIN)}")
@@ -1022,6 +1405,10 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
                 success(f"{service} backed up")
             elif action_fn is do_restore:
                 success(f"{service} restored")
+            elif action_fn is do_dump:
+                success(f"{service} dumped")
+            elif action_fn is do_migrate:
+                success(f"{service} migrated")
         print()
 
     print(f"{BOLD}{'━' * 40}{RESET}")
@@ -1054,8 +1441,14 @@ def main() -> int:
         show_help()
         return 1
 
-    if action not in ("up", "-u", "down", "-d", "restart", "-r", "logs", "update", "backup", "restore", "snapshots"):
-        error(f"Unknown action '{action}' — use up, down, restart, logs, update, backup, restore, or snapshots")
+    if action not in (
+        "up", "-u", "down", "-d", "restart", "-r", "logs", "update",
+        "backup", "restore", "snapshots", "dump", "migrate",
+    ):
+        error(
+            "Unknown action "
+            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, or migrate"
+        )
         show_help()
         return 1
 
@@ -1064,6 +1457,7 @@ def main() -> int:
     no_backup = False
     no_ml = False
     snapshot: str | None = None
+    image_flag: str | None = None
     run_all = run_core = run_min = run_running = False
 
     i = 0
@@ -1085,6 +1479,12 @@ def main() -> int:
                 error("--snapshot requires a timestamp (e.g. --snapshot 20260710-160628)")
                 return 1
             snapshot = rest[i]
+        elif tok == "--image":
+            i += 1
+            if i >= len(rest):
+                error("--image requires a tag or repo:tag (e.g. --image postgres:18.4-alpine)")
+                return 1
+            image_flag = rest[i]
         elif tok == "all":
             run_all = True
         elif tok == "core":
@@ -1111,6 +1511,17 @@ def main() -> int:
         if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_min or run_running:
             error("--no-ml is only valid with 'up immich' on its own (excludes immich-ml)")
             return 1
+
+    if action == "migrate" and (run_all or run_core or run_min or run_running):
+        error("migrate only works against explicitly named services, e.g. 'dev migrate forgejo' — no tier-wide migration")
+        return 1
+
+    if image_flag and action != "migrate":
+        error("--image is only valid with the migrate action")
+        return 1
+    if image_flag and len(services_to_run) != 1:
+        error("--image is only valid when migrating exactly one service")
+        return 1
 
     if action in ("up", "-u"):
         ensure_network()
@@ -1228,6 +1639,25 @@ def main() -> int:
             return 1
         for service in services_to_run:
             do_snapshots(service)
+
+    elif action == "dump":
+        if run_all:
+            header("Dumping all running services' databases to service_data/db_dump/...")
+            run_list(do_dump, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+        elif run_core:
+            header("Dumping core services' databases...")
+            run_list(do_dump, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+        elif run_min:
+            header("Dumping min services' databases...")
+            run_list(do_dump, SERVICES_MIN + services_to_run, env, profile, "Min services")
+        else:
+            header("Dumping databases...")
+            run_list(do_dump, services_to_run, env, profile, "Services")
+
+    elif action == "migrate":
+        ensure_network()
+        header(f"Migrating database{' to ' + image_flag if image_flag else ' to postgres-alpine'}...")
+        run_list(do_migrate, services_to_run, env, profile, "Services", extra=image_flag)
 
     return 0
 

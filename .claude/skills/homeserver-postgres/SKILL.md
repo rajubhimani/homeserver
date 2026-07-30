@@ -44,6 +44,27 @@ docker run --rm -v <service>_<volname>:/to alpine sh -c "chown -R 999:999 /to &&
 
 **Don't invent ad-hoc `<name>.bak-<timestamp>` folders** next to live data as a manual safety copy — use `backup`/`snapshots` instead (see `homeserver-backups` skill). That ad-hoc pattern predates the snapshot system and just leaves untracked copies nothing prunes or lists.
 
+## Migrating a Postgres container to a different image (e.g. Debian-based to `-alpine`)
+
+**Never just swap the image tag on an existing volume** — Postgres bakes the OS's collation library into the data directory at `initdb` time, and Debian (glibc) vs Alpine (musl) don't agree on collation versions. Reusing the old volume under the new image silently leaves indexes sorted under a stale collation, corrupting sorted/text indexes without an obvious error (see [docker-library/postgres#327](https://github.com/docker-library/postgres/issues/327)). The only safe path is a logical migration: dump the old cluster, `initdb` a genuinely fresh volume under the new image, restore into it, verify, then remove the old volume.
+
+This is built into `homeserver.py` as two commands — use these, don't hand-roll the process:
+
+```bash
+uv run homeserver.py dev dump <service>       # pg_dump + pg_dumpall --roles-only -> service_data/db_dump/<service>/<ts>/
+uv run homeserver.py dev migrate <service>    # stop, swap image to postgres-alpine + rename volume, fresh DB-only
+                                               # start, apply roles, restore, bring the rest back up
+uv run homeserver.py dev migrate <service> --image <repo:tag>   # explicit target instead of the -alpine default
+```
+
+`migrate` only auto-infers `-alpine` for the plain official `postgres:<tag>` image (no registry/path prefix) — a custom/extended image (e.g. `immich`'s `ghcr.io/immich-app/postgres` with vectorchord/pgvector baked in) requires `--image` explicitly, since there's no way to know whether that specific fork even publishes an alpine (or any other) variant; it refuses to guess. The old volume is never auto-removed — `migrate` prints the exact `docker volume rm` command to run once you've verified (not just "it started" — hit a real API endpoint that reflects actual pre-migration data, a healthy DB-ping isn't enough) it worked.
+
+**Gotchas already handled by `dump`/`migrate`, discovered migrating forgejo/guacamole/nextcloud/jellyfin-pgsql-test — know these exist even though you don't need to work around them by hand:**
+- An image whose `docker-entrypoint-initdb.d/` bootstraps its own schema (e.g. guacamole's `01-schema.sql`) collides with the dump trying to recreate the same objects on restore — the restore always runs with `--clean --if-exists`.
+- An app authenticating as a DB role other than `POSTGRES_USER` (e.g. Nextcloud's own ad-hoc `oc_admin`, created during its first-run setup and never part of any tracked init script) — a per-database dump never captures roles at all (they're cluster-wide), so `dump` also runs `pg_dumpall --roles-only` and `migrate` applies it before the main restore. See `docs/services/nextcloud.md`'s "Migrated: nextcloud-db..." section for the full incident (Nextcloud crash-looped on `SQLSTATE[08006]: password authentication failed for user "oc_admin"` before this was fixed).
+
+See `docs/services/forgejo.md`'s "Migrated: forgejo-db..." section for the original worked example (before this was built into `homeserver.py`) if you want the full narrative.
+
 ## Memory tuning (required on resource-constrained hosts)
 
 Every DB container should get a `command:` override with real tuning parameters, plus a `deploy.resources.limits.memory` cgroup cap as a backstop — not the cap alone. A hard memory cap without tuning the app's own settings just means the DB tries to use more than the cap and gets OOM-killed under load; tuning the engine's own settings down means it rarely approaches the cap at all.

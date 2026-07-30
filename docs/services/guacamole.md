@@ -117,6 +117,12 @@ ORDER BY c.connection_name;
 docker exec guacd sh -c 'nc -z -v -w 3 <target-ip> <port>'
 ```
 
+## Migrated: `guacamole-db` from `postgres:18.4` to `postgres:18.4-alpine`
+
+Via `uv run homeserver.py dev dump guacamole` + `dev migrate guacamole` — see `docs/services/forgejo.md`'s "Migrated: forgejo-db..." section for the full process.
+
+**Guacamole-specific gotcha hit here:** `guacamole-db`'s `postgres-init/01-schema.sql` bootstraps the *entire* Guacamole schema on first boot (unlike forgejo's init script, which only grants permissions) — so the fresh Alpine cluster already had all the tables/types before the restore even ran, and `pg_restore` errored on every `CREATE TYPE`/`CREATE TABLE` colliding with what `initdb` had already created. This is why the restore now always runs with `--clean --if-exists`, safe here specifically because the target is always a container created fresh for the migration.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

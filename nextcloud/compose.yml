@@ -1,6 +1,6 @@
 services:
   nextcloud-db:
-    image: postgres:18.4
+    image: postgres:18.4-alpine
     container_name: nextcloud-db
     restart: unless-stopped
     env_file: .env
@@ -14,7 +14,7 @@ services:
         limits:
           memory: 512M
     volumes:
-      - nextcloud-postgres:/var/lib/postgresql
+      - nextcloud-postgres-alpine:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -102,7 +102,7 @@ services:
 
 volumes:
   nextcloud-html:
-  nextcloud-postgres:
+  nextcloud-postgres-alpine:
   nextcloud-config:
   nextcloud-data:
   nextcloud-custom-apps:

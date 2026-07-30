@@ -1,6 +1,6 @@
 services:
   jellyfin-pgsql-test-db:
-    image: postgres:18.4
+    image: postgres:18.4-alpine
     container_name: jellyfin-pgsql-test-db
     restart: unless-stopped
     env_file: .env
@@ -14,7 +14,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - jellyfin-pgsql-test-postgres:/var/lib/postgresql
+      - jellyfin-pgsql-test-postgres-alpine:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -47,7 +47,7 @@ services:
       - homeserver
 
 volumes:
-  jellyfin-pgsql-test-postgres:
+  jellyfin-pgsql-test-postgres-alpine:
 
 networks:
   homeserver:

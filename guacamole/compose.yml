@@ -1,6 +1,6 @@
 services:
   guacamole-db:
-    image: postgres:18.4
+    image: postgres:18.4-alpine
     container_name: guacamole-db
     restart: unless-stopped
     env_file: .env
@@ -14,7 +14,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - guacamole-postgres:/var/lib/postgresql
+      - guacamole-postgres-alpine:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -89,7 +89,7 @@ services:
       - homeserver
 
 volumes:
-  guacamole-postgres:
+  guacamole-postgres-alpine:
 
 networks:
   homeserver:

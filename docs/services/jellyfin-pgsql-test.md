@@ -63,6 +63,10 @@ This instance's `MEDIA_ROOT` points at `service_data/media/jellyfin/` — the re
 
 Same bug and fix as the real jellyfin instance (see `jellyfin.md`'s "Fixed: `config/metadata` cache was also nested inside `DATA_ROOT`" section) — this instance's own scans populate its own separate `config/metadata/` (it doesn't share metadata with the real jellyfin), and it had grown to 1.4GB before being caught. Added `METADATA_ROOT=../service_data/cache/jellyfin-pgsql-test/metadata`, mounted over `/config/metadata` as a second bind mount. Fully regenerable — re-downloads from providers on next scan.
 
+## Migrated: `jellyfin-pgsql-test-db` from `postgres:18.4` to `postgres:18.4-alpine`
+
+Via `uv run homeserver.py dev dump jellyfin-pgsql-test` + `dev migrate jellyfin-pgsql-test` — see `docs/services/forgejo.md`'s "Migrated: forgejo-db..." section for the full process. Clean run, no service-specific gotchas — the fixes already baked into `dump`/`migrate` from migrating forgejo/guacamole/nextcloud first (roles dump/apply before restore, `--clean --if-exists --no-owner` on restore) covered everything here.
+
 ## Landing page integration
 
 This instance intentionally does **not** get its own landing-page card. It's a secondary link on the real Jellyfin card (`card-link-secondary`, `data-testsub="jellyfin-test"` in `landing/index.html`), labeled with a small "TEST" badge, resolved to `https://jellyfin-test.${DOMAIN}` by the same `applyDomain()` JS that handles every other card's main link. It does **not** get a live status dot — the landing page's health-check/online-offline-tab-sorting architecture is strictly one-status-per-card, and wiring a second live indicator into that would need real changes to `checkService()`/`placeCard()`, which was out of scope for what's essentially a low-stakes manual test service. A `/health/jellyfin-pgsql-test` route does exist in `landing/nginx.conf`/`landing/nginx.podman.conf` if that's ever revisited.
