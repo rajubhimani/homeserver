@@ -109,10 +109,10 @@ if os.path.exists(DOCKER_SOCKET):
 
 SERVICES_MIN = ["dozzle", "beszel", "cloudflared", "nginx-plain", "landing"]
 
-SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole"]
+SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole", "portainer"]
 
 SERVICES_EXTRA = [
-    "dockge", "portainer", "uptime-kuma", "openproject", "paperless",
+    "dockge", "uptime-kuma", "openproject", "paperless",
     "stirling-pdf-lite", "mealie",
     "syncthing", "authentik", "miniflux", "audiobookshelf",
     "invoiceshelf", "appflowy", "plane", "ollama", "open-webui",

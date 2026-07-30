@@ -15,13 +15,13 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | dozzle, beszel, cloudflared, nginx-plain, landing |
-| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole |
+| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, portainer |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
 `down all` always stops everything in reverse order — no list to maintain.
 
 **Extra services** (started with `up all` or individually):
-dockge, portainer, uptime-kuma, openproject, paperless, stirling-pdf-lite,
+dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
 mealie, syncthing, authentik,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui.
 
@@ -45,8 +45,8 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Immich | `immich-server` | 2283 | 2283 | core |
 | Jellyfin | `jellyfin` | 8096 | 8096 | core |
 | Guacamole | `guacamole` | 8107 | 8080 | core |
+| Portainer | `portainer` | 9000 / 9443 | 9000 / 9443 | core |
 | Dockge | `dockge` | 5001 | 5001 | extra |
-| Portainer | `portainer` | 9000 / 9443 | 9000 / 9443 | extra |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |
 | Paperless-ngx | `paperless` | 8010 | 8000 | extra |
