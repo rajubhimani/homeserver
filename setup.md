@@ -180,9 +180,9 @@ Service data (gitignored):
 ```text
 service_data/
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
-├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/uploads/immich/ (kept out of DATA_ROOT so backups don't sweep it)
-├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/ (same reason)
-├── jellyfin-pgsql-test/ (config/, cache/) — manual-only test instance, see docs/services/jellyfin-pgsql-test.md; reuses jellyfin's media read-only
+├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
+├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
+├── jellyfin-pgsql-test/ (config/, cache/) — manual-only test instance, see docs/services/jellyfin-pgsql-test.md; reuses jellyfin's media read-only, own metadata cache in service_data/cache/jellyfin-pgsql-test/metadata/
 ├── vaultwarden/      (data/)
 ├── paperless/        (postgres/, app/)
 ├── stirling-pdf/     (configs/, logs/, customFiles/, pipeline/, tessdata/)
@@ -199,7 +199,7 @@ service_data/
 ├── plane/            (postgres/, uploads/, logs/)
 ├── invoiceshelf/     (db/, uploads/)
 ├── firefly/          (postgres/, upload/)
-├── ollama/           (empty — models live outside this tree, in service_data/models/ollama/, kept out of DATA_ROOT so backups don't sweep multi-GB model files)
-├── open-webui/       (data/)
+├── ollama/           (empty — models live outside this tree, in service_data/cache/ollama/, kept out of DATA_ROOT so backups don't sweep multi-GB model files)
+├── open-webui/       (data/) — embedding model cache lives outside this tree, in service_data/cache/open-webui/cache/ (same reason)
 └── beszel/           (data/, socket/, agent/)
 ```

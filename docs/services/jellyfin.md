@@ -95,6 +95,14 @@ If still direct-streaming after both prefs are set, Windows' own "HEVC Video Ext
 
 **Fix:** moved media out to `service_data/media/jellyfin/` — a sibling of `service_data/data/`, structurally outside anything `backup_service()` sweeps — and updated `MEDIA_ROOT` accordingly. The container's mount target (`/media`) didn't change, only the host-side source path, so no library rescan was needed; Jellyfin's internal paths are relative to the container mount point, not the host path. Confirmed fix: a backup taken after the move completed immediately with no media in the archive. This is now a documented convention (see the `homeserver-add-service` skill, step 2) for any service with a second, large secondary data root — `immich`'s `UPLOAD_LOCATION` had the identical bug, fixed the same way (see `docs/services/immich.md`); `dockge`'s `DOCKGE_STACKS_DIR` had the same pattern too (fixed, though it had no live deployment to migrate).
 
+## Fixed: `config/metadata` cache was also nested inside `DATA_ROOT`
+
+**Symptom:** even after the `MEDIA_ROOT` fix above, `down all`/backup snapshots were still slow — `service_data/data/jellyfin/config/metadata` (downloaded poster/fanart/NFO cache) had grown to 1.2GB and was still being fully re-archived on every backup.
+
+**Root cause:** unlike `MEDIA_ROOT`, this directory isn't a top-level `.env` var — Jellyfin populates `config/metadata/` on its own during library scans (same class of issue as `open-webui`'s embedding-model cache, see the `homeserver-add-service` skill step 2's retrofit note). It was never flagged because it's a subdirectory of `config/`, not a separate declared root.
+
+**Fix:** added a new `METADATA_ROOT` env var (`../service_data/cache/jellyfin/metadata`), mounted over `/config/metadata` as a second bind mount layered on top of the `/config` mount in `compose.yml`. Moved the existing 1.2GB directory to the new path before restarting — no rescan needed, same reasoning as the `MEDIA_ROOT` fix (container-side path unchanged). Fully regenerable if ever lost: Jellyfin re-downloads metadata from providers (TMDB etc.) on the next library scan.
+
 ## See also: Postgres-backend test instance
 
 [`docs/services/jellyfin-pgsql-test.md`](jellyfin-pgsql-test.md) — a separate, manual-only Jellyfin instance running on a community Postgres fork, built specifically to test whether Postgres avoids the `OptimisticLockBehavior` write-stall documented above. Confirmed a real bug in that fork along the way (crash-loops on restart once it has data) — see that doc for the full investigation.

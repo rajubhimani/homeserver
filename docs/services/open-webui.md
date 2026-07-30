@@ -27,17 +27,19 @@ or containerized, is never exposed publicly).
 ## Data paths
 
 - `service_data/data/ollama/` — unused placeholder; the `ollama` container keeps no state here.
-- `service_data/models/ollama/` — **downloaded models** (can be tens of GB), only used if
+- `service_data/cache/ollama/` — **downloaded models** (can be tens of GB), only used if
   running the `docker-ollama` profile. Deliberately outside `service_data/data/ollama/` so
   `homeserver.py`'s backup/snapshot step (which tars the whole `DATA_ROOT` on every
-  `down`/`backup`) never sweeps up the model weights. See `MODELS_ROOT` in `ollama/.env`.
+  `down`/`backup`) never sweeps up the model weights. Grouped under `service_data/cache/`
+  alongside other services' regenerable caches. See `MODELS_ROOT` in `ollama/.env`.
 - `service_data/data/open-webui/data/` — chat history, user accounts, settings (small, gets
   backed up normally).
-- `service_data/models/open-webui/cache/` — embedding model cache (`sentence-transformers/
+- `service_data/cache/open-webui/cache/` — embedding model cache (`sentence-transformers/
   all-MiniLM-L6-v2`, ~1.7GB once downloaded). Same reasoning as `ollama`'s `MODELS_ROOT`
   above: kept outside `service_data/data/open-webui/` so it isn't re-archived on every
   backup/snapshot. Fully regenerable — deleting it just re-downloads the model on next use.
-  See `MODELS_ROOT` in `open-webui/.env`.
+  Grouped under `service_data/cache/` alongside other services' regenerable caches (e.g.
+  jellyfin's `METADATA_ROOT`). See `MODELS_ROOT` in `open-webui/.env`.
 
 ## Setup (default: native host Ollama)
 

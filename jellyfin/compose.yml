@@ -8,6 +8,7 @@ services:
       - ${DATA_ROOT}/config:/config
       - ${DATA_ROOT}/cache:/cache
       - ${MEDIA_ROOT}:/media:ro
+      - ${METADATA_ROOT}:/config/metadata
     networks:
       - homeserver
 
