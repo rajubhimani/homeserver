@@ -43,19 +43,11 @@ uv run homeserver.py dev up immich
 
 Admin account is created on first browser visit — no env var needed. Immich does not support creating the admin account via env vars.
 
-## Machine Learning (optional)
+## Machine Learning
 
-Enables facial recognition and smart search. Disabled by default via `profiles: [ml]` to save RAM.
+Enables facial recognition and smart search. `immich-ml` is a normal, always-included service now (no `profiles:` gate) — `up immich` starts it automatically. In UI: `Admin → Machine Learning → toggle on → Save`, then run initial jobs under `Admin → Jobs`: Smart Search → Run All, Face Detection → Run All.
 
-**Enable:**
-
-```bash
-uv run homeserver.py dev up immich --profile ml
-```
-
-Then in UI: `Admin → Machine Learning → toggle on → Save`. Run initial jobs under `Admin → Jobs`: Smart Search → Run All, Face Detection → Run All.
-
-**Disable in UI** (recommended for low-resource setups): `Admin → Administration → Machine Learning → toggle off → Save`.
+**To exclude it** (low-resource setups that don't want the RAM/CPU cost): `uv run homeserver.py dev up immich --no-ml` — starts every other immich container but scales `immich-machine-learning` to 0 replicas, so no container gets created for it at all. This only affects `up`; `down`/`backup`/`update immich` always act on the whole project regardless.
 
 ## Mobile App Setup
 

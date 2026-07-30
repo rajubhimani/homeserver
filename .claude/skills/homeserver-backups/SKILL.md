@@ -22,7 +22,8 @@ uv run homeserver.py dev backup <service>
 uv run homeserver.py dev snapshots <service>
 
 # Restore the latest snapshot (also auto-snapshots current state first, via
-# the same auto-backup-on-down behavior, so restoring is itself non-destructive)
+# the same auto-backup-on-down behavior, so restoring is itself non-destructive;
+# and restarts the service afterward if it was running before, same as backup)
 uv run homeserver.py dev restore all
 uv run homeserver.py dev restore <service>
 

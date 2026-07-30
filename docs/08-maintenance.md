@@ -28,9 +28,9 @@ uv run homeserver.py prod up all
 # Follow logs
 uv run homeserver.py dev logs immich
 
-# Immich with ML profile
-uv run homeserver.py dev up immich --profile ml
-uv run homeserver.py dev down immich --profile ml
+# Immich — ML container starts by default now; --no-ml excludes it
+# (e.g. low-resource machines that don't want face/object detection)
+uv run homeserver.py dev up immich --no-ml
 
 # Update running services to latest images
 uv run homeserver.py dev update running

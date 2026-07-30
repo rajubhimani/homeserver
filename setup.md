@@ -124,8 +124,8 @@ uv run homeserver.py dev down jellyfin
 # Follow logs
 uv run homeserver.py dev logs nextcloud
 
-# Immich with face recognition
-uv run homeserver.py dev up immich --profile ml
+# Immich — ML (face/object recognition) starts by default; exclude it with:
+uv run homeserver.py dev up immich --no-ml
 
 # Pull latest images and recreate
 uv run homeserver.py dev update all

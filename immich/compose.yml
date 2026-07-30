@@ -39,8 +39,6 @@ services:
     container_name: immich-ml
     restart: unless-stopped
     env_file: .env
-    profiles:
-      - ml
     volumes:
       - immich-model-cache:/cache
     networks:

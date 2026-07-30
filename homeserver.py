@@ -2,7 +2,7 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--snapshot <ts>]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
   python homeserver.py <env> -r <service...>   (shorthand for restart)
 
 Service tiers:
@@ -196,10 +196,13 @@ def header(msg: str) -> None:
 class DockerBackend(ABC):
     @abstractmethod
     def compose_up(
-        self, files: list[Path], env: dict[str, str], profile: str | None, force_recreate: bool = False
+        self, files: list[Path], env: dict[str, str], profile: str | None,
+        force_recreate: bool = False, exclude: list[str] | None = None,
     ) -> tuple[bool, str]:
         """Returns (success, combined stdout+stderr) — the caller inspects the
-        text for port-conflict/Podman-quirk patterns regardless of backend."""
+        text for port-conflict/Podman-quirk patterns regardless of backend.
+        exclude: container names to scale to 0 (started normally otherwise) —
+        e.g. immich-ml's --no-ml, see do_up."""
 
     @abstractmethod
     def compose_down(self, files: list[Path], env: dict[str, str], profile: str | None) -> bool: ...
@@ -269,23 +272,17 @@ class SubprocessBackend(DockerBackend):
             args += ["--profile", profile]
         return args
 
-    def compose_up(self, files, env, profile, force_recreate=False):
+    def compose_up(self, files, env, profile, force_recreate=False, exclude=None):
         args = self._compose_args(files, profile) + ["up", "-d"]
         if force_recreate:
             args.append("--force-recreate")
+        for name in exclude or []:
+            args += ["--scale", f"{name}=0"]
         proc = self._run(args, env=env)
         return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
     def compose_down(self, files, env, profile):
-        if profile:
-            proc = self._run(self._compose_args(files, profile) + ["down"], env=env)
-            return proc.returncode == 0
-        # Try to also tear down the 'ml' profile (immich) — harmless no-op
-        # for services that don't have one.
-        ml_attempt = self._run(self._compose_args(files, "ml") + ["down"], env=env)
-        if ml_attempt.returncode == 0:
-            return True
-        proc = self._run(self._compose_args(files, None) + ["down"], env=env)
+        proc = self._run(self._compose_args(files, profile) + ["down"], env=env)
         return proc.returncode == 0
 
     def compose_pull(self, files, env):
@@ -400,12 +397,13 @@ class PythonOnWhalesBackend(DockerBackend):
             os.environ.clear()
             os.environ.update(old)
 
-    def compose_up(self, files, env, profile, force_recreate=False):
+    def compose_up(self, files, env, profile, force_recreate=False, exclude=None):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
+        scales = {name: 0 for name in exclude} if exclude else None
         try:
             with self._env(env):
-                client.compose.up(detach=True, force_recreate=force_recreate, wait=False)
+                client.compose.up(detach=True, force_recreate=force_recreate, wait=False, scales=scales)
             return True, ""
         except DockerException as e:
             out = f"{e.stderr or ''}\n{e.stdout or ''}"
@@ -418,22 +416,8 @@ class PythonOnWhalesBackend(DockerBackend):
             with self._env(env):
                 client.compose.down()
             return True
-        except DockerException:
-            if not profile:
-                # Mirror SubprocessBackend: try the 'ml' profile too, then a
-                # plain down with no profile at all.
-                try:
-                    with self._env(env):
-                        self._client(files, "ml").compose.down()
-                    return True
-                except DockerException:
-                    try:
-                        with self._env(env):
-                            self._client(files, None).compose.down()
-                        return True
-                    except DockerException as e2:
-                        error(f"  compose down failed: {e2.stderr or e2}")
-                        return False
+        except DockerException as e:
+            error(f"  compose down failed: {e.stderr or e}")
             return False
 
     def compose_pull(self, files, env):
@@ -739,7 +723,7 @@ def do_snapshots(service: str) -> None:
 # ── Actions ──────────────────────────────────────────────────────────
 
 
-def do_up(service: str, env: str, profile: str | None) -> bool:
+def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None) -> bool:
     d = BASE_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
@@ -758,10 +742,12 @@ def do_up(service: str, env: str, profile: str | None) -> bool:
 
     if profile:
         info(f"Starting {service} ({env}) --profile {profile}...")
+    elif exclude:
+        info(f"Starting {service} ({env}), excluding {', '.join(exclude)}...")
     else:
         info(f"Starting {service} ({env})...")
 
-    ok, out = BACKEND.compose_up(files, cenv, profile)
+    ok, out = BACKEND.compose_up(files, cenv, profile, exclude=exclude)
     if out:
         print(out)
 
@@ -773,7 +759,7 @@ def do_up(service: str, env: str, profile: str | None) -> bool:
             if shutil.which("fuser"):
                 subprocess.run(["sudo", "fuser", "-k", f"{port}/tcp"], capture_output=True)
             time.sleep(1)
-            ok, out = BACKEND.compose_up(files, cenv, profile)
+            ok, out = BACKEND.compose_up(files, cenv, profile, exclude=exclude)
         # Podman quirk: 'internal libpod error' is thrown during dependency-
         # chain tracking but containers still start. Fall through to
         # wait_healthy to verify actual container state rather than treating
@@ -899,10 +885,12 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
 
     # Back up whatever's there right now before overwriting it — do_down
     # does this automatically as part of stopping.
-    if service in get_running_services():
+    was_running = service in get_running_services()
+    if was_running:
         do_down(service, env, profile, no_backup=False)
 
     info(f"Restoring {service} from snapshot {backup_dir.name}...")
+    ok = True
     for f in sorted(backup_dir.glob("*.tar.gz")):
         base = f.name[: -len(".tar.gz")]
         if base == "service_data":
@@ -911,6 +899,7 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
                 success(f"  restored service_data for {service}")
             else:
                 error(f"  failed to restore service_data for {service}")
+                ok = False
         else:
             if not BACKEND.volume_exists(base):
                 BACKEND.volume_create(base)
@@ -918,8 +907,14 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
                 success(f"  restored volume {base}")
             else:
                 error(f"  failed to restore volume {base}")
+                ok = False
 
-    return True
+    # Mirror do_backup: put the service back the way it was found, so
+    # 'restore' never leaves something the caller didn't ask to stop.
+    if was_running:
+        do_up(service, env, profile)
+
+    return ok
 
 
 def do_logs(service: str, env: str) -> None:
@@ -965,8 +960,8 @@ def show_help() -> None:
     print("    python homeserver.py dev down all                    stop everything (reverse order)")
     print("    python homeserver.py dev up landing mealie           start specific services")
     print("    python homeserver.py dev down landing mealie         stop specific services")
-    print("    python homeserver.py dev up immich --profile ml      add ML profile to immich")
-    print("    python homeserver.py dev down immich --profile ml    remove ML profile")
+    print("    python homeserver.py dev up forgejo --profile runner  add CI runner to forgejo")
+    print("    python homeserver.py dev down forgejo --profile runner remove CI runner")
     print("    python homeserver.py dev restart nginx-plain         restart a service (re-runs entrypoint)")
     print("    python homeserver.py dev -r nginx-plain              same, shorthand")
     print("    python homeserver.py dev logs immich                 follow logs")
@@ -975,6 +970,7 @@ def show_help() -> None:
     print("    python homeserver.py dev update jellyfin             update a single service")
     print("    python homeserver.py dev down mealie                 stop AND auto-snapshot (default)")
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
+    print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
     print("    python homeserver.py dev backup all                  snapshot every service now, regardless of running state")
     print("    python homeserver.py dev snapshots mealie            list available snapshots for a service")
     print("    python homeserver.py dev restore mealie              restore the latest snapshot")
@@ -1066,6 +1062,7 @@ def main() -> int:
     services_to_run: list[str] = []
     profile: str | None = None
     no_backup = False
+    no_ml = False
     snapshot: str | None = None
     run_all = run_core = run_min = run_running = False
 
@@ -1075,11 +1072,13 @@ def main() -> int:
         if tok == "--profile":
             i += 1
             if i >= len(rest):
-                error("--profile requires a name (e.g. --profile ml)")
+                error("--profile requires a name (e.g. --profile runner)")
                 return 1
             profile = rest[i]
         elif tok == "--no-backup":
             no_backup = True
+        elif tok == "--no-ml":
+            no_ml = True
         elif tok == "--snapshot":
             i += 1
             if i >= len(rest):
@@ -1108,8 +1107,14 @@ def main() -> int:
         show_help()
         return 1
 
+    if no_ml:
+        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_min or run_running:
+            error("--no-ml is only valid with 'up immich' on its own (excludes immich-ml)")
+            return 1
+
     if action in ("up", "-u"):
         ensure_network()
+        exclude = ["immich-machine-learning"] if no_ml else None
         if run_all:
             header(f"Starting all services (min + core + extra) in {env} mode...")
             run_list(do_up, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
@@ -1121,7 +1126,7 @@ def main() -> int:
             run_list(do_up, SERVICES_MIN + services_to_run, env, profile, "Min services")
         else:
             header(f"Starting services in {env} mode...")
-            run_list(do_up, services_to_run, env, profile, "Services")
+            run_list(do_up, services_to_run, env, profile, "Services", extra=exclude)
 
     elif action in ("down", "-d"):
         if run_all:
