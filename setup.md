@@ -26,6 +26,30 @@
 | [Syncthing](docs/services/syncthing.md) | Peer-to-peer file sync | Dropbox Sync |
 | [Authentik](docs/services/authentik.md) | Identity provider / SSO | Okta / Auth0 |
 | [Miniflux](docs/services/miniflux.md) | RSS reader | Feedly |
+| [Vikunja](docs/services/vikunja.md) | To-do / task management | Todoist |
+| [Trilium Notes](docs/services/trilium.md) | Hierarchical, scriptable notes | Personal wiki / Evernote |
+| [SilverBullet](docs/services/silverbullet.md) | Markdown notes with a query language | Obsidian (self-hosted) |
+| [Outline](docs/services/outline.md) | Self-hosted team wiki / docs | Notion / Confluence |
+| [BookStack](docs/services/bookstack.md) | Shelves/books/chapters/pages wiki | Confluence |
+| [Excalidraw](docs/services/excalidraw.md) | Hand-drawn-style whiteboard/diagrams | draw.io / Miro |
+| [Karakeep](docs/services/karakeep.md) | Bookmark manager with AI auto-tagging | Pocket / Raindrop |
+| [ntfy](docs/services/ntfy.md) | Self-hosted push notifications | Pushover / Pushbullet |
+| [IT-Tools](docs/services/it-tools.md) | ~80 browser-only dev utilities | assorted sketchy websites |
+| [n8n](docs/services/n8n.md) | Self-hosted workflow automation | Zapier / Make |
+| [CrowdSec](docs/services/crowdsec.md) | Collaborative intrusion detection (detection-only, see TODO.md) | fail2ban |
+| [Wallabag](docs/services/wallabag.md) | Read-it-later app | Pocket |
+| [Atuin](docs/services/atuin.md) | Shell history sync across machines | plain bash/zsh history file |
+| [AdGuard Home](docs/services/adguard-home.md) | Network-wide DNS ad/tracker blocking | Pi-hole |
+| [PhotoPrism](docs/services/photoprism.md) | AI-powered photo library (manual-only, redundant with Immich) | Google Photos (alt.) |
+| [OrangeHRM](docs/services/orangehrm.md) | Open-source HR management | BambooHR / Workday |
+| [NocoDB](docs/services/nocodb.md) | Spreadsheet UI over a database | Airtable |
+| [Listmonk](docs/services/listmonk.md) | Newsletter / mailing list manager | Mailchimp |
+| [Documenso](docs/services/documenso.md) | Document e-signing | DocuSign |
+| [Cal.com](docs/services/calcom.md) | Scheduling / booking pages | Calendly |
+| [Plausible](docs/services/plausible.md) | Privacy-friendly web analytics | Google Analytics |
+| [Penpot](docs/services/penpot.md) | Design / prototyping tool | Figma |
+| [Coolify](docs/services/coolify.md) | Self-hosted PaaS for deploying other projects | Vercel / Heroku |
+| [Supabase](docs/services/supabase.md) | Self-hosted backend platform (DB, auth, storage, functions) | Firebase |
 | [Audiobookshelf](docs/services/audiobookshelf.md) | Audiobooks + podcasts | Audible |
 | [OpenProject](docs/services/openproject.md) | Project management | Jira / Asana |
 | [Plane](docs/services/plane.md) | Issue tracking | Linear / Jira |
@@ -165,6 +189,30 @@ uv run homeserver.py prod up all
 ├── syncthing/
 ├── authentik/
 ├── miniflux/
+├── vikunja/
+├── trilium/
+├── silverbullet/
+├── outline/
+├── bookstack/
+├── excalidraw/
+├── karakeep/
+├── ntfy/
+├── it-tools/
+├── n8n/
+├── crowdsec/
+├── wallabag/
+├── atuin/
+├── adguard-home/
+├── photoprism/
+├── orangehrm/
+├── nocodb/
+├── listmonk/
+├── documenso/
+├── calcom/
+├── plausible/
+├── penpot/
+├── coolify/
+├── supabase/
 ├── audiobookshelf/
 ├── openproject/
 ├── plane/
@@ -194,6 +242,30 @@ service_data/
 ├── syncthing/        (data/)
 ├── authentik/        (postgres/, media/, certs/, templates/)
 ├── miniflux/         (postgres/)
+├── vikunja/          (postgres/, files/)
+├── trilium/          (trilium-data/)
+├── silverbullet/     (space/)
+├── outline/          (postgres/, redis/, data/)
+├── bookstack/        (mariadb/, config/)
+├── excalidraw/       (empty — no persistent data, no DB)
+├── karakeep/         (data/) — search index lives in a named volume, not this tree
+├── ntfy/             (data/)
+├── it-tools/         (empty — no persistent data, no DB)
+├── n8n/              (postgres/, data/)
+├── crowdsec/         (config/) — parsed decisions/DB live in a named volume, not this tree
+├── wallabag/         (postgres/, data/, images/)
+├── atuin/            (postgres/, config/)
+├── adguard-home/     (work/, conf/)
+├── photoprism/       (mariadb/, storage/) — photo library lives outside this tree, in service_data/media/photoprism/ (kept out of DATA_ROOT so backups don't sweep it)
+├── orangehrm/        (mariadb/ only — app container has no data volume yet, see docs/services/orangehrm.md)
+├── nocodb/           (postgres/, data/)
+├── listmonk/         (postgres/, uploads/)
+├── documenso/        (postgres/, data/, cert.p12 — signing certificate, generate before first start)
+├── calcom/           (postgres/ only — app itself is stateless)
+├── plausible/        (postgres/, clickhouse-data/, clickhouse-logs/, data/ — all named volumes)
+├── penpot/           (postgres/ named volume, assets/ bind mount)
+├── coolify/          (postgres/, redis/ named volumes; data/, ssh/, applications/, databases/, backups/, services/ bind mounts)
+├── supabase/         (db-data/, db-config/, deno-cache/ named volumes; storage/ bind mount)
 ├── audiobookshelf/   (config/, metadata/)
 ├── openproject/      (pgdata/, assets/)
 ├── plane/            (postgres/, uploads/, logs/)

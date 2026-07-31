@@ -1,0 +1,4 @@
+services:
+  orangehrm:
+    ports:
+      - "8125:80"

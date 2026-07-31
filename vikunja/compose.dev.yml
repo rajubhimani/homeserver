@@ -1,0 +1,4 @@
+services:
+  vikunja:
+    ports:
+      - "8111:3456"

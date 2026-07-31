@@ -17,6 +17,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    labels:
+      # Lets CrowdSec's docker acquisition source (see crowdsec/acquis.yaml)
+      # read this container's logs via the Docker API — no file mount or
+      # nginx logging config change needed.
+      crowdsec.enable: "true"
+      crowdsec.labels.type: "nginx"
     networks:
       - homeserver
 

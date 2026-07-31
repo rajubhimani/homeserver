@@ -209,6 +209,341 @@ server {
     }
 }
 
+# ── Vikunja ───────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name vikunja.${DOMAIN};
+    location / {
+        set $upstream http://vikunja:3456;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Trilium Notes ─────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name trilium.${DOMAIN};
+    location / {
+        set $upstream http://trilium:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── SilverBullet ──────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name silverbullet.${DOMAIN};
+    location / {
+        set $upstream http://silverbullet:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Outline ───────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name outline.${DOMAIN};
+    location / {
+        set $upstream http://outline:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── BookStack ─────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name bookstack.${DOMAIN};
+    location / {
+        set $upstream http://bookstack:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Excalidraw ────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name excalidraw.${DOMAIN};
+    location / {
+        set $upstream http://excalidraw:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Karakeep ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name karakeep.${DOMAIN};
+    location / {
+        set $upstream http://karakeep:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── ntfy ──────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name ntfy.${DOMAIN};
+    location / {
+        set $upstream http://ntfy:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+    }
+}
+
+# ── IT-Tools ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name it-tools.${DOMAIN};
+    location / {
+        set $upstream http://it-tools:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── n8n ───────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name n8n.${DOMAIN};
+    location / {
+        set $upstream http://n8n:5678;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# ── Wallabag ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name wallabag.${DOMAIN};
+    location / {
+        set $upstream http://wallabag:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Atuin ─────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name atuin.${DOMAIN};
+    location / {
+        set $upstream http://atuin:8888;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── AdGuard Home (web UI only — DNS itself is LAN-only on port 53) ────────────
+server {
+    listen 80;
+    server_name adguard-home.${DOMAIN};
+    location / {
+        set $upstream http://adguard-home:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── PhotoPrism (manual-only — redundant with Immich) ──────────────────────────
+server {
+    listen 80;
+    server_name photoprism.${DOMAIN};
+    location / {
+        set $upstream http://photoprism:2342;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── OrangeHRM ─────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name orangehrm.${DOMAIN};
+    location / {
+        set $upstream http://orangehrm:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── NocoDB ────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name nocodb.${DOMAIN};
+    location / {
+        set $upstream http://nocodb:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Listmonk ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name listmonk.${DOMAIN};
+    location / {
+        set $upstream http://listmonk:9000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Documenso ─────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name documenso.${DOMAIN};
+    location / {
+        set $upstream http://documenso:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Cal.com ───────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name calcom.${DOMAIN};
+    location / {
+        set $upstream http://calcom:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Plausible ─────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name plausible.${DOMAIN};
+    location / {
+        set $upstream http://plausible:8000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Penpot ────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name penpot.${DOMAIN};
+    location / {
+        set $upstream http://penpot-frontend:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# ── Coolify ───────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name coolify.${DOMAIN};
+    location / {
+        set $upstream http://coolify:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# ── Supabase ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name supabase.${DOMAIN};
+    location / {
+        set $upstream http://supabase-kong:8000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
 # ── Audiobookshelf ────────────────────────────────────────────────────────────
 server {
     listen 80;

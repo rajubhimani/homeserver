@@ -1,0 +1,29 @@
+services:
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.7.8
+    container_name: crowdsec
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      COLLECTIONS: crowdsecurity/nginx
+      GID: "1000"
+    volumes:
+      - ${DATA_ROOT}/config:/etc/crowdsec
+      - crowdsec-data:/var/lib/crowdsec/data
+      - ./acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ${DOCKER_SOCKET}:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homeserver
+
+volumes:
+  crowdsec-data:
+
+networks:
+  homeserver:
+    external: true

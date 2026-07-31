@@ -1,0 +1,4 @@
+services:
+  excalidraw:
+    ports:
+      - "127.0.0.1:8116:80"

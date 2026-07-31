@@ -1,0 +1,114 @@
+services:
+  coolify-db:
+    image: postgres:15-alpine
+    container_name: coolify-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: coolify
+      POSTGRES_USER: coolify
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - coolify-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coolify"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  coolify-redis:
+    image: redis:7-alpine
+    container_name: coolify-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - coolify-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  coolify-realtime:
+    image: coollabsio/coolify-realtime:1.0.16
+    container_name: coolify-realtime
+    restart: unless-stopped
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9601/usage"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homeserver
+
+  coolify:
+    # No stable version tags are published on Docker Hub right now (apparent
+    # upstream release-pipeline issue as of this writing — only edge/next/
+    # feature-branch tags exist). Pinned to "edge" as a deliberate, documented
+    # exception to this stack's usual "pin a real stable release" rule — see
+    # docs/services/coolify.md and TODO.md. Switch to a real version tag the
+    # moment one is published.
+    image: coollabsio/coolify:edge
+    container_name: coolify
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ID: ${APP_ID}
+      APP_KEY: ${APP_KEY}
+      APP_URL: https://coolify.${DOMAIN}
+      DB_HOST: coolify-db
+      DB_PORT: 5432
+      DB_DATABASE: coolify
+      DB_USERNAME: coolify
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: coolify-redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      PUSHER_APP_ID: ${PUSHER_APP_ID}
+      PUSHER_APP_KEY: ${PUSHER_APP_KEY}
+      PUSHER_APP_SECRET: ${PUSHER_APP_SECRET}
+      PUSHER_HOST: coolify-realtime
+      PUSHER_PORT: 6001
+    volumes:
+      - ${DATA_ROOT}/data:/data/coolify/source/storage/app
+      - ${DATA_ROOT}/ssh:/data/coolify/ssh
+      - ${DATA_ROOT}/applications:/data/coolify/applications
+      - ${DATA_ROOT}/databases:/data/coolify/databases
+      - ${DATA_ROOT}/backups:/data/coolify/backups
+      - ${DATA_ROOT}/services:/data/coolify/services
+      - ${DOCKER_SOCKET}:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      coolify-db:
+        condition: service_healthy
+      coolify-redis:
+        condition: service_healthy
+      coolify-realtime:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  coolify-postgres:
+  coolify-redis:
+
+networks:
+  homeserver:
+    external: true

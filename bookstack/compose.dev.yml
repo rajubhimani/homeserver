@@ -1,0 +1,4 @@
+services:
+  bookstack:
+    ports:
+      - "8115:80"

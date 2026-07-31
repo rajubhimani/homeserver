@@ -1,0 +1,4 @@
+services:
+  trilium:
+    ports:
+      - "127.0.0.1:8112:8080"

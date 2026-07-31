@@ -1,0 +1,4 @@
+services:
+  photoprism:
+    ports:
+      - "127.0.0.1:8124:2342"

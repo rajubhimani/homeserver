@@ -118,7 +118,11 @@ SERVICES_EXTRA = [
     "dockge", "uptime-kuma", "openproject", "paperless",
     "stirling-pdf-lite", "mealie",
     "syncthing", "authentik", "miniflux", "audiobookshelf",
-    "invoiceshelf", "appflowy", "plane", "ollama", "open-webui",
+    "invoiceshelf", "appflowy", "plane", "ollama", "open-webui", "vikunja",
+    "trilium", "silverbullet", "outline", "bookstack", "excalidraw", "karakeep",
+    "ntfy", "it-tools", "n8n", "crowdsec", "wallabag", "atuin", "adguard-home",
+    "orangehrm", "nocodb", "listmonk", "documenso", "calcom", "plausible",
+    "penpot", "coolify", "supabase",
 ]
 
 # Manual-only — never started by 'up min/core/all' (or their down/restart/
@@ -129,7 +133,12 @@ SERVICES_EXTRA = [
 #   - stirling-pdf (full): redundant with stirling-pdf-lite (same PDF
 #     toolset) at ~2x the memory (OCR/LibreOffice extras) — lite is the
 #     default; start the full image only when those extras are actually needed
-SERVICES_MANUAL = ["gitlab", "stirling-pdf", "jellyfin-pgsql-test"]
+#   - photoprism: redundant with immich (same AI photo-management role) at
+#     extra memory/maintenance cost from running a second photo library
+#     stack — immich is the default; start photoprism only if its specific
+#     feature set (e.g. its different face-recognition/tagging approach) is
+#     actually needed
+SERVICES_MANUAL = ["gitlab", "stirling-pdf", "jellyfin-pgsql-test", "photoprism"]
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is

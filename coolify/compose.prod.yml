@@ -1,0 +1,8 @@
+services:
+  coolify:
+    ports:
+      - "127.0.0.1:8132:8080"
+  coolify-realtime:
+    ports:
+      - "127.0.0.1:6001:6001"
+      - "127.0.0.1:6002:6002"

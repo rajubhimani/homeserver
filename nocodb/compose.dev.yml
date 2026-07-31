@@ -1,0 +1,4 @@
+services:
+  nocodb:
+    ports:
+      - "8126:8080"

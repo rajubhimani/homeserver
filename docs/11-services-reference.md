@@ -23,10 +23,13 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 **Extra services** (started with `up all` or individually):
 dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
 mealie, syncthing, authentik,
-miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui.
+miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
+trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, it-tools,
+n8n, crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
+documenso, calcom, plausible, penpot, coolify, supabase.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
-gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
+gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory), photoprism (redundant with immich, same AI photo-management role).
 
 ---
 
@@ -61,12 +64,36 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Plane | `plane-proxy` | 8100 | 80 | extra |
 | Ollama | `ollama` | 8110 | 11434 | extra (`--profile docker-ollama`) |
 | Open WebUI | `open-webui` | 8109 | 8080 | extra |
+| Vikunja | `vikunja` | 8111 | 3456 | extra |
+| Trilium Notes | `trilium` | 8112 | 8080 | extra |
+| SilverBullet | `silverbullet` | 8113 | 3000 | extra |
+| Outline | `outline` | 8114 | 3000 | extra |
+| BookStack | `bookstack` | 8115 | 80 | extra |
+| Excalidraw | `excalidraw` | 8116 | 80 | extra |
+| Karakeep | `karakeep` | 8117 | 3000 | extra |
+| ntfy | `ntfy` | 8118 | 80 | extra |
+| IT-Tools | `it-tools` | 8119 | 80 | extra |
+| n8n | `n8n` | 8120 | 5678 | extra |
+| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
+| Wallabag | `wallabag` | 8121 | 80 | extra |
+| Atuin | `atuin` | 8122 | 8888 | extra |
+| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | extra (manual) |
+| PhotoPrism | `photoprism` | 8124 | 2342 | extra (manual) |
+| OrangeHRM | `orangehrm` | 8125 | 80 | extra |
+| NocoDB | `nocodb` | 8126 | 8080 | extra |
+| Listmonk | `listmonk` | 8127 | 9000 | extra |
+| Documenso | `documenso` | 8128 | 3000 | extra |
+| Cal.com | `calcom` | 8129 | 3000 | extra |
+| Plausible | `plausible` | 8130 | 8000 | extra |
+| Penpot | `penpot-frontend` | 8131 | 8080 | extra |
+| Coolify | `coolify` | 8132 | 8080 | extra |
+| Supabase | `supabase-kong` | 8133 | 8000 | extra |
 | Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
 | Jellyfin Postgres test | `jellyfin-pgsql-test` | 8097 | 8096 | extra (manual) |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 / 81 (admin) | same | extra (optional) |
 
-**Next available ports:** web `8111`, SSH `2225`. Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8134`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -117,7 +144,30 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
 | `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | extra |
 | `open-webui.yourdomain.com` | `open-webui` | `8080` | extra |
+| `vikunja.yourdomain.com` | `vikunja` | `3456` | extra |
+| `trilium.yourdomain.com` | `trilium` | `8080` | extra |
+| `silverbullet.yourdomain.com` | `silverbullet` | `3000` | extra |
+| `outline.yourdomain.com` | `outline` | `3000` | extra |
+| `bookstack.yourdomain.com` | `bookstack` | `80` | extra |
+| `excalidraw.yourdomain.com` | `excalidraw` | `80` | extra |
+| `karakeep.yourdomain.com` | `karakeep` | `3000` | extra |
+| `ntfy.yourdomain.com` | `ntfy` | `80` | extra |
+| `it-tools.yourdomain.com` | `it-tools` | `80` | extra |
+| `n8n.yourdomain.com` | `n8n` | `5678` | extra |
+| `wallabag.yourdomain.com` | `wallabag` | `80` | extra |
+| `atuin.yourdomain.com` | `atuin` | `8888` | extra |
+| `adguard-home.yourdomain.com` | `adguard-home` | `3000` | extra |
 | `gitlab.yourdomain.com` | `gitlab` | `80` | extra (manual) |
+| `photoprism.yourdomain.com` | `photoprism` | `2342` | extra (manual) |
+| `orangehrm.yourdomain.com` | `orangehrm` | `80` | extra |
+| `nocodb.yourdomain.com` | `nocodb` | `8080` | extra |
+| `listmonk.yourdomain.com` | `listmonk` | `9000` | extra |
+| `documenso.yourdomain.com` | `documenso` | `3000` | extra |
+| `calcom.yourdomain.com` | `calcom` | `3000` | extra |
+| `plausible.yourdomain.com` | `plausible` | `8000` | extra |
+| `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
+| `coolify.yourdomain.com` | `coolify` | `8080` | extra |
+| `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
 | `jellyfin-test.yourdomain.com` | `jellyfin-pgsql-test` | `8096` | extra (manual) |
 
 ---

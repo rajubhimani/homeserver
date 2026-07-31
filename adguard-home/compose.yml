@@ -1,0 +1,20 @@
+services:
+  adguard-home:
+    image: adguard/adguardhome:v0.107.78
+    container_name: adguard-home
+    restart: unless-stopped
+    volumes:
+      - ${DATA_ROOT}/work:/opt/adguardhome/work
+      - ${DATA_ROOT}/conf:/opt/adguardhome/conf
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

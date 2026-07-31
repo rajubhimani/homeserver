@@ -48,6 +48,30 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Portainer CE | [docs/services/portainer.md](services/portainer.md) |
 | Dockge | [docs/services/dockge.md](services/dockge.md) |
 | Ollama + Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
+| Vikunja | [docs/services/vikunja.md](services/vikunja.md) |
+| Trilium Notes | [docs/services/trilium.md](services/trilium.md) |
+| SilverBullet | [docs/services/silverbullet.md](services/silverbullet.md) |
+| Outline | [docs/services/outline.md](services/outline.md) |
+| BookStack | [docs/services/bookstack.md](services/bookstack.md) |
+| Excalidraw | [docs/services/excalidraw.md](services/excalidraw.md) |
+| Karakeep | [docs/services/karakeep.md](services/karakeep.md) |
+| ntfy | [docs/services/ntfy.md](services/ntfy.md) |
+| IT-Tools | [docs/services/it-tools.md](services/it-tools.md) |
+| n8n | [docs/services/n8n.md](services/n8n.md) |
+| CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
+| Wallabag | [docs/services/wallabag.md](services/wallabag.md) |
+| Atuin | [docs/services/atuin.md](services/atuin.md) |
+| AdGuard Home | [docs/services/adguard-home.md](services/adguard-home.md) |
+| PhotoPrism | [docs/services/photoprism.md](services/photoprism.md) |
+| OrangeHRM | [docs/services/orangehrm.md](services/orangehrm.md) |
+| NocoDB | [docs/services/nocodb.md](services/nocodb.md) |
+| Listmonk | [docs/services/listmonk.md](services/listmonk.md) |
+| Documenso | [docs/services/documenso.md](services/documenso.md) |
+| Cal.com | [docs/services/calcom.md](services/calcom.md) |
+| Plausible | [docs/services/plausible.md](services/plausible.md) |
+| Penpot | [docs/services/penpot.md](services/penpot.md) |
+| Coolify | [docs/services/coolify.md](services/coolify.md) |
+| Supabase | [docs/services/supabase.md](services/supabase.md) |
 
 ---
 

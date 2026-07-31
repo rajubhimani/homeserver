@@ -63,6 +63,7 @@ services:
       - nextcloud-custom-apps:/var/www/html/custom_apps
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
       - ${USER_DATA_ROOT}:/mnt/seagate
+      - ${OS_ISO_ROOT}:/mnt/os-iso
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
       interval: 30s
