@@ -20,6 +20,12 @@ Both backends implement the **full** `DockerBackend` interface, not just compose
 
 **Do not** run this stack from inside a WSL2 distro against a repo checked out on a Windows drive (`/mnt/c/...`, `/mnt/d/...`) — the drvfs/9p filesystem translation doesn't give real POSIX ownership guarantees and will intermittently produce `FATAL: data directory has wrong ownership` for Postgres containers, or in rare cases silent file corruption. Run from native Windows or a repo cloned natively inside the WSL distro's own filesystem instead.
 
+## Reclaiming disk space (Windows / WSL2 Docker Desktop)
+
+See [docs/08-maintenance.md](../../../docs/08-maintenance.md#reclaiming-disk-space-docker-desktop-on-windows--wsl2) — the VHDX-compaction procedure lives there, not here.
+
+One addition worth knowing beyond what that doc currently says: if a compact pass reports 0GB reclaimed with no error, check that `diskpart` actually ran **elevated** (Administrator PowerShell) before assuming there was nothing to reclaim — it silently no-ops when unelevated. And `fstrim -a` inside the WSL VM (`wsl -d docker-desktop -u root -- fstrim -av`) before compacting matters — WSL2's ext4 doesn't issue TRIM by default, so without it the VHDX has no idea which blocks are actually free.
+
 ## `python-on-whales` version pin
 
 `pyproject.toml` pins `python-on-whales>=0.81,<0.82` and Python itself to `>=3.14,<3.15` — patch releases stay usable, but neither jumps a minor version silently. If bumping either, update the pin deliberately and re-run `uv lock`.

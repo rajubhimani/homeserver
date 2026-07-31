@@ -1,6 +1,6 @@
 services:
   orangehrm-db:
-    image: mariadb:10.4
+    image: mariadb:12.3.2
     container_name: orangehrm-db
     restart: unless-stopped
     env_file: .env

@@ -24,7 +24,7 @@ services:
       - homeserver
 
   outline-redis:
-    image: redis:7-alpine
+    image: redis:8.10-alpine
     container_name: outline-redis
     restart: unless-stopped
     volumes:

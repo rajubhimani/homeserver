@@ -1,6 +1,6 @@
 services:
   plausible-db:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     container_name: plausible-db
     restart: unless-stopped
     env_file: .env
@@ -13,7 +13,7 @@ services:
         limits:
           memory: 384M
     volumes:
-      - plausible-postgres:/var/lib/postgresql/data
+      - plausible-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 30s
@@ -24,7 +24,7 @@ services:
       - homeserver
 
   plausible-events-db:
-    image: clickhouse/clickhouse-server:24.12-alpine
+    image: clickhouse/clickhouse-server:26.7.1-alpine
     container_name: plausible-events-db
     restart: unless-stopped
     env_file: .env

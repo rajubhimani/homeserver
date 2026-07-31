@@ -83,7 +83,7 @@ services:
 
   supabase-rest:
     container_name: supabase-rest
-    image: postgrest/postgrest:v14.12
+    image: postgrest/postgrest:v14.16
     restart: unless-stopped
     env_file: .env
     environment:
@@ -191,7 +191,7 @@ services:
 
   supabase-imgproxy:
     container_name: supabase-imgproxy
-    image: darthsim/imgproxy:v3.30.1
+    image: darthsim/imgproxy:v4.0.12
     restart: unless-stopped
     environment:
       IMGPROXY_BIND: ":5001"
@@ -300,7 +300,7 @@ services:
 
   supabase-kong:
     container_name: supabase-kong
-    image: kong/kong:3.9.1
+    image: kong/kong:3.9.3
     restart: unless-stopped
     env_file: .env
     environment:

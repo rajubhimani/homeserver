@@ -19,7 +19,7 @@ services:
       - homeserver
 
   appflowy-redis:
-    image: redis:7-alpine
+    image: redis:8.10-alpine
     container_name: appflowy-redis
     restart: unless-stopped
     command: redis-server --save "" --stop-writes-on-bgsave-error no
@@ -73,7 +73,7 @@ services:
       - homeserver
 
   appflowy-gotrue:
-    image: appflowyinc/gotrue:0.16.5
+    image: appflowyinc/gotrue:0.17.1
     container_name: appflowy-gotrue
     restart: unless-stopped
     env_file: .env
@@ -139,7 +139,7 @@ services:
       - homeserver
 
   appflowy-web:
-    image: appflowyinc/appflowy_web:0.15.5
+    image: appflowyinc/appflowy_web:0.16.2
     container_name: appflowy-web
     restart: unless-stopped
     environment:
@@ -153,7 +153,7 @@ services:
       - homeserver
 
   appflowy-admin:
-    image: appflowyinc/admin_frontend:0.16.5
+    image: appflowyinc/admin_frontend:0.17.1
     container_name: appflowy-admin
     restart: unless-stopped
     env_file: .env
@@ -167,7 +167,7 @@ services:
       - homeserver
 
   appflowy-nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.30-alpine
     container_name: appflowy-nginx
     restart: unless-stopped
     volumes:

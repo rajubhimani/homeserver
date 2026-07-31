@@ -1,6 +1,6 @@
 services:
   trilium:
-    image: triliumnext/notes:v0.95.0
+    image: triliumnext/trilium:v0.104.1
     container_name: trilium
     restart: unless-stopped
     env_file: .env

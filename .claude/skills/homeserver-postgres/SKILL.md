@@ -26,7 +26,15 @@ Standard setup for a service with its own discrete `<service>-db` container:
 
 ## Named volume, not a bind mount
 
-**DB data always uses a named Docker volume** — declare it in `compose.yml` as e.g. `<service>-postgres:` under `volumes:` and mount it as `<service>-postgres:/var/lib/postgresql` (never `${DATA_ROOT}/postgres:/var/lib/postgresql`). This applies equally to MariaDB (`/var/lib/mysql`) and RabbitMQ (`/var/lib/rabbitmq`).
+**DB data always uses a named Docker volume** — declare it in `compose.yml` as e.g. `<service>-postgres:` under `volumes:` and mount it at the **exact path the image's own Dockerfile declares as `VOLUME`** (never `${DATA_ROOT}/postgres:/var/lib/postgresql`). This applies equally to MariaDB (`/var/lib/mysql`) and RabbitMQ (`/var/lib/rabbitmq`).
+
+**The exact path is version-dependent for Postgres — check it, don't assume `/var/lib/postgresql`.** `postgres:18`/`18-alpine` declare `VOLUME /var/lib/postgresql` (the parent dir), but `postgres:15-alpine`/`16-alpine` declare `VOLUME /var/lib/postgresql/data` (the child dir) — a real upstream Dockerfile change between those major versions, not a typo. Mounting the named volume at a path that doesn't *exactly* match the image's declared `VOLUME` doesn't lose data, but it does leak a second, anonymous, unnamed volume for the mismatched path on every container creation — Docker satisfies the Dockerfile's `VOLUME` instruction itself if the exact path isn't already covered by an explicit mount, even when a parent directory is already mounted. Confirmed bug instance: `coolify-db`/`penpot-db` (both `postgres:15-alpine`) were mounted at `/var/lib/postgresql`, silently spawning an orphaned anonymous volume each time. Verify before mounting:
+
+```bash
+docker inspect <image>:<tag> --format '{{json .Config.Volumes}}'
+```
+
+If you ever see unlabeled 64-char-hash volumes in `docker volume ls`, this mismatch on some postgres-backed service is the first thing to check — `docker ps -a --filter volume=<hash>` shows which container (if any) still references it.
 
 Why: bind-mounting DB data onto a host filesystem that isn't native Linux ext4 (Windows drvfs, WSL2 9p, macOS osxfs/virtiofs) doesn't give the DB engine reliable POSIX ownership guarantees — causes intermittent `FATAL: data directory has wrong ownership` or worse, silent corruption. Named volumes are daemon-managed and sidestep the host filesystem entirely, so they work identically across Linux/Mac/Windows. Non-DB app data/config/uploads can usually stay on `${DATA_ROOT}` bind mounts — only the DB engine's own data directory needs this.
 
