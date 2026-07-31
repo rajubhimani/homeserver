@@ -50,6 +50,7 @@
 | [Penpot](docs/services/penpot.md) | Design / prototyping tool | Figma |
 | [Coolify](docs/services/coolify.md) | Self-hosted PaaS for deploying other projects | Vercel / Heroku |
 | [Supabase](docs/services/supabase.md) | Self-hosted backend platform (DB, auth, storage, functions) | Firebase |
+| [Observability](docs/services/observability.md) | Metrics + log dashboards (Grafana + Prometheus + Loki + Alloy + cAdvisor + node-exporter) | Datadog / Grafana Cloud |
 | [Audiobookshelf](docs/services/audiobookshelf.md) | Audiobooks + podcasts | Audible |
 | [OpenProject](docs/services/openproject.md) | Project management | Jira / Asana |
 | [Plane](docs/services/plane.md) | Issue tracking | Linear / Jira |
@@ -220,7 +221,8 @@ uv run homeserver.py prod up all
 ├── firefly/
 ├── ollama/
 ├── open-webui/
-└── beszel/
+├── beszel/
+└── observability/
 ```
 
 Service data (gitignored):
@@ -273,5 +275,6 @@ service_data/
 ├── firefly/          (postgres/, upload/)
 ├── ollama/           (empty — models live outside this tree, in service_data/cache/ollama/, kept out of DATA_ROOT so backups don't sweep multi-GB model files)
 ├── open-webui/       (data/) — embedding model cache lives outside this tree, in service_data/cache/open-webui/cache/ (same reason)
-└── beszel/           (data/, socket/, agent/)
+├── beszel/           (data/, socket/, agent/)
+└── observability/    (grafana/, prometheus/, loki/) — capped by retention (PROMETHEUS_RETENTION, LOKI_RETENTION), so kept in DATA_ROOT rather than a separate cache/ bucket despite not being regenerable
 ```

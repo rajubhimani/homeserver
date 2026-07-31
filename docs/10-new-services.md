@@ -72,6 +72,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Penpot | [docs/services/penpot.md](services/penpot.md) |
 | Coolify | [docs/services/coolify.md](services/coolify.md) |
 | Supabase | [docs/services/supabase.md](services/supabase.md) |
+| Observability (Grafana + Prometheus + Loki) | [docs/services/observability.md](services/observability.md) |
 
 ---
 

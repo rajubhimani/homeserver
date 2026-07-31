@@ -122,7 +122,7 @@ SERVICES_EXTRA = [
     "trilium", "silverbullet", "outline", "bookstack", "excalidraw", "karakeep",
     "ntfy", "it-tools", "n8n", "crowdsec", "wallabag", "atuin", "adguard-home",
     "orangehrm", "nocodb", "listmonk", "documenso", "calcom", "plausible",
-    "penpot", "coolify", "supabase",
+    "penpot", "coolify", "supabase", "observability",
 ]
 
 # Manual-only — never started by 'up min/core/all' (or their down/restart/

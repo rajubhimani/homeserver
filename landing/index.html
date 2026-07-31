@@ -1279,6 +1279,23 @@
         </a>
       </div>
 
+      <div class="card" data-service="observability" data-category="system">
+        <div class="card-icon orange">
+          <svg viewBox="0 0 18 18" fill="none">
+            <path d="M3 14 L3 4 M3 14 L15 14" stroke="#F46800" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M5 12 L8 8 L10.5 10.5 L14 5" stroke="#F46800" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="card-header">
+          <span class="card-name">Grafana</span>
+          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+        </div>
+        <p class="card-desc">Metrics and log dashboards (Prometheus + Loki), covering every container in the stack.</p>
+        <a class="card-link" href="#" target="_blank">
+          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+
       <div class="card" data-service="dozzle" data-category="system">
         <div class="card-icon gray">
           <svg viewBox="0 0 18 18" fill="none">
@@ -1323,6 +1340,7 @@
     const DOMAIN = 'DOMAIN_PLACEHOLDER';
 
     const SERVICE_SUBDOMAINS = {
+      observability:       'grafana',
       syncthing:           'syncthing',
       authentik:           'authentik',
       miniflux:            'miniflux',

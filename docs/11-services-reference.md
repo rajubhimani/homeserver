@@ -26,7 +26,7 @@ mealie, syncthing, authentik,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
 trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, it-tools,
 n8n, crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
-documenso, calcom, plausible, penpot, coolify, supabase.
+documenso, calcom, plausible, penpot, coolify, supabase, observability.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory), photoprism (redundant with immich, same AI photo-management role).
@@ -89,11 +89,15 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
 | Coolify | `coolify` | 8132 | 8080 | extra |
 | Supabase | `supabase-kong` | 8133 | 8000 | extra |
+| Observability (Grafana) | `grafana` | 8134 | 3000 | extra |
+| Observability (Prometheus) | `prometheus` | 8135 | 9090 | extra |
 | Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
 | Jellyfin Postgres test | `jellyfin-pgsql-test` | 8097 | 8096 | extra (manual) |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 / 81 (admin) | same | extra (optional) |
 
-**Next available ports:** web `8134`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
+
+**Next available ports:** web `8136`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -168,6 +172,7 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
 | `coolify.yourdomain.com` | `coolify` | `8080` | extra |
 | `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
+| `grafana.yourdomain.com` | `grafana` | `3000` | extra |
 | `jellyfin-test.yourdomain.com` | `jellyfin-pgsql-test` | `8096` | extra (manual) |
 
 ---

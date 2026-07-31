@@ -1,0 +1,10 @@
+services:
+  alloy:
+    security_opt:
+      - label=disable
+  cadvisor:
+    security_opt:
+      - label=disable
+  node-exporter:
+    security_opt:
+      - label=disable
