@@ -103,9 +103,13 @@ If still direct-streaming after both prefs are set, Windows' own "HEVC Video Ext
 
 **Fix:** added a new `METADATA_ROOT` env var (`../service_data/cache/jellyfin/metadata`), mounted over `/config/metadata` as a second bind mount layered on top of the `/config` mount in `compose.yml`. Moved the existing 1.2GB directory to the new path before restarting — no rescan needed, same reasoning as the `MEDIA_ROOT` fix (container-side path unchanged). Fully regenerable if ever lost: Jellyfin re-downloads metadata from providers (TMDB etc.) on the next library scan.
 
-## See also: Postgres-backend test instance
+## Decommissioned: Postgres-backend test instance
 
-[`docs/services/jellyfin-pgsql-test.md`](jellyfin-pgsql-test.md) — a separate, manual-only Jellyfin instance running on a community Postgres fork, built specifically to test whether Postgres avoids the `OptimisticLockBehavior` write-stall documented above. Confirmed a real bug in that fork along the way (crash-loops on restart once it has data) — see that doc for the full investigation.
+A separate, manual-only `jellyfin-pgsql-test` instance ran on a community Postgres fork ([JPVenson/Jellyfin.Pgsql](https://github.com/JPVenson/Jellyfin.Pgsql)) to test whether Postgres avoids the `OptimisticLockBehavior` write-stall documented above. It confirmed a real bug in that fork (crash-loops on restart once it has data — no `DROP`/`IF NOT EXISTS` guards in its backup/restore logic) and was never made production-safe, per the fork maintainer's own "HIGHLY experimental" warning.
+
+Before teardown, the watch history/favorites that had accumulated on the test instance (~4,000 `UserData` rows, plus its downloaded poster/fanart cache) were merged into this real instance's SQLite DB and metadata cache — matching rows by item path/`ItemId`, since Jellyfin generates item GUIDs deterministically from the file path, so the same media file gets the same `Id` in independently-scanned libraries. Two accounts (`TV`, `neerajbadal`) that only existed on the test instance were recreated here via the Jellyfin API to receive their migrated data. One gotcha hit during the merge: CSV-importing Postgres `NULL`s produced empty strings (`''`) instead of SQLite `NULL`s in the `LastPlayedDate`/`RetentionDate` columns, which crashed item-detail API calls with a `DateTime` parse error — fixed with `UPDATE UserData SET LastPlayedDate = NULL WHERE LastPlayedDate = ''` (and the same for `RetentionDate`).
+
+The `jellyfin-pgsql-test` container, its Postgres volume, `service_data/data/jellyfin-pgsql-test/`, `service_data/cache/jellyfin-pgsql-test/`, and the `jellyfin-pgsql-test/` compose directory have all been removed.
 
 ---
 

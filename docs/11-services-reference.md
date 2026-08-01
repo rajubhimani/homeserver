@@ -92,7 +92,6 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Observability (Grafana) | `grafana` | 8134 | 3000 | extra |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | extra |
 | Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
-| Jellyfin Postgres test | `jellyfin-pgsql-test` | 8097 | 8096 | extra (manual) |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 / 81 (admin) | same | extra (optional) |
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
@@ -173,7 +172,6 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `coolify.yourdomain.com` | `coolify` | `8080` | extra |
 | `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
 | `grafana.yourdomain.com` | `grafana` | `3000` | extra |
-| `jellyfin-test.yourdomain.com` | `jellyfin-pgsql-test` | `8096` | extra (manual) |
 
 ---
 

@@ -501,9 +501,6 @@
         <a class="card-link" href="#" target="_blank">
           <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
-        <a class="card-link-secondary" href="#" data-testsub="jellyfin-test" data-testhealth="jellyfin-pgsql-test" target="_blank">
-          <span class="test-badge">TEST</span><span class="test-dot"></span> Postgres backend test
-        </a>
       </div>
 
       <div class="card" data-service="syncthing" data-category="storage">
@@ -1412,7 +1409,7 @@
       });
       // Secondary "testing instance" links — not part of SERVICE_SUBDOMAINS
       // since they share a card with their main service rather than getting
-      // their own (see docs/services/jellyfin-pgsql-test.md).
+      // their own.
       document.querySelectorAll('#card-pool .card-link-secondary[data-testsub]').forEach(link => {
         link.href = `https://${link.dataset.testsub}.${DOMAIN}`;
       });

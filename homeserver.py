@@ -138,7 +138,7 @@ SERVICES_EXTRA = [
 #     stack — immich is the default; start photoprism only if its specific
 #     feature set (e.g. its different face-recognition/tagging approach) is
 #     actually needed
-SERVICES_MANUAL = ["gitlab", "stirling-pdf", "jellyfin-pgsql-test", "photoprism"]
+SERVICES_MANUAL = ["gitlab", "stirling-pdf", "photoprism"]
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is

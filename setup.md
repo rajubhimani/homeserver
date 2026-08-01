@@ -13,7 +13,6 @@
 | [Nextcloud](docs/services/nextcloud.md) | File storage + sharing | Google Drive |
 | [Immich](docs/services/immich.md) | Photo management | Google Photos |
 | [Jellyfin](docs/services/jellyfin.md) | Media streaming | Netflix / Plex |
-| [Jellyfin Postgres test](docs/services/jellyfin-pgsql-test.md) | Manual-only test instance (Postgres backend, not SQLite) | — |
 | [Vaultwarden](docs/services/vaultwarden.md) | Password manager | 1Password / LastPass |
 | [Paperless-ngx](docs/services/paperless.md) | Document management | Scansnap cloud |
 | [Stirling PDF](docs/services/stirling-pdf.md) | PDF toolkit | Adobe Acrobat |
@@ -177,7 +176,6 @@ uv run homeserver.py prod up all
 ├── nextcloud/
 ├── immich/
 ├── jellyfin/
-├── jellyfin-pgsql-test/   ← manual-only test instance, see docs/services/jellyfin-pgsql-test.md
 ├── vaultwarden/
 ├── paperless/
 ├── stirling-pdf/
@@ -232,7 +230,6 @@ service_data/
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
 ├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
 ├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
-├── jellyfin-pgsql-test/ (config/, cache/) — manual-only test instance, see docs/services/jellyfin-pgsql-test.md; reuses jellyfin's media read-only, own metadata cache in service_data/cache/jellyfin-pgsql-test/metadata/
 ├── vaultwarden/      (data/)
 ├── paperless/        (postgres/, app/)
 ├── stirling-pdf/     (configs/, logs/, customFiles/, pipeline/, tessdata/)
