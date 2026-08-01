@@ -25,7 +25,7 @@ services:
       - homeserver
 
   forgejo:
-    image: codeberg.org/forgejo/forgejo:16.0.0
+    image: codeberg.org/forgejo/forgejo:16.0.2
     container_name: forgejo
     restart: unless-stopped
     env_file: .env
@@ -63,7 +63,7 @@ services:
       - homeserver
 
   forgejo-runner:
-    image: code.forgejo.org/forgejo/runner:12.12.0
+    image: code.forgejo.org/forgejo/runner:12.13.2
     container_name: forgejo-runner
     restart: unless-stopped
     profiles:

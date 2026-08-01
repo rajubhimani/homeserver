@@ -55,6 +55,7 @@ Prometheus and Loki dashboards ship empty — Grafana's own "Docker" and "Node E
 - **`cadvisor` runs `privileged: true`** — it needs broad host/cgroup access to read per-container stats; this is the standard cAdvisor deployment shape, not a stack-specific choice, but worth knowing it's the one privileged container in this repo.
 - **node-exporter's stats are container-namespace-relative for a few metrics** (notably some network-interface counters) since it's not on `network_mode: host` — CPU/memory/disk are unaffected since `/proc`, `/sys`, and `/` are mounted read-only regardless of network mode.
 - **No alerting configured.** Grafana supports alert rules out of the box (Alerting → Alert rules), but none are pre-provisioned — set up rules manually for anything you want paged on (e.g. disk-almost-full, container OOM-looping).
+- **First boot can exceed `homeserver.py`'s 180s readiness timeout.** Grafana 13's OSS image auto-installs several bundled apps (pyroscope, exploretraces, metricsdrilldown, lokiexplore) on first start, which can push `/api/health` past 180s and print `✖ observability FAILED` even though the container finishes starting and settles into `healthy` a bit later (check with `docker ps` or `dev logs observability`). This only happens once — the plugins land in `${DATA_ROOT}/grafana`, so subsequent `up`/`restart` calls are fast. Safe to ignore on a fresh clone or after wiping `service_data/data/observability/`; no action needed.
 
 ---
 
