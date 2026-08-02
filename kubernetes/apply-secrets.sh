@@ -167,6 +167,34 @@ kubectl create secret generic listmonk-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "listmonk-db-credentials + listmonk-credentials applied"
 
+# ── Documenso's own dedicated Postgres + app secrets ──────────────────
+kubectl create secret generic documenso-db-credentials -n apps \
+  --from-literal=password="$DOCUMENSO_DB_PASSWORD" \
+  --from-literal=database-url="postgres://documenso:${DOCUMENSO_DB_PASSWORD}@documenso-db:5432/documenso" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic documenso-credentials -n apps \
+  --from-literal=nextauth-secret="$DOCUMENSO_NEXTAUTH_SECRET" \
+  --from-literal=encryption-key="$DOCUMENSO_ENCRYPTION_KEY" \
+  --from-literal=encryption-secondary-key="$DOCUMENSO_ENCRYPTION_SECONDARY_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "documenso-db-credentials + documenso-credentials applied"
+
+# Documenso refuses to start without a valid cert.p12 for local document
+# signing. This pilot has no real signing use, so generate a throwaway
+# self-signed one on the fly rather than committing a cert to the repo.
+DOCUMENSO_CERT_DIR=$(mktemp -d)
+openssl genrsa -out "$DOCUMENSO_CERT_DIR/private.key" 2048 >/dev/null 2>&1
+# Doubled leading slash ("//CN=...") tells Git Bash's path-conversion to
+# leave just this one argument alone, without disabling conversion for the
+# surrounding -key/-out paths too (see kubernetes/TROUBLESHOOTING.md)
+openssl req -new -x509 -key "$DOCUMENSO_CERT_DIR/private.key" -out "$DOCUMENSO_CERT_DIR/certificate.crt" -days 3650 -subj "//CN=documenso.k8s.local" >/dev/null 2>&1
+openssl pkcs12 -export -out "$DOCUMENSO_CERT_DIR/cert.p12" -inkey "$DOCUMENSO_CERT_DIR/private.key" -in "$DOCUMENSO_CERT_DIR/certificate.crt" -legacy -passout pass: >/dev/null 2>&1
+kubectl create secret generic documenso-cert -n apps \
+  --from-file=cert.p12="$DOCUMENSO_CERT_DIR/cert.p12" \
+  --dry-run=client -o yaml | kubectl apply -f -
+rm -rf "$DOCUMENSO_CERT_DIR"
+echo "documenso-cert applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
