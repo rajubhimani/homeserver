@@ -205,6 +205,13 @@ kubectl create secret generic invoiceshelf-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "invoiceshelf-db-credentials + invoiceshelf-credentials applied"
 
+# ── OrangeHRM's own dedicated MariaDB ──────────────────────────────────
+kubectl create secret generic orangehrm-db-credentials -n apps \
+  --from-literal=root-password="$ORANGEHRM_DB_ROOT_PASSWORD" \
+  --from-literal=password="$ORANGEHRM_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "orangehrm-db-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
