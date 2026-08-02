@@ -121,6 +121,17 @@ kubectl create secret generic bookstack-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "bookstack-db-credentials + bookstack-credentials applied"
 
+# ── Outline's own dedicated Postgres + core secrets ───────────────────
+kubectl create secret generic outline-db-credentials -n apps \
+  --from-literal=password="$OUTLINE_DB_PASSWORD" \
+  --from-literal=database-url="postgres://outline:${OUTLINE_DB_PASSWORD}@outline-db:5432/outline?sslmode=disable" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic outline-credentials -n apps \
+  --from-literal=secret-key="$OUTLINE_SECRET_KEY" \
+  --from-literal=utils-secret="$OUTLINE_UTILS_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "outline-db-credentials + outline-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
