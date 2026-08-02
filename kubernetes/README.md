@@ -21,6 +21,7 @@ points at it via the `docker-desktop` context.
 | Traefik (Gateway API mode) | `infra` | Routes all services behind one entry point — the k8s equivalent of `nginx-plain`'s `server_name` blocks. `ingress-nginx` is deprecated (no releases/security fixes since March 2026), so this uses Gateway API (`Gateway`/`HTTPRoute`) instead of classic `Ingress` objects. |
 | ArgoCD | `argocd` | GitOps — syncs cluster state to match what's in this folder on git. |
 | Shared Postgres | `data` | One Postgres server, separate database + role per service that doesn't need its own dedicated instance. Services needing a dedicated Postgres (own version/extensions, e.g. Immich's pgvector) get their own separate StatefulSet instead. |
+| Shared MariaDB | `data` | Same pattern, for the MariaDB-using services (BookStack, InvoiceShelf, OrangeHRM) — one server, separate database + user per service via `GRANT`, no cross-service visibility. |
 
 Docker Desktop auto-exposes `type: LoadBalancer` Services on `localhost` —
 no MetalLB or extra setup needed.
@@ -39,6 +40,10 @@ kubernetes/
       secret.example.yaml         # template only — real Secret via apply-secrets.sh
       db-init-job.template.yaml   # copy into apps/<service>/ when onboarding a
                                    # service onto the shared Postgres server
+    mariadb/                      # same pattern, for MariaDB-using services
+      statefulset.yaml
+      secret.example.yaml
+      db-init-job.template.yaml
   apps/
     <service>/
       deployment.yaml (or statefulset.yaml)

@@ -20,6 +20,12 @@ kubectl create secret generic postgres-shared-credentials -n data \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "postgres-shared-credentials applied"
 
+# ── Shared MariaDB root password ──────────────────────────────────────
+kubectl create secret generic mariadb-shared-credentials -n data \
+  --from-literal=root-password="$MARIADB_SHARED_ROOT_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "mariadb-shared-credentials applied"
+
 # ── Guacamole's own dedicated Postgres password ──────────────────────
 kubectl create secret generic guacamole-db-credentials -n apps \
   --from-literal=password="$GUACAMOLE_DB_PASSWORD" \
