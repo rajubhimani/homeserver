@@ -105,6 +105,16 @@ kubectl create secret generic vikunja-db-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "vikunja-db-credentials applied"
 
+# ── BookStack's own dedicated MariaDB + app key ───────────────────────
+kubectl create secret generic bookstack-db-credentials -n apps \
+  --from-literal=root-password="$BOOKSTACK_DB_ROOT_PASSWORD" \
+  --from-literal=password="$BOOKSTACK_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic bookstack-credentials -n apps \
+  --from-literal=app-key="$BOOKSTACK_APP_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "bookstack-db-credentials + bookstack-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

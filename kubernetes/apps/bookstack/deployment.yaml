@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bookstack-config
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookstack
+  namespace: apps
+  labels:
+    app: bookstack
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bookstack
+  template:
+    metadata:
+      labels:
+        app: bookstack
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: bookstack
+          image: lscr.io/linuxserver/bookstack:v26.05.3-ls277
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: APP_URL
+              value: https://bookstack.k8s.local
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bookstack-credentials
+                  key: app-key
+            - name: DB_HOST
+              value: bookstack-db
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_USERNAME
+              value: bookstack
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bookstack-db-credentials
+                  key: password
+            - name: DB_DATABASE
+              value: bookstack
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 80
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: bookstack-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookstack
+  namespace: apps
+spec:
+  selector:
+    app: bookstack
+  ports:
+    - port: 80
