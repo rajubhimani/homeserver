@@ -195,6 +195,16 @@ kubectl create secret generic documenso-cert -n apps \
 rm -rf "$DOCUMENSO_CERT_DIR"
 echo "documenso-cert applied"
 
+# ── InvoiceShelf's own dedicated MariaDB + Laravel app key ────────────
+kubectl create secret generic invoiceshelf-db-credentials -n apps \
+  --from-literal=root-password="$INVOICESHELF_DB_ROOT_PASSWORD" \
+  --from-literal=password="$INVOICESHELF_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic invoiceshelf-credentials -n apps \
+  --from-literal=app-key="$INVOICESHELF_APP_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "invoiceshelf-db-credentials + invoiceshelf-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
