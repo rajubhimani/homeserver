@@ -38,6 +38,16 @@ kubectl create secret generic forgejo-db-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "forgejo-db-credentials applied"
 
+# ── Firefly's own dedicated Postgres password + app secrets ──────────
+kubectl create secret generic firefly-db-credentials -n apps \
+  --from-literal=password="$FIREFLY_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic firefly-credentials -n apps \
+  --from-literal=app-key="$FIREFLY_APP_KEY" \
+  --from-literal=cron-token="$FIREFLY_CRON_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "firefly-db-credentials + firefly-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

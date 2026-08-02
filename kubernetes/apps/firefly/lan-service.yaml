@@ -1,0 +1,26 @@
+# Direct LAN-reachable ports matching firefly/compose.dev.yml exactly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: firefly
+  ports:
+    - port: 8102
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-importer-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: firefly-importer
+  ports:
+    - port: 8104
+      targetPort: 8080
