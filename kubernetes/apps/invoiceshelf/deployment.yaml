@@ -29,6 +29,13 @@ spec:
         app: invoiceshelf
     spec:
       enableServiceLinks: false
+      initContainers:
+        - name: init-storage-dirs
+          image: busybox:1.37
+          command: ["mkdir", "-p", "/var/www/html/storage/app/templates/pdf"]
+          volumeMounts:
+            - name: uploads
+              mountPath: /var/www/html/storage
       containers:
         - name: invoiceshelf
           image: invoiceshelf/invoiceshelf:2.4.2
