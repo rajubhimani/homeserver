@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nocodb
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "nocodb.k8s.local"
+  rules:
+    - backendRefs:
+        - name: nocodb
+          port: 8080

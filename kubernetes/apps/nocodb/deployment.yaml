@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nocodb-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nocodb
+  namespace: apps
+  labels:
+    app: nocodb
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nocodb
+  template:
+    metadata:
+      labels:
+        app: nocodb
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: nocodb
+          image: nocodb/nocodb:2026.07.0
+          env:
+            - name: NC_DB
+              valueFrom:
+                secretKeyRef:
+                  name: nocodb-db-credentials
+                  key: nc-db-uri
+            - name: NC_PUBLIC_URL
+              value: https://nocodb.k8s.local
+            - name: NC_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nocodb-credentials
+                  key: jwt-secret
+            - name: NC_JWT_EXPIRES_IN
+              value: "10h"
+            - name: DB_QUERY_LIMIT_DEFAULT
+              value: "25"
+            - name: DB_QUERY_LIMIT_MAX
+              value: "1000"
+            - name: NC_REQUEST_BODY_SIZE
+              value: "1048576"
+            - name: NC_DISABLE_CACHE
+              value: "false"
+            - name: NC_ATTACHMENT_FIELD_SIZE
+              value: "20971520"
+            - name: NC_DISABLE_AUDIT
+              value: "false"
+            - name: NC_AUTOMATION_LOG_LEVEL
+              value: "OFF"
+            - name: NC_SMTP_SECURE
+              value: "false"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /usr/app/data
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nocodb-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nocodb
+  namespace: apps
+spec:
+  selector:
+    app: nocodb
+  ports:
+    - port: 8080

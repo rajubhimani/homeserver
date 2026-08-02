@@ -148,6 +148,16 @@ kubectl create secret generic atuin-db-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "atuin-db-credentials applied"
 
+# ── NocoDB's own dedicated Postgres + JWT secret ──────────────────────
+kubectl create secret generic nocodb-db-credentials -n apps \
+  --from-literal=password="$NOCODB_DB_PASSWORD" \
+  --from-literal=nc-db-uri="pg://nocodb-db:5432?u=nocodb&p=${NOCODB_DB_PASSWORD}&d=nocodb" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic nocodb-credentials -n apps \
+  --from-literal=jwt-secret="$NOCODB_JWT_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "nocodb-db-credentials + nocodb-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
