@@ -141,6 +141,13 @@ kubectl create secret generic wallabag-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "wallabag-db-credentials + wallabag-credentials applied"
 
+# ── Atuin's own dedicated Postgres ────────────────────────────────────
+kubectl create secret generic atuin-db-credentials -n apps \
+  --from-literal=password="$ATUIN_DB_PASSWORD" \
+  --from-literal=db-uri="postgres://atuin:${ATUIN_DB_PASSWORD}@atuin-db/atuin" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "atuin-db-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
