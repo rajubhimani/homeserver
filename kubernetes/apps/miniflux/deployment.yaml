@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: miniflux
+  namespace: apps
+  labels:
+    app: miniflux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: miniflux
+  template:
+    metadata:
+      labels:
+        app: miniflux
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: miniflux
+          image: miniflux/miniflux:2.3.2
+          env:
+            # Pre-composed as a single secret value — not via k8s $(VAR)
+            # substitution (see kubernetes/TROUBLESHOOTING.md's Immich
+            # entry for why that silently fails).
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-db-credentials
+                  key: database-url
+            - name: RUN_MIGRATIONS
+              value: "1"
+            - name: CREATE_ADMIN
+              value: "1"
+            - name: ADMIN_USERNAME
+              value: admin
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-credentials
+                  key: admin-password
+            - name: BASE_URL
+              value: https://miniflux.k8s.local
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: miniflux
+  namespace: apps
+spec:
+  selector:
+    app: miniflux
+  ports:
+    - port: 8080
