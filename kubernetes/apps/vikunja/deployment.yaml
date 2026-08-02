@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vikunja-files
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vikunja
+  namespace: apps
+  labels:
+    app: vikunja
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vikunja
+  template:
+    metadata:
+      labels:
+        app: vikunja
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: vikunja
+          image: vikunja/vikunja:2.4.0
+          env:
+            - name: VIKUNJA_DATABASE_TYPE
+              value: postgres
+            - name: VIKUNJA_DATABASE_HOST
+              value: vikunja-db
+            - name: VIKUNJA_DATABASE_USER
+              value: vikunja
+            - name: VIKUNJA_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vikunja-db-credentials
+                  key: password
+            - name: VIKUNJA_DATABASE_DATABASE
+              value: vikunja
+            - name: VIKUNJA_SERVICE_PUBLICURL
+              value: https://vikunja.k8s.local/
+            - name: VIKUNJA_SERVICE_ENABLEREGISTRATION
+              value: "false"
+          ports:
+            - containerPort: 3456
+          volumeMounts:
+            - name: files
+              mountPath: /app/vikunja/files
+          readinessProbe:
+            exec:
+              command: ["/app/vikunja/vikunja", "healthcheck"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["/app/vikunja/vikunja", "healthcheck"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: files
+          persistentVolumeClaim:
+            claimName: vikunja-files
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vikunja
+  namespace: apps
+spec:
+  selector:
+    app: vikunja
+  ports:
+    - port: 3456

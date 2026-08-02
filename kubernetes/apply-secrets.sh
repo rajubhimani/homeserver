@@ -99,6 +99,12 @@ kubectl create secret generic miniflux-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "miniflux-db-credentials + miniflux-credentials applied"
 
+# ── Vikunja's own dedicated Postgres password ─────────────────────────
+kubectl create secret generic vikunja-db-credentials -n apps \
+  --from-literal=password="$VIKUNJA_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "vikunja-db-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
