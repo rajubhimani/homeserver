@@ -4,6 +4,7 @@
 Usage:
   python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
   python homeserver.py <env> -r <service...>   (shorthand for restart)
+  python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
 
 Service tiers:
   min    — bare minimum to run the server (dozzle, nginx-plain, landing)
@@ -45,6 +46,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -296,6 +298,17 @@ class DockerBackend(ABC):
     @abstractmethod
     def untar_into_dir(self, archive_path: Path, dest_dir: Path) -> bool: ...
 
+    @abstractmethod
+    def system_prune(self) -> tuple[bool, str]:
+        """docker system prune -a --volumes -f — removes every unused image,
+        stopped container, and unnamed/anonymous volume on the whole Docker
+        host, not just this stack. Returns (success, combined output)."""
+
+    @abstractmethod
+    def builder_prune(self) -> tuple[bool, str]:
+        """docker builder prune -a -f — clears the build cache. Returns
+        (success, combined output)."""
+
 
 class SubprocessBackend(DockerBackend):
     def _run(self, args: list[str], env: dict[str, str] | None = None, capture: bool = True) -> subprocess.CompletedProcess:
@@ -451,6 +464,14 @@ class SubprocessBackend(DockerBackend):
             "sh", "-c", f"tar xzf /backup/{archive_path.name} -C /to",
         ]
         return self._run(args).returncode == 0
+
+    def system_prune(self) -> tuple[bool, str]:
+        proc = self._run(["system", "prune", "-a", "--volumes", "-f"])
+        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
+
+    def builder_prune(self) -> tuple[bool, str]:
+        proc = self._run(["builder", "prune", "-a", "-f"])
+        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
 
 class PythonOnWhalesBackend(DockerBackend):
@@ -666,6 +687,17 @@ class PythonOnWhalesBackend(DockerBackend):
         except Exception as e:
             error(f"  {e}")
             return False
+
+    def system_prune(self) -> tuple[bool, str]:
+        # Raw subprocess rather than python-on-whales here — same reasoning
+        # as db_pg_dump above: this backend's main value (typed compose
+        # exceptions) doesn't apply to a one-shot prune command.
+        proc = subprocess.run([RUNTIME, "system", "prune", "-a", "--volumes", "-f"], capture_output=True, text=True)
+        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
+
+    def builder_prune(self) -> tuple[bool, str]:
+        proc = subprocess.run([RUNTIME, "builder", "prune", "-a", "-f"], capture_output=True, text=True)
+        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
 
 def create_backend() -> DockerBackend:
@@ -1319,6 +1351,125 @@ def do_logs(service: str, env: str) -> None:
     BACKEND.compose_logs_follow(files, cenv)
 
 
+# ── Disk reclaim (gc) ───────────────────────────────────────────────
+#
+# Pruning alone (docker system/builder prune) only frees space *inside*
+# Docker Desktop's WSL2 VHDX — the .vhdx file on disk never shrinks on its
+# own no matter how much you delete inside it. Actually reclaiming that disk
+# space needs fstrim (tell the WSL2 VM's filesystem which blocks are free)
+# + wsl --shutdown + a diskpart compact pass. See
+# docs/08-maintenance.md#reclaiming-disk-space-docker-desktop-on-windows--wsl2
+# for the manual version of this procedure this automates.
+
+
+def _is_windows_admin() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes  # noqa: PLC0415
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def _find_docker_vhdx() -> Path | None:
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        return None
+    # Path/filename depends on Docker Desktop version — try newer first.
+    candidates = [
+        Path(local) / "Docker" / "wsl" / "disk" / "docker_data.vhdx",
+        Path(local) / "Docker" / "wsl" / "data" / "ext4.vhdx",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
+def _gb(n: int) -> float:
+    return n / (1024 ** 3)
+
+
+def _compact_docker_vhdx(vhdx: Path) -> None:
+    if not _is_windows_admin():
+        warn("Not running as Administrator — diskpart compaction needs elevation")
+        warn(f"  (it silently no-ops otherwise). Re-run from an Administrator terminal to compact {vhdx}")
+        return
+
+    before = vhdx.stat().st_size
+    info("Trimming filesystem inside the WSL2 VM...")
+    subprocess.run(["wsl", "-d", "docker-desktop", "-u", "root", "--", "fstrim", "-av"])
+    info("Shutting down WSL...")
+    subprocess.run(["wsl", "--shutdown"])
+    info("Compacting VHDX via diskpart (this can take a minute)...")
+    script = f'select vdisk file="{vhdx}"\nattach vdisk readonly\ncompact vdisk\ndetach vdisk\nexit\n'
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write(script)
+        script_path = f.name
+    try:
+        subprocess.run(["diskpart", "/s", script_path])
+    finally:
+        os.unlink(script_path)
+
+    after = vhdx.stat().st_size
+    reclaimed = _gb(before - after)
+    if reclaimed > 0.05:
+        success(f"VHDX compacted: {_gb(before):.2f}GB -> {_gb(after):.2f}GB (reclaimed {reclaimed:.2f}GB)")
+    else:
+        warn(f"VHDX barely shrank ({_gb(before):.2f}GB -> {_gb(after):.2f}GB)")
+        warn("  If this persists, try the export/reimport procedure in docs/08-maintenance.md")
+
+
+def do_gc(assume_yes: bool = False) -> int:
+    header(f"Reclaiming Docker disk space (runtime: {RUNTIME})...")
+
+    warn("This prunes ALL unused images/containers/volumes on this Docker host —")
+    warn("not just this stack's. If other projects share this Docker install, their")
+    warn("unused resources get pruned too.")
+    if sys.platform == "win32":
+        vhdx = _find_docker_vhdx()
+        if vhdx:
+            warn(f"It will also shut down WSL and compact {vhdx.name} via diskpart.")
+    if not assume_yes:
+        try:
+            reply = input(f"\n{BOLD}Continue? [y/N]{RESET} ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            info("Cancelled")
+            return 1
+        if reply not in ("y", "yes"):
+            info("Cancelled")
+            return 1
+    print()
+
+    info("Pruning unused images, containers, and volumes...")
+    ok, out = BACKEND.system_prune()
+    if out.strip():
+        print(out.strip())
+    success("System prune complete") if ok else error("System prune failed")
+
+    info("Pruning build cache...")
+    ok2, out2 = BACKEND.builder_prune()
+    if out2.strip():
+        print(out2.strip())
+    success("Builder prune complete") if ok2 else error("Builder prune failed")
+
+    if sys.platform == "win32":
+        vhdx = _find_docker_vhdx()
+        if vhdx:
+            _compact_docker_vhdx(vhdx)
+        else:
+            info("No Docker Desktop WSL2 VHDX found — nothing more to reclaim")
+    else:
+        info("Native Docker frees space on the host filesystem immediately — prune above is the whole story here")
+
+    print(f"\n{BOLD}{'━' * 40}{RESET}")
+    success("Done")
+    print(f"{BOLD}{'━' * 40}{RESET}\n")
+    return 0
+
+
 # ── Help ─────────────────────────────────────────────────────────────
 
 
@@ -1331,6 +1482,7 @@ def show_help() -> None:
     print("    python homeserver.py <env> -u <service...>                     (up shorthand)")
     print("    python homeserver.py <env> -d <service...>                     (down shorthand)")
     print("    python homeserver.py <env> -r <service...>                     (restart shorthand)")
+    print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print()
     print(f"  {BOLD}Environments:{RESET}")
     print("    dev    ports on all interfaces (direct access)")
@@ -1371,6 +1523,8 @@ def show_help() -> None:
     print("    python homeserver.py dev migrate forgejo             migrate forgejo-db to postgres-alpine using the latest dump")
     print("    python homeserver.py dev migrate immich --image ghcr.io/immich-app/postgres:18-vectorchord0.6.0-pgvector0.9.0")
     print("                                                         explicit target — required for non-official Postgres images")
+    print("    python homeserver.py gc                              prune + (Windows) compact Docker Desktop's WSL2 VHDX")
+    print("    python homeserver.py gc --yes                        same, skip the confirmation prompt")
     print()
     print(f"  {BOLD}MIN (infrastructure):{RESET}")
     print(f"    {' '.join(SERVICES_MIN)}")
@@ -1436,6 +1590,11 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
 
 def main() -> int:
     argv = sys.argv[1:]
+
+    # Standalone verb, not part of the <env> <action> <target> pattern below —
+    # disk reclaim isn't env/service-scoped, it's a whole-Docker-host operation.
+    if argv and argv[0] == "gc":
+        return do_gc(assume_yes="--yes" in argv or "-y" in argv)
 
     if len(argv) < 3:
         show_help()
