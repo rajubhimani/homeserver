@@ -1,0 +1,89 @@
+# Own dedicated Postgres, not the shared server — guacamole needs its own
+# schema bootstrapped fresh via docker-entrypoint-initdb.d (00-init.sh +
+# 01-schema.sql, see postgres-init-configmap.yaml), which only runs on an
+# empty data directory. Mirrors guacamole/compose.yml's guacamole-db exactly.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: guacamole-db
+  namespace: apps
+spec:
+  serviceName: guacamole-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guacamole-db
+  template:
+    metadata:
+      labels:
+        app: guacamole-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18.4-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: guacamole
+            - name: POSTGRES_USER
+              value: guacamole
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: guacamole-db-credentials
+                  key: password
+          # args, not command — command overrides the image's ENTRYPOINT
+          # wrapper (docker-entrypoint.sh, handles switching off root/init),
+          # unlike Compose's `command:` which only overrides CMD. args is
+          # the k8s equivalent of Compose's `command:` for this purpose.
+          args:
+            - -c
+            - shared_buffers=128MB
+            - -c
+            - max_connections=20
+            - -c
+            - work_mem=4MB
+            - -c
+            - maintenance_work_mem=64MB
+            - -c
+            - effective_cache_size=256MB
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          resources:
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "guacamole"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: init
+          configMap:
+            name: guacamole-postgres-init
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guacamole-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: guacamole-db
+  ports:
+    - port: 5432

@@ -20,6 +20,12 @@ kubectl create secret generic postgres-shared-credentials -n data \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "postgres-shared-credentials applied"
 
+# ── Guacamole's own dedicated Postgres password ──────────────────────
+kubectl create secret generic guacamole-db-credentials -n apps \
+  --from-literal=password="$GUACAMOLE_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "guacamole-db-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

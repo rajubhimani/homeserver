@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: excalidraw
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rajubhimani/homeserver.git
+    targetRevision: feature/k8s-pilot
+    path: kubernetes/apps/excalidraw
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps
+  syncPolicy:
+    automated:
+      prune: true      # remove resources deleted from git
+      selfHeal: true    # revert manual kubectl changes back to match git
+    syncOptions:
+      - CreateNamespace=false   # apps namespace already created by cluster/namespaces.yaml
