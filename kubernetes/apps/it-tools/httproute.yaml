@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: it-tools
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "it-tools.k8s.local"
+  rules:
+    - backendRefs:
+        - name: it-tools
+          port: 80
