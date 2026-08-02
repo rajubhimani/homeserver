@@ -1,0 +1,31 @@
+# Multi-source Application: the Helm chart itself from Traefik's chart repo,
+# + our values.yaml from this git repo, referenced via $values. Pinned to
+# chart 41.1.0 to match exactly what was already running (installed via
+# plain `helm install` originally, then migrated to ArgoCD management —
+# see kubernetes/README.md for that migration note).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-traefik
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://traefik.github.io/charts
+      chart: traefik
+      targetRevision: 41.1.0
+      helm:
+        valueFiles:
+          - $values/kubernetes/cluster/traefik/values.yaml
+    - repoURL: https://github.com/rajubhimani/homeserver.git
+      targetRevision: feature/k8s-pilot
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
