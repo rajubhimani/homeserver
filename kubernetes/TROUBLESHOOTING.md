@@ -400,4 +400,74 @@ check a candidate port isn't already bound before committing to it:
 
 ---
 
+## Docker Desktop's VHDX filling the entire host disk (real outage, 2026-08-03)
+
+Repeatedly pulling images for each new service test in this pilot (~35
+services, one at a time) without pruning in between let Docker Desktop's
+WSL2 VHDX (`docker_data.vhdx`) balloon to ~83GB. Windows/WSL2 VHDXs never
+auto-shrink — deletes *inside* the VM don't reclaim host disk space without
+an explicit compact step. It eventually filled the C: drive to 100% (33MB
+free), which made the Docker daemon itself hang completely: `docker
+version`/`docker context ls` timed out on every single CLI command, not
+just slow — indistinguishable from a genuinely stuck backend process from
+the CLI side alone.
+
+**Diagnose first:** if the daemon stops responding to *everything*, check
+`df -h /c` (host disk) before assuming it's a hung process and restarting
+Docker Desktop — a full C: drive looks identical to a stuck daemon but
+needs a completely different fix (free host disk, not kill/restart
+processes; restarting won't even succeed if there's no space to start
+into).
+
+**Prevention — do this every 2-3 services, not just when things break:**
+run `uv run homeserver.py gc` (prune + WSL2 VHDX compact) periodically
+throughout the pilot instead of letting pulls accumulate.
+
+**Recovery, if the disk does fill completely** (this wipes ALL Docker
+state — every image/container/volume, not just k8s test leftovers; get
+explicit user confirmation before doing this, and take a fresh backup of
+CORE production services first if the daemon is still responsive enough
+to allow it):
+
+1. Fully stop Docker Desktop (`Docker Desktop`, `com.docker.backend`,
+   `com.docker.build`, `docker-agent` processes).
+2. `wsl --unregister docker-desktop` — un-registers the distro, but does
+   **not** delete the VHDX itself, since Docker Desktop stores it at a
+   custom path (`%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx`) outside
+   WSL's normal per-distro storage convention.
+3. Manually delete the now-orphaned VHDX files (`wsl\disk\docker_data.vhdx`
+   and `wsl\main\ext4.vhdx`) once Docker Desktop is confirmed fully
+   stopped — this is the step that actually frees host disk space.
+4. Relaunch Docker Desktop. It recreates fresh empty VHDXs, and since
+   `"KubernetesEnabled": true` persists separately in
+   `%APPDATA%\Docker\settings-store.json` (untouched by the VHDX wipe), it
+   auto-reprovisions a fresh 4-node kind cluster on its own — no manual
+   `kind create cluster` needed.
+5. What survives, unaffected: everything committed to git under
+   `kubernetes/` (every manifest, every ArgoCD `Application`), and
+   `kubernetes/.env` (the generated secret values) — that's a plain file
+   on the `D:` drive, never touched by wiping `C:\...\AppData\Local\Docker`.
+   Rebuilding the platform from here is mechanical, not "start over":
+   - Reinstall Gateway API CRDs (same command as initial setup, see README).
+   - Reapply `kubernetes/cluster/namespaces.yaml` directly (bootstraps the
+     `argocd` namespace ArgoCD needs to install into — chicken-and-egg,
+     ArgoCD can't create its own namespace before it exists).
+   - Bootstrap ArgoCD itself:
+     `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml --server-side --force-conflicts`
+     — **must** use `--server-side`. Plain `kubectl apply` fails on the
+     `applicationsets.argoproj.io` CRD with `annotations: Too long: may
+     not be more than 262144 bytes` (ArgoCD's CRDs are too large for
+     client-side apply's `last-applied-configuration` annotation).
+   - Once ArgoCD is up, apply the `argocd-apps/cluster-*.yaml` Applications
+     (`cluster-namespaces`, `cluster-gateway`, `cluster-traefik`,
+     `cluster-postgres-shared`, `cluster-mariadb-shared`) and let ArgoCD
+     reconcile the rest of the platform itself, rather than manually
+     `kubectl apply`-ing each piece.
+   - Re-run `kubernetes/apply-secrets.sh` — it reuses the existing values
+     already in `.env`, no need to regenerate secrets.
+   - Individual service Applications (`argocd-apps/<service>.yaml`) can
+     then be reapplied and tested one at a time, same as normal.
+
+---
+
 [← kubernetes/README.md](README.md)
