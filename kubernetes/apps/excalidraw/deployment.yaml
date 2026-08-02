@@ -18,6 +18,7 @@ spec:
       labels:
         app: excalidraw
     spec:
+      enableServiceLinks: false
       containers:
         - name: excalidraw
           image: excalidraw/excalidraw:latest

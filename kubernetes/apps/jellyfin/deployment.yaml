@@ -66,6 +66,7 @@ spec:
       labels:
         app: jellyfin
     spec:
+      enableServiceLinks: false
       containers:
         - name: jellyfin
           image: jellyfin/jellyfin:10.11.11

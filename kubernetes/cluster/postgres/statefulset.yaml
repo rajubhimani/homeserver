@@ -21,6 +21,7 @@ spec:
       labels:
         app: postgres-shared
     spec:
+      enableServiceLinks: false
       containers:
         - name: postgres
           image: postgres:18.4-alpine

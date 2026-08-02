@@ -32,6 +32,7 @@ spec:
       labels:
         app: vaultwarden
     spec:
+      enableServiceLinks: false
       containers:
         - name: vaultwarden
           image: vaultwarden/server:1.37.1

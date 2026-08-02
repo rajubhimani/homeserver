@@ -16,6 +16,7 @@ spec:
       labels:
         app: firefly-db
     spec:
+      enableServiceLinks: false
       containers:
         - name: postgres
           image: postgres:18.4-alpine

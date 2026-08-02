@@ -28,6 +28,13 @@ spec:
       labels:
         app: trilium
     spec:
+      # Kubernetes auto-injects legacy Docker-link-style env vars for every
+      # Service in the namespace (<SERVICE_NAME>_PORT, _SERVICE_HOST, etc.).
+      # Our own "trilium" Service collided with Trilium's own TRILIUM_PORT
+      # config var — disable this for every pod in this shared namespace,
+      # not just this one, since any similarly-named app env var could
+      # collide with any other service's name as more get added.
+      enableServiceLinks: false
       containers:
         - name: trilium
           image: triliumnext/trilium:v0.104.1

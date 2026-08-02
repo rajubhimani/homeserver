@@ -31,6 +31,7 @@ spec:
       labels:
         app: forgejo
     spec:
+      enableServiceLinks: false
       containers:
         - name: forgejo
           image: codeberg.org/forgejo/forgejo:16.0.2

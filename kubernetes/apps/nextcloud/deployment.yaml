@@ -66,6 +66,7 @@ spec:
       labels:
         app: nextcloud
     spec:
+      enableServiceLinks: false
       containers:
         - name: nextcloud
           image: nextcloud:34
@@ -178,6 +179,7 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          enableServiceLinks: false
           containers:
             - name: nextcloud-cron
               image: nextcloud:34

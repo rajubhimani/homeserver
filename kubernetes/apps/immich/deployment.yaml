@@ -46,6 +46,7 @@ spec:
       labels:
         app: immich-server
     spec:
+      enableServiceLinks: false
       containers:
         - name: immich-server
           image: ghcr.io/immich-app/immich-server:v3.1.0
@@ -151,6 +152,7 @@ spec:
       labels:
         app: immich-ml
     spec:
+      enableServiceLinks: false
       containers:
         - name: immich-ml
           image: ghcr.io/immich-app/immich-machine-learning:v3.1.0

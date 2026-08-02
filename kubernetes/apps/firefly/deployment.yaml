@@ -39,6 +39,7 @@ spec:
           volumeMounts:
             - name: storage
               mountPath: /var/www/html/storage
+      enableServiceLinks: false
       containers:
         - name: firefly
           image: fireflyiii/core:version-6.6.6
@@ -145,6 +146,7 @@ spec:
       labels:
         app: firefly-importer
     spec:
+      enableServiceLinks: false
       containers:
         - name: firefly-importer
           image: fireflyiii/data-importer:version-2.3.4
@@ -202,6 +204,7 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          enableServiceLinks: false
           containers:
             - name: firefly-cron
               image: alpine:3.24

@@ -21,6 +21,7 @@ spec:
       labels:
         app: immich-db
     spec:
+      enableServiceLinks: false
       containers:
         - name: postgres
           image: ghcr.io/immich-app/postgres:18-vectorchord0.5.3-pgvector0.8.1
@@ -103,6 +104,7 @@ spec:
       labels:
         app: immich-redis
     spec:
+      enableServiceLinks: false
       containers:
         - name: redis
           image: valkey/valkey:9.1-alpine

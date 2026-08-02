@@ -18,6 +18,7 @@ spec:
       labels:
         app: guacamole-db
     spec:
+      enableServiceLinks: false
       containers:
         - name: postgres
           image: postgres:18.4-alpine

@@ -171,6 +171,45 @@ directory` errors for paths that definitely exist inside the container.
 
 ## Application-specific gotchas
 
+### Kubernetes auto-injects env vars that can collide with an app's own config vars
+
+Kubernetes auto-populates every pod with legacy Docker-link-style
+environment variables for **every** `Service` that already exists in the
+same namespace at pod creation time — `<SERVICE_NAME>_SERVICE_HOST`,
+`<SERVICE_NAME>_SERVICE_PORT`, and `<SERVICE_NAME>_PORT` (a
+`tcp://<ip>:<port>` URI). This is the `enableServiceLinks` pod-spec field,
+default `true`.
+
+**Symptom:** `trilium` crash-looped with `FATAL ERROR: Invalid port value
+"tcp://10.96.55.194:8080" from environment variable TRILIUM_PORT` — Trilium
+itself reads an env var literally named `TRILIUM_PORT` for its own config,
+and Kubernetes had already injected a same-named variable (derived from the
+`trilium` Service's own name) with a completely different value format.
+
+**Why this gets worse over time in this setup specifically:** every
+service in this pilot shares one flat `apps` namespace (mirroring the
+compose stack's single-network model). Every additional service added is
+another `Service` name that gets auto-injected into every *other* pod's
+environment — the collision risk only grows as more services are ported,
+and it can hit any app with a generically-named env var (`PORT`, `HOST`,
+`_PORT` suffixes are common).
+
+**Fix:** set `enableServiceLinks: false` on every pod spec in this shared
+namespace, not just the one that happened to collide first:
+
+```yaml
+spec:
+  template:
+    spec:
+      enableServiceLinks: false   # right here, sibling to `containers:`
+      containers:
+        - name: ...
+```
+
+Applied retroactively to every Deployment/StatefulSet/CronJob in this repo
+once found — **new services must include this from the start**, don't wait
+for a collision to surface it.
+
 ### Nextcloud 400s kubelet's own health probes
 
 Nextcloud validates every request's `Host` header against

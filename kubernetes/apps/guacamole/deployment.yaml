@@ -17,6 +17,7 @@ spec:
       labels:
         app: guacd
     spec:
+      enableServiceLinks: false
       containers:
         - name: guacd
           image: guacamole/guacd:1.6.0
@@ -56,6 +57,7 @@ spec:
       labels:
         app: guacamole
     spec:
+      enableServiceLinks: false
       containers:
         - name: guacamole
           image: guacamole/guacamole:1.6.0
