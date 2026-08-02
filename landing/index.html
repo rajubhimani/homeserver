@@ -158,6 +158,20 @@
       margin-bottom: 0.875rem;
     }
 
+    /* ── Subgroups (within a category) ──────────────────────────────── */
+    .subgroup { margin-bottom: 1.25rem; }
+    .subgroup:last-child { margin-bottom: 0; }
+
+    .subgroup-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 0.625rem;
+    }
+
     /* ── Responsive grid ───────────────────────────────────────────── */
     .grid {
       display: grid;
@@ -402,15 +416,9 @@
       </div>
       <div class="category" data-cat="productivity" style="display:none">
         <p class="section-label">Productivity</p>
-        <div class="grid"></div>
-      </div>
-      <div class="category" data-cat="communication" style="display:none">
-        <p class="section-label">Communication</p>
-        <div class="grid"></div>
       </div>
       <div class="category" data-cat="dev" style="display:none">
         <p class="section-label">Dev &amp; Security</p>
-        <div class="grid"></div>
       </div>
       <div class="category" data-cat="system" style="display:none">
         <p class="section-label">System</p>
@@ -429,15 +437,9 @@
       </div>
       <div class="category" data-cat="productivity" style="display:none">
         <p class="section-label">Productivity</p>
-        <div class="grid"></div>
-      </div>
-      <div class="category" data-cat="communication" style="display:none">
-        <p class="section-label">Communication</p>
-        <div class="grid"></div>
       </div>
       <div class="category" data-cat="dev" style="display:none">
         <p class="section-label">Dev &amp; Security</p>
-        <div class="grid"></div>
       </div>
       <div class="category" data-cat="system" style="display:none">
         <p class="section-label">System</p>
@@ -446,887 +448,7 @@
     </div>
 
     <!-- ── Card pool (hidden — JS places cards into sections) ──────── -->
-    <div id="card-pool" style="display:none">
-
-      <!-- Storage & Media -->
-      <div class="card" data-service="immich" data-category="storage">
-        <div class="card-icon teal">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="2" width="14" height="10" rx="2" stroke="#0F6E56" stroke-width="1.4"/>
-            <circle cx="9" cy="7" r="2.5" stroke="#0F6E56" stroke-width="1.4"/>
-            <path d="M5 15 Q9 12 13 15" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Immich</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted photo and video backup. Google Photos alternative with facial recognition and smart search.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="nextcloud" data-category="storage">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 5 L3 14 Q3 15 4 15 L14 15 Q15 15 15 14 L15 5" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M2 5 L9 2 L16 5" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M7 15 L7 10 L11 10 L11 15" stroke="#185FA5" stroke-width="1.4"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Nextcloud</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="jellyfin" data-category="storage">
-        <div class="card-icon purple">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="4" width="14" height="10" rx="2" stroke="#6B35B5" stroke-width="1.4"/>
-            <path d="M6 9 L8 11 L12 7" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M9 2 L9 4" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Jellyfin</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="syncthing" data-category="storage">
-        <div class="card-icon teal">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 3 A6 6 0 0 1 15 9" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M9 15 A6 6 0 0 1 3 9" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M13 7 L15 9 L13 11" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M5 7 L3 9 L5 11" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Syncthing</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Continuous P2P file sync between your devices. No cloud middleman — direct device-to-device.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="audiobookshelf" data-category="storage">
-        <div class="card-icon purple">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="3" y="3" width="12" height="12" rx="2" stroke="#6B35B5" stroke-width="1.4"/>
-            <path d="M7 7 L7 11 M9 6 L9 12 M11 8 L11 11" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Audiobookshelf</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <!-- Productivity -->
-      <div class="card" data-service="paperless" data-category="productivity">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M4 3 L14 3 Q15 3 15 4 L15 14 Q15 15 14 15 L4 15 Q3 15 3 14 L3 4 Q3 3 4 3Z" stroke="#A85C04" stroke-width="1.4"/>
-            <path d="M6 7 L12 7 M6 10 L10 10" stroke="#A85C04" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Paperless</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Scan, index, and archive all your documents. Full-text search with OCR — go paperless.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="stirling-pdf-lite" data-category="productivity">
-        <div class="card-icon red">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="3" y="2" width="9" height="12" rx="1.5" stroke="#A83535" stroke-width="1.4"/>
-            <path d="M6 5 L9 5 M6 8 L9 8" stroke="#A83535" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M11 10 L15 14 M13 10 L15 12" stroke="#A83535" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Stirling PDF</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Merge, split, compress, and edit PDFs. Lightweight toolkit — always on.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="stirling-pdf" data-category="productivity">
-        <div class="card-icon red">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="3" y="2" width="9" height="12" rx="1.5" stroke="#A83535" stroke-width="1.4"/>
-            <path d="M6 5 L9 5 M6 8 L9 8" stroke="#A83535" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M11 10 L15 14 M13 10 L15 12" stroke="#A83535" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Stirling PDF (Full)</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="guacamole" data-category="system">
-        <div class="card-icon purple">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="3" width="14" height="9" rx="1.5" stroke="#6B35B5" stroke-width="1.4"/>
-            <path d="M7 15 L11 15 M9 12 L9 15" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M6 7.5 L8 9.5 L12 5.5" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Guacamole</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Clientless remote desktop gateway — access VNC/RDP/SSH targets from any browser, on your LAN or over the internet.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="open-webui" data-category="productivity">
-        <div class="card-icon pink">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 4 h12 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 h-8 l-3 3 v-3 h-1 a1 1 0 0 1 -1 -1 v-6 a1 1 0 0 1 1 -1 Z" stroke="#A5356B" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Open WebUI</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Chat interface for local LLMs served by Ollama.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="mealie" data-category="productivity">
-        <div class="card-icon pink">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 2 L10.5 6.5 L15.5 6.5 L11.5 9.5 L13 14 L9 11 L5 14 L6.5 9.5 L2.5 6.5 L7.5 6.5 Z" stroke="#A5356B" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Mealie</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="trilium" data-category="productivity">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 2 L9 16 M9 2 L4 5 L4 11 L9 14 M9 2 L14 5 L14 11 L9 14" stroke="#1565C0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Trilium Notes</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="silverbullet" data-category="productivity">
-        <div class="card-icon gray">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="6.5" stroke="#4A4A4A" stroke-width="1.4"/>
-            <path d="M9 5.5 L9 9 L11.5 10.5" stroke="#4A4A4A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">SilverBullet</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Markdown notes with a query language over your own space. Lightweight, single space.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="outline" data-category="productivity">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="3" y="2.5" width="12" height="13" rx="1.5" stroke="#1565C0" stroke-width="1.4"/>
-            <path d="M6 6 L12 6 M6 9 L12 9 M6 12 L9.5 12" stroke="#1565C0" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Outline</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Polished self-hosted team wiki and docs, good search. Logs in via Authentik.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="bookstack" data-category="productivity">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M4 3 h5 v12 h-5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 A1.5 1.5 0 0 1 4 3 Z" stroke="#A85C04" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M9 3 h5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-5" stroke="#A85C04" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">BookStack</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="excalidraw" data-category="productivity">
-        <div class="card-icon purple">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 14 L6 14.5 L13.5 7 a1.2 1.2 0 0 0 0 -1.7 l-0.8 -0.8 a1.2 1.2 0 0 0 -1.7 0 L3.5 12 Z" stroke="#6B35B5" stroke-width="1.3" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Excalidraw</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="karakeep" data-category="productivity">
-        <div class="card-icon yellow">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M5 2.5 h8 v13 l-4 -3 l-4 3 Z" stroke="#8A6D00" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Karakeep</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Bookmark manager with AI auto-tagging and full-text search of saved pages.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="it-tools" data-category="dev">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M11 2.5 a3 3 0 0 0 -3.9 3.9 L2.5 11 l1.5 1.5 l0.7 -0.7 l1 1 l0.8 -0.8 l-1 -1 l1.9 -1.9 a3 3 0 0 0 3.9 -3.9 l-2 2 l-1.4 -1.4 Z" stroke="#1565C0" stroke-width="1.3" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">IT-Tools</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="n8n" data-category="dev">
-        <div class="card-icon pink">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="4" cy="4.5" r="1.8" stroke="#A5356B" stroke-width="1.3"/>
-            <circle cx="14" cy="4.5" r="1.8" stroke="#A5356B" stroke-width="1.3"/>
-            <circle cx="9" cy="13.5" r="1.8" stroke="#A5356B" stroke-width="1.3"/>
-            <path d="M5.6 5.2 L8 12 M12.4 5.2 L10 12 M5.8 4.5 L12.2 4.5" stroke="#A5356B" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">n8n</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted workflow automation. Webhook → transform → notify style glue for homelab scripts.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="wallabag" data-category="productivity">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M4 3 h10 v11 l-5 -2.5 l-5 2.5 Z" stroke="#2E7D32" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Wallabag</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="nocodb" data-category="dev">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2.5" y="3" width="13" height="12" rx="1.5" stroke="#2E7D32" stroke-width="1.4"/>
-            <path d="M2.5 7.5 h13 M6.5 3 v12" stroke="#2E7D32" stroke-width="1.4"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">NocoDB</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Turns any database into an Airtable-style spreadsheet UI.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="listmonk" data-category="productivity">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M2.5 5 L9 9.5 L15.5 5" stroke="#1565C0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <rect x="2.5" y="4" width="13" height="10" rx="1.5" stroke="#1565C0" stroke-width="1.4"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Listmonk</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted newsletter and mailing list manager.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="documenso" data-category="productivity">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M5 2.5 h6 l3 3 v10 h-9 Z" stroke="#1565C0" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M7 11.5 l1.5 1.5 l3 -3.5" stroke="#1565C0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Documenso</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted document e-signing.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="calcom" data-category="productivity">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" stroke="#2E7D32" stroke-width="1.4"/>
-            <path d="M2.5 7 h13 M6 2 v3 M12 2 v3" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Cal.com</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted scheduling and booking pages.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="plausible" data-category="dev">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 13 L7 8 L10 10.5 L15 4" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M3 3 L3 15 L15 15" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Plausible</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted, privacy-friendly web analytics.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="penpot" data-category="dev">
-        <div class="card-icon purple">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M4 4 L14 4 L14 9 L9 14 L4 14 Z" stroke="#6B35B5" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M9 9 L9 14 M9 9 L14 9" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Penpot</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted design and prototyping tool.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="coolify" data-category="dev">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 2 L15 5.5 L15 12.5 L9 16 L3 12.5 L3 5.5 Z" stroke="#1565C0" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M6.5 8.5 L8 10 L11.5 6.5" stroke="#1565C0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Coolify</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted PaaS — deploy other projects with a Vercel/Heroku-style workflow.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="supabase" data-category="dev">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M10 2 L4 10 L8.5 10 L8 16 L14 8 L9.5 8 Z" stroke="#2E7D32" stroke-width="1.3" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Supabase</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted Firebase alternative — Postgres, Auth, Realtime, Storage, Edge Functions.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="vikunja" data-category="productivity">
-        <div class="card-icon teal">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2.5" y="2.5" width="13" height="13" rx="2" stroke="#00695C" stroke-width="1.4"/>
-            <path d="M5.5 9 L7.5 11 L12.5 6" stroke="#00695C" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Vikunja</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">To-do list and task management app. Organize projects, set due dates, and track work.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="miniflux" data-category="productivity">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 5 L15 5 M3 9 L12 9 M3 13 L9 13" stroke="#A85C04" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Miniflux</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="openproject" data-category="productivity">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="2" width="14" height="14" rx="2" stroke="#185FA5" stroke-width="1.4"/>
-            <path d="M5 6 L13 6 M5 9 L10 9 M5 12 L8 12" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">OpenProject</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="plane" data-category="productivity">
-        <div class="card-icon purple">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="3" stroke="#6B35B5" stroke-width="1.4"/>
-            <path d="M9 2 L9 6 M9 12 L9 16 M2 9 L6 9 M12 9 L16 9" stroke="#6B35B5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Plane</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Modern open-source project management. Issues, cycles, modules and analytics. Jira alternative.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="invoiceshelf" data-category="productivity">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="3" y="2" width="12" height="14" rx="2" stroke="#A85C04" stroke-width="1.4"/>
-            <path d="M6 6 L12 6 M6 9 L12 9 M6 12 L9 12" stroke="#A85C04" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M10 11 L13 14 M11.5 11 L13 12.5" stroke="#A85C04" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">InvoiceShelf</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted invoicing and billing. Create invoices, track expenses, accept payments.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="firefly" data-category="productivity">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="6" stroke="#2E7D32" stroke-width="1.4"/>
-            <path d="M9 5 L9 9 L12 11" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M6 7 L9 5 L12 7" stroke="#2E7D32" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Firefly III</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Personal finance manager. Track income, expenses, budgets and accounts in one place.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="firefly-importer" data-category="productivity">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 2 L9 11 M6 8 L9 11 L12 8" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M4 13 L4 15 L14 15 L14 13" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Firefly Importer</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Import financial data into Firefly III from CSV, YNAB, or bank accounts via Nordigen.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="appflowy" data-category="productivity">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="3" width="14" height="12" rx="2" stroke="#1565C0" stroke-width="1.4"/>
-            <path d="M5 7 L13 7 M5 10 L10 10" stroke="#1565C0" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M9 3 L9 1 M12 3 L12 1 M6 3 L6 1" stroke="#1565C0" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">AppFlowy</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <!-- Communication -->
-      <!-- Dev & Security -->
-      <div class="card" data-service="forgejo" data-category="dev">
-        <div class="card-icon teal">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="7" stroke="#0F6E56" stroke-width="1.4"/>
-            <path d="M6 5 Q6 9 9 9 Q12 9 12 13 M9 9 L7 11" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Forgejo</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="orangehrm" data-category="productivity">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="6" r="2.5" stroke="#A85C04" stroke-width="1.4"/>
-            <path d="M4 15 c0 -3 2.2 -5 5 -5 s5 2 5 5" stroke="#A85C04" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">OrangeHRM</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Open-source HR management — employee records, leave, time tracking, recruitment.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="photoprism" data-category="storage">
-        <div class="card-icon yellow">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2.5" y="4" width="13" height="10" rx="1.5" stroke="#8A7A04" stroke-width="1.4"/>
-            <circle cx="9" cy="9" r="2.5" stroke="#8A7A04" stroke-width="1.4"/>
-            <path d="M6 4 L7 2.5 L11 2.5 L12 4" stroke="#8A7A04" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">PhotoPrism</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately).</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="gitlab" data-category="dev">
-        <div class="card-icon teal">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 14 L3 6 L5.5 6 L9 12 L12.5 6 L15 6 Z" stroke="#0F6E56" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
-            <path d="M3 6 L2 9 L9 14 L16 9 L15 6" stroke="#0F6E56" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">GitLab</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="authentik" data-category="dev">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="7" r="3" stroke="#185FA5" stroke-width="1.4"/>
-            <path d="M3 16 C3 13 5.7 11 9 11 C12.3 11 15 13 15 16" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Authentik</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Single sign-on for all your services. One login, one identity, full access control.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="vaultwarden" data-category="dev">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="4" y="3" width="10" height="13" rx="2" stroke="#185FA5" stroke-width="1.4"/>
-            <path d="M7 7 L7 11 M9 6 L9 12 M11 8 L11 11" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Vaultwarden</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted password manager. Bitwarden-compatible — use any Bitwarden app to sync passwords.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <!-- System -->
-      <div class="card" data-service="uptime-kuma" data-category="system">
-        <div class="card-icon yellow">
-          <svg viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="6" stroke="#8A7A04" stroke-width="1.4"/>
-            <path d="M9 5 L9 9" stroke="#8A7A04" stroke-width="1.4" stroke-linecap="round"/>
-            <circle cx="9" cy="12" r="1" fill="#8A7A04"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Uptime Kuma</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="atuin" data-category="dev">
-        <div class="card-icon gray">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 9 a6 6 0 1 1 3 5.2" stroke="#4A4A4A" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M3 9 L3 12.5 L6.5 12.5" stroke="#4A4A4A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Atuin</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted shell history sync across your machines — searchable with context (dir, exit code).</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="adguard-home" data-category="system">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 2 L15 4.5 V9 c0 4 -2.5 6.5 -6 7 c-3.5 -0.5 -6 -3 -6 -7 V4.5 Z" stroke="#2E7D32" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M6.5 9 L8.2 10.7 L11.5 7" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">AdGuard Home</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) — this links to the admin panel.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="ntfy" data-category="system">
-        <div class="card-icon yellow">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M9 2.5 a3 3 0 0 0 -3 3 v2.5 l-1.5 2.5 h9 l-1.5 -2.5 v-2.5 a3 3 0 0 0 -3 -3 Z" stroke="#8A7A04" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M7.5 12.5 a1.5 1.5 0 0 0 3 0" stroke="#8A7A04" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">ntfy</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Self-hosted push notifications. Scripts and services curl a message straight to your phone.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="dockge" data-category="system">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="4" width="14" height="10" rx="2" stroke="#A85C04" stroke-width="1.4"/>
-            <path d="M5 8 L5 11 M8 6 L8 11 M11 8 L11 11 M14 9 L14 11" stroke="#A85C04" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Dockge</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Fancy Docker Compose stack manager. Deploy and manage stacks via a clean web UI.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="portainer" data-category="system">
-        <div class="card-icon blue">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="4" width="14" height="10" rx="2" stroke="#185FA5" stroke-width="1.4"/>
-            <circle cx="6" cy="9" r="1.5" fill="#185FA5"/>
-            <path d="M9 7 L9 11 M12 7 L12 11" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Portainer</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Docker container management UI. Inspect, start/stop, and manage all containers from the browser.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="observability" data-category="system">
-        <div class="card-icon orange">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 14 L3 4 M3 14 L15 14" stroke="#F46800" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M5 12 L8 8 L10.5 10.5 L14 5" stroke="#F46800" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Grafana</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Metrics and log dashboards (Prometheus + Loki), covering every container in the stack.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="dozzle" data-category="system">
-        <div class="card-icon gray">
-          <svg viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="4" width="14" height="10" rx="2" stroke="#555555" stroke-width="1.4"/>
-            <path d="M5 8 L8 11 L13 7" stroke="#555555" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Dozzle</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Real-time Docker container log viewer in the browser. Quickly tail logs from any running container.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-      <div class="card" data-service="beszel" data-category="system">
-        <div class="card-icon green">
-          <svg viewBox="0 0 18 18" fill="none">
-            <path d="M3 14 L3 9 M7 14 L7 5 M11 14 L11 8 M15 14 L15 3" stroke="#1E7A2E" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="card-header">
-          <span class="card-name">Beszel</span>
-          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
-        </div>
-        <p class="card-desc">Lightweight server monitoring. CPU, memory, disk, and Docker container stats with alerts.</p>
-        <a class="card-link" href="#" target="_blank">
-          <svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-
-    </div><!-- /card-pool -->
+    <div id="card-pool" style="display:none"></div><!-- /card-pool -->
 
     <div class="footer">
       Built and maintained by AUTHOR_PLACEHOLDER · LOCATION_PLACEHOLDER · YEAR_PLACEHOLDER
@@ -1336,83 +458,122 @@
   <script>
     const DOMAIN = 'DOMAIN_PLACEHOLDER';
 
-    const SERVICE_SUBDOMAINS = {
-      observability:       'grafana',
-      syncthing:           'syncthing',
-      authentik:           'authentik',
-      miniflux:            'miniflux',
-      vikunja:             'vikunja',
-      trilium:             'trilium',
-      silverbullet:        'silverbullet',
-      outline:             'outline',
-      bookstack:           'bookstack',
-      excalidraw:          'excalidraw',
-      karakeep:            'karakeep',
-      ntfy:                'ntfy',
-      'it-tools':          'it-tools',
-      n8n:                 'n8n',
-      wallabag:            'wallabag',
-      atuin:               'atuin',
-      'adguard-home':      'adguard-home',
-      photoprism:          'photoprism',
-      orangehrm:           'orangehrm',
-      nocodb:              'nocodb',
-      listmonk:            'listmonk',
-      documenso:           'documenso',
-      calcom:              'calcom',
-      plausible:           'plausible',
-      penpot:              'penpot',
-      coolify:             'coolify',
-      supabase:            'supabase',
-      audiobookshelf:      'audiobookshelf',
-      openproject:         'openproject',
-      plane:               'plane',
-      invoiceshelf:        'invoiceshelf',
-      firefly:             'firefly',
-      'firefly-importer':  'firefly-import',
-      appflowy:            'appflowy',
-      immich:              'immich',
-      nextcloud:           'nextcloud',
-      jellyfin:            'jellyfin',
-      paperless:           'paperless',
-      'stirling-pdf-lite': 'stirling-pdf-lite',
-      'stirling-pdf':      'stirling-pdf',
-      mealie:              'mealie',
-      'open-webui':        'open-webui',
-      forgejo:             'forgejo',
-      gitlab:              'gitlab',
-      vaultwarden:         'vaultwarden',
-      'uptime-kuma':       'uptime-kuma',
-      dozzle:              'dozzle',
-      dockge:              'dockge',
-      portainer:           'portainer',
-      beszel:              'beszel',
-      guacamole:           'guacamole',
+    // Service data -- the only thing you touch to add/edit/remove a service.
+    // category: 'storage' | 'productivity' | 'dev' | 'system'
+    // subcategory: optional -- groups cards within a category under a subheading
+    //   (see SUBCATEGORY_LABELS below for display names; only 'productivity'
+    //   and 'dev' currently use subgroups, 'storage'/'system' don't need them)
+    // sub: public subdomain, only needed when it differs from slug
+    // testSub/testHealth/testLabel: optional secondary "test instance" link
+    //   sharing this card -- see homeserver-add-service skill step 7a
+    const SERVICES = [
+  { slug: "immich", name: "Immich", category: "storage", icon: "teal", svg: "<rect x=\"2\" y=\"2\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"7\" r=\"2.5\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M5 15 Q9 12 13 15\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted photo and video backup. Google Photos alternative with facial recognition and smart search." },
+  { slug: "nextcloud", name: "Nextcloud", category: "storage", icon: "blue", svg: "<path d=\"M3 5 L3 14 Q3 15 4 15 L14 15 Q15 15 15 14 L15 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M2 5 L9 2 L16 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M7 15 L7 10 L11 10 L11 15\" stroke=\"#185FA5\" stroke-width=\"1.4\"/>", desc: "Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more." },
+  { slug: "jellyfin", name: "Jellyfin", category: "storage", icon: "purple", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M6 9 L8 11 L12 7\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M9 2 L9 4\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions." },
+  { slug: "syncthing", name: "Syncthing", category: "storage", icon: "teal", svg: "<path d=\"M9 3 A6 6 0 0 1 15 9\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M9 15 A6 6 0 0 1 3 9\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M13 7 L15 9 L13 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M5 7 L3 9 L5 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Continuous P2P file sync between your devices. No cloud middleman — direct device-to-device." },
+  { slug: "audiobookshelf", name: "Audiobookshelf", category: "storage", icon: "purple", svg: "<rect x=\"3\" y=\"3\" width=\"12\" height=\"12\" rx=\"2\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M7 7 L7 11 M9 6 L9 12 M11 8 L11 11\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app." },
+  { slug: "paperless", name: "Paperless", category: "productivity", subcategory: "documents", icon: "orange", svg: "<path d=\"M4 3 L14 3 Q15 3 15 4 L15 14 Q15 15 14 15 L4 15 Q3 15 3 14 L3 4 Q3 3 4 3Z\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M6 7 L12 7 M6 10 L10 10\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Scan, index, and archive all your documents. Full-text search with OCR — go paperless." },
+  { slug: "stirling-pdf-lite", name: "Stirling PDF", category: "productivity", subcategory: "documents", icon: "red", svg: "<rect x=\"3\" y=\"2\" width=\"9\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M6 5 L9 5 M6 8 L9 8\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M11 10 L15 14 M13 10 L15 12\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Merge, split, compress, and edit PDFs. Lightweight toolkit — always on." },
+  { slug: "stirling-pdf", name: "Stirling PDF (Full)", category: "productivity", subcategory: "documents", icon: "red", svg: "<rect x=\"3\" y=\"2\" width=\"9\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M6 5 L9 5 M6 8 L9 8\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M11 10 L15 14 M13 10 L15 12\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand." },
+  { slug: "guacamole", name: "Guacamole", category: "system", icon: "purple", svg: "<rect x=\"2\" y=\"3\" width=\"14\" height=\"9\" rx=\"1.5\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M7 15 L11 15 M9 12 L9 15\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M6 7.5 L8 9.5 L12 5.5\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Clientless remote desktop gateway — access VNC/RDP/SSH targets from any browser, on your LAN or over the internet." },
+  { slug: "open-webui", name: "Open WebUI", category: "productivity", subcategory: "ai", icon: "pink", svg: "<path d=\"M3 4 h12 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 h-8 l-3 3 v-3 h-1 a1 1 0 0 1 -1 -1 v-6 a1 1 0 0 1 1 -1 Z\" stroke=\"#A5356B\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Chat interface for local LLMs served by Ollama." },
+  { slug: "mealie", name: "Mealie", category: "productivity", subcategory: "home", icon: "pink", svg: "<path d=\"M9 2 L10.5 6.5 L15.5 6.5 L11.5 9.5 L13 14 L9 11 L5 14 L6.5 9.5 L2.5 6.5 L7.5 6.5 Z\" stroke=\"#A5356B\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists." },
+  { slug: "trilium", name: "Trilium Notes", category: "productivity", subcategory: "notes", icon: "blue", svg: "<path d=\"M9 2 L9 16 M9 2 L4 5 L4 11 L9 14 M9 2 L14 5 L14 11 L9 14\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid." },
+  { slug: "silverbullet", name: "SilverBullet", category: "productivity", subcategory: "notes", icon: "gray", svg: "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\"/> <path d=\"M9 5.5 L9 9 L11.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Markdown notes with a query language over your own space. Lightweight, single space." },
+  { slug: "outline", name: "Outline", category: "productivity", subcategory: "notes", icon: "blue", svg: "<rect x=\"3\" y=\"2.5\" width=\"12\" height=\"13\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M6 6 L12 6 M6 9 L12 9 M6 12 L9.5 12\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Polished self-hosted team wiki and docs, good search. Logs in via Authentik." },
+  { slug: "bookstack", name: "BookStack", category: "productivity", subcategory: "notes", icon: "orange", svg: "<path d=\"M4 3 h5 v12 h-5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 A1.5 1.5 0 0 1 4 3 Z\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 3 h5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha." },
+  { slug: "excalidraw", name: "Excalidraw", category: "productivity", subcategory: "notes", icon: "purple", svg: "<path d=\"M3 14 L6 14.5 L13.5 7 a1.2 1.2 0 0 0 0 -1.7 l-0.8 -0.8 a1.2 1.2 0 0 0 -1.7 0 L3.5 12 Z\" stroke=\"#6B35B5\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>", desc: "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage." },
+  { slug: "karakeep", name: "Karakeep", category: "productivity", subcategory: "notes", icon: "yellow", svg: "<path d=\"M5 2.5 h8 v13 l-4 -3 l-4 3 Z\" stroke=\"#8A6D00\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Bookmark manager with AI auto-tagging and full-text search of saved pages." },
+  { slug: "it-tools", name: "IT-Tools", category: "dev", subcategory: "tools", icon: "blue", svg: "<path d=\"M11 2.5 a3 3 0 0 0 -3.9 3.9 L2.5 11 l1.5 1.5 l0.7 -0.7 l1 1 l0.8 -0.8 l-1 -1 l1.9 -1.9 a3 3 0 0 0 3.9 -3.9 l-2 2 l-1.4 -1.4 Z\" stroke=\"#1565C0\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>", desc: "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester." },
+  { slug: "n8n", name: "n8n", category: "dev", subcategory: "automation", icon: "pink", svg: "<circle cx=\"4\" cy=\"4.5\" r=\"1.8\" stroke=\"#A5356B\" stroke-width=\"1.3\"/> <circle cx=\"14\" cy=\"4.5\" r=\"1.8\" stroke=\"#A5356B\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"13.5\" r=\"1.8\" stroke=\"#A5356B\" stroke-width=\"1.3\"/> <path d=\"M5.6 5.2 L8 12 M12.4 5.2 L10 12 M5.8 4.5 L12.2 4.5\" stroke=\"#A5356B\" stroke-width=\"1.3\" stroke-linecap=\"round\"/>", desc: "Self-hosted workflow automation. Webhook → transform → notify style glue for homelab scripts." },
+  { slug: "wallabag", name: "Wallabag", category: "productivity", subcategory: "reading", icon: "green", svg: "<path d=\"M4 3 h10 v11 l-5 -2.5 l-5 2.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles." },
+  { slug: "nocodb", name: "NocoDB", category: "dev", subcategory: "automation", icon: "green", svg: "<rect x=\"2.5\" y=\"3\" width=\"13\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7.5 h13 M6.5 3 v12\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/>", desc: "Turns any database into an Airtable-style spreadsheet UI." },
+  { slug: "listmonk", name: "Listmonk", category: "productivity", subcategory: "reading", icon: "blue", svg: "<path d=\"M2.5 5 L9 9.5 L15.5 5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <rect x=\"2.5\" y=\"4\" width=\"13\" height=\"10\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/>", desc: "Self-hosted newsletter and mailing list manager." },
+  { slug: "documenso", name: "Documenso", category: "productivity", subcategory: "documents", icon: "blue", svg: "<path d=\"M5 2.5 h6 l3 3 v10 h-9 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7 11.5 l1.5 1.5 l3 -3.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted document e-signing." },
+  { slug: "calcom", name: "Cal.com", category: "productivity", subcategory: "finance", icon: "green", svg: "<rect x=\"2.5\" y=\"3.5\" width=\"13\" height=\"11\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7 h13 M6 2 v3 M12 2 v3\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted scheduling and booking pages." },
+  { slug: "plausible", name: "Plausible", category: "dev", subcategory: "tools", icon: "green", svg: "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted, privacy-friendly web analytics." },
+  { slug: "penpot", name: "Penpot", category: "dev", subcategory: "tools", icon: "purple", svg: "<path d=\"M4 4 L14 4 L14 9 L9 14 L4 14 Z\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 9 L9 14 M9 9 L14 9\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted design and prototyping tool." },
+  { slug: "coolify", name: "Coolify", category: "dev", subcategory: "tools", icon: "blue", svg: "<path d=\"M9 2 L15 5.5 L15 12.5 L9 16 L3 12.5 L3 5.5 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 8.5 L8 10 L11.5 6.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted PaaS — deploy other projects with a Vercel/Heroku-style workflow." },
+  { slug: "supabase", name: "Supabase", category: "dev", subcategory: "automation", icon: "green", svg: "<path d=\"M10 2 L4 10 L8.5 10 L8 16 L14 8 L9.5 8 Z\" stroke=\"#2E7D32\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>", desc: "Self-hosted Firebase alternative — Postgres, Auth, Realtime, Storage, Edge Functions." },
+  { slug: "vikunja", name: "Vikunja", category: "productivity", subcategory: "projects", icon: "teal", svg: "<rect x=\"2.5\" y=\"2.5\" width=\"13\" height=\"13\" rx=\"2\" stroke=\"#00695C\" stroke-width=\"1.4\"/> <path d=\"M5.5 9 L7.5 11 L12.5 6\" stroke=\"#00695C\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "To-do list and task management app. Organize projects, set due dates, and track work." },
+  { slug: "miniflux", name: "Miniflux", category: "productivity", subcategory: "reading", icon: "orange", svg: "<path d=\"M3 5 L15 5 M3 9 L12 9 M3 13 L9 13\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms." },
+  { slug: "openproject", name: "OpenProject", category: "productivity", subcategory: "projects", icon: "blue", svg: "<rect x=\"2\" y=\"2\" width=\"14\" height=\"14\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M5 6 L13 6 M5 9 L10 9 M5 12 L8 12\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking." },
+  { slug: "plane", name: "Plane", category: "productivity", subcategory: "projects", icon: "purple", svg: "<circle cx=\"9\" cy=\"9\" r=\"3\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M9 2 L9 6 M9 12 L9 16 M2 9 L6 9 M12 9 L16 9\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Modern open-source project management. Issues, cycles, modules and analytics. Jira alternative." },
+  { slug: "invoiceshelf", name: "InvoiceShelf", category: "productivity", subcategory: "finance", icon: "orange", svg: "<rect x=\"3\" y=\"2\" width=\"12\" height=\"14\" rx=\"2\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M6 6 L12 6 M6 9 L12 9 M6 12 L9 12\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M10 11 L13 14 M11.5 11 L13 12.5\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>", desc: "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments." },
+  { slug: "firefly", name: "Firefly III", category: "productivity", subcategory: "finance", icon: "green", svg: "<circle cx=\"9\" cy=\"9\" r=\"6\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9 L12 11\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M6 7 L9 5 L12 7\" stroke=\"#2E7D32\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Personal finance manager. Track income, expenses, budgets and accounts in one place." },
+  { slug: "firefly-importer", name: "Firefly Importer", category: "productivity", subcategory: "finance", icon: "green", svg: "<path d=\"M9 2 L9 11 M6 8 L9 11 L12 8\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M4 13 L4 15 L14 15 L14 13\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Import financial data into Firefly III from CSV, YNAB, or bank accounts via Nordigen.", sub: "firefly-import" },
+  { slug: "appflowy", name: "AppFlowy", category: "productivity", subcategory: "notes", icon: "blue", svg: "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"2\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M5 7 L13 7 M5 10 L10 10\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M9 3 L9 1 M12 3 L12 1 M6 3 L6 1\" stroke=\"#1565C0\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>", desc: "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools." },
+  { slug: "forgejo", name: "Forgejo", category: "dev", subcategory: "git", icon: "teal", svg: "<circle cx=\"9\" cy=\"9\" r=\"7\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M6 5 Q6 9 9 9 Q12 9 12 13 M9 9 L7 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage." },
+  { slug: "orangehrm", name: "OrangeHRM", category: "productivity", subcategory: "finance", icon: "orange", svg: "<circle cx=\"9\" cy=\"6\" r=\"2.5\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M4 15 c0 -3 2.2 -5 5 -5 s5 2 5 5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Open-source HR management — employee records, leave, time tracking, recruitment." },
+  { slug: "photoprism", name: "PhotoPrism", category: "storage", icon: "yellow", svg: "<rect x=\"2.5\" y=\"4\" width=\"13\" height=\"10\" rx=\"1.5\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"9\" r=\"2.5\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M6 4 L7 2.5 L11 2.5 L12 4\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately)." },
+  { slug: "gitlab", name: "GitLab", category: "dev", subcategory: "git", icon: "teal", svg: "<path d=\"M9 14 L3 6 L5.5 6 L9 12 L12.5 6 L15 6 Z\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <path d=\"M3 6 L2 9 L9 14 L16 9 L15 6\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/>", desc: "Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking." },
+  { slug: "authentik", name: "Authentik", category: "dev", subcategory: "identity", icon: "blue", svg: "<circle cx=\"9\" cy=\"7\" r=\"3\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M3 16 C3 13 5.7 11 9 11 C12.3 11 15 13 15 16\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Single sign-on for all your services. One login, one identity, full access control." },
+  { slug: "vaultwarden", name: "Vaultwarden", category: "dev", subcategory: "identity", icon: "blue", svg: "<rect x=\"4\" y=\"3\" width=\"10\" height=\"13\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M7 7 L7 11 M9 6 L9 12 M11 8 L11 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted password manager. Bitwarden-compatible — use any Bitwarden app to sync passwords." },
+  { slug: "uptime-kuma", name: "Uptime Kuma", category: "system", icon: "yellow", svg: "<circle cx=\"9\" cy=\"9\" r=\"6\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <circle cx=\"9\" cy=\"12\" r=\"1\" fill=\"#8A7A04\"/>", desc: "Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking." },
+  { slug: "atuin", name: "Atuin", category: "dev", subcategory: "tools", icon: "gray", svg: "<path d=\"M3 9 a6 6 0 1 1 3 5.2\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M3 9 L3 12.5 L6.5 12.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted shell history sync across your machines — searchable with context (dir, exit code)." },
+  { slug: "adguard-home", name: "AdGuard Home", category: "system", icon: "green", svg: "<path d=\"M9 2 L15 4.5 V9 c0 4 -2.5 6.5 -6 7 c-3.5 -0.5 -6 -3 -6 -7 V4.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 9 L8.2 10.7 L11.5 7\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) — this links to the admin panel." },
+  { slug: "ntfy", name: "ntfy", category: "system", icon: "yellow", svg: "<path d=\"M9 2.5 a3 3 0 0 0 -3 3 v2.5 l-1.5 2.5 h9 l-1.5 -2.5 v-2.5 a3 3 0 0 0 -3 -3 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7.5 12.5 a1.5 1.5 0 0 0 3 0\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted push notifications. Scripts and services curl a message straight to your phone." },
+  { slug: "dockge", name: "Dockge", category: "system", icon: "orange", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M5 8 L5 11 M8 6 L8 11 M11 8 L11 11 M14 9 L14 11\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Fancy Docker Compose stack manager. Deploy and manage stacks via a clean web UI." },
+  { slug: "portainer", name: "Portainer", category: "system", icon: "blue", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <circle cx=\"6\" cy=\"9\" r=\"1.5\" fill=\"#185FA5\"/> <path d=\"M9 7 L9 11 M12 7 L12 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Docker container management UI. Inspect, start/stop, and manage all containers from the browser." },
+  { slug: "observability", name: "Grafana", category: "system", icon: "orange", svg: "<path d=\"M3 14 L3 4 M3 14 L15 14\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5 12 L8 8 L10.5 10.5 L14 5\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Metrics and log dashboards (Prometheus + Loki), covering every container in the stack.", sub: "grafana" },
+  { slug: "dozzle", name: "Dozzle", category: "system", icon: "gray", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#555555\" stroke-width=\"1.4\"/> <path d=\"M5 8 L8 11 L13 7\" stroke=\"#555555\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Real-time Docker container log viewer in the browser. Quickly tail logs from any running container." },
+  { slug: "beszel", name: "Beszel", category: "system", icon: "green", svg: "<path d=\"M3 14 L3 9 M7 14 L7 5 M11 14 L11 8 M15 14 L15 3\" stroke=\"#1E7A2E\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Lightweight server monitoring. CPU, memory, disk, and Docker container stats with alerts." },
+    ];
+
+    // Display labels for subgroups within a category -- keyed by subcategory
+    const SUBCATEGORY_LABELS = {
+      notes: 'Notes & Knowledge',
+      projects: 'Project & Task Mgmt',
+      documents: 'Documents',
+      finance: 'Finance & Business',
+      reading: 'Reading & Feeds',
+      home: 'Home',
+      ai: 'AI',
+      git: 'Git & CI',
+      automation: 'Automation & Low-code',
+      identity: 'Identity & Secrets',
+      tools: 'Tools',
     };
 
-    // Apply domain URLs to all cards in the pool
-    function applyDomain() {
-      document.querySelectorAll('#card-pool .card[data-service]').forEach(card => {
-        const sub = SERVICE_SUBDOMAINS[card.dataset.service];
-        if (!sub) return;
-        const url = `https://${sub}.${DOMAIN}`;
-        const link = card.querySelector('.card-link');
-        if (!link) return;
-        link.href = url;
-        const label = `${sub}.${DOMAIN}`;
-        const textNode = Array.from(link.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
-        if (textNode) {
-          textNode.textContent = label;
-        } else {
-          link.insertBefore(document.createTextNode(label), link.firstChild);
-        }
-      });
-      // Secondary "testing instance" links — not part of SERVICE_SUBDOMAINS
-      // since they share a card with their main service rather than getting
-      // their own.
-      document.querySelectorAll('#card-pool .card-link-secondary[data-testsub]').forEach(link => {
-        link.href = `https://${link.dataset.testsub}.${DOMAIN}`;
-      });
+    const EXTERNAL_LINK_SVG = '<svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    // Build one card element from a SERVICES entry, with its public link
+    // already pointed at the right subdomain.
+    function buildCard(s) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.service = s.slug;
+      card.dataset.category = s.category;
+      if (s.subcategory) card.dataset.subcategory = s.subcategory;
+
+      const sub = s.sub || s.slug;
+      const url = `https://${sub}.${DOMAIN}`;
+      const label = `${sub}.${DOMAIN}`;
+
+      let secondaryLink = '';
+      if (s.testSub) {
+        secondaryLink = `
+        <a class="card-link-secondary" href="https://${s.testSub}.${DOMAIN}" data-testsub="${s.testSub}" data-testhealth="${s.testHealth || s.testSub}" target="_blank">
+          <span class="test-badge">TEST</span><span class="test-dot"></span> ${s.testLabel || ''}
+        </a>`;
+      }
+
+      card.innerHTML = `
+        <div class="card-icon ${s.icon}">
+          <svg viewBox="0 0 18 18" fill="none">${s.svg}</svg>
+        </div>
+        <div class="card-header">
+          <span class="card-name">${s.name}</span>
+          <span class="status checking"><span class="status-dot"></span><span class="status-text">checking</span></span>
+        </div>
+        <p class="card-desc">${s.desc}</p>
+        <a class="card-link" href="${url}" target="_blank">${label}${EXTERNAL_LINK_SVG}</a>${secondaryLink}`;
+      return card;
+    }
+
+    function renderCards() {
+      const pool = document.getElementById('card-pool');
+      SERVICES.forEach(s => pool.appendChild(buildCard(s)));
     }
 
     let activeTab = 'online';
@@ -1434,23 +595,56 @@
     }
 
     // Place a card into the correct online/offline section under its category
+    // (and subgroup, if it has one -- categories without subgroups fall back
+    // to a single direct grid, same as before subgroups existed).
     function placeCard(card, isOnline) {
       const cat = card.dataset.category;
+      const subcat = card.dataset.subcategory;
       const sectionId = isOnline ? 'section-online' : 'section-offline';
       const section = document.getElementById(sectionId);
       const catDiv = section.querySelector(`[data-cat="${cat}"]`);
-      catDiv.querySelector('.grid').appendChild(card);
+
+      let grid;
+      if (subcat) {
+        let subgroup = catDiv.querySelector(`.subgroup[data-subcat="${subcat}"]`);
+        if (!subgroup) {
+          subgroup = document.createElement('div');
+          subgroup.className = 'subgroup';
+          subgroup.dataset.subcat = subcat;
+          const label = document.createElement('p');
+          label.className = 'subgroup-label';
+          label.textContent = SUBCATEGORY_LABELS[subcat] || subcat;
+          grid = document.createElement('div');
+          grid.className = 'grid';
+          subgroup.append(label, grid);
+          catDiv.appendChild(subgroup);
+        } else {
+          grid = subgroup.querySelector('.grid');
+        }
+      } else {
+        grid = catDiv.querySelector(':scope > .grid');
+        if (!grid) {
+          grid = document.createElement('div');
+          grid.className = 'grid';
+          catDiv.appendChild(grid);
+        }
+      }
+      grid.appendChild(card);
       updateVisibility();
     }
 
-    // Show/hide category groups, update tab counts, apply active tab
+    // Show/hide category/subgroup groups, update tab counts, apply active tab
     function updateVisibility() {
       ['online', 'offline'].forEach(t => {
         const section = document.getElementById(`section-${t}`);
         let count = 0;
         section.querySelectorAll('.category').forEach(cat => {
-          const n = cat.querySelector('.grid').children.length;
+          let n = 0;
+          cat.querySelectorAll('.grid').forEach(g => { n += g.children.length; });
           cat.style.display = n > 0 ? '' : 'none';
+          cat.querySelectorAll('.subgroup').forEach(sg => {
+            sg.style.display = sg.querySelector('.grid').children.length > 0 ? '' : 'none';
+          });
           count += n;
         });
         document.querySelector(`.tab-btn[data-tab="${t}"] .tab-count`).textContent = count;
@@ -1471,10 +665,10 @@
       const service = card.dataset.service;
       const badge = card.querySelector('.status');
       const text  = badge.querySelector('.status-text');
-      // Any card can carry one or more secondary "test instance" links —
-      // just add <a class="card-link-secondary" data-testsub="foo-test">
-      // to that service's card and it's automatically OR'd into the main
-      // status (online if the main instance OR any test instance is up).
+      // Any card can carry one or more secondary "test instance" links --
+      // set testSub (and optionally testHealth/testLabel) on its SERVICES
+      // entry and it's automatically OR'd into the main status (online if
+      // the main instance OR any test instance is up).
       const testLinks = Array.from(card.querySelectorAll('.card-link-secondary[data-testsub]'));
 
       const [mainUp, testResults] = await Promise.all([
@@ -1504,7 +698,7 @@
       document.querySelectorAll('#card-pool .card[data-service]').forEach(checkService);
     }
 
-    applyDomain();
+    renderCards();
     // Initial check: pull all cards from pool and check each one
     document.querySelectorAll('#card-pool .card[data-service]').forEach(checkService);
     setInterval(recheckAll, 30000);
