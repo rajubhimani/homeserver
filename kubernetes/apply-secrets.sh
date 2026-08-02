@@ -158,6 +158,15 @@ kubectl create secret generic nocodb-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "nocodb-db-credentials + nocodb-credentials applied"
 
+# ── Listmonk's own dedicated Postgres + admin bootstrap account ───────
+kubectl create secret generic listmonk-db-credentials -n apps \
+  --from-literal=password="$LISTMONK_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic listmonk-credentials -n apps \
+  --from-literal=admin-password="$LISTMONK_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "listmonk-db-credentials + listmonk-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
