@@ -71,6 +71,12 @@ kubectl create secret generic immich-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "immich-db-credentials + immich-credentials applied"
 
+# ── SilverBullet basic-auth login ─────────────────────────────────────
+kubectl create secret generic silverbullet-credentials -n apps \
+  --from-literal=sb-user="$SILVERBULLET_SB_USER" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "silverbullet-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
