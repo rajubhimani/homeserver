@@ -1,0 +1,78 @@
+# Shared Postgres server for services that don't need their own dedicated
+# instance (own version/extensions) — each such service gets its own
+# CREATE DATABASE + role inside this one server, provisioned by a per-service
+# Job (see kubernetes/apps/<service>/db-init-job.yaml once a service is
+# onboarded). Services needing a dedicated Postgres (e.g. Immich's
+# pgvector/vectorchord) get their own separate StatefulSet instead — this
+# one is deliberately not that.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-shared
+  namespace: data
+spec:
+  serviceName: postgres-shared
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-shared
+  template:
+    metadata:
+      labels:
+        app: postgres-shared
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18.4-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-shared-credentials
+                  key: postgres-password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-shared
+  namespace: data
+spec:
+  clusterIP: None   # headless — standard for a StatefulSet's stable network identity
+  selector:
+    app: postgres-shared
+  ports:
+    - port: 5432
+      targetPort: 5432

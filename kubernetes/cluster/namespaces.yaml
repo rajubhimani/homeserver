@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra   # Traefik (Gateway API) and other cluster-wide infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data    # shared Postgres and any other shared datastores
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps    # application workloads — one shared namespace, mirrors the
+                # compose stack's single "homeserver" network (flat, not
+                # segmented per service)
