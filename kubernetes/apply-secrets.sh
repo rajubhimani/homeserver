@@ -32,6 +32,12 @@ kubectl create secret generic vaultwarden-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "vaultwarden-credentials applied"
 
+# ── Forgejo's own dedicated Postgres password ─────────────────────────
+kubectl create secret generic forgejo-db-credentials -n apps \
+  --from-literal=password="$FORGEJO_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "forgejo-db-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

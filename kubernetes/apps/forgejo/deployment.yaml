@@ -1,0 +1,100 @@
+# Mirrors forgejo/compose.yml's forgejo service (runner intentionally
+# omitted for this pilot — CI runner isn't part of the core routing/DB
+# pattern being validated here).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forgejo-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forgejo
+  namespace: apps
+  labels:
+    app: forgejo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forgejo
+  template:
+    metadata:
+      labels:
+        app: forgejo
+    spec:
+      containers:
+        - name: forgejo
+          image: codeberg.org/forgejo/forgejo:16.0.2
+          ports:
+            - containerPort: 3000
+          env:
+            - name: USER_UID
+              value: "1000"
+            - name: USER_GID
+              value: "1000"
+            - name: FORGEJO__database__DB_TYPE
+              value: postgres
+            - name: FORGEJO__database__HOST
+              value: forgejo-db:5432
+            - name: FORGEJO__database__NAME
+              value: forgejo
+            - name: FORGEJO__database__USER
+              value: forgejo
+            - name: FORGEJO__database__PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: forgejo-db-credentials
+                  key: password
+            - name: FORGEJO__server__DOMAIN
+              value: forgejo.k8s.local
+            - name: FORGEJO__server__ROOT_URL
+              value: https://forgejo.k8s.local
+            - name: FORGEJO__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: FORGEJO__security__INSTALL_LOCK
+              value: "true"
+            # k8s pod network CIDR (10.244.0.0/16), equivalent to the
+            # compose stack scoping this to the Docker bridge subnet.
+            - name: FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES
+              value: 10.244.0.0/16
+            - name: FORGEJO__actions__ENABLED
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: forgejo-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgejo
+  namespace: apps
+spec:
+  selector:
+    app: forgejo
+  ports:
+    - port: 3000
