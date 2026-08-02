@@ -132,6 +132,15 @@ kubectl create secret generic outline-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "outline-db-credentials + outline-credentials applied"
 
+# ── Wallabag's own dedicated Postgres + Symfony secret ────────────────
+kubectl create secret generic wallabag-db-credentials -n apps \
+  --from-literal=password="$WALLABAG_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic wallabag-credentials -n apps \
+  --from-literal=secret="$WALLABAG_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "wallabag-db-credentials + wallabag-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
