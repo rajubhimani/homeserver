@@ -212,6 +212,17 @@ kubectl create secret generic orangehrm-db-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "orangehrm-db-credentials applied"
 
+# ── Cal.com's own dedicated Postgres + app secrets ────────────────────
+kubectl create secret generic calcom-db-credentials -n apps \
+  --from-literal=password="$CALCOM_DB_PASSWORD" \
+  --from-literal=database-url="postgresql://calcom:${CALCOM_DB_PASSWORD}@calcom-db:5432/calcom" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic calcom-credentials -n apps \
+  --from-literal=nextauth-secret="$CALCOM_NEXTAUTH_SECRET" \
+  --from-literal=encryption-key="$CALCOM_ENCRYPTION_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "calcom-db-credentials + calcom-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
