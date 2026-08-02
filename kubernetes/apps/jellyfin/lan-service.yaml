@@ -1,0 +1,14 @@
+# Port 8096 matches jellyfin/compose.dev.yml exactly. Compose version was
+# stopped (uv run homeserver.py dev down jellyfin) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: jellyfin
+  ports:
+    - port: 8096
+      targetPort: 8096
