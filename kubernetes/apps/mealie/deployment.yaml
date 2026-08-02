@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mealie-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mealie
+  namespace: apps
+  labels:
+    app: mealie
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mealie
+  template:
+    metadata:
+      labels:
+        app: mealie
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mealie
+          image: ghcr.io/mealie-recipes/mealie:v3.22.0
+          env:
+            - name: DB_ENGINE
+              value: postgres
+            - name: POSTGRES_SERVER
+              value: mealie-db
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: mealie
+            - name: POSTGRES_USER
+              value: mealie
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mealie-db-credentials
+                  key: password
+            - name: BASE_URL
+              value: https://mealie.k8s.local
+            - name: ALLOW_SIGNUP
+              value: "false"
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mealie-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mealie
+  namespace: apps
+spec:
+  selector:
+    app: mealie
+  ports:
+    - port: 9000

@@ -83,6 +83,12 @@ kubectl create secret generic openproject-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "openproject-credentials applied"
 
+# ── Mealie's own dedicated Postgres password ──────────────────────────
+kubectl create secret generic mealie-db-credentials -n apps \
+  --from-literal=password="$MEALIE_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "mealie-db-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
