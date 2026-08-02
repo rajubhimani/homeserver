@@ -223,6 +223,19 @@ kubectl create secret generic calcom-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "calcom-db-credentials + calcom-credentials applied"
 
+# ── Plausible's own dedicated Postgres + ClickHouse + app secrets ─────
+kubectl create secret generic plausible-db-credentials -n apps \
+  --from-literal=password="$PLAUSIBLE_DB_PASSWORD" \
+  --from-literal=clickhouse-password="$PLAUSIBLE_CLICKHOUSE_PASSWORD" \
+  --from-literal=database-url="postgres://postgres:${PLAUSIBLE_DB_PASSWORD}@plausible-db:5432/plausible" \
+  --from-literal=clickhouse-url="http://plausible:${PLAUSIBLE_CLICKHOUSE_PASSWORD}@plausible-events-db:8123/plausible_events_db" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic plausible-credentials -n apps \
+  --from-literal=secret-key-base="$PLAUSIBLE_SECRET_KEY_BASE" \
+  --from-literal=totp-vault-key="$PLAUSIBLE_TOTP_VAULT_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "plausible-db-credentials + plausible-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
