@@ -463,6 +463,18 @@ to allow it):
      `cluster-postgres-shared`, `cluster-mariadb-shared`) and let ArgoCD
      reconcile the rest of the platform itself, rather than manually
      `kubectl apply`-ing each piece.
+   - Set ArgoCD's server to plain HTTP (matches how Traefik fronts every
+     app here — no TLS termination inside the cluster) and expose it on
+     its own permanent port, same pattern as the CORE services'
+     `lan-service.yaml`, so the UI survives restarts without a manual
+     `kubectl port-forward` every time:
+     ```bash
+     kubectl patch cm argocd-cmd-params-cm -n argocd --type merge -p '{"data":{"server.insecure":"true"}}'
+     kubectl rollout restart deployment argocd-server -n argocd
+     kubectl apply -f kubernetes/cluster/argocd/lan-service.yaml
+     ```
+     UI is then reachable at `http://localhost:18081` — not `https`, since
+     `server.insecure` disables TLS.
    - Re-run `kubernetes/apply-secrets.sh` — it reuses the existing values
      already in `.env`, no need to regenerate secrets.
    - Individual service Applications (`argocd-apps/<service>.yaml`) can
