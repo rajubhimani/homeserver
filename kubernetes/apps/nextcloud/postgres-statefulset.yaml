@@ -1,0 +1,117 @@
+# Own dedicated Postgres, not the shared server — mirrors
+# nextcloud/compose.yml's nextcloud-db tuning (higher connections/memory
+# than the other services here since Nextcloud has multiple concurrent
+# consumers — same reasoning as docs/08-maintenance.md's tuning table).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nextcloud-db
+  namespace: apps
+spec:
+  serviceName: nextcloud-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud-db
+  template:
+    metadata:
+      labels:
+        app: nextcloud-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18.4-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: nextcloud
+            - name: POSTGRES_USER
+              value: nextcloud
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-db-credentials
+                  key: password
+          args:
+            - -c
+            - shared_buffers=128MB
+            - -c
+            - max_connections=50
+            - -c
+            - work_mem=4MB
+            - -c
+            - maintenance_work_mem=64MB
+            - -c
+            - effective_cache_size=384MB
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+          resources:
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nextcloud"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: nextcloud-db
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud-redis
+  namespace: apps
+  labels:
+    app: nextcloud-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud-redis
+  template:
+    metadata:
+      labels:
+        app: nextcloud-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.10-alpine
+          args: ["redis-server", "--save", "", "--stop-writes-on-bgsave-error", "no"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-redis
+  namespace: apps
+spec:
+  selector:
+    app: nextcloud-redis
+  ports:
+    - port: 6379

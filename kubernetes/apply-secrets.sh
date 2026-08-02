@@ -48,6 +48,15 @@ kubectl create secret generic firefly-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "firefly-db-credentials + firefly-credentials applied"
 
+# ── Nextcloud's own dedicated Postgres password + admin password ─────
+kubectl create secret generic nextcloud-db-credentials -n apps \
+  --from-literal=password="$NEXTCLOUD_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic nextcloud-credentials -n apps \
+  --from-literal=admin-password="$NEXTCLOUD_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "nextcloud-db-credentials + nextcloud-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
