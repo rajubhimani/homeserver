@@ -76,9 +76,13 @@ spec:
               mountPath: /config
             - name: cache
               mountPath: /cache
+            # Not readOnly here (unlike the compose stack's :ro real-media
+            # mount) — this PVC holds placeholder test data that has to be
+            # populated via kubectl cp after the pod starts, which needs
+            # write access. Never holds real media, so the protection a
+            # real read-only library mount gives doesn't apply.
             - name: media
               mountPath: /media
-              readOnly: true
             - name: metadata
               mountPath: /config/metadata
           readinessProbe:
