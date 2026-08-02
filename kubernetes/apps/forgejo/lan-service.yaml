@@ -1,0 +1,21 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Ports 3002 (HTTP) + 2223 (git-over-SSH) match forgejo/compose.dev.yml
+# exactly. The Compose version was stopped
+# (uv run homeserver.py dev down forgejo) to free these ports.
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgejo-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: forgejo
+  ports:
+    - name: http
+      port: 3002
+      targetPort: 3000
+    - name: ssh
+      port: 2223
+      targetPort: 22

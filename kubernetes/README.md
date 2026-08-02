@@ -43,6 +43,7 @@ kubernetes/
     <service>/
       deployment.yaml (or statefulset.yaml)
       httproute.yaml
+      lan-service.yaml   # direct LAN-reachable port, see "LAN access" below
       db-init-job.yaml   # only if using the shared Postgres server
   argocd-apps/
     <service>.yaml       # ArgoCD Application manifests, one per service
@@ -58,6 +59,38 @@ tested elsewhere in this repo:
 ```bash
 curl -H "Host: excalidraw.k8s.local" http://localhost:80/
 ```
+
+## LAN access (phone, other devices)
+
+Hostname routing above only works from this PC (no hosts-file trick works on
+a phone, and AdGuard Home isn't set up as the network's DNS resolver yet —
+revisit once it is). Until then, each service also gets a second `Service`
+(`type: LoadBalancer`, see `lan-service.yaml`) exposing it directly on the
+**exact same port its `compose.dev.yml` already uses** — same number you
+already know, nothing new to learn. Docker Desktop's LoadBalancer support
+auto-exposes these on both `localhost` and the host's real LAN IP with no
+extra setup.
+
+**The Compose version of a service must be stopped before porting it** —
+same host port, can't have both bound at once:
+
+```bash
+uv run homeserver.py dev down <service>
+```
+
+| Service | Port | Matches |
+| --- | --- | --- |
+| excalidraw | 8116 | `excalidraw/compose.dev.yml` |
+| guacamole | 8107 | `guacamole/compose.dev.yml` |
+| vaultwarden | 8200 | `vaultwarden/compose.dev.yml` |
+| forgejo | 3002 (HTTP), 2223 (SSH) | `forgejo/compose.dev.yml` |
+
+Gotcha hit once already: editing an existing `LoadBalancer` Service's `port:`
+in place does **not** cleanly re-provision the underlying proxy container
+(Docker Desktop's `kindccm-*` containers) — it stays bound to the old port.
+If a port ever needs to change, delete and recreate the Service
+(`kubectl delete svc <name>-lan -n apps` then re-apply), don't just edit and
+re-apply.
 
 ## Secrets
 
