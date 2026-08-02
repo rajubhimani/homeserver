@@ -80,3 +80,4 @@ All persistent data lives under `service_data/` at the repo root (gitignored ent
 | Backup/restore/snapshots, machine migration | `homeserver-backups` skill |
 | Port numbers, service tiers, NPM proxy-host table (canonical, keep this one updated) | [`docs/11-services-reference.md`](docs/11-services-reference.md) |
 | Per-service setup, architecture, every gotcha/troubleshooting note | [`docs/services/<service>.md`](docs/services/) — one consolidated doc per service |
+| Kubernetes pilot (parallel to Compose, not a replacement — see `feature/k8s-pilot` branch) | [`kubernetes/README.md`](kubernetes/README.md) for setup/status, [`kubernetes/TROUBLESHOOTING.md`](kubernetes/TROUBLESHOOTING.md) for every gotcha hit so far (incl. disk-full recovery, ArgoCD bootstrap, Compose-vs-k8s semantic traps) |
