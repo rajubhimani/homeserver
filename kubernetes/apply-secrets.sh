@@ -26,6 +26,12 @@ kubectl create secret generic guacamole-db-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "guacamole-db-credentials applied"
 
+# ── Vaultwarden admin token ───────────────────────────────────────────
+kubectl create secret generic vaultwarden-credentials -n apps \
+  --from-literal=admin-token="$VAULTWARDEN_ADMIN_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "vaultwarden-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
