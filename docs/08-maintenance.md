@@ -225,6 +225,17 @@ sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl
 
 Docker Desktop's WSL2 VHDX only grows, never shrinks automatically — even after you delete images/volumes, the backing disk file stays large until you reclaim it manually. Do this periodically if `C:` (or wherever the VHDX lives) is filling up.
 
+**Automated (recommended):**
+
+```bash
+uv run homeserver.py gc          # prompts for confirmation first
+uv run homeserver.py gc --yes    # skip the prompt
+```
+
+Runs `docker system prune -a --volumes -f` + `docker builder prune -a -f`, then on Windows also trims the WSL2 VM's filesystem (`fstrim -av`), shuts down WSL, and compacts the VHDX via `diskpart` — the same steps as the manual procedure below, in the right order. **Must be run from an Administrator terminal** for the compaction step to actually take effect — `diskpart` silently no-ops otherwise; the command detects this, skips compaction, and tells you to re-run elevated rather than pretending it worked. On native Linux Docker, pruning is the whole story (no VHDX involved) and it stops there. Prunes the whole Docker host, not just this stack — if other projects share this Docker install, their unused resources get pruned too, which is exactly why it asks for confirmation first.
+
+**Manual, or if you want to understand/debug what the command above is doing:**
+
 **1. Check what's actually using space, then prune.** Compacting only shrinks the file to match what's used *inside* it — pruning first is what makes compacting worthwhile:
 
 ```powershell

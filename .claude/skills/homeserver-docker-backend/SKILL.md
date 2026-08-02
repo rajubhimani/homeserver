@@ -22,9 +22,9 @@ Both backends implement the **full** `DockerBackend` interface, not just compose
 
 ## Reclaiming disk space (Windows / WSL2 Docker Desktop)
 
-See [docs/08-maintenance.md](../../../docs/08-maintenance.md#reclaiming-disk-space-docker-desktop-on-windows--wsl2) — the VHDX-compaction procedure lives there, not here.
+`uv run homeserver.py gc` automates this — prune (`system_prune`/`builder_prune` on `DockerBackend`) + `fstrim` inside the WSL2 VM + `wsl --shutdown` + `diskpart compact vdisk`. See [docs/08-maintenance.md](../../../docs/08-maintenance.md#reclaiming-disk-space-docker-desktop-on-windows--wsl2) for usage and the manual procedure it's based on.
 
-One addition worth knowing beyond what that doc currently says: if a compact pass reports 0GB reclaimed with no error, check that `diskpart` actually ran **elevated** (Administrator PowerShell) before assuming there was nothing to reclaim — it silently no-ops when unelevated. And `fstrim -a` inside the WSL VM (`wsl -d docker-desktop -u root -- fstrim -av`) before compacting matters — WSL2's ext4 doesn't issue TRIM by default, so without it the VHDX has no idea which blocks are actually free.
+Must run from an **elevated** (Administrator) terminal for the `diskpart` step to do anything — `do_gc()`'s `_is_windows_admin()` check catches the unelevated case and skips compaction with a warning rather than silently reporting 0GB reclaimed. `fstrim -a` inside the WSL VM matters too — WSL2's ext4 doesn't issue TRIM by default, so without it the VHDX has no idea which blocks are actually free; `_compact_docker_vhdx()` runs it before shutting WSL down.
 
 ## `python-on-whales` version pin
 
