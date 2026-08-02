@@ -43,7 +43,9 @@ kubernetes/
     <service>/
       deployment.yaml (or statefulset.yaml)
       httproute.yaml
-      lan-service.yaml   # direct LAN-reachable port, see "LAN access" below
+      lan-service.yaml   # direct LAN-reachable port, kept for real-hardware
+                          # use later — see "Current status" below for why
+                          # it's not live-applied on this Windows pilot box
       db-init-job.yaml   # only if using the shared Postgres server
   argocd-apps/
     <service>.yaml       # ArgoCD Application manifests, one per service
@@ -92,6 +94,15 @@ If a port ever needs to change, delete and recreate the Service
 (`kubectl delete svc <name>-lan -n apps` then re-apply), don't just edit and
 re-apply.
 
+**Not currently live-applied on this Windows pilot box** — the whole point
+of matching Compose's exact ports means the k8s and Compose versions of a
+service can never run at the same time on this one machine (same port,
+can't both bind it). Since the real Compose stack is what's actually in use
+day to day right now, these `lan-service.yaml` files stay in git (so
+they're ready to use once this moves to real Linux hardware, where there's
+no competing Compose stack to collide with) but aren't part of what's
+currently `kubectl apply`'d/ArgoCD-synced. See "Current status" below.
+
 ## Secrets
 
 Same convention as every other service in this repo: `.env` (gitignored,
@@ -102,10 +113,26 @@ only accepts a bcrypt hash in its Secret, so the script hashes it (via
 `uv run --with bcrypt`, no new project dependency) before patching
 `argocd-secret`.
 
-## Status
+## Current status
 
-Pilot in progress — proving the pattern (shared Postgres, dedicated Postgres,
-stateless, ArgoCD-managed) on a handful of representative services before
-templating the rest. See git history / conversation log for current
-progress; this file will get a proper "what's ported so far" table once the
-pattern is settled.
+All 7 `SERVICES_CORE` services are ported and validated: guacamole,
+vaultwarden, forgejo, firefly, nextcloud, jellyfin, immich — each with a
+dedicated or shared Postgres as appropriate, routed through Traefik/Gateway
+API, and ArgoCD-managed (`Synced`/`Healthy`). Plus the cluster foundation
+(namespaces, Traefik itself, the shared Gateway, shared Postgres) — also
+ArgoCD-managed, see `kubernetes/argocd-apps/cluster-*.yaml`.
+
+**This pilot's actual purpose, going forward:** validate that these
+manifests are correct and deployable — not to run this cluster as a
+day-to-day replacement for the real Compose stack on this Windows machine.
+The real Compose stack is what's actually in production use here; this
+`kind`-on-Docker-Desktop cluster is a config-validation exercise. The plan
+is to bring this exact `feature/k8s-pilot` branch to real Linux hardware
+(Fedora) once available, where `hostPath` volumes work natively (no
+Windows/Docker-Desktop/kind virtualization stack in the way — see
+`TROUBLESHOOTING.md`'s "Host data access" section for why that specifically
+doesn't work well on this Windows setup) and there's no competing Compose
+stack to collide with on ports.
+
+See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) for every real bug/gotcha
+hit while building this out, and why each one happened.
