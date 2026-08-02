@@ -112,16 +112,27 @@ spec:
             - name: before-starting-hook
               mountPath: /docker-entrypoint-hooks.d/before-starting
               readOnly: true
+          # Nextcloud 400s any request whose Host header isn't in
+          # trusted_domains — kubelet's httpGet probe sends the pod IP as
+          # Host by default (unlike Compose's healthcheck, which naturally
+          # used "localhost" via curl from inside the container), so it
+          # must be pinned explicitly to a trusted value here.
           readinessProbe:
             httpGet:
               path: /status.php
               port: 80
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 30
             periodSeconds: 15
           livenessProbe:
             httpGet:
               path: /status.php
               port: 80
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 60
             periodSeconds: 30
       volumes:
