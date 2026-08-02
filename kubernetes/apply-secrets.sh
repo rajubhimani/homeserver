@@ -58,8 +58,13 @@ kubectl create secret generic nextcloud-credentials -n apps \
 echo "nextcloud-db-credentials + nextcloud-credentials applied"
 
 # ── Immich's own dedicated Postgres password + app secret ────────────
+# db-url is pre-composed here, not built via k8s's $(VAR) substitution in
+# the deployment manifest — that only resolves references to variables
+# defined *earlier* in the same env list, which silently failed and
+# crash-looped immich-server/immich-ml (see deployment.yaml's comment).
 kubectl create secret generic immich-db-credentials -n apps \
   --from-literal=password="$IMMICH_DB_PASSWORD" \
+  --from-literal=db-url="postgresql://immich:${IMMICH_DB_PASSWORD}@immich-db:5432/immich" \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic immich-credentials -n apps \
   --from-literal=secret="$IMMICH_SECRET" \
