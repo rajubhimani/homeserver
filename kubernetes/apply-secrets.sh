@@ -57,6 +57,15 @@ kubectl create secret generic nextcloud-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "nextcloud-db-credentials + nextcloud-credentials applied"
 
+# ── Immich's own dedicated Postgres password + app secret ────────────
+kubectl create secret generic immich-db-credentials -n apps \
+  --from-literal=password="$IMMICH_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic immich-credentials -n apps \
+  --from-literal=secret="$IMMICH_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "immich-db-credentials + immich-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
