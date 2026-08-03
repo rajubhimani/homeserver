@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stirling-pdf-lite-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stirling-pdf-lite
+  namespace: apps
+  labels:
+    app: stirling-pdf-lite
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stirling-pdf-lite
+  template:
+    metadata:
+      labels:
+        app: stirling-pdf-lite
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: stirling-pdf-lite
+          image: stirlingtools/stirling-pdf:2.14.2-ultra-lite
+          env:
+            - name: DISABLE_ADDITIONAL_FEATURES
+              value: "false"
+            - name: SECURITY_ENABLELOGIN
+              value: "true"
+            - name: SECURITY_INITIALLOGIN_USERNAME
+              value: admin
+            - name: SECURITY_INITIALLOGIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stirling-pdf-lite-credentials
+                  key: admin-password
+            - name: SYSTEM_GOOGLEVISIBILITY
+              value: "false"
+            - name: SYSTEM_ENABLEALPHAFUNCTIONALITY
+              value: "false"
+            - name: SYSTEM_SHOWUPDATE
+              value: "true"
+            - name: SYSTEM_SHOWUPDATEONLYADMIN
+              value: "true"
+            - name: SYSTEM_MAXDPI
+              value: "500"
+            - name: UI_LOGOSTYLE
+              value: classic
+            - name: METRICS_ENABLED
+              value: "true"
+            - name: LEGAL_LOGINAGREEMENT_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: configs
+              mountPath: /configs
+            - name: logs
+              mountPath: /logs
+            - name: custom-files
+              mountPath: /customFiles
+            - name: pipeline
+              mountPath: /pipeline
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: configs
+          persistentVolumeClaim:
+            claimName: stirling-pdf-lite-data
+        - name: logs
+          emptyDir: {}
+        - name: custom-files
+          emptyDir: {}
+        - name: pipeline
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stirling-pdf-lite
+  namespace: apps
+spec:
+  selector:
+    app: stirling-pdf-lite
+  ports:
+    - port: 8080

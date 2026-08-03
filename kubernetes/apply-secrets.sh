@@ -245,6 +245,12 @@ kubectl create secret generic n8n-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "n8n-db-credentials + n8n-credentials applied"
 
+# ── Stirling-PDF Lite admin login ──────────────────────────────────────
+kubectl create secret generic stirling-pdf-lite-credentials -n apps \
+  --from-literal=admin-password="$STIRLING_PDF_LITE_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "stirling-pdf-lite-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
