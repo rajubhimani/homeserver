@@ -480,6 +480,28 @@ to allow it):
    - Individual service Applications (`argocd-apps/<service>.yaml`) can
      then be reapplied and tested one at a time, same as normal.
 
+**Gotcha found on the actual recovery, easy to repeat next time:** a
+cluster rebuild wipes ArgoCD's etcd, so *every* per-service `Application`
+CR is gone, not just the cluster-level ones. It's easy to reapply
+`cluster-*.yaml` plus whichever 1-3 services you were actively working on
+right before the incident, and forget the rest of the already-ported,
+scaled-to-0 services — their manifests still sit untouched in git, so
+nothing *looks* missing there. After any full rebuild, diff what ArgoCD
+actually has against what git declares before assuming recovery is done:
+
+```bash
+kubectl get application -n argocd -o custom-columns=NAME:.metadata.name
+ls kubernetes/argocd-apps/*.yaml
+```
+
+Reapply anything missing with `kubectl apply -f kubernetes/argocd-apps/<service>.yaml`.
+That also re-triggers a subtler issue: a freshly-applied Application still
+carries git's `syncPolicy.automated: {prune:true, selfHeal:true}`, so
+ArgoCD can auto-sync and scale a previously-0 deployment back up to git's
+declared `replicas: 1` in the few seconds before a follow-up
+`kubectl patch ... automated:null` lands — it's a race, not a guarantee.
+Check replica counts after reapplying and rescale to 0 if it won.
+
 ---
 
 [← kubernetes/README.md](README.md)
