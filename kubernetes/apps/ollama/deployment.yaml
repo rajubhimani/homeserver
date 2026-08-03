@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: apps
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: ollama
+          image: ollama/ollama:0.32.5
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+            - name: OLLAMA_KEEP_ALIVE
+              value: "5m"
+            - name: OLLAMA_MAX_LOADED_MODELS
+              value: "0"
+            - name: OLLAMA_NUM_PARALLEL
+              value: "1"
+            - name: OLLAMA_DEBUG
+              value: "INFO"
+            - name: OLLAMA_FLASH_ATTENTION
+              value: "false"
+            - name: OLLAMA_MAX_QUEUE
+              value: "512"
+            - name: OLLAMA_NOPRUNE
+              value: "false"
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+          readinessProbe:
+            exec:
+              command: ["ollama", "list"]
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["ollama", "list"]
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ollama-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: apps
+spec:
+  selector:
+    app: ollama
+  ports:
+    - port: 11434

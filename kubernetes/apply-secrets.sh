@@ -251,6 +251,12 @@ kubectl create secret generic stirling-pdf-lite-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "stirling-pdf-lite-credentials applied"
 
+# ── Open WebUI session secret ───────────────────────────────────────────
+kubectl create secret generic open-webui-credentials -n apps \
+  --from-literal=secret-key="$OPEN_WEBUI_SECRET_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "open-webui-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls
