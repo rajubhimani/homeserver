@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp audiobookshelf/.env.example audiobookshelf/.env
+cp services/audiobookshelf/.env.example services/audiobookshelf/.env
 # set AUDIOBOOKS_PATH and PODCASTS_PATH to your media locations
 uv run homeserver.py dev up audiobookshelf
 ```

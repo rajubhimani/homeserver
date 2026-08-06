@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp authentik/.env.example authentik/.env
+cp services/authentik/.env.example services/authentik/.env
 # generate: openssl rand -hex 32 → AUTHENTIK_SECRET_KEY
 # set POSTGRES_PASSWORD
 uv run homeserver.py dev up authentik

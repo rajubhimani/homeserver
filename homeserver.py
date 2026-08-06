@@ -5,6 +5,8 @@ Usage:
   python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
   python homeserver.py <env> -r <service...>   (shorthand for restart)
   python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
+  python homeserver.py orphaned-volumes [service|all] [--yes]
+                                                list/remove volumes not declared in a service's current compose.yml
 
 Service tiers:
   min    — bare minimum to run the server (dozzle, nginx-plain, landing)
@@ -54,10 +56,16 @@ from pathlib import Path
 # ── Paths & config ──────────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).resolve().parent
+# Every service's own directory (compose.yml, .env, etc.) lives under
+# services/<name>/, one level deeper than the repo root — keeps the root
+# itself to just this script, service_data/, docker/, kubernetes/, and docs.
+SERVICES_DIR = BASE_DIR / "services"
 # service_data/data/<service>/  — live data, bind-mounted into containers
 # service_data/backup/<service>/<YYYYMMDD-HHMMSS>/  — timestamped snapshots
 # service_data/db_dump/<service>/<YYYYMMDD-HHMMSS>/  — logical Postgres dumps,
 #   used by 'migrate' (e.g. Debian->Alpine image migration) — see 'dump'/'migrate'
+# These stay directly under BASE_DIR, not SERVICES_DIR — service_data/ is a
+# sibling of services/, not nested inside it.
 SERVICE_DATA_ROOT = BASE_DIR / "service_data" / "data"
 BACKUP_ROOT = BASE_DIR / "service_data" / "backup"
 DB_DUMP_ROOT = BASE_DIR / "service_data" / "db_dump"
@@ -279,6 +287,9 @@ class DockerBackend(ABC):
     def volume_create(self, name: str) -> None: ...
 
     @abstractmethod
+    def volume_remove(self, name: str) -> bool: ...
+
+    @abstractmethod
     def network_exists(self, name: str) -> bool: ...
 
     @abstractmethod
@@ -429,6 +440,9 @@ class SubprocessBackend(DockerBackend):
 
     def volume_create(self, name: str) -> None:
         self._run(["volume", "create", name])
+
+    def volume_remove(self, name: str) -> bool:
+        return self._run(["volume", "rm", name]).returncode == 0
 
     def network_exists(self, name: str) -> bool:
         return self._run(["network", "inspect", name]).returncode == 0
@@ -632,6 +646,13 @@ class PythonOnWhalesBackend(DockerBackend):
     def volume_create(self, name: str) -> None:
         self._docker.volume.create(name)
 
+    def volume_remove(self, name: str) -> bool:
+        try:
+            self._docker.volume.remove(name)
+            return True
+        except Exception:
+            return False
+
     def network_exists(self, name: str) -> bool:
         return self._docker.network.exists(name)
 
@@ -729,8 +750,44 @@ def is_valid_service(service: str) -> bool:
     )
 
 
+def declared_volumes(service: str) -> set[str]:
+    """Top-level named volumes declared in services/<service>/compose.yml's
+    own `volumes:` block (the base file only — env overrides never add
+    volumes in this repo's convention). Regex-based rather than a real YAML
+    parser, matching this project's pure-stdlib rule (see pyproject.toml) — good
+    enough for this repo's consistently 2-space-indented compose files."""
+    path = SERVICES_DIR / service / base_file(service)
+    if not path.is_file():
+        return set()
+    text = path.read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"^volumes:[ \t]*$(.*?)(?=^\S|\Z)", text, re.M | re.S)
+    if not m:
+        return set()
+    return {
+        dm.group(1)
+        for line in m.group(1).splitlines()
+        if (dm := re.match(r"^ {2}([a-zA-Z0-9_-]+):", line))
+    }
+
+
+def find_orphaned_volumes(service: str) -> list[str]:
+    """Docker volumes matching <service>_* that exist on this host but
+    aren't declared in the service's current compose.yml — leftover from a
+    prior image/volume-name change (see docs/08-maintenance.md's firefly
+    example: postgres:18.4 -> postgres:18.4-alpine renamed the volume too,
+    orphaning the old one, which then rode along silently in every backup)."""
+    declared = declared_volumes(service)
+    prefix = f"{service}_"
+    orphans = []
+    for v in BACKEND.volumes_for_project(service):
+        short = v[len(prefix):] if v.startswith(prefix) else v
+        if short not in declared:
+            orphans.append(v)
+    return orphans
+
+
 def compose_files(service: str, env: str) -> list[Path]:
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     files = [d / base_file(service)]
     env_file = d / f"compose.{env}.yml"
     if env_file.is_file():
@@ -743,7 +800,7 @@ def compose_files(service: str, env: str) -> list[Path]:
 
 
 def compose_files_all(service: str) -> list[Path]:
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     files = [d / base_file(service)]
     for e in ("dev", "prod"):
         f = d / f"compose.{e}.yml"
@@ -876,7 +933,7 @@ def prune_snapshots(service: str) -> None:
     if BACKUP_RETENTION == -1:
         return
     snaps = list_snapshots(service)
-    excess = len(snaps) - BACKUP_RETENTION
+    excess = max(0, len(snaps) - BACKUP_RETENTION)
     for old in snaps[:excess]:
         shutil.rmtree(old, ignore_errors=True)
 
@@ -889,6 +946,15 @@ def backup_service(service: str) -> None:
 
     if not vols and not service_data_dir.is_dir():
         return  # nothing to back up
+
+    declared = declared_volumes(service)
+    prefix = f"{service}_"
+    for v in vols:
+        short = v[len(prefix):] if v.startswith(prefix) else v
+        if short not in declared:
+            warn(f"{v} is backed up but not declared in services/{service}/{base_file(service)}")
+            warn(f"  likely orphaned from a prior image/volume-name change — once you're sure you don't need it: docker volume rm {v}")
+            warn(f"  (or: python homeserver.py orphaned-volumes {service} --yes)")
 
     ts = time.strftime("%Y%m%d-%H%M%S")
     snap_dir = BACKUP_ROOT / service / ts
@@ -938,7 +1004,7 @@ def do_snapshots(service: str) -> None:
 
 
 def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None) -> bool:
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
@@ -990,7 +1056,7 @@ def do_down(service: str, env: str, profile: str | None, no_backup: bool = False
     # env is unused here (compose_files_all tears down both dev/prod
     # regardless) — kept in the signature so do_up/do_down/do_update/
     # do_restart/do_backup/do_restore all share one uniform call shape.
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
@@ -1015,7 +1081,7 @@ def do_down(service: str, env: str, profile: str | None, no_backup: bool = False
 def do_update(service: str, env: str, profile: str | None = None) -> bool:
     # profile is unused — update always pulls/recreates the base service, no
     # profile-scoped variant — kept for the same uniform call shape as above.
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
@@ -1038,7 +1104,7 @@ def do_update(service: str, env: str, profile: str | None = None) -> bool:
 
 
 def do_restart(service: str, env: str, profile: str | None) -> bool:
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
@@ -1065,7 +1131,7 @@ def do_backup(service: str, env: str, profile: str | None) -> bool:
     stopping, so this just reuses that: stop (which snapshots), then restart
     if it was running. Kept as its own command for backing up without wanting
     to think about whether the service happens to be running right now."""
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
@@ -1080,7 +1146,7 @@ def do_backup(service: str, env: str, profile: str | None) -> bool:
 
 
 def do_restore(service: str, env: str, profile: str | None, snapshot: str | None = None) -> bool:
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
@@ -1147,11 +1213,11 @@ def do_dump(service: str, env: str, profile: str | None) -> bool:
         error(f"{db_container} is not running — start {service} first")
         return False
 
-    service_env = load_env_file(BASE_DIR / service / ".env")
+    service_env = load_env_file(SERVICES_DIR / service / ".env")
     user = service_env.get("POSTGRES_USER")
     db = service_env.get("POSTGRES_DB")
     if not user or not db:
-        error(f"{service}/.env has no POSTGRES_USER/POSTGRES_DB — not a standard Postgres service")
+        error(f"services/{service}/.env has no POSTGRES_USER/POSTGRES_DB — not a standard Postgres service")
         return False
 
     ts = time.strftime("%Y%m%d-%H%M%S")
@@ -1216,7 +1282,7 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
         return False
     dump_file = dump_files[0]
 
-    compose_path = BASE_DIR / service / "compose.yml"
+    compose_path = SERVICES_DIR / service / "compose.yml"
     if not compose_path.is_file():
         error(f"{compose_path} not found")
         return False
@@ -1264,11 +1330,11 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
     vol_suffix = "alpine" if new_tag == f"{tag}-alpine" else re.sub(r"[^a-zA-Z0-9]+", "-", new_tag).strip("-")
     new_vol = f"{old_vol}-{vol_suffix}"
 
-    service_env = load_env_file(BASE_DIR / service / ".env")
+    service_env = load_env_file(SERVICES_DIR / service / ".env")
     user = service_env.get("POSTGRES_USER")
     db = service_env.get("POSTGRES_DB")
     if not user or not db:
-        error(f"{service}/.env has no POSTGRES_USER/POSTGRES_DB")
+        error(f"services/{service}/.env has no POSTGRES_USER/POSTGRES_DB")
         return False
 
     info(f"Migrating {service}-db: {old_full} -> {new_full} (volume {old_vol} -> {new_vol})")
@@ -1341,7 +1407,7 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
 
 
 def do_logs(service: str, env: str) -> None:
-    d = BASE_DIR / service
+    d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return
@@ -1470,6 +1536,58 @@ def do_gc(assume_yes: bool = False) -> int:
     return 0
 
 
+def do_orphaned_volumes(target: str, assume_yes: bool) -> int:
+    """List (and optionally remove) Docker volumes matching <service>_* that
+    exist but aren't declared in that service's current compose.yml —
+    automates what backup_service()'s warning flags one service at a time.
+    """
+    header("Checking for orphaned Docker volumes...")
+
+    if target == "all":
+        services = SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + SERVICES_MANUAL
+    else:
+        if not is_valid_service(target):
+            error(f"Service '{target}' not found")
+            return 1
+        services = [target]
+
+    found: list[str] = []
+    for s in services:
+        for v in find_orphaned_volumes(s):
+            warn(f"{v}  (service: {s}, not declared in services/{s}/{base_file(s)})")
+            found.append(v)
+
+    if not found:
+        success("No orphaned volumes found")
+        return 0
+
+    print()
+    warn(f"{len(found)} orphaned volume(s) found above.")
+    warn("Check you don't need old data in one before removing, e.g.:")
+    warn("  docker run --rm -v <volume>:/data alpine ls -la /data")
+
+    if not assume_yes:
+        try:
+            reply = input(f"\n{BOLD}Remove all {len(found)} listed above? [y/N]{RESET} ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            info("Cancelled")
+            return 1
+        if reply not in ("y", "yes"):
+            info("Cancelled — nothing removed")
+            return 0
+
+    print()
+    ok = True
+    for v in found:
+        if BACKEND.volume_remove(v):
+            success(f"Removed {v}")
+        else:
+            error(f"Failed to remove {v}")
+            ok = False
+    return 0 if ok else 1
+
+
 # ── Help ─────────────────────────────────────────────────────────────
 
 
@@ -1483,6 +1601,7 @@ def show_help() -> None:
     print("    python homeserver.py <env> -d <service...>                     (down shorthand)")
     print("    python homeserver.py <env> -r <service...>                     (restart shorthand)")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
+    print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
     print()
     print(f"  {BOLD}Environments:{RESET}")
     print("    dev    ports on all interfaces (direct access)")
@@ -1595,6 +1714,12 @@ def main() -> int:
     # disk reclaim isn't env/service-scoped, it's a whole-Docker-host operation.
     if argv and argv[0] == "gc":
         return do_gc(assume_yes="--yes" in argv or "-y" in argv)
+
+    # Same reasoning — a volume either exists on this host or it doesn't,
+    # dev/prod doesn't change that.
+    if argv and argv[0] == "orphaned-volumes":
+        target = next((a for a in argv[1:] if not a.startswith("-")), "all")
+        return do_orphaned_volumes(target, assume_yes="--yes" in argv or "-y" in argv)
 
     if len(argv) < 3:
         show_help()

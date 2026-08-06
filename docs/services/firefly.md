@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp firefly/.env.example firefly/.env
+cp services/firefly/.env.example services/firefly/.env
 # APP_KEY: openssl rand -hex 16  (exactly 32 chars)
 # STATIC_CRON_TOKEN: openssl rand -hex 16  (exactly 32 chars)
 # set POSTGRES_PASSWORD and SITE_OWNER
@@ -44,7 +44,7 @@ One-time setup after Firefly III is running:
 1. Firefly III → Profile → OAuth → **OAuth Clients** → Create new client
 2. Redirect URL: `https://firefly-import.yourdomain.com/callback` — uncheck "Keep a secret?"
 3. Copy the resulting **Client ID** (a UUID like `019f0fc9-379d-73bf-bc43-7ec7c6fb4ac9`)
-4. Set `FIREFLY_III_CLIENT_ID=<uuid>` in `firefly/.env` and restart the importer:
+4. Set `FIREFLY_III_CLIENT_ID=<uuid>` in `services/firefly/.env` and restart the importer:
 
    ```bash
    uv run homeserver.py prod up firefly

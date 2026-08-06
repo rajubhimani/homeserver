@@ -1,0 +1,6 @@
+# Force LF line endings for all text files, regardless of the client's
+# core.autocrlf setting. Without this, editors/tools on Windows checkouts
+# (or CIFS/SMB mounts served from a Windows host) silently rewrite every
+# line to CRLF, turning every `git diff` into a whole-file noise diff that
+# buries the actual change.
+* text=auto eol=lf

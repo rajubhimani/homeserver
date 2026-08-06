@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp jellyfin/.env.example jellyfin/.env
+cp services/jellyfin/.env.example services/jellyfin/.env
 # set MEDIA_ROOT to your media drive path, and the JELLYFIN_* tuning vars below if you want non-default values
 uv run homeserver.py dev up jellyfin
 ```

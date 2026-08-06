@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp n8n/.env.example n8n/.env
+cp services/n8n/.env.example services/n8n/.env
 # set POSTGRES_PASSWORD and N8N_ENCRYPTION_KEY (openssl rand -hex 32)
 uv run homeserver.py dev up n8n
 ```

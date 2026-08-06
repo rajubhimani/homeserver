@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp ntfy/.env.example ntfy/.env
+cp services/ntfy/.env.example services/ntfy/.env
 uv run homeserver.py dev up ntfy
 docker exec -it ntfy ntfy user add --role=admin youruser
 ```

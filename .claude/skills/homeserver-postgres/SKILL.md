@@ -9,12 +9,12 @@ Don't rely on a fixed list of "which services use which DB" here — it goes sta
 
 ```bash
 # Services with a standalone DB container (postgres/mariadb/rabbitmq image)
-grep -l "image:.*\(postgres\|mariadb\|rabbitmq\)" */compose.yml
+grep -l "image:.*\(postgres\|mariadb\|rabbitmq\)" services/*/compose.yml
 
 # Some all-in-one images bundle their DB inside the main container instead of
 # a separate `<service>-db` — grep above won't catch these. Look for a named
 # volume that isn't an obvious app-data mount instead:
-grep -B2 "^volumes:" */compose.yml
+grep -B2 "^volumes:" services/*/compose.yml
 ```
 
 Then check that service's own `docs/services/<service>.md` — that's where service-specific setup, whether it bundles its own DB internally, custom images, non-default CMDs, and known quirks belong, not here.
@@ -80,12 +80,12 @@ Every DB container should get a `command:` override with real tuning parameters,
 General principle, not a fixed per-service table:
 - **Single-consumer DB** (only one app connects to it): lower `max_connections`/`shared_buffers`/`effective_cache_size`, smaller memory cap (roughly 128MB shared_buffers / 20 connections / 384M cap as a starting point).
 - **Multi-consumer or high-throughput DB** (several concurrent workers, or a large sync-heavy app): higher `max_connections`/`effective_cache_size`, larger cap (roughly 50 connections / 512M cap as a starting point).
-- Check a few existing `<service>/compose.yml` files' `command:` overrides for concrete, currently-applied values to copy from and adjust — treat those as worked examples, not this skill, as the source of truth (they can drift from any numbers written here).
-- **Before assuming a new DB container needs no tuning**, check whether it already has one — `grep -l "command:.*shared_buffers\|command:.*max_connections" */compose.yml` shows which ones do. A DB container with neither a `command:` override nor a `deploy.resources.limits.memory` cap is a gap worth fixing, not a sign it doesn't need one — this includes all-in-one images that bundle their own DB just as much as a discrete `<service>-db` container (check that service's own `docs/services/<service>.md` for whether it does).
+- Check a few existing `services/<service>/compose.yml` files' `command:` overrides for concrete, currently-applied values to copy from and adjust — treat those as worked examples, not this skill, as the source of truth (they can drift from any numbers written here).
+- **Before assuming a new DB container needs no tuning**, check whether it already has one — `grep -l "command:.*shared_buffers\|command:.*max_connections" services/*/compose.yml` shows which ones do. A DB container with neither a `command:` override nor a `deploy.resources.limits.memory` cap is a gap worth fixing, not a sign it doesn't need one — this includes all-in-one images that bundle their own DB just as much as a discrete `<service>-db` container (check that service's own `docs/services/<service>.md` for whether it does).
 - Some official images override the default `CMD` for their own reasons (e.g. to point at a non-default config file enabling extensions/preload libraries) — if you replace `command:` on such an image without preserving its original first flag, the app can silently fall back to defaults and break in ways that look unrelated (e.g. a vector-search extension disappearing). Check the image's own docs/Dockerfile for its default `CMD` before overriding it — see that service's own `docs/services/<service>.md` for a worked example if one's already documented there.
 - After changing a `command:`/`deploy:` block, only the DB container needs recreating — much faster than a full service restart:
   ```bash
-  cd <service>/
+  cd services/<service>/
   docker compose -f compose.yml -f compose.prod.yml up -d --no-deps <service>-db
   ```
 - Verify tuning actually applied: `docker exec <service>-db psql -U <postgres-user> -c "SHOW max_connections; SHOW shared_buffers;"` (or the MariaDB/RabbitMQ equivalent — `SHOW VARIABLES LIKE '...'` / `rabbitmq-diagnostics`).

@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp it-tools/.env.example it-tools/.env   # no values to fill in
+cp services/it-tools/.env.example services/it-tools/.env   # no values to fill in
 uv run homeserver.py dev up it-tools
 ```
 

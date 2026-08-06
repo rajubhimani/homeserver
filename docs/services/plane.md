@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp plane/.env.example plane/.env
+cp services/plane/.env.example services/plane/.env
 # generate: openssl rand -hex 32 → SECRET_KEY
 # set POSTGRES_PASSWORD, RABBITMQ passwords, MINIO credentials
 uv run homeserver.py dev up plane

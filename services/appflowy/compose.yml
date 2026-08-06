@@ -1,0 +1,195 @@
+services:
+  appflowy-db:
+    image: pgvector/pgvector:pg16
+    container_name: appflowy-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - appflowy-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  appflowy-redis:
+    image: redis:8.10-alpine
+    container_name: appflowy-redis
+    restart: unless-stopped
+    command: redis-server --save "" --stop-writes-on-bgsave-error no
+    volumes:
+      # --save "" disables persistence, so nothing is actually written here —
+      # this mount exists only so the image's own `VOLUME /data` declaration
+      # doesn't cause Docker to silently create an anonymous volume instead.
+      - appflowy-redis-alpine:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  appflowy-minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: appflowy-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    env_file: .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ${DATA_ROOT}/minio:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - homeserver
+
+  appflowy-minio-setup:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: appflowy-minio-setup
+    restart: "no"
+    env_file: .env
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set appflowy http://appflowy-minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing appflowy/appflowy;
+      exit 0;
+      "
+    depends_on:
+      appflowy-minio:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  appflowy-gotrue:
+    image: appflowyinc/gotrue:0.17.1
+    container_name: appflowy-gotrue
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GOTRUE_JWT_SECRET: ${GOTRUE_JWT_SECRET}
+      GOTRUE_JWT_EXP: "7200"
+      GOTRUE_DB_DRIVER: postgres
+      # search_path is scoped to this connection string only (not the DB role) so it
+      # doesn't affect AppFlowy Cloud's migrations, which assume unqualified names
+      # resolve to public — see appflowy-cloud's APPFLOWY_DATABASE_URL below.
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@appflowy-db/${POSTGRES_DB}?options=-c%20search_path%3Dauth%2Cpublic
+      GOTRUE_SITE_URL: https://appflowy.${DOMAIN}
+      GOTRUE_URI_ALLOW_LIST: "https://appflowy.${DOMAIN}/**,appflowy-flutter://**"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT:-465}
+      GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: "AppFlowy"
+      API_EXTERNAL_URL: https://appflowy.${DOMAIN}/gotrue
+      PORT: "9999"
+    depends_on:
+      appflowy-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  appflowy-cloud:
+    image: appflowyinc/appflowy_cloud:0.16.5
+    container_name: appflowy-cloud
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APPFLOWY_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@appflowy-db/${POSTGRES_DB}
+      APPFLOWY_REDIS_URI: redis://appflowy-redis:6379
+      APPFLOWY_GOTRUE_BASE_URL: http://appflowy-gotrue:9999
+      APPFLOWY_GOTRUE_JWT_SECRET: ${GOTRUE_JWT_SECRET}
+      APPFLOWY_S3_USE_MINIO: "true"
+      APPFLOWY_S3_MINIO_URL: http://appflowy-minio:9000
+      APPFLOWY_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      APPFLOWY_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      APPFLOWY_S3_BUCKET: appflowy
+      APPFLOWY_S3_REGION: us-east-1
+      APPFLOWY_ENVIRONMENT: production
+      APPFLOWY_WEB_URL: https://appflowy.${DOMAIN}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      appflowy-db:
+        condition: service_healthy
+      appflowy-redis:
+        condition: service_healthy
+      appflowy-gotrue:
+        condition: service_started
+      appflowy-minio-setup:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+  appflowy-web:
+    image: appflowyinc/appflowy_web:0.16.2
+    container_name: appflowy-web
+    restart: unless-stopped
+    environment:
+      APPFLOWY_BASE_URL: https://appflowy.${DOMAIN}
+      APPFLOWY_GOTRUE_BASE_URL: https://appflowy.${DOMAIN}/gotrue
+      APPFLOWY_WS_BASE_URL: wss://appflowy.${DOMAIN}/ws
+    depends_on:
+      appflowy-cloud:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  appflowy-admin:
+    image: appflowyinc/admin_frontend:0.17.1
+    container_name: appflowy-admin
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GOTRUE_URL: https://appflowy.${DOMAIN}/gotrue
+      APPFLOWY_CLOUD_URL: https://appflowy.${DOMAIN}
+    depends_on:
+      appflowy-cloud:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  appflowy-nginx:
+    image: nginx:1.30-alpine
+    container_name: appflowy-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost/gotrue/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      appflowy-cloud:
+        condition: service_healthy
+      appflowy-web:
+        condition: service_started
+    networks:
+      - homeserver
+
+volumes:
+  appflowy-postgres:
+  appflowy-redis-alpine:
+
+networks:
+  homeserver:
+    external: true

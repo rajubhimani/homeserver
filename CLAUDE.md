@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A self-hosted personal cloud stack managed with Docker Compose. Each service lives in its own directory with a three-layer compose structure (`compose.yml` base + `compose.dev.yml`/`compose.prod.yml` overrides — see "Compose file pattern" below). `homeserver.py` is the single entrypoint for managing all services — run it with `uv run homeserver.py ...` (requires [uv](https://docs.astral.sh/uv/); `uv sync` once) or plain `python`/`python3 homeserver.py ...` if you manage Python yourself. Pure-stdlib by default; see the `homeserver-docker-backend` skill for the optional `python-on-whales` backend and Windows-specific notes.
+A self-hosted personal cloud stack managed with Docker Compose. Each service lives in its own directory under `services/` (e.g. `services/nextcloud/`) with a three-layer compose structure (`compose.yml` base + `compose.dev.yml`/`compose.prod.yml` overrides — see "Compose file pattern" below). `homeserver.py` is the single entrypoint for managing all services — run it with `uv run homeserver.py ...` (requires [uv](https://docs.astral.sh/uv/); `uv sync` once) or plain `python`/`python3 homeserver.py ...` if you manage Python yourself. Pure-stdlib by default; see the `homeserver-docker-backend` skill for the optional `python-on-whales` backend and Windows-specific notes.
 
 There is no shell-script entrypoint — an earlier `homeserver.sh` was retired once `homeserver.py` reached full feature parity. Don't recreate one; that's a deliberate new decision to make with the user, not a default to fall back to.
 
@@ -67,7 +67,7 @@ Adding or moving a service between tiers, wiring up a new service end-to-end (la
 
 ## Data directory convention
 
-All persistent data lives under `service_data/` at the repo root (gitignored entirely), split into `data/` (live, bind-mounted) and `backup/` (timestamped snapshots — see `homeserver-backups` skill). Set `DATA_ROOT=../service_data/data/<service>` in the service's `.env`; `homeserver.py` overrides it with an absolute path at runtime. DB data (Postgres/MariaDB/Redis-persisted/RabbitMQ) is a **named Docker volume**, not under `data/` at all — see the `homeserver-postgres` skill for why and how.
+All persistent data lives under `service_data/` at the repo root (gitignored entirely, a sibling of `services/`), split into `data/` (live, bind-mounted) and `backup/` (timestamped snapshots — see `homeserver-backups` skill). Set `DATA_ROOT=../../service_data/data/<service>` in the service's `.env` (two levels up — `services/<service>/.env` to repo root); `homeserver.py` overrides it with an absolute path at runtime. DB data (Postgres/MariaDB/Redis-persisted/RabbitMQ) is a **named Docker volume**, not under `data/` at all — see the `homeserver-postgres` skill for why and how.
 
 **Never delete anything under `service_data/data/`** — it's always live. Snapshots under `service_data/backup/<service>/<timestamp>/` are safe to delete individually.
 
@@ -83,3 +83,4 @@ All persistent data lives under `service_data/` at the repo root (gitignored ent
 | Port numbers, service tiers, NPM proxy-host table (canonical, keep this one updated) | [`docs/11-services-reference.md`](docs/11-services-reference.md) |
 | Per-service setup, architecture, every gotcha/troubleshooting note | [`docs/services/<service>.md`](docs/services/) — one consolidated doc per service |
 | Kubernetes pilot (parallel to Compose, not a replacement — see `feature/k8s-pilot` branch) | [`kubernetes/README.md`](kubernetes/README.md) for setup/status, [`kubernetes/TROUBLESHOOTING.md`](kubernetes/TROUBLESHOOTING.md) for every gotcha hit so far (incl. disk-full recovery, ArgoCD bootstrap, Compose-vs-k8s semantic traps) |
+| Capping Docker's total CPU/memory/disk usage on the host (Fedora/Ubuntu/Windows) | [`docker/README.md`](docker/README.md) — separate from any service's own `deploy.resources.limits`, this caps the whole engine |

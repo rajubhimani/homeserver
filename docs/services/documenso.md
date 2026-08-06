@@ -24,7 +24,7 @@ docker run --rm --entrypoint sh -v "$(pwd)/service_data/data/documenso:/out" alp
 Then:
 
 ```bash
-cp documenso/.env.example documenso/.env
+cp services/documenso/.env.example services/documenso/.env
 # set POSTGRES_PASSWORD, NEXTAUTH_SECRET, NEXT_PRIVATE_ENCRYPTION_KEY,
 # NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY (openssl rand -base64 32 each), and SMTP settings
 uv run homeserver.py dev up documenso

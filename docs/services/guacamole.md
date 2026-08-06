@@ -26,7 +26,7 @@ Deployed with `WEBAPP_CONTEXT=ROOT` so the webapp serves at `/` instead of its d
 ## Setup
 
 ```bash
-cp guacamole/.env.example guacamole/.env
+cp services/guacamole/.env.example services/guacamole/.env
 # set POSTGRES_PASSWORD
 uv run homeserver.py dev up guacamole
 ```
@@ -88,7 +88,7 @@ Not yet tested in this deployment, but standard Guacamole usage: enable Remote D
 **Get more detail out of `guacd`** than its default `INFO` log level shows — useful for any future connection failure:
 
 ```bash
-# In guacamole/compose.yml, add to the guacd service:
+# In services/guacamole/compose.yml, add to the guacd service:
 #   environment:
 #     LOG_LEVEL: debug
 cd guacamole

@@ -10,10 +10,10 @@
 ## Setup
 
 ```bash
-cp immich/.env.example immich/.env
+cp services/immich/.env.example services/immich/.env
 ```
 
-Edit `immich/.env`:
+Edit `services/immich/.env`:
 
 ```env
 UPLOAD_LOCATION=/mnt/seagate/immich
@@ -67,9 +67,9 @@ Login with the user's account, then enable auto-backup in app settings.
 
 **Symptom:** Immich does a create→read→overwrite self-check on a hidden `.immich` marker file in each `upload/` subdirectory on every boot (see [Immich's system-integrity docs](https://docs.immich.app/administration/system-integrity)). On Windows Docker Desktop, the read step can fail immediately after the write succeeds, even though the file is independently readable via a plain `docker run` — not a permissions or race issue, just how this host's bind mount behaves under Immich's own Node.js process.
 
-**Fix:** `IMMICH_IGNORE_MOUNT_CHECK_ERRORS=true` in `immich/.env` (already set by default in this repo) — Immich's own documented escape hatch for this failure mode. It only skips the startup self-check; normal photo/video read/write during actual use is unaffected.
+**Fix:** `IMMICH_IGNORE_MOUNT_CHECK_ERRORS=true` in `services/immich/.env` (already set by default in this repo) — Immich's own documented escape hatch for this failure mode. It only skips the startup self-check; normal photo/video read/write during actual use is unaffected.
 
-**Before assuming it's this bug, verify the mount is even correct:** `docker inspect immich-server --format '{{.Mounts}}'` and confirm the host path matches `UPLOAD_LOCATION` in `immich/.env`. `UPLOAD_LOCATION` is a separate env var from `DATA_ROOT` and does **not** get auto-injected by `homeserver.py` — if you ever restructure `service_data/` paths, grep every `.env`/`.env.example` for `=../service_data/`, not just lines starting with `DATA_ROOT=`. A stale `UPLOAD_LOCATION` silently bind-mounts an empty auto-created directory, which looks identical to the mount-check bug above but is a different problem with a different fix (correct the path, not `IMMICH_IGNORE_MOUNT_CHECK_ERRORS`).
+**Before assuming it's this bug, verify the mount is even correct:** `docker inspect immich-server --format '{{.Mounts}}'` and confirm the host path matches `UPLOAD_LOCATION` in `services/immich/.env`. `UPLOAD_LOCATION` is a separate env var from `DATA_ROOT` and does **not** get auto-injected by `homeserver.py` — if you ever restructure `service_data/` paths, grep every `.env`/`.env.example` for `=../../service_data/`, not just lines starting with `DATA_ROOT=`. A stale `UPLOAD_LOCATION` silently bind-mounts an empty auto-created directory, which looks identical to the mount-check bug above but is a different problem with a different fix (correct the path, not `IMMICH_IGNORE_MOUNT_CHECK_ERRORS`).
 
 ## Troubleshooting: `immich-server`/DB instability during heavy upload + processing
 
@@ -85,7 +85,7 @@ Login with the user's account, then enable auto-backup in app settings.
 
 **Symptom:** `uv run homeserver.py dev backup immich` (and any auto-snapshot on `down`) took a very long time and produced a huge `service_data.tar.gz`, dominated by the actual photo/video library rather than app config.
 
-**Root cause:** `UPLOAD_LOCATION=../service_data/data/immich/upload` was nested *inside* `DATA_ROOT` (`service_data/data/immich/`). `backup_service()` in `homeserver.py` tars the entire `DATA_ROOT` directory on every backup/auto-snapshot, so the whole `library/`/`thumbs/`/`encoded-video/`/`upload/` tree was being re-archived every time. Found via the identical bug on `jellyfin`'s `MEDIA_ROOT` — see `docs/services/jellyfin.md`.
+**Root cause:** `UPLOAD_LOCATION=../../service_data/data/immich/upload` was nested *inside* `DATA_ROOT` (`service_data/data/immich/`). `backup_service()` in `homeserver.py` tars the entire `DATA_ROOT` directory on every backup/auto-snapshot, so the whole `library/`/`thumbs/`/`encoded-video/`/`upload/` tree was being re-archived every time. Found via the identical bug on `jellyfin`'s `MEDIA_ROOT` — see `docs/services/jellyfin.md`.
 
 **Fix:** moved the upload tree to `service_data/uploads/immich/` — a sibling of `service_data/data/`, structurally outside anything `backup_service()` sweeps — and updated `UPLOAD_LOCATION` accordingly. The container's mount target (at the time, `/usr/src/app/upload`) didn't change, only the host-side source path. Confirmed intact after the move: 28,683 files still present under `library/` from inside the container, `immich-server`/`immich-db` both came back healthy. This convention is now documented in the `homeserver-add-service` skill (step 2) for any service with a second, large secondary data root.
 

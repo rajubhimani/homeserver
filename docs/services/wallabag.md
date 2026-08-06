@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp wallabag/.env.example wallabag/.env
+cp services/wallabag/.env.example services/wallabag/.env
 # set POSTGRES_PASSWORD and SYMFONY__ENV__SECRET
 uv run homeserver.py dev up wallabag
 ```

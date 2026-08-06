@@ -10,11 +10,11 @@
 ## Setup
 
 ```bash
-cp bookstack/.env.example bookstack/.env
+cp services/bookstack/.env.example services/bookstack/.env
 # generate APP_KEY:
 docker run --rm --entrypoint /bin/bash lscr.io/linuxserver/bookstack:v26.05.3-ls277 \
   -c "php /app/www/artisan key:generate --show"
-# paste the output (including "base64:") into bookstack/.env as APP_KEY, set the MYSQL_* passwords
+# paste the output (including "base64:") into services/bookstack/.env as APP_KEY, set the MYSQL_* passwords
 uv run homeserver.py dev up bookstack
 ```
 

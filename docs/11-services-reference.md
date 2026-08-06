@@ -48,7 +48,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Immich | `immich-server` | 2283 | 2283 | core |
 | Jellyfin | `jellyfin` | 8096 | 8096 | core |
 | Guacamole | `guacamole` | 8107 | 8080 | core |
-| Portainer | `portainer` | 9000 / 9443 | 9000 / 9443 | core |
+| Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | core |
 | Dockge | `dockge` | 5001 | 5001 | extra |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |

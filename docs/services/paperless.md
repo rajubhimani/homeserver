@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp paperless/.env.example paperless/.env
+cp services/paperless/.env.example services/paperless/.env
 # set POSTGRES_PASSWORD, PAPERLESS_SECRET_KEY, PAPERLESS_ADMIN_USER/PASSWORD
 uv run homeserver.py dev up paperless
 ```

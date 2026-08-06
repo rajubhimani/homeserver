@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp mealie/.env.example mealie/.env
+cp services/mealie/.env.example services/mealie/.env
 # set POSTGRES_PASSWORD
 uv run homeserver.py dev up mealie
 ```

@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp listmonk/.env.example listmonk/.env
+cp services/listmonk/.env.example services/listmonk/.env
 # set POSTGRES_PASSWORD and LISTMONK_ADMIN_PASSWORD
 uv run homeserver.py dev up listmonk
 ```

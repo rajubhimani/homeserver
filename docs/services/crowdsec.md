@@ -16,7 +16,7 @@ So this pass deploys **detection only**: the CrowdSec engine reads `nginx-plain`
 ## Setup
 
 ```bash
-cp crowdsec/.env.example crowdsec/.env
+cp services/crowdsec/.env.example services/crowdsec/.env
 uv run homeserver.py dev up crowdsec
 ```
 
@@ -30,7 +30,7 @@ docker exec -it crowdsec cscli collections list # installed detection scenarios
 
 ## Architecture — reads logs without touching nginx-plain's logging config
 
-Rather than mounting nginx's log files (which the standard official `nginx` image symlinks to `/dev/stdout`, making file-based acquisition unreliable in Docker), this setup uses CrowdSec's **Docker log acquisition source** (`crowdsec/acquis.yaml`, `source: docker` + `use_container_labels: true`): CrowdSec reads container logs directly via the Docker API for any container labeled `crowdsec.enable: "true"`, and takes the parser/collection to apply from that same container's `crowdsec.labels.type` label. `nginx-plain/compose.yml` carries both labels — see the `labels:` block there.
+Rather than mounting nginx's log files (which the standard official `nginx` image symlinks to `/dev/stdout`, making file-based acquisition unreliable in Docker), this setup uses CrowdSec's **Docker log acquisition source** (`services/crowdsec/acquis.yaml`, `source: docker` + `use_container_labels: true`): CrowdSec reads container logs directly via the Docker API for any container labeled `crowdsec.enable: "true"`, and takes the parser/collection to apply from that same container's `crowdsec.labels.type` label. `services/nginx-plain/compose.yml` carries both labels — see the `labels:` block there.
 
 This requires read access to the Docker socket (`${DOCKER_SOCKET}` mounted read-only) — the same socket-access pattern already used by `dozzle`, `portainer`, `dockge`, `forgejo`, and `guacamole` in this stack.
 

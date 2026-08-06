@@ -12,7 +12,7 @@
 Server:
 
 ```bash
-cp atuin/.env.example atuin/.env
+cp services/atuin/.env.example services/atuin/.env
 uv run homeserver.py dev up atuin
 ```
 
