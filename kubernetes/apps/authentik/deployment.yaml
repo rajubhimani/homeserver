@@ -1,0 +1,206 @@
+# authentik-server and authentik-worker are two separate Deployments built
+# from the exact same image, differing only in which subcommand they run
+# (`server` vs `worker`) — same split as authentik/compose.yml's two
+# services. Both need `args:`, not `command:`, to select that subcommand:
+# the goauthentik/server image's ENTRYPOINT is its own `ak` wrapper binary,
+# and Compose's `command: server` / `command: worker` only overrides CMD
+# (passed to that entrypoint as its argument). Setting k8s `command:`
+# instead would replace the entrypoint itself and try to exec "server" or
+# "worker" directly, which doesn't exist as a binary — same class of bug as
+# the Postgres command:/args: gotcha in TROUBLESHOOTING.md, different app.
+#
+# media/templates PVCs are ReadWriteOnce and mounted by BOTH Deployments.
+# This only works reliably as long as the scheduler happens to land both
+# pods on the same node (RWO volumes can't be attached read-write from two
+# nodes at once) — there's no node affinity pinning that here, so it's a
+# latent scheduling risk, not a guarantee, on a real multi-node cluster.
+# Same category of caution as any other single-RWO-volume-shared-by-two-pods
+# setup in this pilot; worth revisiting (ReadWriteMany via an NFS-backed
+# StorageClass, or splitting into per-pod volumes) if it's ever actually hit.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentik-media
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentik-templates
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentik-certs
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-server
+  namespace: apps
+  labels:
+    app: authentik-server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: authentik-server
+  template:
+    metadata:
+      labels:
+        app: authentik-server
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: authentik-server
+          image: ghcr.io/goauthentik/server:2026.5.6
+          args: ["server"]
+          env:
+            - name: AUTHENTIK_POSTGRESQL__HOST
+              value: authentik-db
+            - name: AUTHENTIK_POSTGRESQL__USER
+              value: authentik
+            - name: AUTHENTIK_POSTGRESQL__NAME
+              value: authentik
+            - name: AUTHENTIK_POSTGRESQL__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-db-credentials
+                  key: password
+            - name: AUTHENTIK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-credentials
+                  key: secret-key
+            - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+              value: "false"
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: media
+              mountPath: /media
+            - name: templates
+              mountPath: /templates
+          readinessProbe:
+            exec:
+              command: ["ak", "healthcheck"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["ak", "healthcheck"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: authentik-media
+        - name: templates
+          persistentVolumeClaim:
+            claimName: authentik-templates
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-server
+  namespace: apps
+spec:
+  selector:
+    app: authentik-server
+  ports:
+    - port: 9000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-worker
+  namespace: apps
+  labels:
+    app: authentik-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: authentik-worker
+  template:
+    metadata:
+      labels:
+        app: authentik-worker
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: authentik-worker
+          image: ghcr.io/goauthentik/server:2026.5.6
+          args: ["worker"]
+          env:
+            - name: AUTHENTIK_POSTGRESQL__HOST
+              value: authentik-db
+            - name: AUTHENTIK_POSTGRESQL__USER
+              value: authentik
+            - name: AUTHENTIK_POSTGRESQL__NAME
+              value: authentik
+            - name: AUTHENTIK_POSTGRESQL__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-db-credentials
+                  key: password
+            - name: AUTHENTIK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-credentials
+                  key: secret-key
+            - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+              value: "false"
+          volumeMounts:
+            - name: media
+              mountPath: /media
+            - name: templates
+              mountPath: /templates
+            - name: certs
+              mountPath: /certs
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: authentik-media
+        - name: templates
+          persistentVolumeClaim:
+            claimName: authentik-templates
+        - name: certs
+          persistentVolumeClaim:
+            claimName: authentik-certs
+        - name: docker-sock
+          # Same caveat as dockge/deployment.yaml and any other docker.sock
+          # hostPath mount in this pilot: only live if the node actually runs
+          # dockerd at this path. kind nodes run containerd instead, not
+          # dockerd, so /var/run/docker.sock doesn't exist there at all —
+          # with type: Socket, kubelet will refuse to mount it and the pod
+          # sticks in ContainerCreating on this pilot's cluster. This only
+          # becomes usable once these manifests run on a genuine Docker host
+          # node (see dockge/deployment.yaml's longer comment on the same
+          # limitation).
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

@@ -1,0 +1,37 @@
+# Multi-source Application, same shape as cluster-traefik.yaml: the MetalLB
+# Helm chart itself, our values.yaml via $values, AND (third source) our
+# IPAddressPool/L2Advertisement CRs as plain manifests from this same repo.
+# The CRs will fail to apply until the chart's own CRDs exist on first sync —
+# ArgoCD's selfHeal just keeps retrying, so this self-resolves within a
+# couple of sync cycles with no manual intervention (same "let ArgoCD
+# reconcile the rest" pattern TROUBLESHOOTING.md already documents for the
+# cluster-rebuild recovery path).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-metallb
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://metallb.github.io/metallb
+      chart: metallb
+      targetRevision: 0.15.2
+      helm:
+        valueFiles:
+          - $values/kubernetes/cluster/metallb/values.yaml
+    - repoURL: https://github.com/rajubhimani/homeserver.git
+      targetRevision: feature/k8s-pilot
+      ref: values
+    - repoURL: https://github.com/rajubhimani/homeserver.git
+      targetRevision: feature/k8s-pilot
+      path: kubernetes/cluster/metallb/resources
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

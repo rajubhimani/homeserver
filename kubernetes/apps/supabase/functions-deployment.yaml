@@ -1,0 +1,93 @@
+# Best-effort port — Edge Functions runtime is a supporting/optional piece,
+# not one of this pilot's priority containers. SUPABASE_DB_URL is
+# pre-composed in apply-secrets.sh (supabase-db-credentials/functions-db-url).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-functions
+  namespace: apps
+  labels:
+    app: supabase-functions
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-functions
+  template:
+    metadata:
+      labels:
+        app: supabase-functions
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: functions
+          image: supabase/edge-runtime:v1.74.0
+          args: ["start", "--main-service", "/home/deno/functions/main"]
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: SUPABASE_URL
+              value: http://supabase-kong:8000
+            - name: SUPABASE_PUBLIC_URL
+              value: https://supabase.k8s.local
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: anon-key
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: service-role-key
+            - name: SUPABASE_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: functions-db-url
+            - name: VERIFY_JWT
+              value: "false"
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: functions
+              mountPath: /home/deno/functions/main/index.ts
+              subPath: main-index.ts
+              readOnly: true
+            - name: functions
+              mountPath: /home/deno/functions/hello/index.ts
+              subPath: hello-index.ts
+              readOnly: true
+            - name: deno-cache
+              mountPath: /root/.cache/deno
+          # Compose's healthcheck opens a raw TCP connection via bash's
+          # /dev/tcp — a tcpSocket probe is the direct k8s equivalent, no
+          # need for the bash workaround here.
+          readinessProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: functions
+          configMap:
+            name: supabase-functions
+        # Just a build cache, safe to lose — emptyDir, not a PVC.
+        - name: deno-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-functions
+  namespace: apps
+spec:
+  selector:
+    app: supabase-functions
+  ports:
+    - port: 9000

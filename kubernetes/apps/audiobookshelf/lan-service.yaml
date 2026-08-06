@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8094 matches audiobookshelf/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down audiobookshelf) before applying
+# this — same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: audiobookshelf-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: audiobookshelf
+  ports:
+    - port: 8094
+      targetPort: 80

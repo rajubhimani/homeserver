@@ -1,0 +1,126 @@
+# Mirrors appflowy/compose.yml's appflowy-minio + appflowy-minio-setup.
+# appflowy-minio's ${DATA_ROOT}/minio bind mount is real persisted data
+# (uploaded files), so it gets a PVC — unlike appflowy-redis above.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: appflowy-minio-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-minio
+  namespace: apps
+  labels:
+    app: appflowy-minio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: appflowy-minio
+  template:
+    metadata:
+      labels:
+        app: appflowy-minio
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: minio
+          image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+          # compose's `command:` overrides CMD only (ENTRYPOINT's own init
+          # logic still runs) — args: here, not command:, same reasoning as
+          # every Postgres in this repo (see TROUBLESHOOTING.md).
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports:
+            - containerPort: 9000
+            - containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: minio-root-password
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: appflowy-minio-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-minio
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-minio
+  ports:
+    - name: api
+      port: 9000
+    - name: console
+      port: 9001
+---
+# One-shot bucket bootstrap — mirrors appflowy-minio-setup's `restart: "no"`
+# in compose (a Job, not a Deployment, is the correct k8s primitive for a
+# container meant to run once and exit).
+#
+# Compose's `depends_on: appflowy-minio: condition: service_healthy` has no
+# direct k8s equivalent (no readiness-gate-on-another-workload primitive) —
+# the retry loop below is the practical substitute, same documented gap as
+# elsewhere in this pilot (see kubernetes/TROUBLESHOOTING.md).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: appflowy-minio-setup
+  namespace: apps
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: minio-setup
+          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+          # compose's `entrypoint:` overrides ENTRYPOINT itself — command:
+          # here (not args:), matching that same override semantics.
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until mc alias set appflowy http://appflowy-minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+                echo "waiting for appflowy-minio..."
+                sleep 3
+              done
+              mc mb --ignore-existing appflowy/appflowy
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: minio-root-password

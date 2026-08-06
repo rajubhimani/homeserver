@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8115 matches bookstack/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down bookstack) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookstack-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: bookstack
+  ports:
+    - port: 8115
+      targetPort: 80

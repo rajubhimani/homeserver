@@ -1,0 +1,65 @@
+# Mirrors plane/compose.yml's plane-mq. No existing RabbitMQ example
+# elsewhere in this pilot yet — mirrors the Postgres StatefulSet pattern
+# above: PVC for the data dir, env from a Secret, a readiness probe using
+# the same command as compose's own healthcheck.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: plane-mq
+  namespace: apps
+spec:
+  serviceName: plane-mq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-mq
+  template:
+    metadata:
+      labels:
+        app: plane-mq
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.3-alpine
+          ports:
+            - containerPort: 5672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: plane
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: rabbitmq-password
+            - name: RABBITMQ_DEFAULT_VHOST
+              value: plane
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-mq
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: plane-mq
+  ports:
+    - port: 5672

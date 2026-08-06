@@ -1,0 +1,124 @@
+# ============================================================================
+# NAMING CAVEAT — read before renaming anything here:
+#
+# compose.yml gives this container the deliberately unusual
+# `container_name: realtime-dev.supabase-realtime` (with a literal dot) —
+# its own comment explains why: self-hosted Realtime derives its tenant ID
+# from the first label of the *hostname it's reached through*. Kong's
+# kong.yml routes to it via `http://realtime-dev.supabase-realtime:4000/...`,
+# so the Host header Kong sends starts with "realtime-dev." and Realtime
+# resolves that to its `SEED_SELF_HOST`-created default tenant, external_id
+# "realtime-dev".
+#
+# Kubernetes Service names are RFC 1123 DNS labels — they cannot contain a
+# dot, so `metadata.name: realtime-dev.supabase-realtime` is not legal here.
+# The fix used in this manifest: name the Service just "realtime-dev" (no
+# dot). Split on the first ".", "realtime-dev" is still the first label
+# whether it's reached as the bare name or the FQDN
+# (realtime-dev.apps.svc.cluster.local) — same tenant resolution, just via a
+# differently-shaped hostname. supabase/kong-configmap.yaml's copy of
+# kong.yml has its realtime backend URLs rewritten to match
+# (`http://realtime-dev:4000/...` instead of the compose original) — see the
+# comment there. If this Service is ever renamed, kong.yml's routes must be
+# updated in the same commit or the realtime proxy silently breaks.
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-realtime
+  namespace: apps
+  labels:
+    app: supabase-realtime
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-realtime
+  template:
+    metadata:
+      labels:
+        app: supabase-realtime
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: realtime
+          image: supabase/realtime:v2.102.3
+          env:
+            - name: PORT
+              value: "4000"
+            - name: DB_HOST
+              value: supabase-db
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: supabase_admin
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: password
+            - name: DB_NAME
+              value: postgres
+            - name: DB_AFTER_CONNECT_QUERY
+              value: "SET search_path TO _realtime"
+            - name: DB_ENC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: realtime-db-enc-key
+            - name: API_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: secret-key-base
+            - name: METRICS_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: ERL_AFLAGS
+              value: "-proto_dist inet_tcp"
+            - name: DNS_NODES
+              value: "''"
+            - name: RLIMIT_NOFILE
+              value: "10000"
+            - name: APP_NAME
+              value: realtime
+            - name: SEED_SELF_HOST
+              value: "true"
+            - name: RUN_JANITOR
+              value: "true"
+            - name: DISABLE_HEALTHCHECK_LOGGING
+              value: "true"
+          ports:
+            - containerPort: 4000
+          # Compose's healthcheck sends an Authorization: Bearer <anon key>
+          # header — httpGet probes can set static httpHeaders, but not one
+          # sourced from a Secret, so a faithful equivalent isn't possible
+          # without baking the anon key in plaintext here. Using a plain
+          # tcpSocket check instead: weaker (doesn't confirm the tenant
+          # health endpoint actually returns 200), but doesn't require
+          # putting a secret value in a probe definition.
+          readinessProbe:
+            tcpSocket:
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: realtime-dev
+  namespace: apps
+spec:
+  selector:
+    app: supabase-realtime
+  ports:
+    - port: 4000

@@ -1,22 +1,20 @@
-# Own dedicated Postgres, not the shared server — mirrors
-# nextcloud/compose.yml's nextcloud-db tuning (higher connections/memory
-# than the other services here since Nextcloud has multiple concurrent
-# consumers — same reasoning as docs/08-maintenance.md's tuning table).
+# Mirrors penpot/compose.yml's penpot-db + penpot-redis. Own dedicated
+# Postgres, same reasoning as every other service in this pilot.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: nextcloud-db
+  name: penpot-db
   namespace: apps
 spec:
-  serviceName: nextcloud-db
+  serviceName: penpot-db
   replicas: 1
   selector:
     matchLabels:
-      app: nextcloud-db
+      app: penpot-db
   template:
     metadata:
       labels:
-        app: nextcloud-db
+        app: penpot-db
     spec:
       enableServiceLinks: false
       containers:
@@ -26,44 +24,39 @@ spec:
             - containerPort: 5432
           env:
             - name: POSTGRES_DB
-              value: nextcloud
+              value: penpot
             - name: POSTGRES_USER
-              value: nextcloud
+              value: penpot
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nextcloud-db-credentials
+                  name: penpot-db-credentials
                   key: password
+          # compose's `command: postgres -c ...` overrides CMD only — args:
+          # here (not command:), same ENTRYPOINT-preserving reasoning as
+          # every other Postgres in this repo (see TROUBLESHOOTING.md).
           args:
             - -c
             - shared_buffers=128MB
             - -c
-            - max_connections=50
+            - max_connections=20
             - -c
             - work_mem=4MB
             - -c
             - maintenance_work_mem=64MB
             - -c
-            - effective_cache_size=384MB
+            - effective_cache_size=256MB
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql
-            - name: init
-              mountPath: /docker-entrypoint-initdb.d
-              readOnly: true
           resources:
             limits:
-              memory: 512Mi
+              memory: 384Mi
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "nextcloud"]
-            initialDelaySeconds: 5
-            periodSeconds: 10
-      volumes:
-        - name: init
-          configMap:
-            name: nextcloud-postgres-init
-            defaultMode: 0755
+              command: ["pg_isready", "-U", "penpot"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -71,57 +64,61 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 5Gi
+            storage: 2Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: nextcloud-db
+  name: penpot-db
   namespace: apps
 spec:
   clusterIP: None
   selector:
-    app: nextcloud-db
+    app: penpot-db
   ports:
     - port: 5432
 ---
+# Persistence disabled via maxmemory-policy (not `--save ""` like most other
+# valkey/redis instances in this pilot) — compose's own command line:
+# `valkey-server --maxmemory 128mb --maxmemory-policy allkeys-lru`. No
+# volume mounted in compose either way, so no PVC/emptyDir needed here.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nextcloud-redis
+  name: penpot-redis
   namespace: apps
   labels:
-    app: nextcloud-redis
+    app: penpot-redis
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nextcloud-redis
+      app: penpot-redis
   template:
     metadata:
       labels:
-        app: nextcloud-redis
+        app: penpot-redis
     spec:
       enableServiceLinks: false
       containers:
         - name: redis
-          image: redis:8.10-alpine
-          args: ["redis-server", "--save", "", "--stop-writes-on-bgsave-error", "no"]
+          image: valkey/valkey:9.1-alpine
+          args: ["valkey-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
           ports:
             - containerPort: 6379
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["valkey-cli", "ping"]
             initialDelaySeconds: 5
             periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: nextcloud-redis
+  name: penpot-redis
   namespace: apps
 spec:
   selector:
-    app: nextcloud-redis
+    app: penpot-redis
   ports:
     - port: 6379

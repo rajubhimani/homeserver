@@ -1,0 +1,18 @@
+# kind cluster topology for this pilot — see kubernetes/README.md.
+#
+# 1 control-plane, not 2: etcd (which backs the control plane) needs an ODD
+# number of members for quorum. A 2-node control-plane is strictly worse
+# than 1 — losing either member loses quorum immediately, so it buys zero
+# fault tolerance while still paying for kind's HAProxy load-balancer
+# sidecar that multi-control-plane setups require. Use 1 (this pilot, a
+# single Linux host) or 3 (genuine HA, needs 3 separate hosts to matter) —
+# never 2.
+#
+# 3 workers matches the README's documented topology (4 nodes total).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+  - role: worker

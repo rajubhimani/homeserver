@@ -1,0 +1,70 @@
+# plane-proxy (makeplane/plane-proxy, a Caddy-based image) is the actual
+# public-facing container in compose — routes /spaces, /god-mode, /api,
+# /auth, /static, /<bucket> and / to the other six containers (see
+# proxy-configmap.yaml). This is what gets the HTTPRoute/lan-service, not
+# plane-web or plane-api directly. Matches docs/11-services-reference.md's
+# `plane-proxy` row (confirmed against compose.dev.yml: 8100:80 on this
+# exact container).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-proxy
+  namespace: apps
+  labels:
+    app: plane-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-proxy
+  template:
+    metadata:
+      labels:
+        app: plane-proxy
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-proxy
+          image: makeplane/plane-proxy:v1.4.0
+          ports:
+            - containerPort: 80
+          env:
+            - name: NGINX_PORT
+              value: "80"
+            - name: FILE_SIZE_LIMIT
+              value: "5m"
+            - name: BUCKET_NAME
+              value: uploads
+            - name: SITE_ADDRESS
+              value: ":80"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: plane-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-proxy
+  namespace: apps
+spec:
+  selector:
+    app: plane-proxy
+  ports:
+    - port: 80

@@ -1,0 +1,62 @@
+# penpot-frontend is the public-facing container in compose — the only one
+# with a healthcheck and the only one with a published port
+# (compose.dev.yml: 8131:8080). Gets the HTTPRoute/lan-service; backend and
+# exporter (deployment.yaml) stay ClusterIP-only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-frontend
+  namespace: apps
+  labels:
+    app: penpot-frontend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: penpot-frontend
+  template:
+    metadata:
+      labels:
+        app: penpot-frontend
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: penpot-frontend
+          image: penpotapp/frontend:2.17.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PENPOT_PUBLIC_URI
+              value: https://penpot.k8s.local
+          volumeMounts:
+            - name: assets
+              mountPath: /opt/data/assets
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: assets
+          persistentVolumeClaim:
+            claimName: penpot-assets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: penpot-frontend
+  namespace: apps
+spec:
+  selector:
+    app: penpot-frontend
+  ports:
+    - port: 8080

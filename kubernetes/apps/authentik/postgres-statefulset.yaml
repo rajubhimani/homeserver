@@ -1,0 +1,88 @@
+# Own dedicated Postgres — same init-script-owns-schema pattern as
+# mealie/guacamole/forgejo/firefly. Resource flags copied verbatim from
+# authentik/compose.yml's authentik-db `command:` — here as `args:`, not
+# `command:` (see TROUBLESHOOTING.md's "command: means different things in
+# Compose vs Kubernetes" — k8s command: overrides ENTRYPOINT and skips the
+# postgres image's own entrypoint wrapper that drops root).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: authentik-db
+  namespace: apps
+spec:
+  serviceName: authentik-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authentik-db
+  template:
+    metadata:
+      labels:
+        app: authentik-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:18.4
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: authentik
+            - name: POSTGRES_USER
+              value: authentik
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-db-credentials
+                  key: password
+          args:
+            - -c
+            - shared_buffers=128MB
+            - -c
+            - max_connections=20
+            - -c
+            - work_mem=4MB
+            - -c
+            - maintenance_work_mem=64MB
+            - -c
+            - effective_cache_size=256MB
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          resources:
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "authentik"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: init
+          configMap:
+            name: authentik-postgres-init
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: authentik-db
+  ports:
+    - port: 5432

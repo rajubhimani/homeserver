@@ -1,0 +1,102 @@
+# Compose runs a one-shot `syncthing-permissions` container (chown -R
+# 1000:1000 /config) before the main container via `depends_on: condition:
+# service_completed_successfully`. The direct k8s equivalent of "run once,
+# then start the real container" on the same pod is an initContainer, not a
+# separate Deployment — initContainers always run to completion, in order,
+# before any container in the pod's own `containers:` list starts.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: syncthing-config
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: syncthing-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: syncthing
+  namespace: apps
+  labels:
+    app: syncthing
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: syncthing
+  template:
+    metadata:
+      labels:
+        app: syncthing
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: syncthing-permissions
+          image: alpine:3.24
+          command: ["chown", "-R", "1000:1000", "/config"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      containers:
+        - name: syncthing
+          image: lscr.io/linuxserver/syncthing:2.1.2
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: Asia/Kolkata
+          ports:
+            - containerPort: 8384
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /rest/noauth/health
+              port: 8384
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /rest/noauth/health
+              port: 8384
+            initialDelaySeconds: 40
+            periodSeconds: 30
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: syncthing-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: syncthing-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncthing
+  namespace: apps
+spec:
+  selector:
+    app: syncthing
+  ports:
+    - port: 8384

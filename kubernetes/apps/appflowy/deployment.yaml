@@ -1,0 +1,251 @@
+# Mirrors appflowy/compose.yml's appflowy-gotrue, appflowy-cloud,
+# appflowy-web, appflowy-admin. See postgres-statefulset.yaml/minio.yaml for
+# the backing stores, and nginx-deployment.yaml for the public entrypoint
+# that fronts all four of these.
+#
+# Compose's depends_on chain (cloud waits on db/redis healthy + gotrue
+# started + minio-setup completed; web/admin wait on cloud healthy) has no
+# direct k8s equivalent — no native "wait for another Deployment" primitive.
+# Kubernetes' own restart-on-crash + these containers' internal
+# connection-retry behavior is the practical substitute; readiness probes
+# below at least keep an unready pod out of Service rotation until its own
+# healthcheck passes, but there's no cross-container startup ordering
+# guarantee. Same documented gap as minio.yaml's Job and elsewhere in
+# kubernetes/TROUBLESHOOTING.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-gotrue
+  namespace: apps
+  labels:
+    app: appflowy-gotrue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-gotrue
+  template:
+    metadata:
+      labels:
+        app: appflowy-gotrue
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: gotrue
+          image: appflowyinc/gotrue:0.17.1
+          ports:
+            - containerPort: 9999
+          env:
+            - name: GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-credentials
+                  key: jwt-secret
+            - name: GOTRUE_JWT_EXP
+              value: "7200"
+            - name: GOTRUE_DB_DRIVER
+              value: postgres
+            - name: GOTRUE_DB_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: gotrue-db-url
+            - name: GOTRUE_SITE_URL
+              value: https://appflowy.k8s.local
+            - name: GOTRUE_URI_ALLOW_LIST
+              value: "https://appflowy.k8s.local/**,appflowy-flutter://**"
+            - name: GOTRUE_DISABLE_SIGNUP
+              value: "false"
+            - name: GOTRUE_MAILER_AUTOCONFIRM
+              value: "true"
+            - name: GOTRUE_SMTP_HOST
+              value: ""
+            - name: GOTRUE_SMTP_PORT
+              value: "465"
+            - name: GOTRUE_SMTP_USER
+              value: ""
+            - name: GOTRUE_SMTP_PASS
+              value: ""
+            - name: GOTRUE_SMTP_SENDER_NAME
+              value: "AppFlowy"
+            - name: API_EXTERNAL_URL
+              value: https://appflowy.k8s.local/gotrue
+            - name: PORT
+              value: "9999"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-gotrue
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-gotrue
+  ports:
+    - port: 9999
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-cloud
+  namespace: apps
+  labels:
+    app: appflowy-cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-cloud
+  template:
+    metadata:
+      labels:
+        app: appflowy-cloud
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: appflowy-cloud
+          image: appflowyinc/appflowy_cloud:0.16.5
+          ports:
+            - containerPort: 8000
+          env:
+            - name: APPFLOWY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: db-url
+            - name: APPFLOWY_REDIS_URI
+              value: redis://appflowy-redis:6379
+            - name: APPFLOWY_GOTRUE_BASE_URL
+              value: http://appflowy-gotrue:9999
+            - name: APPFLOWY_GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-credentials
+                  key: jwt-secret
+            - name: APPFLOWY_S3_USE_MINIO
+              value: "true"
+            - name: APPFLOWY_S3_MINIO_URL
+              value: http://appflowy-minio:9000
+            - name: APPFLOWY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: minio-root-user
+            - name: APPFLOWY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: minio-root-password
+            - name: APPFLOWY_S3_BUCKET
+              value: appflowy
+            - name: APPFLOWY_S3_REGION
+              value: us-east-1
+            - name: APPFLOWY_ENVIRONMENT
+              value: production
+            - name: APPFLOWY_WEB_URL
+              value: https://appflowy.k8s.local
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-cloud
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-cloud
+  ports:
+    - port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-web
+  namespace: apps
+  labels:
+    app: appflowy-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-web
+  template:
+    metadata:
+      labels:
+        app: appflowy-web
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: appflowy-web
+          image: appflowyinc/appflowy_web:0.16.2
+          ports:
+            - containerPort: 80
+          env:
+            - name: APPFLOWY_BASE_URL
+              value: https://appflowy.k8s.local
+            - name: APPFLOWY_GOTRUE_BASE_URL
+              value: https://appflowy.k8s.local/gotrue
+            - name: APPFLOWY_WS_BASE_URL
+              value: wss://appflowy.k8s.local/ws
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-web
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-web
+  ports:
+    - port: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-admin
+  namespace: apps
+  labels:
+    app: appflowy-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-admin
+  template:
+    metadata:
+      labels:
+        app: appflowy-admin
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: appflowy-admin
+          image: appflowyinc/admin_frontend:0.17.1
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GOTRUE_URL
+              value: https://appflowy.k8s.local/gotrue
+            - name: APPFLOWY_CLOUD_URL
+              value: https://appflowy.k8s.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-admin
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-admin
+  ports:
+    - port: 3000

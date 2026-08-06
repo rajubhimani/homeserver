@@ -1,22 +1,20 @@
-# Own dedicated Postgres, not the shared server — mirrors
-# nextcloud/compose.yml's nextcloud-db tuning (higher connections/memory
-# than the other services here since Nextcloud has multiple concurrent
-# consumers — same reasoning as docs/08-maintenance.md's tuning table).
+# Mirrors plane/compose.yml's plane-db + plane-redis. Own dedicated
+# Postgres, same reasoning as every other service in this pilot.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: nextcloud-db
+  name: plane-db
   namespace: apps
 spec:
-  serviceName: nextcloud-db
+  serviceName: plane-db
   replicas: 1
   selector:
     matchLabels:
-      app: nextcloud-db
+      app: plane-db
   template:
     metadata:
       labels:
-        app: nextcloud-db
+        app: plane-db
     spec:
       enableServiceLinks: false
       containers:
@@ -25,15 +23,18 @@ spec:
           ports:
             - containerPort: 5432
           env:
-            - name: POSTGRES_DB
-              value: nextcloud
             - name: POSTGRES_USER
-              value: nextcloud
+              value: plane
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nextcloud-db-credentials
+                  name: plane-db-credentials
                   key: password
+            - name: POSTGRES_DB
+              value: plane
+          # compose's `command: postgres -c ...` overrides CMD only — args:
+          # here (not command:), same ENTRYPOINT-preserving reasoning as
+          # every other Postgres in this repo (see TROUBLESHOOTING.md).
           args:
             - -c
             - shared_buffers=128MB
@@ -48,22 +49,14 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql
-            - name: init
-              mountPath: /docker-entrypoint-initdb.d
-              readOnly: true
           resources:
             limits:
               memory: 512Mi
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "nextcloud"]
-            initialDelaySeconds: 5
-            periodSeconds: 10
-      volumes:
-        - name: init
-          configMap:
-            name: nextcloud-postgres-init
-            defaultMode: 0755
+              command: ["pg_isready", "-U", "plane"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -76,52 +69,52 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nextcloud-db
+  name: plane-db
   namespace: apps
 spec:
   clusterIP: None
   selector:
-    app: nextcloud-db
+    app: plane-db
   ports:
     - port: 5432
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nextcloud-redis
+  name: plane-redis
   namespace: apps
   labels:
-    app: nextcloud-redis
+    app: plane-redis
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nextcloud-redis
+      app: plane-redis
   template:
     metadata:
       labels:
-        app: nextcloud-redis
+        app: plane-redis
     spec:
       enableServiceLinks: false
       containers:
         - name: redis
-          image: redis:8.10-alpine
-          args: ["redis-server", "--save", "", "--stop-writes-on-bgsave-error", "no"]
+          image: valkey/valkey:9.1-alpine
+          args: ["valkey-server", "--save", "", "--stop-writes-on-bgsave-error", "no"]
           ports:
             - containerPort: 6379
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["valkey-cli", "ping"]
             initialDelaySeconds: 5
             periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: nextcloud-redis
+  name: plane-redis
   namespace: apps
 spec:
   selector:
-    app: nextcloud-redis
+    app: plane-redis
   ports:
     - port: 6379

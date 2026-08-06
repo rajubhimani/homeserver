@@ -1,0 +1,119 @@
+# PAPERLESS_DATA_DIR / MEDIA_ROOT / CONSUMPTION_DIR / EXPORT_DIR below all
+# redirect paperless to subpaths of the single /paperless PVC mount, mirroring
+# paperless/compose.yml's ${DATA_ROOT}/app:/paperless bind mount. Compose
+# additionally mounts four `paperless-*-unused` named volumes onto the
+# image's own default paths (/usr/src/paperless/{consume,data,export,media})
+# — those exist purely to stop Compose from creating *anonymous* volumes for
+# the image's declared VOLUMEs (which would silently accumulate as untracked
+# storage). Kubernetes has no anonymous-volume equivalent to guard against —
+# an unmounted image VOLUME just becomes ordinary writable container
+# filesystem layer, gone on pod restart, no orphaned resource left behind —
+# so those four are intentionally omitted here, not an oversight.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paperless-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paperless
+  namespace: apps
+  labels:
+    app: paperless
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: paperless
+  template:
+    metadata:
+      labels:
+        app: paperless
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: paperless
+          image: ghcr.io/paperless-ngx/paperless-ngx:3.0.4
+          env:
+            - name: PAPERLESS_REDIS
+              value: redis://paperless-redis:6379
+            - name: PAPERLESS_DBHOST
+              value: paperless-db
+            - name: PAPERLESS_DBNAME
+              value: paperless
+            - name: PAPERLESS_DBUSER
+              value: paperless
+            - name: PAPERLESS_DBPASS
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-db-credentials
+                  key: password
+            - name: PAPERLESS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-credentials
+                  key: secret-key
+            - name: PAPERLESS_URL
+              value: https://paperless.k8s.local
+            - name: PAPERLESS_ADMIN_USER
+              value: admin
+            - name: PAPERLESS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-credentials
+                  key: admin-password
+            - name: PAPERLESS_TIME_ZONE
+              value: Asia/Kolkata
+            - name: PAPERLESS_TASK_WORKERS
+              value: "1"
+            - name: PAPERLESS_THREADS_PER_WORKER
+              value: "1"
+            - name: PAPERLESS_DATA_DIR
+              value: /paperless/data
+            - name: PAPERLESS_MEDIA_ROOT
+              value: /paperless/media
+            - name: PAPERLESS_CONSUMPTION_DIR
+              value: /paperless/consume
+            - name: PAPERLESS_EXPORT_DIR
+              value: /paperless/export
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: data
+              mountPath: /paperless
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: paperless-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paperless
+  namespace: apps
+spec:
+  selector:
+    app: paperless
+  ports:
+    - port: 8000

@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8118 matches ntfy/compose.dev.yml exactly. Stop the Compose version
+# (uv run homeserver.py dev down ntfy) before applying this — same host
+# port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ntfy-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: ntfy
+  ports:
+    - port: 8118
+      targetPort: 80

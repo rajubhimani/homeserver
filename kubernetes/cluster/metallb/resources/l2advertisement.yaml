@@ -1,0 +1,13 @@
+# Layer-2 mode: MetalLB answers ARP for each allocated IP directly on the
+# Docker bridge network kind's nodes sit on. No BGP router needed — the
+# right choice for a single-host pilot with no real network infrastructure
+# in front of it (same "simplest thing that works for one box" reasoning as
+# this stack's Compose side using nginx-plain instead of a full LB).
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: homeserver-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - homeserver-pool

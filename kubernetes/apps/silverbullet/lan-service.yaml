@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8113 matches silverbullet/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down silverbullet) before applying this
+# — same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: silverbullet-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: silverbullet
+  ports:
+    - port: 8113
+      targetPort: 3000

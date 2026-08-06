@@ -1,0 +1,60 @@
+# appflowy-nginx is the actual public-facing container in compose (routes
+# /gotrue, /api, /ws, /web, / to the other five containers — see
+# nginx-configmap.yaml) — this is what gets the HTTPRoute/lan-service, not
+# appflowy-cloud or appflowy-web directly. Matches docs/11-services-reference.md's
+# `appflowy-nginx` row (confirmed against compose.dev.yml: 8103:80 on this
+# exact container).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-nginx
+  namespace: apps
+  labels:
+    app: appflowy-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-nginx
+  template:
+    metadata:
+      labels:
+        app: appflowy-nginx
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: nginx
+          image: nginx:1.30-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          readinessProbe:
+            httpGet:
+              path: /gotrue/health
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /gotrue/health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: appflowy-nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-nginx
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-nginx
+  ports:
+    - port: 80

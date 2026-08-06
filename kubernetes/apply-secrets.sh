@@ -257,6 +257,126 @@ kubectl create secret generic open-webui-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "open-webui-credentials applied"
 
+# ── Beszel agent pairing (blank is fine to start, same as Compose) ────
+kubectl create secret generic beszel-credentials -n apps \
+  --from-literal=agent-token="${BESZEL_AGENT_TOKEN:-}" \
+  --from-literal=agent-key="${BESZEL_AGENT_KEY:-}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "beszel-credentials applied"
+
+# ── Cloudflare Tunnel token ────────────────────────────────────────────
+kubectl create secret generic cloudflared-credentials -n apps \
+  --from-literal=tunnel-token="$TUNNEL_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "cloudflared-credentials applied"
+
+# ── Paperless-ngx's own dedicated Postgres + app secrets ──────────────
+kubectl create secret generic paperless-db-credentials -n apps \
+  --from-literal=password="$PAPERLESS_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic paperless-credentials -n apps \
+  --from-literal=secret-key="$PAPERLESS_SECRET_KEY" \
+  --from-literal=admin-password="$PAPERLESS_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "paperless-db-credentials + paperless-credentials applied"
+
+# ── Authentik's own dedicated Postgres + secret key ────────────────────
+kubectl create secret generic authentik-db-credentials -n apps \
+  --from-literal=password="$AUTHENTIK_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic authentik-credentials -n apps \
+  --from-literal=secret-key="$AUTHENTIK_SECRET_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "authentik-db-credentials + authentik-credentials applied"
+
+# ── AppFlowy's own dedicated Postgres + MinIO + JWT secret ─────────────
+# db-url/gotrue-db-url are pre-composed here, not built via k8s's $(VAR)
+# substitution in the deployment manifest — same reasoning as immich's
+# db-url above. gotrue-db-url's search_path override is copied verbatim
+# from appflowy/compose.yml's GOTRUE_DB_DATABASE_URL.
+kubectl create secret generic appflowy-db-credentials -n apps \
+  --from-literal=password="$APPFLOWY_DB_PASSWORD" \
+  --from-literal=db-url="postgres://appflowy:${APPFLOWY_DB_PASSWORD}@appflowy-db/appflowy" \
+  --from-literal=gotrue-db-url="postgres://appflowy:${APPFLOWY_DB_PASSWORD}@appflowy-db/appflowy?options=-c%20search_path%3Dauth%2Cpublic" \
+  --from-literal=minio-root-user="$APPFLOWY_MINIO_ROOT_USER" \
+  --from-literal=minio-root-password="$APPFLOWY_MINIO_ROOT_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic appflowy-credentials -n apps \
+  --from-literal=jwt-secret="$APPFLOWY_JWT_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "appflowy-db-credentials + appflowy-credentials applied"
+
+# ── Plane's own dedicated Postgres + RabbitMQ + MinIO + secret key ─────
+kubectl create secret generic plane-db-credentials -n apps \
+  --from-literal=password="$PLANE_DB_PASSWORD" \
+  --from-literal=database-url="postgresql://plane:${PLANE_DB_PASSWORD}@plane-db/plane" \
+  --from-literal=rabbitmq-password="$PLANE_RABBITMQ_PASSWORD" \
+  --from-literal=minio-root-user="$PLANE_MINIO_ROOT_USER" \
+  --from-literal=minio-root-password="$PLANE_MINIO_ROOT_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic plane-credentials -n apps \
+  --from-literal=secret-key="$PLANE_SECRET_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "plane-db-credentials + plane-credentials applied"
+
+# ── Karakeep's Meilisearch master key + NextAuth secret ────────────────
+kubectl create secret generic karakeep-credentials -n apps \
+  --from-literal=meili-master-key="$KARAKEEP_MEILI_MASTER_KEY" \
+  --from-literal=nextauth-secret="$KARAKEEP_NEXTAUTH_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "karakeep-credentials applied"
+
+# ── Penpot's own dedicated Postgres + secret key ────────────────────────
+kubectl create secret generic penpot-db-credentials -n apps \
+  --from-literal=password="$PENPOT_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic penpot-credentials -n apps \
+  --from-literal=secret-key="$PENPOT_SECRET_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "penpot-db-credentials + penpot-credentials applied"
+
+# ── Observability's Grafana admin login ─────────────────────────────────
+kubectl create secret generic observability-credentials -n apps \
+  --from-literal=admin-user="$OBSERVABILITY_GRAFANA_ADMIN_USER" \
+  --from-literal=admin-password="$OBSERVABILITY_GRAFANA_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "observability-credentials applied"
+
+# ── Supabase's own dedicated Postgres (one password, many roles) +
+# every app secret. Connection strings use the exact role names
+# supabase/volumes/db/roles.sql actually creates (authenticator,
+# supabase_auth_admin, supabase_storage_admin, supabase_functions_admin,
+# pgbouncer) — every role shares the one Postgres superuser password, same
+# as upstream Supabase's own self-hosting docker-compose.
+kubectl create secret generic supabase-db-credentials -n apps \
+  --from-literal=password="$SUPABASE_POSTGRES_PASSWORD" \
+  --from-literal=auth-db-url="postgres://supabase_auth_admin:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/postgres" \
+  --from-literal=rest-db-uri="postgres://authenticator:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/postgres" \
+  --from-literal=storage-db-url="postgres://supabase_storage_admin:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/postgres" \
+  --from-literal=functions-db-url="postgres://supabase_functions_admin:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/postgres" \
+  --from-literal=pooler-database-url="postgres://pgbouncer:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/postgres" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic supabase-credentials -n apps \
+  --from-literal=jwt-secret="$SUPABASE_JWT_SECRET" \
+  --from-literal=anon-key="$SUPABASE_ANON_KEY" \
+  --from-literal=service-role-key="$SUPABASE_SERVICE_ROLE_KEY" \
+  --from-literal=dashboard-username="$SUPABASE_DASHBOARD_USERNAME" \
+  --from-literal=dashboard-password="$SUPABASE_DASHBOARD_PASSWORD" \
+  --from-literal=secret-key-base="$SUPABASE_SECRET_KEY_BASE" \
+  --from-literal=realtime-db-enc-key="$SUPABASE_REALTIME_DB_ENC_KEY" \
+  --from-literal=vault-enc-key="$SUPABASE_VAULT_ENC_KEY" \
+  --from-literal=pg-meta-crypto-key="$SUPABASE_PG_META_CRYPTO_KEY" \
+  --from-literal=s3-access-key-id="$SUPABASE_S3_PROTOCOL_ACCESS_KEY_ID" \
+  --from-literal=s3-access-key-secret="$SUPABASE_S3_PROTOCOL_ACCESS_KEY_SECRET" \
+  --from-literal=pooler-tenant-id="$SUPABASE_POOLER_TENANT_ID" \
+  --from-literal=publishable-key="${SUPABASE_PUBLISHABLE_KEY:-}" \
+  --from-literal=secret-key="${SUPABASE_SECRET_KEY:-}" \
+  --from-literal=anon-key-asymmetric="${SUPABASE_ANON_KEY_ASYMMETRIC:-}" \
+  --from-literal=service-role-key-asymmetric="${SUPABASE_SERVICE_ROLE_KEY_ASYMMETRIC:-}" \
+  --from-literal=openai-api-key="${SUPABASE_OPENAI_API_KEY:-}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "supabase-db-credentials + supabase-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

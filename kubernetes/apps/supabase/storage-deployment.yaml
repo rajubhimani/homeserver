@@ -1,0 +1,124 @@
+# DATABASE_URL is pre-composed in apply-secrets.sh
+# (supabase-db-credentials/storage-db-url), same reasoning as
+# supabase-auth/supabase-rest. Shares its data PVC with supabase-imgproxy
+# (both mount ${DATA_ROOT}/storage in compose) — see
+# imgproxy-deployment.yaml's comment on the scheduling caveat that implies.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: supabase-storage-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-storage
+  namespace: apps
+  labels:
+    app: supabase-storage
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-storage
+  template:
+    metadata:
+      labels:
+        app: supabase-storage
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: storage
+          image: supabase/storage-api:v1.60.4
+          env:
+            - name: ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: anon-key
+            - name: SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: service-role-key
+            - name: POSTGREST_URL
+              value: http://supabase-rest:3000
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: storage-db-url
+            - name: STORAGE_PUBLIC_URL
+              value: https://supabase.k8s.local
+            - name: REQUEST_ALLOW_X_FORWARDED_PATH
+              value: "true"
+            - name: FILE_SIZE_LIMIT
+              value: "52428800"
+            - name: STORAGE_BACKEND
+              value: file
+            - name: GLOBAL_S3_BUCKET
+              value: stub
+            - name: FILE_STORAGE_BACKEND_PATH
+              value: /var/lib/storage
+            - name: TENANT_ID
+              value: stub
+            - name: REGION
+              value: stub
+            - name: ENABLE_IMAGE_TRANSFORMATION
+              value: "true"
+            - name: IMGPROXY_URL
+              value: http://supabase-imgproxy:5001
+            - name: S3_PROTOCOL_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: s3-access-key-id
+            - name: S3_PROTOCOL_ACCESS_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: s3-access-key-secret
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/storage
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: supabase-storage-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-storage
+  namespace: apps
+spec:
+  selector:
+    app: supabase-storage
+  ports:
+    - port: 5000

@@ -1,0 +1,82 @@
+# PostgREST. Stateless — no volumes. PGRST_DB_URI is pre-composed in
+# apply-secrets.sh (supabase-db-credentials/rest-db-uri), same reasoning as
+# supabase-auth's GOTRUE_DB_DATABASE_URL.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-rest
+  namespace: apps
+  labels:
+    app: supabase-rest
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-rest
+  template:
+    metadata:
+      labels:
+        app: supabase-rest
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: rest
+          image: postgrest/postgrest:v14.16
+          args: ["postgrest"]
+          env:
+            - name: PGRST_DB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: rest-db-uri
+            - name: PGRST_DB_SCHEMAS
+              value: "public,graphql_public"
+            - name: PGRST_DB_MAX_ROWS
+              value: "1000"
+            - name: PGRST_DB_EXTRA_SEARCH_PATH
+              value: public
+            - name: PGRST_DB_ANON_ROLE
+              value: anon
+            - name: PGRST_ADMIN_SERVER_PORT
+              value: "3001"
+            - name: PGRST_ADMIN_SERVER_HOST
+              value: localhost
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: PGRST_DB_USE_LEGACY_GUCS
+              value: "false"
+            - name: PGRST_APP_SETTINGS_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: PGRST_APP_SETTINGS_JWT_EXP
+              value: "3600"
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            exec:
+              command: ["postgrest", "--ready"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["postgrest", "--ready"]
+            initialDelaySeconds: 20
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-rest
+  namespace: apps
+spec:
+  selector:
+    app: supabase-rest
+  ports:
+    - port: 3000

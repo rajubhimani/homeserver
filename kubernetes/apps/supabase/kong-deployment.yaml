@@ -1,0 +1,143 @@
+# Kong is the public entrypoint for the whole platform — confirmed by
+# supabase/compose.dev.yml, which maps host port 8133 to supabase-kong:8000
+# only (nothing else in this service gets a host port in Compose either).
+#
+# command, not args — compose used `entrypoint:` (full ENTRYPOINT override),
+# not `command:`. Per kubernetes/TROUBLESHOOTING.md's "command: means
+# different things" entry, an `entrypoint:` override maps to k8s `command:`
+# (which also replaces ENTRYPOINT), the opposite mapping from Postgres's
+# `command:` -> k8s `args:` case used elsewhere in this pilot. kong.yml is
+# mounted at /home/kong/temp.yml — kong-entrypoint.sh reads that path,
+# env-substitutes it, and writes the real declarative config from there;
+# see kong-configmap.yaml for both files' content and why kong.yml's backend
+# hostnames were rewritten from upstream's short names.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-kong
+  namespace: apps
+  labels:
+    app: supabase-kong
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-kong
+  template:
+    metadata:
+      labels:
+        app: supabase-kong
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: kong
+          image: kong/kong:3.9.3
+          command: ["/bin/sh", "/home/kong/kong-entrypoint.sh"]
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: /usr/local/kong/kong.yml
+            - name: KONG_ROUTER_FLAVOR
+              value: expressions
+            - name: KONG_DNS_ORDER
+              value: "LAST,A,CNAME"
+            - name: KONG_DNS_NOT_FOUND_TTL
+              value: "1"
+            - name: KONG_DNS_VALID_TTL
+              value: "5"
+            - name: KONG_PLUGINS
+              value: "request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function"
+            - name: KONG_NGINX_PROXY_PROXY_BUFFER_SIZE
+              value: 160k
+            - name: KONG_NGINX_PROXY_PROXY_BUFFERS
+              value: "64 160k"
+            - name: KONG_PROXY_ACCESS_LOG
+              value: /dev/stdout combined
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: anon-key
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: service-role-key
+            - name: SUPABASE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: publishable-key
+                  optional: true
+            - name: SUPABASE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: secret-key
+                  optional: true
+            - name: ANON_KEY_ASYMMETRIC
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: anon-key-asymmetric
+                  optional: true
+            - name: SERVICE_ROLE_KEY_ASYMMETRIC
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: service-role-key-asymmetric
+                  optional: true
+            - name: DASHBOARD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: dashboard-username
+            - name: DASHBOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: dashboard-password
+          ports:
+            - containerPort: 8000
+            - containerPort: 8001
+          volumeMounts:
+            - name: kong-config
+              mountPath: /home/kong/temp.yml
+              subPath: kong.yml
+              readOnly: true
+            - name: kong-config
+              mountPath: /home/kong/kong-entrypoint.sh
+              subPath: kong-entrypoint.sh
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["kong", "health"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["kong", "health"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: kong-config
+          configMap:
+            name: supabase-kong-config
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-kong
+  namespace: apps
+spec:
+  selector:
+    app: supabase-kong
+  ports:
+    - name: proxy
+      port: 8000
+    - name: admin
+      port: 8001

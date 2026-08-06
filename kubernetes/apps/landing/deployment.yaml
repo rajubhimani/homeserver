@@ -1,0 +1,101 @@
+# Stock nginx:1.28.0-alpine image with config injected via ConfigMap
+# subPath mounts — mirrors landing/docker-compose.yml's three bind mounts
+# (index.html, nginx.conf, entrypoint.sh) file-for-file. See
+# configmap.yaml's header comment for the content-drift caveat (a
+# ConfigMap is a point-in-time copy of those three files, not a live bind
+# mount) and CLAUDE.md for why this service's compose file is named
+# docker-compose.yml rather than compose.yml.
+#
+# Uses `command:`, not `args:`, for /entrypoint.sh — Compose's
+# `entrypoint:` directive (used here, not `command:`) overrides the
+# image's ENTRYPOINT directly, and Kubernetes' `command:` field is the
+# correct equivalent for that (see kubernetes/TROUBLESHOOTING.md's
+# "`command:` means different things in Compose vs Kubernetes" — the
+# opposite mapping from cloudflared/deployment.yaml, which uses Compose's
+# `command:` and therefore maps to k8s `args:`).
+#
+# DOMAIN/SITE_NAME/TAGLINE/AUTHOR/LOCATION below use the same generic
+# template values as landing/.env.example (not the real landing/.env
+# values) — this manifest is checked into git, landing/.env is not.
+# DOMAIN is set to this pilot's k8s.local convention so the page's service
+# links point at the right place for local testing.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: landing
+  namespace: apps
+  labels:
+    app: landing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: landing
+  template:
+    metadata:
+      labels:
+        app: landing
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: landing
+          image: nginx:1.28.0-alpine
+          command: ["/entrypoint.sh"]
+          env:
+            - name: DOMAIN
+              value: k8s.local
+            - name: SITE_NAME
+              value: My Homeserver
+            - name: TAGLINE
+              value: "Your data, your hardware, your control."
+            - name: AUTHOR
+              value: Your Name
+            - name: LOCATION
+              value: "Your City, Country"
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /template/index.html
+              subPath: index.html
+            - name: config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx.conf
+            - name: config
+              mountPath: /entrypoint.sh
+              subPath: entrypoint.sh
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: landing-config
+            items:
+              - key: index.html
+                path: index.html
+              - key: nginx.conf
+                path: nginx.conf
+              - key: entrypoint.sh
+                path: entrypoint.sh
+                mode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: landing
+  namespace: apps
+spec:
+  selector:
+    app: landing
+  ports:
+    - port: 80

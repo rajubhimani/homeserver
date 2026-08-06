@@ -1,0 +1,105 @@
+# Mirrors crowdsec/compose.yml. Detection-only — no port exposed (matches
+# docs/11-services-reference.md's "no port exposed, detection-only" row), so
+# no Service/HTTPRoute/lan-service here at all, unlike every other service
+# in this pilot.
+#
+# Reads other containers' logs via the Docker socket, mounted read-only —
+# same hostPath caveat as noted elsewhere in this pilot: this assumes a
+# literal /var/run/docker.sock on the node, which won't exist on a
+# containerd-based node (most managed Kubernetes, and some bare kubeadm
+# setups). Works as-is on this pilot's Docker-Desktop-backed kind cluster
+# (nodes run a real dockerd underneath), but revisit if this ever moves to a
+# containerd-only node — see kubernetes/TROUBLESHOOTING.md's "kind's node
+# containers have NO host filesystem passthrough" for the closest related
+# gotcha (this hostPath is a different failure mode — socket absence, not
+# filesystem virtualization — but same "verify the assumption on the actual
+# node" lesson).
+#
+# DATA_ROOT's ${DATA_ROOT}/config bind mount and the crowdsec-data named
+# volume are two separate persisted paths in compose — kept as two separate
+# PVCs here for the same reason.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: crowdsec-config
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: crowdsec-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crowdsec
+  namespace: apps
+  labels:
+    app: crowdsec
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: crowdsec
+  template:
+    metadata:
+      labels:
+        app: crowdsec
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: crowdsec
+          image: crowdsecurity/crowdsec:v1.7.8
+          env:
+            - name: COLLECTIONS
+              value: crowdsecurity/nginx
+            - name: GID
+              value: "1000"
+            - name: TZ
+              value: UTC
+            - name: DISABLE_LOCAL_API
+              value: "false"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/crowdsec
+            - name: data
+              mountPath: /var/lib/crowdsec/data
+            - name: acquis
+              mountPath: /etc/crowdsec/acquis.yaml
+              subPath: acquis.yaml
+              readOnly: true
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["cscli", "lapi", "status"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: crowdsec-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: crowdsec-data
+        - name: acquis
+          configMap:
+            name: crowdsec-acquis-config
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

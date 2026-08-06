@@ -1,0 +1,19 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8087 matches syncthing/compose.dev.yml's web UI port exactly (the
+# sync-protocol ports 22000/tcp+udp and 21027/udp aren't ported here — this
+# pilot only validates the web UI reachability, not device-to-device sync).
+# The Compose version was stopped (uv run homeserver.py dev down syncthing)
+# to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncthing-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: syncthing
+  ports:
+    - port: 8087
+      targetPort: 8384

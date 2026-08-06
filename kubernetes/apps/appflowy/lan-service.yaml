@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8103 matches appflowy/compose.dev.yml exactly (appflowy-nginx is the
+# container that binds it there too). Not currently live-applied — see
+# kubernetes/README.md's "Current status".
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: appflowy-nginx
+  ports:
+    - port: 8103
+      targetPort: 80

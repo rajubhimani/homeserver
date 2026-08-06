@@ -1,0 +1,120 @@
+# Best-effort port — Supavisor (transaction-mode connection pooler) is a
+# supporting service, not one of this pilot's priority containers.
+#
+# args, not command — compose used `command:` (CMD override) for the
+# migrate-then-seed-then-serve shell one-liner, so this becomes `args:` here
+# per kubernetes/TROUBLESHOOTING.md's command-vs-args entry (unlike Kong's
+# `entrypoint:` override, which does map to k8s `command:`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-pooler
+  namespace: apps
+  labels:
+    app: supabase-pooler
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-pooler
+  template:
+    metadata:
+      labels:
+        app: supabase-pooler
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: pooler
+          image: supabase/supavisor:2.9.5
+          args:
+            - /bin/sh
+            - -c
+            - /app/bin/migrate && /app/bin/supavisor eval "$(cat /etc/pooler/pooler.exs)" && /app/bin/server
+          env:
+            - name: PORT
+              value: "4000"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_HOST
+              value: supabase-db
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: password
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: pooler-database-url
+            - name: CLUSTER_POSTGRES
+              value: "true"
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: secret-key-base
+            - name: VAULT_ENC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: vault-enc-key
+            - name: API_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: METRICS_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: REGION
+              value: local
+            - name: ERL_AFLAGS
+              value: "-proto_dist inet_tcp"
+            - name: POOLER_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: pooler-tenant-id
+            - name: POOLER_DEFAULT_POOL_SIZE
+              value: "20"
+            - name: POOLER_MAX_CLIENT_CONN
+              value: "100"
+            - name: POOLER_POOL_MODE
+              value: transaction
+            - name: DB_POOL_SIZE
+              value: "5"
+          ports:
+            - containerPort: 4000
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pooler/pooler.exs
+              subPath: pooler.exs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: config
+          configMap:
+            name: supabase-pooler-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-pooler
+  namespace: apps
+spec:
+  selector:
+    app: supabase-pooler
+  ports:
+    - port: 4000

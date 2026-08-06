@@ -1,0 +1,294 @@
+# Mirrors plane/compose.yml's plane-api, plane-worker, plane-beat,
+# plane-web, plane-admin, plane-space. See migrator-job.yaml for the
+# one-shot DB migration, proxy-deployment.yaml for the public entrypoint
+# that fronts all of these.
+#
+# Compose's depends_on chain (all of these wait on plane-db/plane-redis/
+# plane-mq healthy) has no direct k8s equivalent — same documented gap as
+# migrator-job.yaml and elsewhere in kubernetes/TROUBLESHOOTING.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-api
+  namespace: apps
+  labels:
+    app: plane-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-api
+  template:
+    metadata:
+      labels:
+        app: plane-api
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-api
+          image: makeplane/plane-backend:v1.4.0
+          args: ["./bin/docker-entrypoint-api.sh"]
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: database-url
+            - name: REDIS_URL
+              value: redis://plane-redis:6379/
+            - name: RABBITMQ_HOST
+              value: plane-mq
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: minio-root-user
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: minio-root-password
+            - name: AWS_S3_ENDPOINT_URL
+              value: http://plane-minio:9000
+            - name: AWS_S3_BUCKET_NAME
+              value: uploads
+            - name: WEB_URL
+              value: https://plane.k8s.local
+            - name: CORS_ALLOWED_ORIGINS
+              value: https://plane.k8s.local
+            - name: APP_BASE_URL
+              value: https://plane.k8s.local
+            - name: ADMIN_BASE_URL
+              value: https://plane.k8s.local
+            - name: SPACE_BASE_URL
+              value: https://plane.k8s.local
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plane-credentials
+                  key: secret-key
+            - name: GUNICORN_WORKERS
+              value: "2"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-api
+  namespace: apps
+spec:
+  selector:
+    app: plane-api
+  ports:
+    - port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-worker
+  namespace: apps
+  labels:
+    app: plane-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-worker
+  template:
+    metadata:
+      labels:
+        app: plane-worker
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-worker
+          image: makeplane/plane-backend:v1.4.0
+          args: ["./bin/docker-entrypoint-worker.sh"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: database-url
+            - name: REDIS_URL
+              value: redis://plane-redis:6379/
+            - name: RABBITMQ_HOST
+              value: plane-mq
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: minio-root-user
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: minio-root-password
+            - name: AWS_S3_ENDPOINT_URL
+              value: http://plane-minio:9000
+            - name: AWS_S3_BUCKET_NAME
+              value: uploads
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plane-credentials
+                  key: secret-key
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-beat
+  namespace: apps
+  labels:
+    app: plane-beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-beat
+  template:
+    metadata:
+      labels:
+        app: plane-beat
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-beat
+          image: makeplane/plane-backend:v1.4.0
+          args: ["./bin/docker-entrypoint-beat.sh"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: database-url
+            - name: REDIS_URL
+              value: redis://plane-redis:6379/
+            - name: RABBITMQ_HOST
+              value: plane-mq
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plane-credentials
+                  key: secret-key
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-web
+  namespace: apps
+  labels:
+    app: plane-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-web
+  template:
+    metadata:
+      labels:
+        app: plane-web
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-web
+          image: makeplane/plane-frontend:v1.4.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_BASE_URL
+              value: https://plane.k8s.local
+            - name: NEXT_PUBLIC_ADMIN_BASE_URL
+              value: https://plane.k8s.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-web
+  namespace: apps
+spec:
+  selector:
+    app: plane-web
+  ports:
+    - port: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-admin
+  namespace: apps
+  labels:
+    app: plane-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-admin
+  template:
+    metadata:
+      labels:
+        app: plane-admin
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-admin
+          image: makeplane/plane-admin:v1.4.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_BASE_URL
+              value: https://plane.k8s.local
+            - name: NEXT_PUBLIC_ADMIN_BASE_URL
+              value: https://plane.k8s.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-admin
+  namespace: apps
+spec:
+  selector:
+    app: plane-admin
+  ports:
+    - port: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-space
+  namespace: apps
+  labels:
+    app: plane-space
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plane-space
+  template:
+    metadata:
+      labels:
+        app: plane-space
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: plane-space
+          image: makeplane/plane-space:v1.4.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_BASE_URL
+              value: https://plane.k8s.local
+            - name: NEXT_PUBLIC_ADMIN_BASE_URL
+              value: https://plane.k8s.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-space
+  namespace: apps
+spec:
+  selector:
+    app: plane-space
+  ports:
+    - port: 3000

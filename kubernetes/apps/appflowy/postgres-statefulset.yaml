@@ -1,0 +1,110 @@
+# Mirrors appflowy/compose.yml's appflowy-db + appflowy-redis. Own dedicated
+# Postgres (pgvector-enabled image, same reasoning as every other service in
+# this pilot — never a shared server). No custom command/memory-tuning args
+# in the source compose.yml for appflowy-db (unlike mealie/plausible/plane),
+# so none invented here either — stick to what's actually proven in compose.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: appflowy-db
+  namespace: apps
+spec:
+  serviceName: appflowy-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-db
+  template:
+    metadata:
+      labels:
+        app: appflowy-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: appflowy
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: appflowy-db-credentials
+                  key: password
+            - name: POSTGRES_DB
+              value: appflowy
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "appflowy"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: appflowy-db
+  ports:
+    - port: 5432
+---
+# --save "" disables persistence (compose only mounts a named volume to stop
+# the image's own `VOLUME /data` declaration from creating an anonymous one)
+# — no PVC needed here, emptyDir-equivalent is simply no volume at all, same
+# as immich-redis in this pilot.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appflowy-redis
+  namespace: apps
+  labels:
+    app: appflowy-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appflowy-redis
+  template:
+    metadata:
+      labels:
+        app: appflowy-redis
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          image: redis:8.10-alpine
+          args: ["redis-server", "--save", "", "--stop-writes-on-bgsave-error", "no"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appflowy-redis
+  namespace: apps
+spec:
+  selector:
+    app: appflowy-redis
+  ports:
+    - port: 6379

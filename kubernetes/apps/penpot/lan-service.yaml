@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8131 matches penpot/compose.dev.yml exactly (penpot-frontend is the
+# container that binds it there too). Not currently live-applied — see
+# kubernetes/README.md's "Current status".
+apiVersion: v1
+kind: Service
+metadata:
+  name: penpot-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: penpot-frontend
+  ports:
+    - port: 8131
+      targetPort: 8080

@@ -1,0 +1,139 @@
+# Best-effort port — Studio is the admin dashboard UI, not one of this
+# pilot's priority containers (kong/db/auth/rest/storage got the careful
+# pass). Reuses the same functions ConfigMap as supabase-functions
+# (read-only, matches compose's ./volumes/functions:/app/edge-functions:ro).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: supabase-studio-snippets
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-studio
+  namespace: apps
+  labels:
+    app: supabase-studio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-studio
+  template:
+    metadata:
+      labels:
+        app: supabase-studio
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: studio
+          image: supabase/studio:2026.07.07-sha-a6a04f2
+          env:
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: STUDIO_PG_META_URL
+              value: http://supabase-meta:8080
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_HOST
+              value: supabase-db
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: password
+            - name: POSTGRES_USER_READ_WRITE
+              value: postgres
+            - name: PG_META_CRYPTO_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: pg-meta-crypto-key
+            - name: PGRST_DB_SCHEMAS
+              value: "public,graphql_public"
+            - name: PGRST_DB_MAX_ROWS
+              value: "1000"
+            - name: PGRST_DB_EXTRA_SEARCH_PATH
+              value: public
+            - name: DEFAULT_ORGANIZATION_NAME
+              value: "Default Organization"
+            - name: DEFAULT_PROJECT_NAME
+              value: "Default Project"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: openai-api-key
+                  optional: true
+            - name: SUPABASE_URL
+              value: http://supabase-kong:8000
+            - name: SUPABASE_PUBLIC_URL
+              value: https://supabase.k8s.local
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: anon-key
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: service-role-key
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: ENABLED_FEATURES_LOGS_ALL
+              value: "false"
+            - name: SNIPPETS_MANAGEMENT_FOLDER
+              value: /app/snippets
+            - name: EDGE_FUNCTIONS_MANAGEMENT_FOLDER
+              value: /app/edge-functions
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: snippets
+              mountPath: /app/snippets
+            - name: functions
+              mountPath: /app/edge-functions/main/index.ts
+              subPath: main-index.ts
+              readOnly: true
+            - name: functions
+              mountPath: /app/edge-functions/hello/index.ts
+              subPath: hello-index.ts
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/platform/profile
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+      volumes:
+        - name: snippets
+          persistentVolumeClaim:
+            claimName: supabase-studio-snippets
+        - name: functions
+          configMap:
+            name: supabase-functions
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-studio
+  namespace: apps
+spec:
+  selector:
+    app: supabase-studio
+  ports:
+    - port: 3000

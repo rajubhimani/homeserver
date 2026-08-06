@@ -1,0 +1,78 @@
+# Mirrors plane/compose.yml's plane-minio. ${DATA_ROOT}/uploads bind mount
+# is real persisted data (attachments/uploads), so it gets a PVC.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plane-minio-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-minio
+  namespace: apps
+  labels:
+    app: plane-minio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plane-minio
+  template:
+    metadata:
+      labels:
+        app: plane-minio
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: minio
+          image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+          args: ["server", "/data", "--console-address", ":9090"]
+          ports:
+            - containerPort: 9000
+            - containerPort: 9090
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: minio-root-password
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: plane-minio-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-minio
+  namespace: apps
+spec:
+  selector:
+    app: plane-minio
+  ports:
+    - name: api
+      port: 9000
+    - name: console
+      port: 9090

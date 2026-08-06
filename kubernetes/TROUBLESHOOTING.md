@@ -504,4 +504,61 @@ Check replica counts after reapplying and rescale to 0 if it won.
 
 ---
 
+## Moving from Docker-Desktop-kind to plain kind (real Linux hardware)
+
+Two real problems surfaced moving this pilot off the original Windows/
+Docker-Desktop box onto real Linux hardware, both from assumptions that
+were true under Docker Desktop's kind integration but not true of plain
+`kind`.
+
+### `kind-config.yaml` had 2 control-plane nodes — worse than 1, not better
+
+A hand-written `kind-config.yaml` for this migration specified 2
+control-plane nodes ("for redundancy"). etcd, which backs the k8s control
+plane, requires an **odd** number of members to establish quorum. With
+exactly 2, losing either one loses quorum immediately — strictly worse
+fault tolerance than a single control-plane, while still paying for kind's
+HAProxy load-balancer sidecar that multi-control-plane setups require to
+front the API server. Fixed to 1 control-plane + 3 workers, matching what
+this README already documented as the target topology. Use 1 (single
+host, no real HA possible anyway) or 3 (genuine HA, needs 3 separate
+hosts) — never an even number.
+
+### LoadBalancer Services don't auto-expose on plain kind
+
+Docker Desktop's kind integration auto-publishes every `type: LoadBalancer`
+Service on `localhost` — no extra component needed. This pilot's README
+and every `lan-service.yaml` file were written assuming that behavior.
+Plain `kind` (the CLI, run directly on Linux) has **no such feature** —
+every LoadBalancer Service just sits at `EXTERNAL-IP: <pending>` forever.
+
+**Fix: MetalLB**, `kubernetes/cluster/metallb/`, installed the same way as
+Traefik (multi-source ArgoCD Application: upstream Helm chart + our
+`values.yaml` via `$values`, plus a third source pointing at
+`kubernetes/cluster/metallb/resources/` for the `IPAddressPool`/
+`L2Advertisement` CRs). L2 mode — no BGP router exists on this network, so
+MetalLB just answers ARP directly on kind's Docker bridge network.
+
+The address pool has to be a slice of whatever subnet Docker actually
+assigned the `kind` network, which is only known **after** first cluster
+creation (`docker network inspect kind`) — it's a placeholder in git until
+then, see that file's own comment for the exact command and a safe slice
+to pick.
+
+**This changes what "LAN access" means going forward**: Services get a
+real MetalLB-assigned IP (e.g. `172.18.255.20x`), not literal
+`localhost:<port>` the way Docker Desktop provided. If literal-port
+access is wanted later, layer a host-side forwarder (`socat`,
+`kubectl port-forward` as a systemd unit) on top of the stable MetalLB IP,
+one service at a time — additive, doesn't require touching the cluster.
+The reverse direction (starting from static `extraPortMappings` in
+`kind-config.yaml`, then later wanting MetalLB or just a new port) is much
+worse: `extraPortMappings` are baked in at node-container-creation time,
+so any change means a full cluster recreate — the same ArgoCD/Traefik/
+Postgres re-bootstrap dance as the disk-full recovery section above. That
+asymmetry is why MetalLB was chosen over enumerating every service's port
+statically.
+
+---
+
 [← kubernetes/README.md](README.md)

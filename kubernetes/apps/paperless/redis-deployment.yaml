@@ -1,0 +1,60 @@
+# paperless-redis: task queue broker for paperless's Celery workers, nothing
+# else. Compose runs it with `--save ""` (RDB snapshotting disabled entirely)
+# specifically because none of its contents need to survive a restart — an
+# emptyDir is the correct k8s equivalent of that same "don't bother
+# persisting this" intent, not a PVC.
+#
+# Uses `args:`, not `command:`, for the same reason as every Postgres
+# StatefulSet in this pilot (see TROUBLESHOOTING.md's "command: means
+# different things in Compose vs Kubernetes") — the redis:alpine image's
+# entrypoint script drops root via gosu before exec'ing redis-server;
+# setting `command:` in k8s would replace that entrypoint outright and skip
+# the privilege drop.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paperless-redis
+  namespace: apps
+  labels:
+    app: paperless-redis
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: paperless-redis
+  template:
+    metadata:
+      labels:
+        app: paperless-redis
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          image: redis:8.10-alpine
+          args: ["redis-server", "--save", "", "--stop-writes-on-bgsave-error", "no"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paperless-redis
+  namespace: apps
+spec:
+  selector:
+    app: paperless-redis
+  ports:
+    - port: 6379

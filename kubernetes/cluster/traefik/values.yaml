@@ -20,7 +20,10 @@ gateway:
 image:
   tag: v3.7.10
 
-# Docker Desktop's bundled cloud provider auto-exposes LoadBalancer Services
-# on localhost with no extra setup (confirmed — no MetalLB needed here).
+# On the original Docker-Desktop-backed pilot box, LoadBalancer Services
+# auto-exposed on localhost with no extra setup. This branch has since moved
+# to a plain-`kind`-on-Linux host, which has no such magic — MetalLB
+# (kubernetes/cluster/metallb/) now provides the real IP this Service gets,
+# same as every other LoadBalancer Service in this cluster.
 service:
   type: LoadBalancer

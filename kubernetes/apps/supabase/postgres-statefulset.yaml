@@ -1,0 +1,138 @@
+# supabase-db uses the *custom* supabase/postgres image (not stock
+# `postgres:`) — it bundles vendor extensions (pgjwt, pg_net, pgsodium, ...)
+# and a forked entrypoint that scans /docker-entrypoint-initdb.d/migrations/
+# and /docker-entrypoint-initdb.d/init-scripts/ subdirectories (not just the
+# top level) in filename order. Each subPath mount below reproduces exactly
+# one of compose.yml's bind mounts, same numeric filename prefixes, so the
+# custom entrypoint runs them in the same order it would under Compose.
+#
+# args, not command — compose used `command:` (CMD override, keeps this
+# custom image's own entrypoint that does the initdb-scripts dance and drops
+# root), see kubernetes/TROUBLESHOOTING.md's "command: means different
+# things" entry. Dropping the literal "postgres" token is fine — the postgres
+# entrypoint contract (which this image still follows) auto-prepends it when
+# args starts with a flag.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: supabase-db
+  namespace: apps
+spec:
+  serviceName: supabase-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-db
+  template:
+    metadata:
+      labels:
+        app: supabase-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: supabase/postgres:17.6.1.136
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_HOST
+              value: /var/run/postgresql
+            - name: PGPORT
+              value: "5432"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: password
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-db-credentials
+                  key: password
+            - name: PGDATABASE
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: jwt-secret
+            - name: JWT_EXP
+              value: "3600"
+          args:
+            - -c
+            - config_file=/etc/postgresql/postgresql.conf
+            - -c
+            - log_min_messages=fatal
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: config
+              mountPath: /etc/postgresql-custom
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/migrations/99-realtime.sql
+              subPath: realtime.sql
+              readOnly: true
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql
+              subPath: webhooks.sql
+              readOnly: true
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/init-scripts/99-roles.sql
+              subPath: roles.sql
+              readOnly: true
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/init-scripts/99-jwt.sql
+              subPath: jwt.sql
+              readOnly: true
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/migrations/97-_supabase.sql
+              subPath: _supabase.sql
+              readOnly: true
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/migrations/99-logs.sql
+              subPath: logs.sql
+              readOnly: true
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d/migrations/99-pooler.sql
+              subPath: pooler.sql
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-h", "localhost"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: db-init
+          configMap:
+            name: supabase-db-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+    - metadata:
+        name: config
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: supabase-db
+  ports:
+    - port: 5432

@@ -1,0 +1,16 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8080 matches landing/compose.dev.yml exactly. The Compose version
+# was stopped (uv run homeserver.py dev down landing) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: landing-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: landing
+  ports:
+    - port: 8080
+      targetPort: 80

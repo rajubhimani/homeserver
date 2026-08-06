@@ -1,0 +1,16 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8010 matches paperless/compose.dev.yml exactly. The Compose version
+# was stopped (uv run homeserver.py dev down paperless) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: paperless-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: paperless
+  ports:
+    - port: 8010
+      targetPort: 8000

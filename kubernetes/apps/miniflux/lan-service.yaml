@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8093 matches miniflux/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down miniflux) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: miniflux-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: miniflux
+  ports:
+    - port: 8093
+      targetPort: 8080

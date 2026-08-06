@@ -1,0 +1,151 @@
+# Mirrors penpot/compose.yml's penpot-backend + penpot-exporter — both
+# internal-only (ClusterIP, no HTTPRoute/lan-service; see
+# frontend-deployment.yaml for the public entrypoint). Compose's depends_on
+# (backend/exporter wait on penpot-db/penpot-redis healthy) has no direct
+# k8s equivalent — same documented gap as elsewhere in this pilot.
+#
+# ${DATA_ROOT}/assets is bind-mounted into BOTH penpot-backend and
+# penpot-frontend in compose (frontend serves already-processed assets
+# directly, backend writes them) — one shared PVC here, mounted
+# ReadWriteOnce by both Deployments. RWO technically only guarantees
+# same-node concurrent mounts (not cluster-wide) as of the k8s versions this
+# pilot targets; on this multi-worker kind cluster the two pods could in
+# theory land on different nodes and one would fail to mount. Not hit in
+# practice yet (small cluster, few competing workloads), but worth watching
+# if it ever does — a ReadWriteMany-capable StorageClass would remove the
+# risk entirely.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: penpot-assets
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-backend
+  namespace: apps
+  labels:
+    app: penpot-backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: penpot-backend
+  template:
+    metadata:
+      labels:
+        app: penpot-backend
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: penpot-backend
+          image: penpotapp/backend:2.17.0
+          # No `ports:` block in compose either (default EXPOSEd port is
+          # reachable on the shared compose network regardless) — 6060/6061
+          # are Penpot's documented default backend/exporter listen ports.
+          ports:
+            - containerPort: 6060
+          env:
+            - name: PENPOT_DATABASE_URI
+              value: postgresql://penpot-db/penpot
+            - name: PENPOT_DATABASE_USERNAME
+              value: penpot
+            - name: PENPOT_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-db-credentials
+                  key: password
+            - name: PENPOT_REDIS_URI
+              value: redis://penpot-redis/0
+            - name: PENPOT_PUBLIC_URI
+              value: https://penpot.k8s.local
+            - name: PENPOT_ASSETS_STORAGE_BACKEND
+              value: assets-fs
+            - name: PENPOT_STORAGE_ASSETS_FS_DIRECTORY
+              value: /opt/data/assets
+            - name: PENPOT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-credentials
+                  key: secret-key
+            - name: PENPOT_FLAGS
+              value: ""
+            - name: PENPOT_SMTP_HOST
+              value: "smtp.yourprovider.com"
+            - name: PENPOT_SMTP_PORT
+              value: "587"
+            - name: PENPOT_SMTP_USERNAME
+              value: ""
+            - name: PENPOT_SMTP_PASSWORD
+              value: ""
+          volumeMounts:
+            - name: assets
+              mountPath: /opt/data/assets
+      volumes:
+        - name: assets
+          persistentVolumeClaim:
+            claimName: penpot-assets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: penpot-backend
+  namespace: apps
+spec:
+  selector:
+    app: penpot-backend
+  ports:
+    - port: 6060
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-exporter
+  namespace: apps
+  labels:
+    app: penpot-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: penpot-exporter
+  template:
+    metadata:
+      labels:
+        app: penpot-exporter
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: penpot-exporter
+          image: penpotapp/exporter:2.17.0
+          ports:
+            - containerPort: 6061
+          env:
+            - name: PENPOT_PUBLIC_URI
+              value: http://penpot-frontend:8080
+            - name: PENPOT_REDIS_URI
+              value: redis://penpot-redis/0
+            - name: PENPOT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-credentials
+                  key: secret-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: penpot-exporter
+  namespace: apps
+spec:
+  selector:
+    app: penpot-exporter
+  ports:
+    - port: 6061

@@ -1,0 +1,71 @@
+# Best-effort port — imgproxy is a supporting service for supabase-storage's
+# image transformation feature, not one of this pilot's priority containers.
+#
+# Mounts the SAME PVC as supabase-storage (both read/write the same
+# ${DATA_ROOT}/storage tree in compose, so imgproxy can read files storage-api
+# saved). A ReadWriteOnce PVC can only be attached to one *node* at a time
+# (not one pod) — this works as long as the k8s scheduler happens to place
+# both pods on the same node, which isn't guaranteed on a multi-node cluster.
+# If imgproxy ever fails to mount with a multi-attach error, that's why; the
+# real fix would be pod affinity pinning both to the same node, or switching
+# the PVC to a ReadWriteMany-capable storage class — not done here to keep
+# this manifest matching the simple compose bind-mount 1:1.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-imgproxy
+  namespace: apps
+  labels:
+    app: supabase-imgproxy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: supabase-imgproxy
+  template:
+    metadata:
+      labels:
+        app: supabase-imgproxy
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: imgproxy
+          image: darthsim/imgproxy:v4.0.12
+          env:
+            - name: IMGPROXY_BIND
+              value: ":5001"
+            - name: IMGPROXY_LOCAL_FILESYSTEM_ROOT
+              value: "/"
+            - name: IMGPROXY_USE_ETAG
+              value: "true"
+            - name: IMGPROXY_AUTO_WEBP
+              value: "true"
+            - name: IMGPROXY_MAX_SRC_RESOLUTION
+              value: "16.8"
+          ports:
+            - containerPort: 5001
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/storage
+          readinessProbe:
+            exec:
+              command: ["imgproxy", "health"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: supabase-storage-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-imgproxy
+  namespace: apps
+spec:
+  selector:
+    app: supabase-imgproxy
+  ports:
+    - port: 5001
