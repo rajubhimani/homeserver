@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp vaultwarden/.env.example vaultwarden/.env
+cp services/vaultwarden/.env.example services/vaultwarden/.env
 # set ADMIN_TOKEN (openssl rand -base64 48)
 uv run homeserver.py dev up vaultwarden
 ```

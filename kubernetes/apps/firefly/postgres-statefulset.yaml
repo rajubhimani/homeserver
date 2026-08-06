@@ -1,0 +1,84 @@
+# Own dedicated Postgres, not the shared server — same
+# init-script-owns-schema pattern as forgejo/guacamole.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: firefly-db
+  namespace: apps
+spec:
+  serviceName: firefly-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firefly-db
+  template:
+    metadata:
+      labels:
+        app: firefly-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:18.4-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: firefly
+            - name: POSTGRES_USER
+              value: firefly
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-db-credentials
+                  key: password
+          args:
+            - -c
+            - shared_buffers=128MB
+            - -c
+            - max_connections=20
+            - -c
+            - work_mem=4MB
+            - -c
+            - maintenance_work_mem=64MB
+            - -c
+            - effective_cache_size=256MB
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          resources:
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "firefly"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: init
+          configMap:
+            name: firefly-postgres-init
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: firefly-db
+  ports:
+    - port: 5432

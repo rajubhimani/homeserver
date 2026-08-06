@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp trilium/.env.example trilium/.env
+cp services/trilium/.env.example services/trilium/.env
 uv run homeserver.py dev up trilium
 ```
 

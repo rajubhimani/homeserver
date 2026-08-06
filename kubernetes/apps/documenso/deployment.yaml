@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: documenso-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: documenso
+  namespace: apps
+  labels:
+    app: documenso
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: documenso
+  template:
+    metadata:
+      labels:
+        app: documenso
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: documenso
+          image: documenso/documenso:v2.16.0
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NEXT_PRIVATE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-db-credentials
+                  key: database-url
+            - name: NEXT_PRIVATE_DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-db-credentials
+                  key: database-url
+            - name: NEXT_PUBLIC_WEBAPP_URL
+              value: https://documenso.k8s.local
+            - name: NEXT_PRIVATE_INTERNAL_WEBAPP_URL
+              value: http://localhost:3000
+            - name: NEXT_PRIVATE_SIGNING_TRANSPORT
+              value: local
+            - name: NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH
+              value: /opt/documenso/cert.p12
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-credentials
+                  key: nextauth-secret
+            - name: NEXT_PRIVATE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-credentials
+                  key: encryption-key
+            - name: NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-credentials
+                  key: encryption-secondary-key
+            - name: NEXT_PUBLIC_UPLOAD_TRANSPORT
+              value: database
+            - name: NEXT_PUBLIC_DOCUMENT_SIZE_UPLOAD_LIMIT
+              value: "5"
+            - name: NEXT_PRIVATE_SMTP_TRANSPORT
+              value: smtp-auth
+            - name: NEXT_PRIVATE_SMTP_SECURE
+              value: "false"
+            - name: NEXT_PUBLIC_DISABLE_SIGNUP
+              value: "false"
+            - name: NEXT_PUBLIC_FEATURE_BILLING_ENABLED
+              value: "false"
+            - name: NEXT_PRIVATE_JOBS_PROVIDER
+              value: local
+            - name: DOCUMENSO_DISABLE_TELEMETRY
+              value: "false"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: cert
+              mountPath: /opt/documenso/cert.p12
+              subPath: cert.p12
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 25
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 45
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: documenso-data
+        - name: cert
+          secret:
+            secretName: documenso-cert
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: documenso
+  namespace: apps
+spec:
+  selector:
+    app: documenso
+  ports:
+    - port: 3000

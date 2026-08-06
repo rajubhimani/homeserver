@@ -31,7 +31,7 @@ or containerized, is never exposed publicly).
   running the `docker-ollama` profile. Deliberately outside `service_data/data/ollama/` so
   `homeserver.py`'s backup/snapshot step (which tars the whole `DATA_ROOT` on every
   `down`/`backup`) never sweeps up the model weights. Grouped under `service_data/cache/`
-  alongside other services' regenerable caches. See `MODELS_ROOT` in `ollama/.env`.
+  alongside other services' regenerable caches. See `MODELS_ROOT` in `services/ollama/.env`.
 - `service_data/data/open-webui/data/` — chat history, user accounts, settings (small, gets
   backed up normally).
 - `service_data/cache/open-webui/cache/` — embedding model cache (`sentence-transformers/
@@ -39,7 +39,7 @@ or containerized, is never exposed publicly).
   above: kept outside `service_data/data/open-webui/` so it isn't re-archived on every
   backup/snapshot. Fully regenerable — deleting it just re-downloads the model on next use.
   Grouped under `service_data/cache/` alongside other services' regenerable caches (e.g.
-  jellyfin's `METADATA_ROOT`). See `MODELS_ROOT` in `open-webui/.env`.
+  jellyfin's `METADATA_ROOT`). See `MODELS_ROOT` in `services/open-webui/.env`.
 
 ## Setup (default: native host Ollama)
 
@@ -47,12 +47,12 @@ or containerized, is never exposed publicly).
    connections from the Docker network (default is loopback-only).
 2. Pull a model: `ollama pull llama3.2` (or any model from the
    [Ollama library](https://ollama.com/library)).
-3. `uv run homeserver.py dev up open-webui` — `open-webui/.env`'s
+3. `uv run homeserver.py dev up open-webui` — `services/open-webui/.env`'s
    `OLLAMA_BASE_URL=http://host.docker.internal:11434` already points at the host; the
-   `host.docker.internal:host-gateway` entry in `open-webui/compose.yml` makes that hostname
+   `host.docker.internal:host-gateway` entry in `services/open-webui/compose.yml` makes that hostname
    resolve on Linux, Mac, and Windows alike.
 4. Open `https://open-webui.yourdomain.com` (or `http://localhost:8109` in dev) and create the first
-   account — it becomes the admin automatically. Set `ENABLE_SIGNUP=false` in `open-webui/.env`
+   account — it becomes the admin automatically. Set `ENABLE_SIGNUP=false` in `services/open-webui/.env`
    once your account exists if you don't want further public signups.
 
 ## Using the containerized Ollama instead
@@ -61,19 +61,19 @@ Useful if you don't want to install Ollama on the host at all, or before GPU pas
 set up on the host:
 
 1. `uv run homeserver.py dev up ollama open-webui --profile docker-ollama`
-2. Change `OLLAMA_BASE_URL` in `open-webui/.env` to `http://ollama:11434` and restart
+2. Change `OLLAMA_BASE_URL` in `services/open-webui/.env` to `http://ollama:11434` and restart
    `open-webui`.
 3. Pull a model into the container: `docker exec -it ollama ollama pull llama3.2`.
 
 Don't run a host Ollama and the `ollama` container at the same time pointed at the same
-`OLLAMA_BASE_URL` — pick one per `open-webui/.env`.
+`OLLAMA_BASE_URL` — pick one per `services/open-webui/.env`.
 
 ## GPU passthrough (future, for the containerized path)
 
-`ollama/compose.yml` has no `deploy.resources` block yet — CPU-only. When a GPU is available:
+`services/ollama/compose.yml` has no `deploy.resources` block yet — CPU-only. When a GPU is available:
 
 1. Install `nvidia-container-toolkit` on the host.
-2. Add to `ollama/compose.yml` under the `ollama` service:
+2. Add to `services/ollama/compose.yml` under the `ollama` service:
 
    ```yaml
    deploy:
@@ -93,8 +93,8 @@ already gives it — no homeserver-side config needed.
 
 ### Image variant
 
-`open-webui/compose.yml` picks its image tag from `OPEN_WEBUI_IMAGE_TAG` in
-`open-webui/.env`, defaulting to `0.10.2-slim` (no bundled local RAG/embeddings/Whisper/TTS
+`services/open-webui/compose.yml` picks its image tag from `OPEN_WEBUI_IMAGE_TAG` in
+`services/open-webui/.env`, defaulting to `0.10.2-slim` (no bundled local RAG/embeddings/Whisper/TTS
 stack — smaller image, less runtime memory). When GPU passthrough lands and local RAG or
 voice features are wanted, change it to the standard tag (`0.10.2`, no `-slim` suffix) and
 run `uv run homeserver.py dev update open-webui` to pull and recreate. Chat history and

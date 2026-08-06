@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp excalidraw/.env.example excalidraw/.env   # no values to fill in — see below
+cp services/excalidraw/.env.example services/excalidraw/.env   # no values to fill in — see below
 uv run homeserver.py dev up excalidraw
 ```
 

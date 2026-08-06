@@ -1,0 +1,50 @@
+# Stateless, no DB, no persistence — the pilot's simplest case, mirrors
+# excalidraw/compose.yml exactly (same image, same "latest" tag choice,
+# since upstream publishes no numbered version tags for this image).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: excalidraw
+  namespace: apps
+  labels:
+    app: excalidraw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: excalidraw
+  template:
+    metadata:
+      labels:
+        app: excalidraw
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: excalidraw
+          image: excalidraw/excalidraw:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: excalidraw
+  namespace: apps
+spec:
+  selector:
+    app: excalidraw
+  ports:
+    - port: 80
+      targetPort: 80

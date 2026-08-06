@@ -18,7 +18,7 @@ As of this writing, `coollabsio/coolify` has **no semver-tagged releases on Dock
 ## Setup
 
 ```bash
-cp coolify/.env.example coolify/.env
+cp services/coolify/.env.example services/coolify/.env
 # generate ALL secrets before first start (see comments in .env.example) —
 # changing any of them later can break the installation
 uv run homeserver.py dev up coolify

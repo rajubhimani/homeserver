@@ -33,6 +33,29 @@ uv run homeserver.py dev restore <service> --snapshot 20260710-160628
 
 Snapshots beyond `BACKUP_RETENTION` (root `.env`, default 5) are auto-pruned oldest-first after each backup; set `BACKUP_RETENTION=-1` for unlimited history (manual cleanup only).
 
+## Orphaned volumes
+
+`backup_service()` matches volumes by Docker's own `<service>_*` naming prefix (live `docker volume ls`, not `compose.yml`), deliberately — see the comment on `volumes_for_project()`. That means a volume Docker still has on disk gets backed up even if `compose.yml` no longer declares it (e.g. after switching a DB image between a plain and `-alpine` tag, which also renames the volume — the old one doesn't get deleted automatically, it just stops being referenced). Every `backup`/`down` now warns when this happens:
+
+```
+⚠ firefly_firefly-postgres is backed up but not declared in services/firefly/compose.yml
+  likely orphaned from a prior image/volume-name change — once you're sure you don't need it: docker volume rm firefly_firefly-postgres
+```
+
+Clean these up in bulk instead of hunting for the warning line-by-line:
+
+```bash
+# List orphans for one service, or every service (dev/prod doesn't matter — a
+# volume either exists on this host or it doesn't)
+uv run homeserver.py orphaned-volumes <service>
+uv run homeserver.py orphaned-volumes all
+
+# Remove everything listed, after confirming (or --yes to skip the prompt)
+uv run homeserver.py orphaned-volumes <service> --yes
+```
+
+This never deletes anything backup/restore would still recognize as "the current volume" — only ones `compose.yml` no longer declares at all. Still worth checking a volume's contents first if you're unsure (`docker run --rm -v <volume>:/data alpine ls -la /data`) — it's still real data until you delete it, just no longer wired into the running stack.
+
 ## Migrating to a different machine
 
 `backup all`, copy the whole `service_data/backup/` folder to the new machine (plain `.tar.gz` files — pendrive-safe, ownership preserved as tar metadata not filesystem metadata), clone this repo, `restore all`.

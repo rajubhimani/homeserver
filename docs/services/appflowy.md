@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp appflowy/.env.example appflowy/.env
+cp services/appflowy/.env.example services/appflowy/.env
 # generate: openssl rand -hex 32 → GOTRUE_JWT_SECRET
 # set POSTGRES_PASSWORD and MINIO_ROOT_PASSWORD
 mkdir -p service_data/data/appflowy/{postgres,redis,minio}

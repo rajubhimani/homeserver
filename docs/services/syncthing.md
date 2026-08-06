@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp syncthing/.env.example syncthing/.env
+cp services/syncthing/.env.example services/syncthing/.env
 uv run homeserver.py dev up syncthing
 ```
 

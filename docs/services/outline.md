@@ -14,11 +14,11 @@ Outline has **no built-in username/password login** — it requires at least one
 1. Start Authentik first if it isn't already running: `uv run homeserver.py dev up authentik`.
 2. In Authentik: create an **OAuth2/OIDC Provider**, then a matching **Application**, for Outline.
    - Redirect URI: `https://outline.<domain>/auth/oidc.callback`
-3. Copy the client ID/secret and the provider's authorize/token/userinfo URLs into `outline/.env` (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_AUTH_URI`, `OIDC_TOKEN_URI`, `OIDC_USERINFO_URI`).
+3. Copy the client ID/secret and the provider's authorize/token/userinfo URLs into `services/outline/.env` (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_AUTH_URI`, `OIDC_TOKEN_URI`, `OIDC_USERINFO_URI`).
 4. Then:
 
 ```bash
-cp outline/.env.example outline/.env
+cp services/outline/.env.example services/outline/.env
 # set POSTGRES_PASSWORD, SECRET_KEY, UTILS_SECRET (openssl rand -hex 32), and the OIDC_* vars from step 2-3
 uv run homeserver.py dev up outline
 ```

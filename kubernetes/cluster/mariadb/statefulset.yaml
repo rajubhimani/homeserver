@@ -1,0 +1,75 @@
+# Shared MariaDB server for services that don't need their own dedicated
+# instance — each such service gets its own CREATE DATABASE + user inside
+# this one server (own database, own credentials scoped only to it via
+# GRANT, no cross-service visibility), provisioned by a per-service Job
+# (see db-init-job.template.yaml). Same pattern as ../postgres/statefulset.yaml,
+# for the MariaDB-using services in this stack (BookStack, InvoiceShelf,
+# OrangeHRM) instead of Postgres ones.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mariadb-shared
+  namespace: data
+spec:
+  serviceName: mariadb-shared
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb-shared
+  template:
+    metadata:
+      labels:
+        app: mariadb-shared
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mariadb
+          image: mariadb:12.3.2
+          ports:
+            - containerPort: 3306
+              name: mysql
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-shared-credentials
+                  key: root-password
+          args: ["--innodb-buffer-pool-size=256M", "--max-connections=50"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-shared
+  namespace: data
+spec:
+  clusterIP: None
+  selector:
+    app: mariadb-shared
+  ports:
+    - port: 3306

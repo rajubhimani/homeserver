@@ -22,7 +22,7 @@ The original plan was `network_mode: host` for a "just works" LAN binding. That'
 ## Setup
 
 ```bash
-cp adguard-home/.env.example adguard-home/.env
+cp services/adguard-home/.env.example services/adguard-home/.env
 uv run homeserver.py dev up adguard-home
 ```
 

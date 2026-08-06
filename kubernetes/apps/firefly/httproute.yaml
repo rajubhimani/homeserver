@@ -1,0 +1,31 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: firefly
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "firefly.k8s.local"
+  rules:
+    - backendRefs:
+        - name: firefly
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: firefly-importer
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "firefly-import.k8s.local"
+  rules:
+    - backendRefs:
+        - name: firefly-importer
+          port: 8080

@@ -37,7 +37,7 @@ Only **`grafana.${DOMAIN}`** gets a public nginx-plain route. Prometheus, Loki, 
 ## Setup
 
 ```bash
-cp observability/.env.example observability/.env
+cp services/observability/.env.example services/observability/.env
 # set GRAFANA_ADMIN_PASSWORD to something real — the example default is a placeholder
 uv run homeserver.py dev up observability
 ```

@@ -1,0 +1,23 @@
+# Excludes secret.example.yaml (template only, not a real object to apply)
+# and db-init-job.template.yaml (a template copied per-service, not applied
+# from here directly).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-postgres-shared
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rajubhimani/homeserver.git
+    targetRevision: feature/k8s-pilot
+    path: kubernetes/cluster/postgres
+    directory:
+      include: "statefulset.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data
+  syncPolicy:
+    automated:
+      prune: false   # never auto-delete the shared Postgres StatefulSet/PVC
+      selfHeal: true

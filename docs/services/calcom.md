@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp calcom/.env.example calcom/.env
+cp services/calcom/.env.example services/calcom/.env
 # set POSTGRES_PASSWORD, NEXTAUTH_SECRET (openssl rand -base64 32),
 # CALENDSO_ENCRYPTION_KEY (openssl rand -base64 24)
 uv run homeserver.py dev up calcom

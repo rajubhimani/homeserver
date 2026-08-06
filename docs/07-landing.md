@@ -22,7 +22,7 @@ green when up, red when down, rechecked every 60 seconds.
 ## Dynamic configuration
 
 The landing page is fully dynamic — no domain or personal info is hardcoded.
-Set these in `landing/.env`:
+Set these in `services/landing/.env`:
 
 ```env
 DOMAIN=yourdomain.com

@@ -1,0 +1,44 @@
+# Template for onboarding a new service onto the shared Postgres server.
+# Copy into kubernetes/apps/<service>/db-init-job.yaml and replace SERVICE_NAME
+# (and the generated password) — creates a dedicated database + role for that
+# service inside postgres-shared, idempotently (safe to re-apply/re-run).
+#
+# Only for services using the shared server. Services needing a dedicated
+# Postgres (own version/extensions, e.g. pgvector) get their own separate
+# StatefulSet instead — this template doesn't apply to those.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: SERVICE_NAME-db-init
+  namespace: data
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          image: postgres:18.4-alpine
+          env:
+            - name: PGHOST
+              value: postgres-shared.data.svc.cluster.local
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-shared-credentials
+                  key: postgres-password
+            - name: SERVICE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: SERVICE_NAME-db-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              psql -tc "SELECT 1 FROM pg_roles WHERE rolname='SERVICE_NAME'" | grep -q 1 || \
+                psql -c "CREATE ROLE \"SERVICE_NAME\" LOGIN PASSWORD '$SERVICE_DB_PASSWORD';"
+              psql -tc "SELECT 1 FROM pg_database WHERE datname='SERVICE_NAME'" | grep -q 1 || \
+                psql -c "CREATE DATABASE \"SERVICE_NAME\" OWNER \"SERVICE_NAME\";"

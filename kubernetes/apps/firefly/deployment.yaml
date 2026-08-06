@@ -1,0 +1,220 @@
+# Mirrors firefly/compose.yml. The compose stack's one-shot
+# firefly-permissions container (chown storage to www-data, UID 33) becomes
+# an initContainer here instead — same effect, more idiomatic k8s than a
+# separate always-present container that just exits immediately.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: firefly-storage
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firefly
+  namespace: apps
+  labels:
+    app: firefly
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: firefly
+  template:
+    metadata:
+      labels:
+        app: firefly
+    spec:
+      initContainers:
+        - name: fix-permissions
+          image: alpine:3.24
+          command: ["chown", "-R", "33:33", "/var/www/html/storage"]
+          volumeMounts:
+            - name: storage
+              mountPath: /var/www/html/storage
+      enableServiceLinks: false
+      containers:
+        - name: firefly
+          image: fireflyiii/core:version-6.6.6
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_URL
+              value: https://firefly.k8s.local
+            - name: DB_CONNECTION
+              value: pgsql
+            - name: DB_HOST
+              value: firefly-db
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_DATABASE
+              value: firefly
+            - name: DB_USERNAME
+              value: firefly
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-db-credentials
+                  key: password
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-credentials
+                  key: app-key
+            - name: STATIC_CRON_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: firefly-credentials
+                  key: cron-token
+            - name: APP_ENV
+              value: production
+            - name: MAIL_MAILER
+              value: log
+            - name: TRUSTED_PROXIES
+              value: "**"
+            - name: CACHE_DRIVER
+              value: file
+            - name: SESSION_DRIVER
+              value: file
+            - name: DEFAULT_LANGUAGE
+              value: en_US
+            - name: TZ
+              value: "Asia/Kolkata"
+          volumeMounts:
+            - name: storage
+              mountPath: /var/www/html/storage
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: firefly-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly
+  namespace: apps
+spec:
+  selector:
+    app: firefly
+  ports:
+    - port: 8080
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: firefly-importer-upload
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firefly-importer
+  namespace: apps
+  labels:
+    app: firefly-importer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firefly-importer
+  template:
+    metadata:
+      labels:
+        app: firefly-importer
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: firefly-importer
+          image: fireflyiii/data-importer:version-2.3.4
+          ports:
+            - containerPort: 8080
+          env:
+            - name: FIREFLY_III_URL
+              value: http://firefly:8080
+            - name: VANITY_URL
+              value: https://firefly.k8s.local
+            - name: FIREFLY_III_CLIENT_ID
+              value: ""
+            - name: TRUSTED_PROXIES
+              value: "**"
+            - name: TZ
+              value: "Asia/Kolkata"
+          volumeMounts:
+            - name: upload
+              mountPath: /var/www/html/storage/upload
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: upload
+          persistentVolumeClaim:
+            claimName: firefly-importer-upload
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-importer
+  namespace: apps
+spec:
+  selector:
+    app: firefly-importer
+  ports:
+    - port: 8080
+---
+# k8s-native equivalent of the compose stack's firefly-cron container
+# (alpine + crond running `curl .../cron/$STATIC_CRON_TOKEN` daily at 03:00)
+# — a real CronJob is the idiomatic way to do this in k8s rather than an
+# always-running container just to hold a crontab.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: firefly-cron
+  namespace: apps
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          enableServiceLinks: false
+          containers:
+            - name: firefly-cron
+              image: alpine:3.24
+              env:
+                - name: STATIC_CRON_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: firefly-credentials
+                      key: cron-token
+              command:
+                - sh
+                - -c
+                - "apk add --no-cache curl >/dev/null 2>&1 && curl -s http://firefly:8080/api/v1/cron/$STATIC_CRON_TOKEN"

@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp dockge/.env.example dockge/.env
+cp services/dockge/.env.example services/dockge/.env
 uv run homeserver.py dev up dockge
 ```
 

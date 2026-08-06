@@ -1,0 +1,73 @@
+# First MariaDB-based service in this pilot — args (not command) for the
+# same reason as every Postgres here (Compose's command: overrides CMD
+# only, keeping the entrypoint wrapper; k8s's command: overrides ENTRYPOINT
+# itself, bypassing it — see TROUBLESHOOTING.md).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: bookstack-db
+  namespace: apps
+spec:
+  serviceName: bookstack-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bookstack-db
+  template:
+    metadata:
+      labels:
+        app: bookstack-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mariadb
+          image: mariadb:12.3.2
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bookstack-db-credentials
+                  key: root-password
+            - name: MYSQL_DATABASE
+              value: bookstack
+            - name: MYSQL_USER
+              value: bookstack
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bookstack-db-credentials
+                  key: password
+          args: ["--innodb-buffer-pool-size=128M", "--max-connections=20"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          resources:
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookstack-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: bookstack-db
+  ports:
+    - port: 3306

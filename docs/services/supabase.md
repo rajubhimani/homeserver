@@ -16,7 +16,7 @@
 The upstream project vendors several non-trivial config files (Kong's declarative routing config + entrypoint script, and 7 Postgres init SQL scripts) that this service's `compose.yml` depends on directly — they're copied verbatim into `supabase/volumes/` from the official `supabase/supabase` repo (`docker/volumes/`), not reproduced by hand, to avoid subtly breaking Kong's routing rules or Postgres's role/JWT setup.
 
 ```bash
-cp supabase/.env.example supabase/.env
+cp services/supabase/.env.example services/supabase/.env
 # generate real secrets — see the long comment block at the top of .env.example,
 # or run the copied official helper: bash supabase/generate-keys.sh
 uv run homeserver.py dev up supabase

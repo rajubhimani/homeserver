@@ -16,7 +16,7 @@ Two variants, run independently:
 ## Setup — Lite (default, always on)
 
 ```bash
-cp stirling-pdf-lite/.env.example stirling-pdf-lite/.env
+cp services/stirling-pdf-lite/.env.example services/stirling-pdf-lite/.env
 uv run homeserver.py dev up stirling-pdf-lite
 ```
 

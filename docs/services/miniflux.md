@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp miniflux/.env.example miniflux/.env
+cp services/miniflux/.env.example services/miniflux/.env
 # set ADMIN_USERNAME, ADMIN_PASSWORD, POSTGRES_PASSWORD
 uv run homeserver.py dev up miniflux
 ```

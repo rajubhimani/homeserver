@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A self-hosted personal cloud stack managed with Docker Compose. Each service lives in its own directory with a three-layer compose structure (`compose.yml` base + `compose.dev.yml`/`compose.prod.yml` overrides — see "Compose file pattern" below). `homeserver.py` is the single entrypoint for managing all services — run it with `uv run homeserver.py ...` (requires [uv](https://docs.astral.sh/uv/); `uv sync` once) or plain `python`/`python3 homeserver.py ...` if you manage Python yourself. Pure-stdlib by default; see the `homeserver-docker-backend` skill for the optional `python-on-whales` backend and Windows-specific notes.
+A self-hosted personal cloud stack managed with Docker Compose. Each service lives in its own directory under `services/` (e.g. `services/nextcloud/`) with a three-layer compose structure (`compose.yml` base + `compose.dev.yml`/`compose.prod.yml` overrides — see "Compose file pattern" below). `homeserver.py` is the single entrypoint for managing all services — run it with `uv run homeserver.py ...` (requires [uv](https://docs.astral.sh/uv/); `uv sync` once) or plain `python`/`python3 homeserver.py ...` if you manage Python yourself. Pure-stdlib by default; see the `homeserver-docker-backend` skill for the optional `python-on-whales` backend and Windows-specific notes.
 
 There is no shell-script entrypoint — an earlier `homeserver.sh` was retired once `homeserver.py` reached full feature parity. Don't recreate one; that's a deliberate new decision to make with the user, not a default to fall back to.
 
@@ -47,9 +47,11 @@ Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `d
 **Service tiers (additive):**
 
 - **SERVICES_MIN** (infrastructure): dozzle → beszel → cloudflared → nginx-plain → landing
-- **SERVICES_CORE** (always-on apps, on top of MIN): nextcloud → vaultwarden → forgejo → firefly → immich → jellyfin → guacamole
-- **SERVICES_EXTRA** (`up all` or individually): dockge → portainer → uptime-kuma → openproject → paperless → stirling-pdf-lite → mealie → syncthing → authentik → miniflux → audiobookshelf → invoiceshelf → appflowy → plane
-- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory)
+- **SERVICES_CORE** (always-on apps, on top of MIN): nextcloud → vaultwarden → forgejo → firefly → immich → jellyfin → guacamole → portainer
+- **SERVICES_EXTRA** (`up all` or individually): dockge → uptime-kuma → openproject → paperless → stirling-pdf-lite → mealie → syncthing → authentik → miniflux → audiobookshelf → invoiceshelf → appflowy → plane → ollama → open-webui → vikunja → trilium → silverbullet → outline → bookstack → excalidraw → karakeep → ntfy → it-tools → n8n → crowdsec → wallabag → atuin → adguard-home → orangehrm → nocodb → listmonk → documenso → calcom → plausible → penpot → coolify → supabase → observability
+- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory), photoprism (redundant with immich, extra memory/maintenance cost)
+
+The lists above live in `homeserver.py` (`SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL`) — treat that as the source of truth and re-check it if this ever looks out of sync, rather than trusting this file blindly.
 
 Adding or moving a service between tiers, wiring up a new service end-to-end (landing page, health route, docs, ports): **see the `homeserver-add-service` skill.**
 
@@ -65,7 +67,7 @@ Adding or moving a service between tiers, wiring up a new service end-to-end (la
 
 ## Data directory convention
 
-All persistent data lives under `service_data/` at the repo root (gitignored entirely), split into `data/` (live, bind-mounted) and `backup/` (timestamped snapshots — see `homeserver-backups` skill). Set `DATA_ROOT=../service_data/data/<service>` in the service's `.env`; `homeserver.py` overrides it with an absolute path at runtime. DB data (Postgres/MariaDB/Redis-persisted/RabbitMQ) is a **named Docker volume**, not under `data/` at all — see the `homeserver-postgres` skill for why and how.
+All persistent data lives under `service_data/` at the repo root (gitignored entirely, a sibling of `services/`), split into `data/` (live, bind-mounted) and `backup/` (timestamped snapshots — see `homeserver-backups` skill). Set `DATA_ROOT=../../service_data/data/<service>` in the service's `.env` (two levels up — `services/<service>/.env` to repo root); `homeserver.py` overrides it with an absolute path at runtime. DB data (Postgres/MariaDB/Redis-persisted/RabbitMQ) is a **named Docker volume**, not under `data/` at all — see the `homeserver-postgres` skill for why and how.
 
 **Never delete anything under `service_data/data/`** — it's always live. Snapshots under `service_data/backup/<service>/<timestamp>/` are safe to delete individually.
 
@@ -80,3 +82,5 @@ All persistent data lives under `service_data/` at the repo root (gitignored ent
 | Backup/restore/snapshots, machine migration | `homeserver-backups` skill |
 | Port numbers, service tiers, NPM proxy-host table (canonical, keep this one updated) | [`docs/11-services-reference.md`](docs/11-services-reference.md) |
 | Per-service setup, architecture, every gotcha/troubleshooting note | [`docs/services/<service>.md`](docs/services/) — one consolidated doc per service |
+| Kubernetes pilot (parallel to Compose, not a replacement — see `feature/k8s-pilot` branch) | [`kubernetes/README.md`](kubernetes/README.md) for setup/status, [`kubernetes/TROUBLESHOOTING.md`](kubernetes/TROUBLESHOOTING.md) for every gotcha hit so far (incl. disk-full recovery, ArgoCD bootstrap, Compose-vs-k8s semantic traps) |
+| Capping Docker's total CPU/memory/disk usage on the host (Fedora/Ubuntu/Windows) | [`docker/README.md`](docker/README.md) — separate from any service's own `deploy.resources.limits`, this caps the whole engine |

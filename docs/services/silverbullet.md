@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp silverbullet/.env.example silverbullet/.env
+cp services/silverbullet/.env.example services/silverbullet/.env
 # set SB_USER to username:password
 uv run homeserver.py dev up silverbullet
 ```

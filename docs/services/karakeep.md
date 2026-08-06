@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp karakeep/.env.example karakeep/.env
+cp services/karakeep/.env.example services/karakeep/.env
 # set NEXTAUTH_SECRET and MEILI_MASTER_KEY to long random strings
 uv run homeserver.py dev up karakeep
 ```

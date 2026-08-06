@@ -25,14 +25,14 @@ To fix this properly: run the web installer once, then inspect the container (`d
 ## Setup
 
 ```bash
-cp orangehrm/.env.example orangehrm/.env
+cp services/orangehrm/.env.example services/orangehrm/.env
 # set MYSQL_ROOT_PASSWORD and MYSQL_PASSWORD
 uv run homeserver.py dev up orangehrm
 ```
 
 Open `https://orangehrm.<domain>/` (or `http://<host>:8125` in dev) and complete the web installer:
 - Database host: `orangehrm-db`, port `3306`
-- Database name/user/password: from `orangehrm/.env`
+- Database name/user/password: from `services/orangehrm/.env`
 
 ## Registration
 

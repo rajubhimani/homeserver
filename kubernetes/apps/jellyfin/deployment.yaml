@@ -1,0 +1,124 @@
+# Mirrors jellyfin/compose.yml. Media is a PVC populated with placeholder
+# test data (kubectl cp from service_data-test/media/jellyfin/) rather than
+# a real host mount — kind's node containers have no host filesystem
+# passthrough (confirmed by direct testing, see kubernetes/README.md), and
+# this pilot never touches real host data regardless.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-cache
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-metadata
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-media-test
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 200Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: apps
+  labels:
+    app: jellyfin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: jellyfin
+          image: jellyfin/jellyfin:10.11.11
+          ports:
+            - containerPort: 8096
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: cache
+              mountPath: /cache
+            # Not readOnly here (unlike the compose stack's :ro real-media
+            # mount) — this PVC holds placeholder test data that has to be
+            # populated via kubectl cp after the pod starts, which needs
+            # write access. Never holds real media, so the protection a
+            # real read-only library mount gives doesn't apply.
+            - name: media
+              mountPath: /media
+            - name: metadata
+              mountPath: /config/metadata
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: cache
+          persistentVolumeClaim:
+            claimName: jellyfin-cache
+        - name: media
+          persistentVolumeClaim:
+            claimName: jellyfin-media-test
+        - name: metadata
+          persistentVolumeClaim:
+            claimName: jellyfin-metadata
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: apps
+spec:
+  selector:
+    app: jellyfin
+  ports:
+    - port: 8096

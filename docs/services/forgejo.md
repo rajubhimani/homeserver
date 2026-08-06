@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp forgejo/.env.example forgejo/.env
+cp services/forgejo/.env.example services/forgejo/.env
 # set POSTGRES_PASSWORD, FORGEJO_DOMAIN, FORGEJO_ROOT_URL
 uv run homeserver.py dev up forgejo
 ```

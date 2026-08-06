@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp vikunja/.env.example vikunja/.env
+cp services/vikunja/.env.example services/vikunja/.env
 # set POSTGRES_PASSWORD and VIKUNJA_SERVICE_SECRET to random values
 uv run homeserver.py dev up vikunja
 ```

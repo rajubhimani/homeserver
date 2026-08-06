@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp gitlab/.env.example gitlab/.env
+cp services/gitlab/.env.example services/gitlab/.env
 # set GITLAB_HOSTNAME, GITLAB_EXTERNAL_URL
 uv run homeserver.py dev up gitlab
 ```

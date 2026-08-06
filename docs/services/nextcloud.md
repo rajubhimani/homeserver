@@ -10,14 +10,15 @@
 ## Setup
 
 ```bash
-cp nextcloud/.env.example nextcloud/.env
+cp services/nextcloud/.env.example services/nextcloud/.env
 ```
 
-Edit `nextcloud/.env`:
+Edit `services/nextcloud/.env`:
 
 ```env
 DATA_ROOT=/mnt/seagate
 USER_DATA_ROOT=/mnt/seagate
+OS_ISO_ROOT=/mnt/os-iso
 
 # Postgres
 POSTGRES_DB=nextcloud
@@ -49,6 +50,8 @@ Settings → Administration → External Storage → Add Storage
   Available for: All users
 → click checkmark (green = working)
 ```
+
+`OS_ISO_ROOT` (mounted at `/mnt/os-iso`) works the same way — add a second External Storage entry pointing at that path if you want the ISO folder browsable in Nextcloud too.
 
 ## Create Family Accounts
 

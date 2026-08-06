@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp nocodb/.env.example nocodb/.env
+cp services/nocodb/.env.example services/nocodb/.env
 # set POSTGRES_PASSWORD and NC_AUTH_JWT_SECRET (openssl rand -hex 24)
 uv run homeserver.py dev up nocodb
 ```

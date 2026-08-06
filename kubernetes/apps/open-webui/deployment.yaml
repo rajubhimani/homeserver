@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: open-webui-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+  namespace: apps
+  labels:
+    app: open-webui
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: open-webui
+          image: ghcr.io/open-webui/open-webui:v0.11.0-slim
+          env:
+            - name: OLLAMA_BASE_URL
+              value: http://ollama:11434
+            - name: ENABLE_SIGNUP
+              value: "false"
+            - name: WEBUI_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: open-webui-credentials
+                  key: secret-key
+            - name: WEBUI_NAME
+              value: "Open WebUI"
+            - name: WEBUI_AUTH
+              value: "true"
+            - name: DEFAULT_LOCALE
+              value: "en"
+            - name: ENABLE_OLLAMA_API
+              value: "true"
+            - name: ENABLE_OPENAI_API
+              value: "true"
+            - name: ENABLE_COMMUNITY_SHARING
+              value: "true"
+            - name: ENABLE_MESSAGE_RATING
+              value: "true"
+            - name: CORS_ALLOW_ORIGIN
+              value: "*"
+            - name: ANONYMIZED_TELEMETRY
+              value: "false"
+            - name: DO_NOT_TRACK
+              value: "true"
+            - name: SCARF_NO_ANALYTICS
+              value: "true"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /app/backend/data
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: open-webui-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui
+  namespace: apps
+spec:
+  selector:
+    app: open-webui
+  ports:
+    - port: 8080

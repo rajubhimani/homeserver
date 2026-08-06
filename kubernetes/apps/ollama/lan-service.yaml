@@ -1,0 +1,21 @@
+# Direct LAN-reachable port — the "dev env" equivalent from the compose
+# stack (ports exposed directly, no hostname routing needed) vs the
+# HTTPRoute's "prod env" equivalent (hostname routing through Traefik).
+# For local/LAN testing only, until AdGuard Home is set up as the network's
+# DNS resolver to make hostname routing work from every device.
+#
+# Port 8110 matches ollama/compose.dev.yml exactly — same number you
+# already know, no new one to learn. Not running in Compose (k8s pilot
+# only), so no port conflict.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: ollama
+  ports:
+    - port: 8110
+      targetPort: 11434

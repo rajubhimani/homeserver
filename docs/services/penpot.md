@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp penpot/.env.example penpot/.env
+cp services/penpot/.env.example services/penpot/.env
 # set POSTGRES_PASSWORD and PENPOT_SECRET_KEY (python3 -c "import secrets; print(secrets.token_urlsafe(64))")
 uv run homeserver.py dev up penpot
 ```

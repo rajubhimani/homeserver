@@ -221,6 +221,154 @@ sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl
 
 ---
 
+## Capping Docker's total resource usage (Fedora / native Linux)
+
+Applies to whichever machine actually runs `dockerd` — the numbers below
+(8 cores, 10GB memory, 50GB disk) were sized for a specific box (16 cores,
+30GB RAM, root filesystem is btrfs) — adjust to your own `nproc`/`free -h`
+before applying elsewhere. This is a host-level Docker daemon config, not
+a per-service `compose.yml` change — nothing here needs a matching
+`.env.example`/`docs/services/<service>.md` update, it applies uniformly
+to every container on the host. The CLI's own `~/.docker/config.json`
+(auth, credential helpers, plugins) is unrelated and has no resource
+knobs at all — everything below is daemon-side.
+
+**`docker/` at the repo root runs all of this for you**, parameterized by
+`docker/.env` instead of hand-editing the commands below — also handles
+Ubuntu (ext4 loopback image instead of a btrfs qgroup) and Windows
+(Docker Desktop's own settings file) with the same three commands. See
+[`docker/README.md`](../docker/README.md). The manual steps below are
+still worth knowing — they're exactly what that script runs, useful for
+understanding/debugging rather than typing by hand every time.
+
+**Requires root** (`sudo`) to install — these commands need to be run
+manually from a real terminal (a coding assistant without an interactive
+sudo prompt can prepare the file contents but can't write to `/etc`
+itself).
+
+### Memory + CPU: a systemd slice, not a `docker.service` drop-in
+
+The obvious-looking approach — a `systemd` drop-in on `docker.service`
+itself with `MemoryMax=`/`CPUQuota=` — **does not cap container
+workloads**, only the `dockerd` management process's own cgroup. With the
+`systemd` cgroup driver (`docker info` → `Cgroup Driver: systemd`, true by
+default on Fedora), each container's cgroup is created as a **sibling** of
+`docker.service` (`system.slice/docker-<id>.scope`), not nested inside it —
+so a `docker.service` drop-in silently caps almost nothing.
+
+The correct mechanism: define a systemd **slice** with the real limits,
+then tell the daemon to place every container's cgroup under that slice
+via `cgroup-parent`.
+
+```bash
+sudo tee /etc/systemd/system/docker-workloads.slice <<'EOF'
+[Unit]
+Description=Resource limit for all Docker containers
+
+[Slice]
+# Hard ceiling — cgroup v2 OOM-kills something inside this slice if
+# exceeded, never the rest of the host.
+MemoryMax=10G
+# Soft ceiling, set just under MemoryMax — cgroup v2 starts reclaiming/
+# throttling here instead of waiting for the hard kill at MemoryMax,
+# smoother degradation under pressure.
+MemoryHigh=9G
+# 800% = 8 of this host's 16 cores (systemd expresses CPU quota as a
+# percentage of one core, so N cores = N*100%).
+CPUQuota=800%
+EOF
+
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "cgroup-parent": "docker-workloads.slice",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart docker   # interrupts every currently-running container
+```
+
+`log-opts` above is a second, independent fix — unbounded container
+stdout/stderr is one of the most common silent disk-fillers (same root
+cause as the WSL2 VHDX incident below, different mechanism: log growth
+instead of image/layer growth). `max-size: 10m` / `max-file: 3` caps each
+container's logs at 30MB total, rotated.
+
+Verify after restarting:
+
+```bash
+systemctl status docker-workloads.slice     # confirm the slice exists and is active
+docker info | grep -i cgroup
+systemd-cgtop                               # live view — containers should show under docker-workloads.slice
+```
+
+### Disk: btrfs quota on `/var/lib/docker`, not a Docker storage-opt
+
+Docker's own `storage-opts: ["overlay2.size=50G"]` needs the backing
+filesystem to support project quotas — XFS (`pquota` mount option) mainly.
+It does **not** work on btrfs, which is this host's root filesystem
+(`docker info` → `Storage Driver: overlayfs` on top of btrfs) — the option
+would be silently ignored or error, not enforced. The real mechanism on
+btrfs is a **qgroup limit**, but qgroups apply per-**subvolume**, and
+`/var/lib/docker` is very likely just a plain directory inside the root
+subvolume on Fedora's default btrfs layout (which typically only splits
+out `root` and `home`), not its own subvolume — check first:
+
+```bash
+sudo btrfs subvolume show /var/lib/docker
+# "ERROR: not a btrfs subvolume" means it's a plain directory — conversion needed below.
+# Any real output (a subvolume ID, path, etc.) means it's already its own
+# subvolume — skip straight to the "quota enable + limit" commands.
+```
+
+**If it's a plain directory**, converting it to its own subvolume is a
+one-time, disruptive migration (stops Docker, moves existing image/
+container/volume data) — not something to run casually mid-session with
+containers up. When ready:
+
+```bash
+sudo systemctl stop docker
+sudo mv /var/lib/docker /var/lib/docker.bak
+sudo btrfs subvolume create /var/lib/docker
+sudo cp -a --reflink=always /var/lib/docker.bak/. /var/lib/docker/
+# Verify the copy looks complete/sane before deleting the backup:
+sudo du -sh /var/lib/docker /var/lib/docker.bak
+sudo rm -rf /var/lib/docker.bak
+sudo systemctl start docker
+```
+
+`--reflink=always` makes the copy near-instant and space-free on btrfs
+(copy-on-write metadata clone, not a real data duplication) — if it's
+slow, something's wrong (falling back to a real copy) and it's worth
+stopping to check available disk space instead of waiting it out.
+
+**Then, either way** (already a subvolume, or just converted):
+
+```bash
+sudo btrfs quota enable /var/lib/docker
+sudo btrfs qgroup limit 50G /var/lib/docker
+```
+
+Verify:
+
+```bash
+sudo btrfs qgroup show -r /var/lib/docker   # -r shows the limit alongside current usage
+```
+
+Once the quota is hit, Docker gets disk-full errors from individual
+operations (pulls, container writes) — same failure shape as the WSL2
+VHDX section below, but contained to the 50GB ceiling instead of
+consuming the whole root partition. `uv run homeserver.py gc` (prune +
+compact — see below) is still the right periodic maintenance regardless
+of whether a hard quota is set.
+
+---
+
 ## Reclaiming disk space (Docker Desktop on Windows / WSL2)
 
 Docker Desktop's WSL2 VHDX only grows, never shrinks automatically — even after you delete images/volumes, the backing disk file stays large until you reclaim it manually. Do this periodically if `C:` (or wherever the VHDX lives) is filling up.

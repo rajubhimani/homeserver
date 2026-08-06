@@ -15,7 +15,7 @@ PhotoPrism is redundant with Immich, already core in this stack — both are AI-
 ## Setup
 
 ```bash
-cp photoprism/.env.example photoprism/.env
+cp services/photoprism/.env.example services/photoprism/.env
 # set MARIADB_PASSWORD, MARIADB_ROOT_PASSWORD, and PHOTOPRISM_ADMIN_PASSWORD (min 8 chars)
 uv run homeserver.py dev up photoprism
 ```

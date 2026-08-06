@@ -1,0 +1,21 @@
+# One shared Gateway = the k8s equivalent of nginx-plain's single entry
+# point. Each service gets its own HTTPRoute attached to this (see
+# kubernetes/apps/<service>/httproute.yaml) instead of its own server block —
+# same "one proxy, many hostnames" shape as nginx-plain/default.conf.template.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: homeserver-gateway
+  namespace: infra
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: http
+      protocol: HTTP
+      # 8000 is Traefik's internal "web" entryPoint port (chart default) —
+      # the Service maps external port 80 -> this internally, so this must
+      # match the entryPoint, not the externally-exposed port.
+      port: 8000
+      allowedRoutes:
+        namespaces:
+          from: All   # HTTPRoutes from any namespace (apps, data, etc.) may attach

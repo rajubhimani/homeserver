@@ -169,58 +169,65 @@ uv run homeserver.py prod up all
 ~/homeserver/
 ├── homeserver.py          ← manage all services (uv run homeserver.py ...)
 ├── .env                   ← set DOMAIN= here once
-├── nginx-plain/           ← default reverse proxy
-├── nginx/                 ← optional: Nginx Proxy Manager
-├── cloudflared/
-├── landing/
-├── nextcloud/
-├── immich/
-├── jellyfin/
-├── vaultwarden/
-├── paperless/
-├── stirling-pdf/
-├── stirling-pdf-lite/
-├── mealie/
-├── forgejo/
-├── gitlab/
-├── uptime-kuma/
-├── dozzle/
-├── syncthing/
-├── authentik/
-├── miniflux/
-├── vikunja/
-├── trilium/
-├── silverbullet/
-├── outline/
-├── bookstack/
-├── excalidraw/
-├── karakeep/
-├── ntfy/
-├── it-tools/
-├── n8n/
-├── crowdsec/
-├── wallabag/
-├── atuin/
-├── adguard-home/
-├── photoprism/
-├── orangehrm/
-├── nocodb/
-├── listmonk/
-├── documenso/
-├── calcom/
-├── plausible/
-├── penpot/
-├── coolify/
-├── supabase/
-├── audiobookshelf/
-├── openproject/
-├── plane/
-├── invoiceshelf/
-├── firefly/
-├── ollama/
-├── open-webui/
-├── beszel/
-└── observability/
+├── docker/                ← caps Docker's own total CPU/memory/disk usage on the host
+├── kubernetes/            ← parallel Kubernetes pilot (not a replacement for the stack below)
+└── services/
+    ├── nginx-plain/           ← default reverse proxy
+    ├── nginx/                 ← optional: Nginx Proxy Manager
+    ├── cloudflared/
+    ├── landing/
+    ├── nextcloud/
+    ├── immich/
+    ├── jellyfin/
+    ├── vaultwarden/
+    ├── guacamole/
+    ├── portainer/
+    ├── paperless/
+    ├── stirling-pdf/
+    ├── stirling-pdf-lite/
+    ├── mealie/
+    ├── forgejo/
+    ├── gitlab/
+    ├── uptime-kuma/
+    ├── dozzle/
+    ├── dockge/
+    ├── syncthing/
+    ├── authentik/
+    ├── miniflux/
+    ├── vikunja/
+    ├── trilium/
+    ├── silverbullet/
+    ├── outline/
+    ├── bookstack/
+    ├── excalidraw/
+    ├── karakeep/
+    ├── ntfy/
+    ├── it-tools/
+    ├── n8n/
+    ├── crowdsec/
+    ├── wallabag/
+    ├── atuin/
+    ├── adguard-home/
+    ├── photoprism/
+    ├── orangehrm/
+    ├── nocodb/
+    ├── listmonk/
+    ├── documenso/
+    ├── calcom/
+    ├── plausible/
+    ├── penpot/
+    ├── coolify/
+    ├── supabase/
+    ├── appflowy/
+    ├── audiobookshelf/
+    ├── openproject/
+    ├── plane/
+    ├── invoiceshelf/
+    ├── firefly/
+    ├── ollama/
+    ├── open-webui/
+    ├── beszel/
+    └── observability/
 ```
 
 Service data (gitignored):

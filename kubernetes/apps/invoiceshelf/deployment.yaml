@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: invoiceshelf-uploads
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: invoiceshelf
+  namespace: apps
+  labels:
+    app: invoiceshelf
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: invoiceshelf
+  template:
+    metadata:
+      labels:
+        app: invoiceshelf
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: init-storage-dirs
+          image: busybox:1.37
+          command: ["mkdir", "-p", "/var/www/html/storage/app/templates/pdf"]
+          volumeMounts:
+            - name: uploads
+              mountPath: /var/www/html/storage
+      containers:
+        - name: invoiceshelf
+          image: invoiceshelf/invoiceshelf:2.4.2
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          env:
+            - name: DB_CONNECTION
+              value: mysql
+            - name: DB_HOST
+              value: invoiceshelf-db
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_DATABASE
+              value: invoiceshelf
+            - name: DB_USERNAME
+              value: invoiceshelf
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: invoiceshelf-db-credentials
+                  key: password
+            - name: APP_URL
+              value: https://invoiceshelf.k8s.local
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: invoiceshelf-credentials
+                  key: app-key
+            - name: APP_ENV
+              value: production
+            - name: APP_DEBUG
+              value: "false"
+            - name: APP_NAME
+              value: InvoiceShelf
+            - name: APP_TIMEZONE
+              value: UTC
+            - name: APP_LOCALE
+              value: en
+            - name: DOMPDF_ENABLE_REMOTE
+              value: "false"
+            - name: TRUSTED_PROXIES
+              value: "*"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: uploads
+              mountPath: /var/www/html/storage
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: invoiceshelf-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: invoiceshelf
+  namespace: apps
+spec:
+  selector:
+    app: invoiceshelf
+  ports:
+    - port: 8080

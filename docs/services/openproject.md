@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp openproject/.env.example openproject/.env
+cp services/openproject/.env.example services/openproject/.env
 # generate: openssl rand -hex 64 → SECRET_KEY_BASE
 uv run homeserver.py dev up openproject
 ```

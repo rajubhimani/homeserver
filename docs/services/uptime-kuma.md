@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-cp uptime-kuma/.env.example uptime-kuma/.env
+cp services/uptime-kuma/.env.example services/uptime-kuma/.env
 uv run homeserver.py dev up uptime-kuma
 ```
 
