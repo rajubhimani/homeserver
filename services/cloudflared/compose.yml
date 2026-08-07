@@ -18,6 +18,32 @@ services:
     networks:
       - homeserver
 
+  # cloudflared's own healthcheck only checks its local connection count, which
+  # doesn't detect the edge silently dropping connections (see watchdog.sh for
+  # the incident this covers). This probes the real public URL and restarts
+  # cloudflared when the tunnel is stale but the origin is confirmed fine.
+  cloudflared-watchdog:
+    image: curlimages/curl:8.11.1
+    container_name: cloudflared-watchdog
+    restart: unless-stopped
+    # curlimages/curl drops to a non-root user by default, which can't reach the
+    # Docker socket regardless of its host-side group ownership (varies between
+    # Docker and rootless podman). Root bypasses that permission check entirely.
+    user: "0:0"
+    environment:
+      DOMAIN: ${DOMAIN}
+      CHECK_INTERVAL: ${WATCHDOG_CHECK_INTERVAL:-60}
+      FAIL_THRESHOLD: ${WATCHDOG_FAIL_THRESHOLD:-3}
+      RESTART_COOLDOWN: ${WATCHDOG_RESTART_COOLDOWN:-120}
+    entrypoint: ["/bin/sh", "/watchdog.sh"]
+    volumes:
+      - ./watchdog.sh:/watchdog.sh:ro
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    networks:
+      - homeserver
+    depends_on:
+      - cloudflared
+
 networks:
   homeserver:
     external: true
