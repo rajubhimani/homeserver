@@ -1,0 +1,55 @@
+services:
+  orangehrm-db:
+    image: mariadb:12.3.2
+    container_name: orangehrm-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: --innodb-buffer-pool-size=128M --max-connections=20
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - orangehrm-mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - homeserver
+
+  orangehrm:
+    image: orangehrm/orangehrm:latest
+    container_name: orangehrm
+    restart: unless-stopped
+    # No volume mount to a data path yet — see docs/services/orangehrm.md.
+    # The app root is /var/www/html (confirmed by inspecting the running
+    # container), and the actual config/upload paths that need persisting
+    # aren't populated until the web installer runs, so a guessed bind mount
+    # risks silently overlaying (and losing) baked-in app files. All state
+    # currently lives inside the container only and is lost on recreate.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      orangehrm-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  orangehrm-mariadb:
+
+networks:
+  homeserver:
+    external: true

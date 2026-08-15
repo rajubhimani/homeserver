@@ -1,0 +1,102 @@
+# Mirrors openproject/compose.yml. All-in-one image with its own bundled
+# internal Postgres (pgdata volume) — no separate DB container, unlike most
+# other services in this stack.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openproject-pgdata
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openproject-assets
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openproject
+  namespace: apps
+  labels:
+    app: openproject
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openproject
+  template:
+    metadata:
+      labels:
+        app: openproject
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: openproject
+          image: openproject/openproject:17.6.0
+          env:
+            - name: OPENPROJECT_HOST__NAME
+              value: openproject.k8s.local
+            - name: OPENPROJECT_HTTPS
+              value: "true"
+            - name: OPENPROJECT_DEFAULT__LANGUAGE
+              value: en
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-credentials
+                  key: secret-key-base
+            - name: OPENPROJECT_SELF__REGISTRATION
+              value: "2"
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/openproject/pgdata
+            - name: assets
+              mountPath: /var/openproject/assets
+          resources:
+            limits:
+              memory: 3Gi
+          readinessProbe:
+            httpGet:
+              path: /health_checks/default
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          livenessProbe:
+            httpGet:
+              path: /health_checks/default
+              port: 80
+            initialDelaySeconds: 90
+            periodSeconds: 30
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: openproject-pgdata
+        - name: assets
+          persistentVolumeClaim:
+            claimName: openproject-assets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openproject
+  namespace: apps
+spec:
+  selector:
+    app: openproject
+  ports:
+    - port: 80

@@ -1,0 +1,16 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8200 matches vaultwarden/compose.dev.yml exactly. The Compose version
+# was stopped (uv run homeserver.py dev down vaultwarden) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vaultwarden-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: vaultwarden
+  ports:
+    - port: 8200
+      targetPort: 80

@@ -1,0 +1,14 @@
+# Port 2283 matches immich/compose.dev.yml exactly. Compose version was
+# stopped (uv run homeserver.py dev down immich) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: immich-server
+  ports:
+    - port: 2283
+      targetPort: 2283

@@ -1,0 +1,4 @@
+services:
+  silverbullet:
+    ports:
+      - "8113:3000"

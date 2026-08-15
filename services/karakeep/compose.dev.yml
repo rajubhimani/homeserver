@@ -1,0 +1,4 @@
+services:
+  karakeep:
+    ports:
+      - "8117:3000"

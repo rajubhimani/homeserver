@@ -5,12 +5,12 @@
 ---
 
 **Purpose:** Audiobook and podcast server with mobile app support.
-**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/`
+**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~36MB
 
 ## Setup
 
 ```bash
-cp audiobookshelf/.env.example audiobookshelf/.env
+cp services/audiobookshelf/.env.example services/audiobookshelf/.env
 # set AUDIOBOOKS_PATH and PODCASTS_PATH to your media locations
 uv run homeserver.py dev up audiobookshelf
 ```

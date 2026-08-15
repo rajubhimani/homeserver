@@ -1,0 +1,27 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_IMAGE_TAG:-v0.11.0-slim}
+    container_name: open-webui
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-false}
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
+    volumes:
+      - ${DATA_ROOT}/data:/app/backend/data
+      - ${MODELS_ROOT}:/app/backend/data/cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

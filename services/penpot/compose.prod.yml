@@ -1,0 +1,4 @@
+services:
+  penpot-frontend:
+    ports:
+      - "127.0.0.1:8131:8080"

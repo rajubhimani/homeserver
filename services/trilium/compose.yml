@@ -1,0 +1,22 @@
+services:
+  trilium:
+    image: triliumnext/trilium:v0.104.1
+    container_name: trilium
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRILIUM_DATA_DIR: /home/node/trilium-data
+    volumes:
+      - ${DATA_ROOT}/trilium-data:/home/node/trilium-data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

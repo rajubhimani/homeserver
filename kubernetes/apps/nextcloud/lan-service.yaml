@@ -1,0 +1,14 @@
+# Port 8081 matches nextcloud/compose.dev.yml exactly. Compose version was
+# stopped (uv run homeserver.py dev down nextcloud) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: nextcloud
+  ports:
+    - port: 8081
+      targetPort: 80

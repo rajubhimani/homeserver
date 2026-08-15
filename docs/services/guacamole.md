@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Clientless remote desktop gateway — access VNC/RDP/SSH machines from any browser, no client app required.
-**Port:** `8107` (host) → `8080` (container) | **Data:** `service_data/data/guacamole/` | **Requires:** Postgres
+**Port:** `8107` (host) → `8080` (container) | **Data:** `service_data/data/guacamole/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; webapp/guacd: no hard limit set; measured idle ~254MB total (webapp 206 + guacd 10 + db 38 — the Tomcat webapp is the heavy part)
 
 ---
 
@@ -26,7 +26,7 @@ Deployed with `WEBAPP_CONTEXT=ROOT` so the webapp serves at `/` instead of its d
 ## Setup
 
 ```bash
-cp guacamole/.env.example guacamole/.env
+cp services/guacamole/.env.example services/guacamole/.env
 # set POSTGRES_PASSWORD
 uv run homeserver.py dev up guacamole
 ```
@@ -88,7 +88,7 @@ Not yet tested in this deployment, but standard Guacamole usage: enable Remote D
 **Get more detail out of `guacd`** than its default `INFO` log level shows — useful for any future connection failure:
 
 ```bash
-# In guacamole/compose.yml, add to the guacd service:
+# In services/guacamole/compose.yml, add to the guacd service:
 #   environment:
 #     LOG_LEVEL: debug
 cd guacamole
@@ -116,6 +116,12 @@ ORDER BY c.connection_name;
 ```bash
 docker exec guacd sh -c 'nc -z -v -w 3 <target-ip> <port>'
 ```
+
+## Migrated: `guacamole-db` from `postgres:18.4` to `postgres:18.4-alpine`
+
+Via `uv run homeserver.py dev dump guacamole` + `dev migrate guacamole` — see `docs/services/forgejo.md`'s "Migrated: forgejo-db..." section for the full process.
+
+**Guacamole-specific gotcha hit here:** `guacamole-db`'s `postgres-init/01-schema.sql` bootstraps the *entire* Guacamole schema on first boot (unlike forgejo's init script, which only grants permissions) — so the fresh Alpine cluster already had all the tables/types before the restore even ran, and `pg_restore` errored on every `CREATE TYPE`/`CREATE TABLE` colliding with what `initdb` had already created. This is why the restore now always runs with `--clean --if-exists`, safe here specifically because the target is always a container created fresh for the migration.
 
 ---
 

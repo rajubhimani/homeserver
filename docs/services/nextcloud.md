@@ -5,16 +5,61 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly)
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~685MB total (app 612 + db 35 + redis 16 + cron 22) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
 
 ## Setup
 
 ```bash
-cp nextcloud/.env.example nextcloud/.env
-uv run homeserver.py dev up nextcloud
+cp services/nextcloud/.env.example services/nextcloud/.env
+```
+
+Edit `services/nextcloud/.env`:
+
+```env
+DATA_ROOT=/mnt/seagate
+USER_DATA_ROOT=/mnt/seagate
+OS_ISO_ROOT=/mnt/os-iso
+
+# Postgres
+POSTGRES_DB=nextcloud
+POSTGRES_USER=nextcloud
+POSTGRES_PASSWORD=your_strong_password
+
+# Nextcloud admin
+NEXTCLOUD_ADMIN_USER=admin
+NEXTCLOUD_ADMIN_PASSWORD=your_strong_password
 ```
 
 **Admin password in `.env` must not contain `$`** — Docker Compose interprets `$VAR` patterns as variable references and silently mangles passwords containing `$`. Use `openssl rand -hex 20` to generate a safe password.
+
+```bash
+uv run homeserver.py dev up nextcloud
+```
+
+**Access:** Cloudflare path `https://nextcloud.yourdomain.com` | Tailscale path `http://100.x.x.x:8081` — login with your admin credentials.
+
+## Enable External Storage
+
+```text
+Apps → search "External storage support" → Enable
+
+Settings → Administration → External Storage → Add Storage
+  Folder name: Seagate
+  Storage type: Local
+  Configuration: /mnt/seagate
+  Available for: All users
+→ click checkmark (green = working)
+```
+
+`OS_ISO_ROOT` (mounted at `/mnt/os-iso`) works the same way — add a second External Storage entry pointing at that path if you want the ISO folder browsable in Nextcloud too.
+
+## Create Family Accounts
+
+```text
+Top right avatar → Administration → Users → New User
+```
+
+One account per family member. They log in via the same URL you use.
 
 ## Architecture notes
 
@@ -52,6 +97,14 @@ docker volume create nextcloud_nextcloud-config
 docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to alpine sh -c "cp -a /from/. /to/ && chown -R 33:33 /to"
 # repeat for data (nextcloud_nextcloud-data) and html (nextcloud_nextcloud-html)
 ```
+
+## Migrated: `nextcloud-db` from `postgres:18.4` to `postgres:18.4-alpine`
+
+Via `uv run homeserver.py dev dump nextcloud` + `dev migrate nextcloud` — see `docs/services/forgejo.md`'s "Migrated: forgejo-db..." section for the full process and general gotchas.
+
+**Nextcloud-specific gotcha hit here:** `config.php`'s `dbuser` was `oc_admin`, a role Nextcloud's own installer created ad-hoc at some point — separate from `.env`'s `POSTGRES_USER=nextcloud`, which is what actually connects during setup/backup operations. A per-database `pg_dump` never captures roles (they're cluster-wide), so after the first restore attempt `oc_admin` didn't exist in the fresh cluster and Nextcloud crash-looped on `SQLSTATE[08006]: password authentication failed for user "oc_admin"`. This is exactly why `dump` also runs `pg_dumpall --roles-only` and `migrate` applies it before the main restore — confirm your own `config.php`'s `dbuser` matches what you expect before assuming a migration here is done, since the container can come up "healthy" on the DB-ping healthcheck while still crash-looping on this.
+
+**Second round, same incident:** the first fix (creating `oc_admin` via the roles dump) was necessary but not sufficient on its own — the restore also ran with `--no-privileges`, which skips the dump's captured `GRANT` statements entirely. That meant `oc_admin` could log in but had zero table privileges (`SQLSTATE[42501]: permission denied for table oc_appconfig`), since `pg_restore` connects and creates everything as `POSTGRES_USER` (`nextcloud`), not `oc_admin`. `--no-privileges` was the wrong fix for the original error — the actual fix was sequencing (apply roles *before* the restore, which was already correct), so once that ordering is right the dump's own `GRANT ... TO oc_admin` statements succeed naturally and `--no-privileges` isn't needed at all. Removed it; `pg_restore` now runs with `--no-owner --clean --if-exists` only. Re-verified end-to-end from a fresh plain-Postgres baseline afterward with zero manual steps needed.
 
 ---
 

@@ -1,0 +1,4 @@
+services:
+  documenso:
+    ports:
+      - "8128:3000"

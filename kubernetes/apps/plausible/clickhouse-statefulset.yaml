@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: plausible-events-db
+  namespace: apps
+spec:
+  serviceName: plausible-events-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plausible-events-db
+  template:
+    metadata:
+      labels:
+        app: plausible-events-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:26.7.1-alpine
+          ports:
+            - containerPort: 8123
+            - containerPort: 9000
+          env:
+            - name: CLICKHOUSE_USER
+              value: plausible
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: plausible-db-credentials
+                  key: clickhouse-password
+            - name: CLICKHOUSE_DB
+              value: plausible_events_db
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: logs
+              mountPath: /var/log/clickhouse-server
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/logs.xml
+              subPath: logs.xml
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/ipv4-only.xml
+              subPath: ipv4-only.xml
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/low-resources.xml
+              subPath: low-resources.xml
+            - name: config
+              mountPath: /etc/clickhouse-server/users.d/default-profile-low-resources-overrides.xml
+              subPath: default-profile-low-resources-overrides.xml
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: plausible-clickhouse-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plausible-events-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: plausible-events-db
+  ports:
+    - name: http
+      port: 8123
+    - name: native
+      port: 9000

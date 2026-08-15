@@ -1,0 +1,4 @@
+services:
+  calcom:
+    ports:
+      - "127.0.0.1:8129:3000"

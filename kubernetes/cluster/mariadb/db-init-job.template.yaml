@@ -1,0 +1,45 @@
+# Template for onboarding a new service onto the shared MariaDB server.
+# Copy into kubernetes/apps/<service>/db-init-job.yaml and replace SERVICE_NAME
+# (and the generated password) — creates a dedicated database + user for that
+# service inside mariadb-shared, idempotently (safe to re-apply/re-run).
+#
+# Only for services using the shared server. Services needing a dedicated
+# MariaDB (unlikely, but same principle as Postgres's pgvector case) get
+# their own separate StatefulSet instead — this template doesn't apply to
+# those.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: SERVICE_NAME-db-init
+  namespace: data
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          image: mariadb:12.3.2
+          env:
+            - name: MYSQL_HOST
+              value: mariadb-shared.data.svc.cluster.local
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-shared-credentials
+                  key: root-password
+            - name: SERVICE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: SERVICE_NAME-db-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              mariadb -h "$MYSQL_HOST" -u root <<-EOSQL
+                CREATE DATABASE IF NOT EXISTS \`SERVICE_NAME\`;
+                CREATE USER IF NOT EXISTS 'SERVICE_NAME'@'%' IDENTIFIED BY '$SERVICE_DB_PASSWORD';
+                GRANT ALL PRIVILEGES ON \`SERVICE_NAME\`.* TO 'SERVICE_NAME'@'%';
+                FLUSH PRIVILEGES;
+              EOSQL

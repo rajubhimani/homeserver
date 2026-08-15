@@ -1,0 +1,8 @@
+services:
+  adguard-home:
+    ports:
+      # DNS — LAN devices point their DNS at this host's IP on port 53
+      - "0.0.0.0:53:53/tcp"
+      - "0.0.0.0:53:53/udp"
+      # Web UI setup wizard / admin panel
+      - "0.0.0.0:8123:3000/tcp"

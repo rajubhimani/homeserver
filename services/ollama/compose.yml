@@ -1,0 +1,21 @@
+services:
+  ollama:
+    image: ollama/ollama:0.32.5
+    container_name: ollama
+    profiles: ["docker-ollama"]
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${MODELS_ROOT}:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

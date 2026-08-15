@@ -4,6 +4,8 @@
 /._nextcloud
 /._setup.md
 service_data/
+# k8s pilot's placeholder test data (see kubernetes/README.md) — never real data
+service_data-test/
 .env
 *.log
 *.json

@@ -20,6 +20,12 @@ Both backends implement the **full** `DockerBackend` interface, not just compose
 
 **Do not** run this stack from inside a WSL2 distro against a repo checked out on a Windows drive (`/mnt/c/...`, `/mnt/d/...`) — the drvfs/9p filesystem translation doesn't give real POSIX ownership guarantees and will intermittently produce `FATAL: data directory has wrong ownership` for Postgres containers, or in rare cases silent file corruption. Run from native Windows or a repo cloned natively inside the WSL distro's own filesystem instead.
 
+## Reclaiming disk space (Windows / WSL2 Docker Desktop)
+
+`uv run homeserver.py gc` automates this — prune (`system_prune`/`builder_prune` on `DockerBackend`) + `fstrim` inside the WSL2 VM + `wsl --shutdown` + `diskpart compact vdisk`. See [docs/08-maintenance.md](../../../docs/08-maintenance.md#reclaiming-disk-space-docker-desktop-on-windows--wsl2) for usage and the manual procedure it's based on.
+
+Must run from an **elevated** (Administrator) terminal for the `diskpart` step to do anything — `do_gc()`'s `_is_windows_admin()` check catches the unelevated case and skips compaction with a warning rather than silently reporting 0GB reclaimed. `fstrim -a` inside the WSL VM matters too — WSL2's ext4 doesn't issue TRIM by default, so without it the VHDX has no idea which blocks are actually free; `_compact_docker_vhdx()` runs it before shutting WSL down.
+
 ## `python-on-whales` version pin
 
 `pyproject.toml` pins `python-on-whales>=0.81,<0.82` and Python itself to `>=3.14,<3.15` — patch releases stay usable, but neither jumps a minor version silently. If bumping either, update the pin deliberately and re-run `uv lock`.

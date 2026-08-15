@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** Open-source invoicing and billing — the actively maintained community successor to Crater (same Laravel + MariaDB stack, same data format; the original `foralabs/crater` image was made private).
-**Port:** `8101` (host) → `8080` (container) | **Data:** `service_data/data/invoiceshelf/` | **Requires:** MariaDB
+**Port:** `8101` (host) → `8080` (container) | **Data:** `service_data/data/invoiceshelf/` | **Requires:** MariaDB | **Memory:** no hard limit set; measured idle ~172MB total (app 63 + db 109)
 
 ## Setup
 
 `compose.yml` bind-mounts the *entire* `/var/www/html/storage` directory (`${DATA_ROOT}/uploads:/var/www/html/storage`), which hides the subdirectories Laravel needs (`framework/cache`, `framework/sessions`, `app/templates/pdf`, etc.) that the image normally ships pre-populated — the container's entrypoint doesn't recreate them, so skipping this pre-create step fails first boot with `Please provide a valid cache path` / `The "/var/www/html/storage/app/templates/pdf" directory does not exist` and a restart loop.
 
 ```bash
-cp invoiceshelf/.env.example invoiceshelf/.env
+cp services/invoiceshelf/.env.example services/invoiceshelf/.env
 # generate: echo "base64:$(openssl rand -base64 32)" → APP_KEY
 # set MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD
 

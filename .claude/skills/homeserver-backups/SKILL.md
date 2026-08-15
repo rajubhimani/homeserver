@@ -22,7 +22,8 @@ uv run homeserver.py dev backup <service>
 uv run homeserver.py dev snapshots <service>
 
 # Restore the latest snapshot (also auto-snapshots current state first, via
-# the same auto-backup-on-down behavior, so restoring is itself non-destructive)
+# the same auto-backup-on-down behavior, so restoring is itself non-destructive;
+# and restarts the service afterward if it was running before, same as backup)
 uv run homeserver.py dev restore all
 uv run homeserver.py dev restore <service>
 
@@ -32,6 +33,29 @@ uv run homeserver.py dev restore <service> --snapshot 20260710-160628
 
 Snapshots beyond `BACKUP_RETENTION` (root `.env`, default 5) are auto-pruned oldest-first after each backup; set `BACKUP_RETENTION=-1` for unlimited history (manual cleanup only).
 
+## Orphaned volumes
+
+`backup_service()` matches volumes by Docker's own `<service>_*` naming prefix (live `docker volume ls`, not `compose.yml`), deliberately — see the comment on `volumes_for_project()`. That means a volume Docker still has on disk gets backed up even if `compose.yml` no longer declares it (e.g. after switching a DB image between a plain and `-alpine` tag, which also renames the volume — the old one doesn't get deleted automatically, it just stops being referenced). Every `backup`/`down` now warns when this happens:
+
+```
+⚠ firefly_firefly-postgres is backed up but not declared in services/firefly/compose.yml
+  likely orphaned from a prior image/volume-name change — once you're sure you don't need it: docker volume rm firefly_firefly-postgres
+```
+
+Clean these up in bulk instead of hunting for the warning line-by-line:
+
+```bash
+# List orphans for one service, or every service (dev/prod doesn't matter — a
+# volume either exists on this host or it doesn't)
+uv run homeserver.py orphaned-volumes <service>
+uv run homeserver.py orphaned-volumes all
+
+# Remove everything listed, after confirming (or --yes to skip the prompt)
+uv run homeserver.py orphaned-volumes <service> --yes
+```
+
+This never deletes anything backup/restore would still recognize as "the current volume" — only ones `compose.yml` no longer declares at all. Still worth checking a volume's contents first if you're unsure (`docker run --rm -v <volume>:/data alpine ls -la /data`) — it's still real data until you delete it, just no longer wired into the running stack.
+
 ## Migrating to a different machine
 
 `backup all`, copy the whole `service_data/backup/` folder to the new machine (plain `.tar.gz` files — pendrive-safe, ownership preserved as tar metadata not filesystem metadata), clone this repo, `restore all`.
@@ -40,15 +64,25 @@ Snapshots beyond `BACKUP_RETENTION` (root `.env`, default 5) are auto-pruned old
 
 ## Layout
 
+`service_data/` (gitignored entirely) has exactly four top-level buckets — see the `homeserver-add-service` skill (step 2) for the classification rule (what goes in which, and the `dockge`-style absolute-path exception):
+
 ```text
-service_data/               ← gitignored entirely
+service_data/
   data/                     ← live data, bind-mounted into running containers (app data only —
-                               DB data is a named volume, not here — see homeserver-postgres skill)
-  backup/                   ← timestamped snapshots
+                               DB data is a named volume, not here — see homeserver-postgres skill).
+                               This is the ONLY thing backup_service() ever tars, along with
+                               named volumes — see below.
+  media/                    ← permanent, irreplaceable content (photo/video libraries: immich,
+                               jellyfin) — NOT covered by backup_service() at all, by design.
+  cache/                    ← regenerable content (downloaded metadata, embedding models, LLM
+                               weights) — also NOT covered by backup_service(), also by design.
+  backup/                   ← timestamped snapshots (this tool's own output)
     <service>/
       <timestamp>/
         <service>_<volume-name>.tar.gz   ← one per named volume
-        service_data.tar.gz              ← the data/<service>/ tree
+        service_data.tar.gz              ← the data/<service>/ tree — never media/ or cache/
 ```
 
-**A folder under `service_data/data/` is safe to delete only if it doesn't exist there in the first place** — never delete anything under `data/`, that's always live. Folders under `service_data/backup/<service>/<timestamp>/` are point-in-time snapshots, safe to delete individually once you don't need that point in time (auto-pruning already does this beyond `BACKUP_RETENTION`).
+**`backup`/`down`'s auto-snapshot never touches `media/` or `cache/` — this is intentional, not a gap to fix.** `cache/` is regenerable by definition, so there's nothing worth snapshotting. `media/` holds the user's permanent library (photos, movies) — but that's exactly why it's excluded: this is primary, actively-managed storage the user maintains and protects on their own terms (not ephemeral app state that benefits from timestamped rotation), and at the sizes involved (100s of GB) a tar snapshot on every `down` would be actively harmful (see the jellyfin/immich incidents in `homeserver-add-service`). If you're ever asked to "back up" a service and its `media/` content specifically needs protecting, that's a distinct, separate concern from this tool's snapshot system — don't assume `backup_service()` already covers it.
+
+**A folder under `service_data/data/` is safe to delete only if it doesn't exist there in the first place** — never delete anything under `data/`, that's always live. Folders under `service_data/backup/<service>/<timestamp>/` are point-in-time snapshots, safe to delete individually once you don't need that point in time (auto-pruning already does this beyond `BACKUP_RETENTION`). The same "never delete" rule applies to `media/` and `cache/` unless the user explicitly asks — `cache/` being regenerable doesn't mean disposable-without-asking.

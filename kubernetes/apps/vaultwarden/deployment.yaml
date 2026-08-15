@@ -1,0 +1,90 @@
+# Single container, embedded SQLite (no external DB) — mirrors
+# vaultwarden/compose.yml. Uses a Deployment + PVC rather than a
+# StatefulSet since there's only ever one replica and no stable network
+# identity is needed, same reasoning as any other single-instance app here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vaultwarden-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vaultwarden
+  namespace: apps
+  labels:
+    app: vaultwarden
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # SQLite on a PVC — never run two replicas against it concurrently
+  selector:
+    matchLabels:
+      app: vaultwarden
+  template:
+    metadata:
+      labels:
+        app: vaultwarden
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: vaultwarden
+          image: vaultwarden/server:1.37.1
+          ports:
+            - containerPort: 80
+          env:
+            - name: DOMAIN
+              value: "https://vaultwarden.k8s.local"
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-credentials
+                  key: admin-token
+            - name: SIGNUPS_ALLOWED
+              value: "false"
+            - name: WEB_VAULT_ENABLED
+              value: "true"
+            - name: ENABLE_WEBSOCKET
+              value: "true"
+            - name: SENDS_ALLOWED
+              value: "true"
+            - name: LOG_LEVEL
+              value: info
+            - name: IP_HEADER
+              value: X-Real-IP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /alive
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: vaultwarden-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vaultwarden
+  namespace: apps
+spec:
+  selector:
+    app: vaultwarden
+  ports:
+    - port: 80

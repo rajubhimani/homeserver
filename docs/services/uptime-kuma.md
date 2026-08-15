@@ -5,12 +5,12 @@
 ---
 
 **Purpose:** Monitor services and alert when something goes down.
-**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/`
+**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~104MB
 
 ## Setup
 
 ```bash
-cp uptime-kuma/.env.example uptime-kuma/.env
+cp services/uptime-kuma/.env.example services/uptime-kuma/.env
 uv run homeserver.py dev up uptime-kuma
 ```
 

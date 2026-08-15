@@ -1,0 +1,102 @@
+# Outline has no built-in email/password login — it requires an OIDC
+# provider (this stack uses Authentik for that) before anyone can actually
+# log in. Authentik isn't deployed in k8s yet (a later, more complex
+# service), so this deployment verifies the app itself boots and connects
+# to its DB/Redis correctly — login flow itself isn't testable until
+# Authentik is ported too.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: outline-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outline
+  namespace: apps
+  labels:
+    app: outline
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: outline
+  template:
+    metadata:
+      labels:
+        app: outline
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: outline
+          image: outlinewiki/outline:1.9.2
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: outline-db-credentials
+                  key: database-url
+            - name: PGSSLMODE
+              value: disable
+            - name: REDIS_URL
+              value: redis://outline-redis:6379
+            - name: URL
+              value: https://outline.k8s.local
+            - name: PORT
+              value: "3000"
+            - name: FILE_STORAGE
+              value: local
+            - name: FILE_STORAGE_LOCAL_ROOT_DIR
+              value: /var/lib/outline/data
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: outline-credentials
+                  key: secret-key
+            - name: UTILS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: outline-credentials
+                  key: utils-secret
+            - name: FORCE_HTTPS
+              value: "false"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/outline/data
+          readinessProbe:
+            httpGet:
+              path: /_health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /_health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: outline-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: outline
+  namespace: apps
+spec:
+  selector:
+    app: outline
+  ports:
+    - port: 3000

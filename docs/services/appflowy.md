@@ -5,12 +5,12 @@
 ---
 
 **Purpose:** Open-source Notion alternative — docs, databases, kanban, and AI writing tools.
-**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** ~2 GB RAM
+**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** Postgres (pgvector) + Redis + MinIO | **Memory:** no hard limit set in compose.yml; measured idle ~382MB across all 8 containers (appflowy-cloud is the largest single piece at ~121MB). No official RAM figure exists upstream — AppFlowy's own `docker-compose.yml` uses unpinned `latest` tags with no published resource spec, so treat any number here (including this one) as observed, not guaranteed
 
 ## Setup
 
 ```bash
-cp appflowy/.env.example appflowy/.env
+cp services/appflowy/.env.example services/appflowy/.env
 # generate: openssl rand -hex 32 → GOTRUE_JWT_SECRET
 # set POSTGRES_PASSWORD and MINIO_ROOT_PASSWORD
 mkdir -p service_data/data/appflowy/{postgres,redis,minio}

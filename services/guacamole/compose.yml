@@ -1,0 +1,96 @@
+services:
+  guacamole-db:
+    image: postgres:18.4-alpine
+    container_name: guacamole-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - guacamole-postgres-alpine:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 60s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - homeserver
+
+  # Proxy daemon — does the actual RDP/VNC/SSH protocol work. Stateless;
+  # all connection/user data lives in guacamole-db, so no volume needed.
+  guacd:
+    image: guacamole/guacd:1.6.0
+    container_name: guacd
+    restart: unless-stopped
+    environment:
+      # Image default — documents current logging verbosity, no behavior change
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4822 || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - homeserver
+
+  guacamole:
+    image: guacamole/guacamole:1.6.0
+    container_name: guacamole
+    restart: unless-stopped
+    environment:
+      GUACD_HOSTNAME: guacd
+      GUACD_PORT: 4822
+      POSTGRESQL_HOSTNAME: guacamole-db
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      # Serves the app at / instead of the default /guacamole/ subpath, so
+      # the landing page card and nginx proxy can link straight to the domain.
+      WEBAPP_CONTEXT: ROOT
+      # Without this, Tomcat sees every request as coming from nginx-plain's
+      # own container IP (the direct TCP peer), not the real client — meaning
+      # the brute-force-ban extension and login audit log key off the proxy's
+      # IP instead of the actual user, so one person's failed logins can lock
+      # out everyone behind the proxy. Default internalProxies already covers
+      # the 172.16.0.0/12 range the homeserver bridge network uses.
+      REMOTE_IP_VALVE_ENABLED: "true"
+      # Remaining vars below are image defaults — not previously set, no
+      # behavior change (documents what REMOTE_IP_VALVE_ENABLED already relies on)
+      GUACAMOLE_HOME: /etc/guacamole
+      LOGBACK_LEVEL: info
+      PROXY_ALLOWED_IPS_REGEX: ^(127\.0\.0\.1|172\.1[6-9]\.\d{1,3}\.\d{1,3}|172\.2[0-9]\.\d{1,3}\.\d{1,3}|172\.3[0-1]\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})$
+      PROXY_BY_HEADER: X-Forwarded-By
+      PROXY_IP_HEADER: X-Forwarded-For
+      PROXY_PROTOCOL_HEADER: X-Forwarded-Proto
+      POSTGRESQL_SSL_MODE: prefer
+    depends_on:
+      guacd:
+        condition: service_healthy
+      guacamole-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - homeserver
+
+volumes:
+  guacamole-postgres-alpine:
+
+networks:
+  homeserver:
+    external: true

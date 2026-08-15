@@ -1,0 +1,87 @@
+services:
+  forgejo-db:
+    image: postgres:18.4-alpine
+    container_name: forgejo-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - forgejo-postgres-alpine:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:16.0.2
+    container_name: forgejo
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: forgejo-db:5432
+      FORGEJO__database__NAME: ${POSTGRES_DB}
+      FORGEJO__database__USER: ${POSTGRES_USER}
+      FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}
+      FORGEJO__server__DOMAIN: forgejo.${DOMAIN}
+      FORGEJO__server__ROOT_URL: https://forgejo.${DOMAIN}
+      FORGEJO__server__SSH_PORT: 2223
+      FORGEJO__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
+      FORGEJO__security__INSTALL_LOCK: "true"
+      # v16+ no longer trusts all proxies by default (was REVERSE_PROXY_TRUSTED_PROXIES=*
+      # in the image) — scope it to the internal Docker network so nginx-plain's
+      # X-Forwarded-For/X-Real-IP are still honored correctly.
+      FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES: 172.18.0.0/16
+      FORGEJO__actions__ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ${DATA_ROOT}/app:/data
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      forgejo-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  forgejo-runner:
+    image: code.forgejo.org/forgejo/runner:12.13.2
+    container_name: forgejo-runner
+    restart: unless-stopped
+    profiles:
+      - runner
+    environment:
+      FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${DATA_ROOT}/runner-data:/data
+    depends_on:
+      forgejo:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  forgejo-postgres-alpine:
+
+networks:
+  homeserver:
+    external: true

@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vaultwarden
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "vaultwarden.k8s.local"
+  rules:
+    - backendRefs:
+        - name: vaultwarden
+          port: 80

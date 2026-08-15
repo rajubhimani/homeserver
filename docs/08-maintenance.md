@@ -28,9 +28,9 @@ uv run homeserver.py prod up all
 # Follow logs
 uv run homeserver.py dev logs immich
 
-# Immich with ML profile
-uv run homeserver.py dev up immich --profile ml
-uv run homeserver.py dev down immich --profile ml
+# Immich — ML container starts by default now; --no-ml excludes it
+# (e.g. low-resource machines that don't want face/object detection)
+uv run homeserver.py dev up immich --no-ml
 
 # Update running services to latest images
 uv run homeserver.py dev update running
@@ -184,18 +184,22 @@ services:
 Use `max_connections=20` / cap `384M` for single-consumer services (most of them). Use `max_connections=50` / cap `512M` for services with multiple concurrent DB consumers (Nextcloud, Plane, Immich — each has more than one container talking to its DB).
 
 > **immich-db is a special case.** Its image (`ghcr.io/immich-app/postgres`) defaults to `Cmd: postgres -c config_file=/etc/postgresql/postgresql.conf` — that custom config file is required for pgvector/vectorchord's `shared_preload_libraries`. Any `command:` override on it must **keep** `-c config_file=/etc/postgresql/postgresql.conf` as the first flag and add tuning flags after it:
+>
 > ```yaml
 > command: postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
 > ```
+>
 > Before overriding `command:` on any vendor-customized Postgres image, check its real default first: `docker inspect <image> --format '{{.Config.Cmd}}'`. Overriding it blind can silently drop required flags.
 >
 > After changing a DB-only `command:`/`deploy:` block, you only need to recreate that one container — this is much faster than a full service restart, which would otherwise wait on every dependent container's healthcheck:
+>
 > ```bash
 > cd <service>/
 > DATA_ROOT="../service_data/<service>" DOMAIN="yourdomain.com" docker compose -f compose.yml -f compose.prod.yml up -d --no-deps <service>-db
 > ```
 >
 > Verify the tuning actually applied (don't just trust `docker ps`):
+>
 > ```bash
 > docker exec <service>-db psql -U <postgres-user> -c "SHOW max_connections; SHOW shared_buffers;"
 > ```
@@ -209,10 +213,227 @@ Use `max_connections=20` / cap `384M` for single-consumer services (most of them
 5. Save — takes effect immediately for new jobs, no restart needed.
 
 **4. If your swap is zram (common on modern Fedora/desktop setups), raise `vm.swappiness` instead of lowering it.** Check with `zramctl` and `swapon --show` — if your swap device is `/dev/zram0`, it's compressed RAM, not slow disk. The usual advice to keep swappiness low (Fedora's default is often already conservative, e.g. `10`) is aimed at disk-backed swap. For zram, a higher value (100-180) makes the kernel offload cold pages to it earlier, freeing real RAM sooner instead of waiting until the system is already under pressure:
+
 ```bash
 cat /proc/sys/vm/swappiness   # check current value
 sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl.d/ to persist)
 ```
+
+---
+
+## Capping Docker's total resource usage (Fedora / native Linux)
+
+Applies to whichever machine actually runs `dockerd` — the numbers below
+(8 cores, 10GB memory, 50GB disk) were sized for a specific box (16 cores,
+30GB RAM, root filesystem is btrfs) — adjust to your own `nproc`/`free -h`
+before applying elsewhere. This is a host-level Docker daemon config, not
+a per-service `compose.yml` change — nothing here needs a matching
+`.env.example`/`docs/services/<service>.md` update, it applies uniformly
+to every container on the host. The CLI's own `~/.docker/config.json`
+(auth, credential helpers, plugins) is unrelated and has no resource
+knobs at all — everything below is daemon-side.
+
+**`docker/` at the repo root runs all of this for you**, parameterized by
+`docker/.env` instead of hand-editing the commands below — also handles
+Ubuntu (ext4 loopback image instead of a btrfs qgroup) and Windows
+(Docker Desktop's own settings file) with the same three commands. See
+[`docker/README.md`](../docker/README.md). The manual steps below are
+still worth knowing — they're exactly what that script runs, useful for
+understanding/debugging rather than typing by hand every time.
+
+**Requires root** (`sudo`) to install — these commands need to be run
+manually from a real terminal (a coding assistant without an interactive
+sudo prompt can prepare the file contents but can't write to `/etc`
+itself).
+
+### Memory + CPU: a systemd slice, not a `docker.service` drop-in
+
+The obvious-looking approach — a `systemd` drop-in on `docker.service`
+itself with `MemoryMax=`/`CPUQuota=` — **does not cap container
+workloads**, only the `dockerd` management process's own cgroup. With the
+`systemd` cgroup driver (`docker info` → `Cgroup Driver: systemd`, true by
+default on Fedora), each container's cgroup is created as a **sibling** of
+`docker.service` (`system.slice/docker-<id>.scope`), not nested inside it —
+so a `docker.service` drop-in silently caps almost nothing.
+
+The correct mechanism: define a systemd **slice** with the real limits,
+then tell the daemon to place every container's cgroup under that slice
+via `cgroup-parent`.
+
+```bash
+sudo tee /etc/systemd/system/docker-workloads.slice <<'EOF'
+[Unit]
+Description=Resource limit for all Docker containers
+
+[Slice]
+# Hard ceiling — cgroup v2 OOM-kills something inside this slice if
+# exceeded, never the rest of the host.
+MemoryMax=10G
+# Soft ceiling, set just under MemoryMax — cgroup v2 starts reclaiming/
+# throttling here instead of waiting for the hard kill at MemoryMax,
+# smoother degradation under pressure.
+MemoryHigh=9G
+# 800% = 8 of this host's 16 cores (systemd expresses CPU quota as a
+# percentage of one core, so N cores = N*100%).
+CPUQuota=800%
+EOF
+
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "cgroup-parent": "docker-workloads.slice",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart docker   # interrupts every currently-running container
+```
+
+`log-opts` above is a second, independent fix — unbounded container
+stdout/stderr is one of the most common silent disk-fillers (same root
+cause as the WSL2 VHDX incident below, different mechanism: log growth
+instead of image/layer growth). `max-size: 10m` / `max-file: 3` caps each
+container's logs at 30MB total, rotated.
+
+Verify after restarting:
+
+```bash
+systemctl status docker-workloads.slice     # confirm the slice exists and is active
+docker info | grep -i cgroup
+systemd-cgtop                               # live view — containers should show under docker-workloads.slice
+```
+
+### Disk: btrfs quota on `/var/lib/docker`, not a Docker storage-opt
+
+Docker's own `storage-opts: ["overlay2.size=50G"]` needs the backing
+filesystem to support project quotas — XFS (`pquota` mount option) mainly.
+It does **not** work on btrfs, which is this host's root filesystem
+(`docker info` → `Storage Driver: overlayfs` on top of btrfs) — the option
+would be silently ignored or error, not enforced. The real mechanism on
+btrfs is a **qgroup limit**, but qgroups apply per-**subvolume**, and
+`/var/lib/docker` is very likely just a plain directory inside the root
+subvolume on Fedora's default btrfs layout (which typically only splits
+out `root` and `home`), not its own subvolume — check first:
+
+```bash
+sudo btrfs subvolume show /var/lib/docker
+# "ERROR: not a btrfs subvolume" means it's a plain directory — conversion needed below.
+# Any real output (a subvolume ID, path, etc.) means it's already its own
+# subvolume — skip straight to the "quota enable + limit" commands.
+```
+
+**If it's a plain directory**, converting it to its own subvolume is a
+one-time, disruptive migration (stops Docker, moves existing image/
+container/volume data) — not something to run casually mid-session with
+containers up. When ready:
+
+```bash
+sudo systemctl stop docker
+sudo mv /var/lib/docker /var/lib/docker.bak
+sudo btrfs subvolume create /var/lib/docker
+sudo cp -a --reflink=always /var/lib/docker.bak/. /var/lib/docker/
+# Verify the copy looks complete/sane before deleting the backup:
+sudo du -sh /var/lib/docker /var/lib/docker.bak
+sudo rm -rf /var/lib/docker.bak
+sudo systemctl start docker
+```
+
+`--reflink=always` makes the copy near-instant and space-free on btrfs
+(copy-on-write metadata clone, not a real data duplication) — if it's
+slow, something's wrong (falling back to a real copy) and it's worth
+stopping to check available disk space instead of waiting it out.
+
+**Then, either way** (already a subvolume, or just converted):
+
+```bash
+sudo btrfs quota enable /var/lib/docker
+sudo btrfs qgroup limit 50G /var/lib/docker
+```
+
+Verify:
+
+```bash
+sudo btrfs qgroup show -r /var/lib/docker   # -r shows the limit alongside current usage
+```
+
+Once the quota is hit, Docker gets disk-full errors from individual
+operations (pulls, container writes) — same failure shape as the WSL2
+VHDX section below, but contained to the 50GB ceiling instead of
+consuming the whole root partition. `uv run homeserver.py gc` (prune +
+compact — see below) is still the right periodic maintenance regardless
+of whether a hard quota is set.
+
+---
+
+## Reclaiming disk space (Docker Desktop on Windows / WSL2)
+
+Docker Desktop's WSL2 VHDX only grows, never shrinks automatically — even after you delete images/volumes, the backing disk file stays large until you reclaim it manually. Do this periodically if `C:` (or wherever the VHDX lives) is filling up.
+
+**Automated (recommended):**
+
+```bash
+uv run homeserver.py gc          # prompts for confirmation first
+uv run homeserver.py gc --yes    # skip the prompt
+```
+
+Runs `docker system prune -a --volumes -f` + `docker builder prune -a -f`, then on Windows also trims the WSL2 VM's filesystem (`fstrim -av`), shuts down WSL, and compacts the VHDX via `diskpart` — the same steps as the manual procedure below, in the right order. **Must be run from an Administrator terminal** for the compaction step to actually take effect — `diskpart` silently no-ops otherwise; the command detects this, skips compaction, and tells you to re-run elevated rather than pretending it worked. On native Linux Docker, pruning is the whole story (no VHDX involved) and it stops there. Prunes the whole Docker host, not just this stack — if other projects share this Docker install, their unused resources get pruned too, which is exactly why it asks for confirmation first.
+
+**Manual, or if you want to understand/debug what the command above is doing:**
+
+**1. Check what's actually using space, then prune.** Compacting only shrinks the file to match what's used *inside* it — pruning first is what makes compacting worthwhile:
+
+```powershell
+docker system df -v              # see what's using space, per image/container/volume
+docker system prune -a --volumes -f
+docker builder prune -a -f
+wsl --shutdown
+```
+
+> `--volumes` deletes unnamed/anonymous volumes too — this is safe for build caches and dangling layers, but double-check you don't have unmounted named volumes here you still want.
+
+**2. Find and check the current VHDX size.** The path/filename depends on Docker Desktop version:
+
+- Newer (4.20+, WSL disk mount): `%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx`
+- Older: `%LOCALAPPDATA%\Docker\wsl\data\ext4.vhdx`
+
+```powershell
+wsl --shutdown
+Get-Item "$env:LOCALAPPDATA\Docker\wsl\disk\docker_data.vhdx" | Select-Object Name, @{N='SizeGB';E={[math]::Round($_.Length/1GB,2)}}
+```
+
+**3. Compact it via `diskpart`:**
+
+```powershell
+wsl --shutdown
+diskpart
+```
+
+Inside the `diskpart` prompt:
+
+```text
+select vdisk file="C:\Users\<you>\AppData\Local\Docker\wsl\disk\docker_data.vhdx"
+attach vdisk readonly
+compact vdisk
+detach vdisk
+exit
+```
+
+Then re-run the `Get-Item` check from step 2 to confirm it shrank.
+
+**If `diskpart` barely shrinks it:** the newer `wsl\disk\` layout sometimes holds onto space more stubbornly than the older `ext4.vhdx` did. Export/reimport is more reliable there:
+
+```powershell
+wsl --shutdown
+wsl --export docker-desktop-data "D:\docker-backup.tar"
+wsl --unregister docker-desktop-data
+wsl --import docker-desktop-data "C:\Docker\wsl-data" "D:\docker-backup.tar" --version 2
+```
+
+After reimporting, open Docker Desktop → **Settings → Resources → Advanced** and confirm the disk image location points at the new import path — some versions recreate a fresh VHDX at the default location on next launch instead of picking up the import.
 
 ---
 

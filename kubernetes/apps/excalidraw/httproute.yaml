@@ -1,0 +1,19 @@
+# Host-based routing via the shared Gateway — same shape as nginx-plain's
+# server_name blocks. Uses a distinct .k8s.local suffix (not the real
+# prajnatech.in domain) to avoid any ambiguity with the actual production
+# compose-based deployment this pilot runs alongside, not in place of.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: excalidraw
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "excalidraw.k8s.local"
+  rules:
+    - backendRefs:
+        - name: excalidraw
+          port: 80

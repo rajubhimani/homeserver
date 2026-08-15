@@ -1,0 +1,23 @@
+# Excludes secret.example.yaml (template only) and db-init-job.template.yaml
+# (a template copied per-service, not applied from here directly) — same
+# pattern as cluster-postgres-shared.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-mariadb-shared
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rajubhimani/homeserver.git
+    targetRevision: feature/k8s-pilot
+    path: kubernetes/cluster/mariadb
+    directory:
+      include: "statefulset.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data
+  syncPolicy:
+    automated:
+      prune: false   # never auto-delete the shared MariaDB StatefulSet/PVC
+      selfHeal: true

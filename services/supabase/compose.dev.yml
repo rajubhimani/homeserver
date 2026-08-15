@@ -1,0 +1,4 @@
+services:
+  supabase-kong:
+    ports:
+      - "8133:8000"

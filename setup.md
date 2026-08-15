@@ -17,6 +17,8 @@
 | [Paperless-ngx](docs/services/paperless.md) | Document management | Scansnap cloud |
 | [Stirling PDF](docs/services/stirling-pdf.md) | PDF toolkit | Adobe Acrobat |
 | [Mealie](docs/services/mealie.md) | Recipe manager | Recipe apps |
+| [HomeBox](docs/services/homebox.md) | Home inventory tracker with QR labels | Sortly |
+| [Open WebUI + Ollama](docs/services/open-webui.md) | Local LLM chat interface | ChatGPT |
 | [Forgejo](docs/services/forgejo.md) | Git hosting | GitHub |
 | [GitLab CE](docs/services/gitlab.md) | Full DevOps platform | GitHub / GitLab.com |
 | [Uptime Kuma](docs/services/uptime-kuma.md) | Service monitoring | Pingdom |
@@ -24,6 +26,31 @@
 | [Syncthing](docs/services/syncthing.md) | Peer-to-peer file sync | Dropbox Sync |
 | [Authentik](docs/services/authentik.md) | Identity provider / SSO | Okta / Auth0 |
 | [Miniflux](docs/services/miniflux.md) | RSS reader | Feedly |
+| [Vikunja](docs/services/vikunja.md) | To-do / task management | Todoist |
+| [Trilium Notes](docs/services/trilium.md) | Hierarchical, scriptable notes | Personal wiki / Evernote |
+| [SilverBullet](docs/services/silverbullet.md) | Markdown notes with a query language | Obsidian (self-hosted) |
+| [Outline](docs/services/outline.md) | Self-hosted team wiki / docs | Notion / Confluence |
+| [BookStack](docs/services/bookstack.md) | Shelves/books/chapters/pages wiki | Confluence |
+| [Excalidraw](docs/services/excalidraw.md) | Hand-drawn-style whiteboard/diagrams | draw.io / Miro |
+| [Karakeep](docs/services/karakeep.md) | Bookmark manager with AI auto-tagging | Pocket / Raindrop |
+| [ntfy](docs/services/ntfy.md) | Self-hosted push notifications | Pushover / Pushbullet |
+| [IT-Tools](docs/services/it-tools.md) | ~80 browser-only dev utilities | assorted sketchy websites |
+| [n8n](docs/services/n8n.md) | Self-hosted workflow automation | Zapier / Make |
+| [CrowdSec](docs/services/crowdsec.md) | Collaborative intrusion detection (detection-only, see TODO.md) | fail2ban |
+| [Wallabag](docs/services/wallabag.md) | Read-it-later app | Pocket |
+| [Atuin](docs/services/atuin.md) | Shell history sync across machines | plain bash/zsh history file |
+| [AdGuard Home](docs/services/adguard-home.md) | Network-wide DNS ad/tracker blocking | Pi-hole |
+| [PhotoPrism](docs/services/photoprism.md) | AI-powered photo library (manual-only, redundant with Immich) | Google Photos (alt.) |
+| [OrangeHRM](docs/services/orangehrm.md) | Open-source HR management | BambooHR / Workday |
+| [NocoDB](docs/services/nocodb.md) | Spreadsheet UI over a database | Airtable |
+| [Listmonk](docs/services/listmonk.md) | Newsletter / mailing list manager | Mailchimp |
+| [Documenso](docs/services/documenso.md) | Document e-signing | DocuSign |
+| [Cal.com](docs/services/calcom.md) | Scheduling / booking pages | Calendly |
+| [Plausible](docs/services/plausible.md) | Privacy-friendly web analytics | Google Analytics |
+| [Penpot](docs/services/penpot.md) | Design / prototyping tool | Figma |
+| [Coolify](docs/services/coolify.md) | Self-hosted PaaS for deploying other projects | Vercel / Heroku |
+| [Supabase](docs/services/supabase.md) | Self-hosted backend platform (DB, auth, storage, functions) | Firebase |
+| [Observability](docs/services/observability.md) | Metrics + log dashboards (Grafana + Prometheus + Loki + Alloy + cAdvisor + node-exporter) | Datadog / Grafana Cloud |
 | [Audiobookshelf](docs/services/audiobookshelf.md) | Audiobooks + podcasts | Audible |
 | [OpenProject](docs/services/openproject.md) | Project management | Jira / Asana |
 | [Plane](docs/services/plane.md) | Issue tracking | Linear / Jira |
@@ -107,7 +134,7 @@ Quick links for day-to-day use once the stack is running.
 
 ```bash
 # Service tiers — MIN ⊂ CORE ⊂ ALL
-uv run homeserver.py dev up min          # infrastructure only (dozzle, cloudflared, nginx-plain, landing)
+uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing, portainer)
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything (core + all extra services)
 
@@ -122,8 +149,8 @@ uv run homeserver.py dev down jellyfin
 # Follow logs
 uv run homeserver.py dev logs nextcloud
 
-# Immich with face recognition
-uv run homeserver.py dev up immich --profile ml
+# Immich — ML (face/object recognition) starts by default; exclude it with:
+uv run homeserver.py dev up immich --no-ml
 
 # Pull latest images and recreate
 uv run homeserver.py dev update all
@@ -143,31 +170,66 @@ uv run homeserver.py prod up all
 ~/homeserver/
 ├── homeserver.py          ← manage all services (uv run homeserver.py ...)
 ├── .env                   ← set DOMAIN= here once
-├── nginx-plain/           ← default reverse proxy
-├── nginx/                 ← optional: Nginx Proxy Manager
-├── cloudflared/
-├── landing/
-├── nextcloud/
-├── immich/
-├── jellyfin/
-├── vaultwarden/
-├── paperless/
-├── stirling-pdf/
-├── stirling-pdf-lite/
-├── mealie/
-├── forgejo/
-├── gitlab/
-├── uptime-kuma/
-├── dozzle/
-├── syncthing/
-├── authentik/
-├── miniflux/
-├── audiobookshelf/
-├── openproject/
-├── plane/
-├── invoiceshelf/
-├── firefly/
-└── beszel/
+├── docker/                ← caps Docker's own total CPU/memory/disk usage on the host
+├── kubernetes/            ← parallel Kubernetes pilot (not a replacement for the stack below)
+└── services/
+    ├── nginx-plain/           ← default reverse proxy
+    ├── nginx/                 ← optional: Nginx Proxy Manager
+    ├── cloudflared/
+    ├── landing/
+    ├── nextcloud/
+    ├── immich/
+    ├── jellyfin/
+    ├── vaultwarden/
+    ├── guacamole/
+    ├── portainer/
+    ├── paperless/
+    ├── stirling-pdf/
+    ├── stirling-pdf-lite/
+    ├── mealie/
+    ├── homebox/
+    ├── forgejo/
+    ├── gitlab/
+    ├── uptime-kuma/
+    ├── dozzle/
+    ├── dockge/
+    ├── syncthing/
+    ├── authentik/
+    ├── miniflux/
+    ├── vikunja/
+    ├── trilium/
+    ├── silverbullet/
+    ├── outline/
+    ├── bookstack/
+    ├── excalidraw/
+    ├── karakeep/
+    ├── ntfy/
+    ├── it-tools/
+    ├── n8n/
+    ├── crowdsec/
+    ├── wallabag/
+    ├── atuin/
+    ├── adguard-home/
+    ├── photoprism/
+    ├── orangehrm/
+    ├── nocodb/
+    ├── listmonk/
+    ├── documenso/
+    ├── calcom/
+    ├── plausible/
+    ├── penpot/
+    ├── coolify/
+    ├── supabase/
+    ├── appflowy/
+    ├── audiobookshelf/
+    ├── openproject/
+    ├── plane/
+    ├── invoiceshelf/
+    ├── firefly/
+    ├── ollama/
+    ├── open-webui/
+    ├── beszel/
+    └── observability/
 ```
 
 Service data (gitignored):
@@ -175,8 +237,8 @@ Service data (gitignored):
 ```text
 service_data/
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
-├── immich/           (upload/, postgres/)
-├── jellyfin/         (config/, cache/)
+├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
+├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
 ├── vaultwarden/      (data/)
 ├── paperless/        (postgres/, app/)
 ├── stirling-pdf/     (configs/, logs/, customFiles/, pipeline/, tessdata/)
@@ -188,10 +250,37 @@ service_data/
 ├── syncthing/        (data/)
 ├── authentik/        (postgres/, media/, certs/, templates/)
 ├── miniflux/         (postgres/)
+├── vikunja/          (postgres/, files/)
+├── trilium/          (trilium-data/)
+├── silverbullet/     (space/)
+├── outline/          (postgres/, redis/, data/)
+├── bookstack/        (mariadb/, config/)
+├── excalidraw/       (empty — no persistent data, no DB)
+├── karakeep/         (data/) — search index lives in a named volume, not this tree
+├── ntfy/             (data/)
+├── it-tools/         (empty — no persistent data, no DB)
+├── n8n/              (postgres/, data/)
+├── crowdsec/         (config/) — parsed decisions/DB live in a named volume, not this tree
+├── wallabag/         (postgres/, data/, images/)
+├── atuin/            (postgres/, config/)
+├── adguard-home/     (work/, conf/)
+├── photoprism/       (mariadb/, storage/) — photo library lives outside this tree, in service_data/media/photoprism/ (kept out of DATA_ROOT so backups don't sweep it)
+├── orangehrm/        (mariadb/ only — app container has no data volume yet, see docs/services/orangehrm.md)
+├── nocodb/           (postgres/, data/)
+├── listmonk/         (postgres/, uploads/)
+├── documenso/        (postgres/, data/, cert.p12 — signing certificate, generate before first start)
+├── calcom/           (postgres/ only — app itself is stateless)
+├── plausible/        (postgres/, clickhouse-data/, clickhouse-logs/, data/ — all named volumes)
+├── penpot/           (postgres/ named volume, assets/ bind mount)
+├── coolify/          (postgres/, redis/ named volumes; data/, ssh/, applications/, databases/, backups/, services/ bind mounts)
+├── supabase/         (db-data/, db-config/, deno-cache/ named volumes; storage/ bind mount)
 ├── audiobookshelf/   (config/, metadata/)
 ├── openproject/      (pgdata/, assets/)
 ├── plane/            (postgres/, uploads/, logs/)
 ├── invoiceshelf/     (db/, uploads/)
 ├── firefly/          (postgres/, upload/)
-└── beszel/           (data/, socket/, agent/)
+├── ollama/           (empty — models live outside this tree, in service_data/cache/ollama/, kept out of DATA_ROOT so backups don't sweep multi-GB model files)
+├── open-webui/       (data/) — embedding model cache lives outside this tree, in service_data/cache/open-webui/cache/ (same reason)
+├── beszel/           (data/, socket/, agent/)
+└── observability/    (grafana/, prometheus/, loki/) — capped by retention (PROMETHEUS_RETENTION, LOKI_RETENTION), so kept in DATA_ROOT rather than a separate cache/ bucket despite not being regenerable
 ```

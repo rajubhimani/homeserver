@@ -5,12 +5,12 @@
 ---
 
 **Purpose:** Docker Compose stack manager UI.
-**Port:** `5001`
+**Port:** `5001` | **Requires:** — | **Memory:** no hard limit set; measured idle ~132MB
 
 ## Setup
 
 ```bash
-cp dockge/.env.example dockge/.env
+cp services/dockge/.env.example services/dockge/.env
 uv run homeserver.py dev up dockge
 ```
 

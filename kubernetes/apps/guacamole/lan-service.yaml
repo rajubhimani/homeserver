@@ -1,0 +1,18 @@
+# Direct LAN-reachable port for the guacamole webapp only (not guacd —
+# that's an internal protocol daemon, never meant to be browser-facing).
+# See excalidraw/lan-service.yaml for the "why" of this pattern.
+#
+# Port 8107 matches guacamole/compose.dev.yml exactly. The Compose version
+# was stopped (uv run homeserver.py dev down guacamole) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: guacamole-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: guacamole
+  ports:
+    - port: 8107
+      targetPort: 8080

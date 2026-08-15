@@ -5,12 +5,12 @@
 ---
 
 **Purpose:** Peer-to-peer file sync between devices, no cloud required.
-**Port:** `8087` (host) → `8384` (container) | **Data:** `service_data/data/syncthing/data/` (your actual synced files — still Explorer-browsable) + named volume `syncthing-config` (Syncthing's own app settings, not your files — moved off the bind mount since nothing needs to browse it directly)
+**Port:** `8087` (host) → `8384` (container) | **Data:** `service_data/data/syncthing/data/` (your actual synced files — still Explorer-browsable) + named volume `syncthing-config` (Syncthing's own app settings, not your files — moved off the bind mount since nothing needs to browse it directly) | **Requires:** — | **Memory:** no hard limit set; measured idle ~45MB
 
 ## Setup
 
 ```bash
-cp syncthing/.env.example syncthing/.env
+cp services/syncthing/.env.example services/syncthing/.env
 uv run homeserver.py dev up syncthing
 ```
 

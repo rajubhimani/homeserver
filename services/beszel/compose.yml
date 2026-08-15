@@ -1,0 +1,67 @@
+services:
+  beszel:
+    image: henrygd/beszel:0.18.7
+    container_name: beszel
+    restart: unless-stopped
+    environment:
+      APP_URL: https://beszel.${DOMAIN}
+      # Remaining vars below are image defaults — not previously set, no
+      # behavior change
+      CHECK_UPDATES: "false"
+      CONTAINER_DETAILS: "true"
+      SHARE_ALL_SYSTEMS: "false"
+    volumes:
+      - ${DATA_ROOT}/data:/beszel_data
+      - ${DATA_ROOT}/socket:/beszel_socket
+    healthcheck:
+      test: ["CMD", "/beszel", "health", "--url", "http://localhost:8090"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - homeserver
+
+  # Monitors this Docker host itself. Uses network_mode: host (instead of the
+  # shared `homeserver` bridge network every other service joins) so it reports
+  # real host network throughput — on a bridge network it would only see its
+  # own virtual interface. It reaches the hub over the shared local socket
+  # below, not TCP, so it has no need to resolve other containers by name.
+  beszel-agent:
+    image: henrygd/beszel-agent:0.18.7
+    container_name: beszel-agent
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      beszel:
+        condition: service_healthy
+    volumes:
+      - ${DATA_ROOT}/agent:/var/lib/beszel-agent
+      - ${DATA_ROOT}/socket:/beszel_socket
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    environment:
+      LISTEN: /beszel_socket/beszel.sock
+      # Host-published port of the hub (see compose.dev.yml/compose.prod.yml) —
+      # reachable as localhost here because this container shares the host's
+      # network namespace. Update if the hub's port mapping ever changes.
+      HUB_URL: http://localhost:8106
+      # Fill in after first hub login — see docs/10-new-services.md
+      TOKEN: ${BESZEL_AGENT_TOKEN}
+      KEY: ${BESZEL_AGENT_KEY}
+      # Remaining vars below are image defaults — not previously set, no
+      # behavior change
+      LOG_LEVEL: info
+      SMART_INTERVAL: 1h
+      SENSORS_TIMEOUT: 2s
+      SKIP_GPU: "false"
+      SKIP_SYSTEMD: "false"
+    healthcheck:
+      test: ["CMD", "/agent", "health"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  homeserver:
+    external: true

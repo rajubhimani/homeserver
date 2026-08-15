@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: silverbullet-space
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: silverbullet
+  namespace: apps
+  labels:
+    app: silverbullet
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: silverbullet
+  template:
+    metadata:
+      labels:
+        app: silverbullet
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: silverbullet
+          image: ghcr.io/silverbulletmd/silverbullet:2.10.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: SB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: silverbullet-credentials
+                  key: sb-user
+          volumeMounts:
+            - name: space
+              mountPath: /space
+          readinessProbe:
+            httpGet:
+              path: /.ping
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /.ping
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: space
+          persistentVolumeClaim:
+            claimName: silverbullet-space
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: silverbullet
+  namespace: apps
+spec:
+  selector:
+    app: silverbullet
+  ports:
+    - port: 3000

@@ -5,12 +5,12 @@
 ---
 
 **Purpose:** Lightweight server monitoring — CPU, memory, disk, network, and Docker container stats with alerts.
-**Port:** `8106` (host) → `8090` (container) | **Data:** `service_data/data/beszel/`
+**Port:** `8106` (host) → `8090` (container) | **Data:** `service_data/data/beszel/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~48MB (hub + agent combined)
 
 ## Setup
 
 ```bash
-cp beszel/.env.example beszel/.env
+cp services/beszel/.env.example services/beszel/.env
 uv run homeserver.py dev up beszel
 ```
 
@@ -20,11 +20,13 @@ Two containers start: `beszel` (hub, web UI + storage) and `beszel-agent` (monit
 
 1. Browse to `http://<ip>:8106` — create the admin account on first launch
 2. Hub UI → **Add System** (or **Settings → Tokens** for a universal token) → copy the token + public key
-3. Set them in `beszel/.env`:
+3. Set them in `services/beszel/.env`:
+
    ```bash
    BESZEL_AGENT_TOKEN=<token from hub>
    BESZEL_AGENT_KEY=<public key from hub>
    ```
+
 4. Restart: `uv run homeserver.py dev up beszel`
 
 The system indicator in the hub UI turns green once the agent connects.

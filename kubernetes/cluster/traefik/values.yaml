@@ -1,0 +1,26 @@
+# Traefik as the Gateway API implementation for this cluster — the k8s
+# equivalent of nginx-plain's per-service server_name blocks (host-based
+# routing to many backends behind one entry point). ingress-nginx is
+# deprecated (no releases/security fixes since March 2026), so Gateway API
+# + Traefik is the current recommended path, not classic Ingress objects.
+providers:
+  kubernetesGateway:
+    enabled: true
+  kubernetesIngress:
+    enabled: false   # Gateway API only — no legacy Ingress objects in this cluster
+
+# Chart's own auto-created Gateway only allows routes from its own namespace
+# and would drift under future `helm upgrade`s — disabled in favor of our own
+# explicit, git-owned Gateway (kubernetes/cluster/traefik/gateway.yaml).
+gateway:
+  enabled: false
+
+# Chart 41.1.0 (latest as of this writing) still ships v3.7.9 by default —
+# pin the image tag directly to pick up the newer patch release.
+image:
+  tag: v3.7.10
+
+# Docker Desktop's bundled cloud provider auto-exposes LoadBalancer Services
+# on localhost with no extra setup (confirmed — no MetalLB needed here).
+service:
+  type: LoadBalancer

@@ -1,0 +1,6 @@
+# CrowdSec needs no port bindings in this detection-only setup — its LAPI is
+# only reached by other containers on the internal homeserver network (none
+# yet — see docs/services/crowdsec.md and TODO.md for the deferred bouncer
+# wiring). This file exists only to satisfy the three-file compose pattern.
+services:
+  crowdsec: {}

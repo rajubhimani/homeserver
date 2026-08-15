@@ -1,0 +1,12 @@
+services:
+  adguard-home:
+    ports:
+      # DNS must stay reachable from the LAN even in "prod" — not loopback-only
+      # like every other service's compose.prod.yml, since its whole purpose is
+      # to answer DNS queries from other devices on the network.
+      - "0.0.0.0:53:53/tcp"
+      - "0.0.0.0:53:53/udp"
+      # Web UI: loopback-only, consistent with every other service's prod
+      # override — reach it via SSH tunnel or the LAN-only nginx route instead
+      # of exposing the admin panel to the LAN directly.
+      - "127.0.0.1:8123:3000/tcp"

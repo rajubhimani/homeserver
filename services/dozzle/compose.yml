@@ -1,0 +1,27 @@
+services:
+  dozzle:
+    image: amir20/dozzle:v10.6.14
+    container_name: dozzle
+    restart: unless-stopped
+    environment:
+      # Image defaults — dozzle has no .env wiring (no secrets/config needed),
+      # so these no-op documentation vars live here instead of in .env
+      DOZZLE_ADDR: :8080
+      DOZZLE_LEVEL: info
+      DOZZLE_MODE: server
+      DOZZLE_TIMEOUT: 10s
+      DOZZLE_RELEASE_CHECK_MODE: automatic
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

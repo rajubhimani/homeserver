@@ -1,0 +1,4 @@
+services:
+  listmonk:
+    ports:
+      - "8127:9000"

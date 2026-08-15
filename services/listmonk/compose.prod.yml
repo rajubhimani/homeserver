@@ -1,0 +1,4 @@
+services:
+  listmonk:
+    ports:
+      - "127.0.0.1:8127:9000"

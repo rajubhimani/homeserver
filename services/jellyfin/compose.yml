@@ -1,0 +1,17 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.11.11
+    container_name: jellyfin
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ${DATA_ROOT}/config:/config
+      - ${DATA_ROOT}/cache:/cache
+      - ${MEDIA_ROOT}:/media:ro
+      - ${METADATA_ROOT}:/config/metadata
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

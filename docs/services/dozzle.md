@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Real-time Docker container log viewer in the browser.
-**Port:** `9999` (host) → `8080` (container)
+**Port:** `9999` (host) → `8080` (container) | **Requires:** — | **Memory:** no hard limit set; measured idle ~50MB
 
 ## Setup
 

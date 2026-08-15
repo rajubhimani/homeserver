@@ -1,0 +1,4 @@
+services:
+  outline:
+    ports:
+      - "8114:3000"

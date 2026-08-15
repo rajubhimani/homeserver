@@ -1,0 +1,300 @@
+apiVersion: v1
+data:
+  00-init.sh: |
+    #!/bin/bash
+    set -e
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        GRANT ALL ON SCHEMA public TO "$POSTGRES_USER";
+        ALTER SCHEMA public OWNER TO "$POSTGRES_USER";
+    EOSQL
+  01-schema.sql: "--\n-- Licensed to the Apache Software Foundation (ASF) under one\n--
+    or more contributor license agreements.  See the NOTICE file\n-- distributed with
+    this work for additional information\n-- regarding copyright ownership.  The ASF
+    licenses this file\n-- to you under the Apache License, Version 2.0 (the\n-- \"License\");
+    you may not use this file except in compliance\n-- with the License.  You may
+    obtain a copy of the License at\n--\n--   http://www.apache.org/licenses/LICENSE-2.0\n--\n--
+    Unless required by applicable law or agreed to in writing,\n-- software distributed
+    under the License is distributed on an\n-- \"AS IS\" BASIS, WITHOUT WARRANTIES
+    OR CONDITIONS OF ANY\n-- KIND, either express or implied.  See the License for
+    the\n-- specific language governing permissions and limitations\n-- under the
+    License.\n--\n\n--\n-- Connection group types\n--\n\nCREATE TYPE guacamole_connection_group_type
+    AS ENUM(\n    'ORGANIZATIONAL',\n    'BALANCING'\n);\n\n--\n-- Entity types\n--\n\nCREATE
+    TYPE guacamole_entity_type AS ENUM(\n    'USER',\n    'USER_GROUP'\n);\n\n--\n--
+    Object permission types\n--\n\nCREATE TYPE guacamole_object_permission_type AS
+    ENUM(\n    'READ',\n    'UPDATE',\n    'DELETE',\n    'ADMINISTER'\n);\n\n--\n--
+    System permission types\n--\n\nCREATE TYPE guacamole_system_permission_type AS
+    ENUM(\n    'CREATE_CONNECTION',\n    'CREATE_CONNECTION_GROUP',\n    'CREATE_SHARING_PROFILE',\n
+    \   'CREATE_USER',\n    'CREATE_USER_GROUP',\n    'AUDIT',\n    'ADMINISTER'\n);\n\n--\n--
+    Guacamole proxy (guacd) encryption methods\n--\n\nCREATE TYPE guacamole_proxy_encryption_method
+    AS ENUM(\n    'NONE',\n    'SSL'\n);\n\n--\n-- Table of connection groups. Each
+    connection group has a name.\n--\n\nCREATE TABLE guacamole_connection_group (\n\n
+    \ connection_group_id   serial       NOT NULL,\n  parent_id             integer,\n
+    \ connection_group_name varchar(128) NOT NULL,\n  type                  guacamole_connection_group_type\n
+    \                       NOT NULL DEFAULT 'ORGANIZATIONAL',\n\n  -- Concurrency
+    limits\n  max_connections          integer,\n  max_connections_per_user integer,\n
+    \ enable_session_affinity  boolean NOT NULL DEFAULT FALSE,\n\n  PRIMARY KEY (connection_group_id),\n\n
+    \ CONSTRAINT connection_group_name_parent\n    UNIQUE (connection_group_name,
+    parent_id),\n\n  CONSTRAINT guacamole_connection_group_ibfk_1\n    FOREIGN KEY
+    (parent_id)\n    REFERENCES guacamole_connection_group (connection_group_id)\n
+    \   ON DELETE CASCADE\n\n);\n\nCREATE INDEX guacamole_connection_group_parent_id\n
+    \   ON guacamole_connection_group(parent_id);\n\n--\n-- Table of connections.
+    Each connection has a name, protocol, and\n-- associated set of parameters.\n--
+    A connection may belong to a connection group.\n--\n\nCREATE TABLE guacamole_connection
+    (\n\n  connection_id       serial       NOT NULL,\n  connection_name     varchar(128)
+    NOT NULL,\n  parent_id           integer,\n  protocol            varchar(32)  NOT
+    NULL,\n  \n  -- Concurrency limits\n  max_connections          integer,\n  max_connections_per_user
+    integer,\n\n  -- Connection Weight\n  connection_weight        integer,\n  failover_only
+    \           boolean NOT NULL DEFAULT FALSE,\n\n  -- Guacamole proxy (guacd) overrides\n
+    \ proxy_port              integer,\n  proxy_hostname          varchar(512),\n
+    \ proxy_encryption_method guacamole_proxy_encryption_method,\n\n  PRIMARY KEY
+    (connection_id),\n\n  CONSTRAINT connection_name_parent\n    UNIQUE (connection_name,
+    parent_id),\n\n  CONSTRAINT guacamole_connection_ibfk_1\n    FOREIGN KEY (parent_id)\n
+    \   REFERENCES guacamole_connection_group (connection_group_id)\n    ON DELETE
+    CASCADE\n\n);\n\nCREATE INDEX guacamole_connection_parent_id\n    ON guacamole_connection(parent_id);\n\n--\n--
+    Table of base entities which may each be either a user or user group. Other\n--
+    tables which represent qualities shared by both users and groups will point\n--
+    to guacamole_entity, while tables which represent qualities specific to\n-- users
+    or groups will point to guacamole_user or guacamole_user_group.\n--\n\nCREATE
+    TABLE guacamole_entity (\n\n  entity_id     serial                  NOT NULL,\n
+    \ name          varchar(128)            NOT NULL,\n  type          guacamole_entity_type
+    \  NOT NULL,\n\n  PRIMARY KEY (entity_id),\n\n  CONSTRAINT guacamole_entity_name_scope\n
+    \   UNIQUE (type, name)\n\n);\n\n--\n-- Table of users. Each user has a unique
+    username and a hashed password\n-- with corresponding salt. Although the authentication
+    system will always set\n-- salted passwords, other systems may set unsalted passwords
+    by simply not\n-- providing the salt.\n--\n\nCREATE TABLE guacamole_user (\n\n
+    \ user_id       serial       NOT NULL,\n  entity_id     integer      NOT NULL,\n\n
+    \ -- Optionally-salted password\n  password_hash bytea        NOT NULL,\n  password_salt
+    bytea,\n  password_date timestamptz  NOT NULL,\n\n  -- Account disabled/expired
+    status\n  disabled      boolean      NOT NULL DEFAULT FALSE,\n  expired       boolean
+    \     NOT NULL DEFAULT FALSE,\n\n  -- Time-based access restriction\n  access_window_start
+    \   time,\n  access_window_end      time,\n\n  -- Date-based access restriction\n
+    \ valid_from  date,\n  valid_until date,\n\n  -- Timezone used for all date/time
+    comparisons and interpretation\n  timezone varchar(64),\n\n  -- Profile information\n
+    \ full_name           varchar(256),\n  email_address       varchar(256),\n  organization
+    \       varchar(256),\n  organizational_role varchar(256),\n\n  PRIMARY KEY (user_id),\n\n
+    \ CONSTRAINT guacamole_user_single_entity\n    UNIQUE (entity_id),\n\n  CONSTRAINT
+    guacamole_user_entity\n    FOREIGN KEY (entity_id)\n    REFERENCES guacamole_entity
+    (entity_id)\n    ON DELETE CASCADE\n\n);\n\n--\n-- Table of user groups. Each
+    user group may have an arbitrary set of member\n-- users and member groups, with
+    those members inheriting the permissions\n-- granted to that group.\n--\n\nCREATE
+    TABLE guacamole_user_group (\n\n  user_group_id serial      NOT NULL,\n  entity_id
+    \    integer     NOT NULL,\n\n  -- Group disabled status\n  disabled      boolean
+    \    NOT NULL DEFAULT FALSE,\n\n  PRIMARY KEY (user_group_id),\n\n  CONSTRAINT
+    guacamole_user_group_single_entity\n    UNIQUE (entity_id),\n\n  CONSTRAINT guacamole_user_group_entity\n
+    \   FOREIGN KEY (entity_id)\n    REFERENCES guacamole_entity (entity_id)\n    ON
+    DELETE CASCADE\n\n);\n\n--\n-- Table of users which are members of given user
+    groups.\n--\n\nCREATE TABLE guacamole_user_group_member (\n\n  user_group_id    integer
+    \      NOT NULL,\n  member_entity_id integer       NOT NULL,\n\n  PRIMARY KEY
+    (user_group_id, member_entity_id),\n\n  -- Parent must be a user group\n  CONSTRAINT
+    guacamole_user_group_member_parent\n    FOREIGN KEY (user_group_id)\n    REFERENCES
+    guacamole_user_group (user_group_id) ON DELETE CASCADE,\n\n  -- Member may be
+    either a user or a user group (any entity)\n  CONSTRAINT guacamole_user_group_member_entity\n
+    \   FOREIGN KEY (member_entity_id)\n    REFERENCES guacamole_entity (entity_id)
+    ON DELETE CASCADE\n\n);\n\n--\n-- Table of sharing profiles. Each sharing profile
+    has a name, associated set\n-- of parameters, and a primary connection. The primary
+    connection is the\n-- connection that the sharing profile shares, and the parameters
+    dictate the\n-- restrictions/features which apply to the user joining the connection
+    via the\n-- sharing profile.\n--\n\nCREATE TABLE guacamole_sharing_profile (\n\n
+    \ sharing_profile_id    serial       NOT NULL,\n  sharing_profile_name  varchar(128)
+    NOT NULL,\n  primary_connection_id integer      NOT NULL,\n\n  PRIMARY KEY (sharing_profile_id),\n\n
+    \ CONSTRAINT sharing_profile_name_primary\n    UNIQUE (sharing_profile_name, primary_connection_id),\n\n
+    \ CONSTRAINT guacamole_sharing_profile_ibfk_1\n    FOREIGN KEY (primary_connection_id)\n
+    \   REFERENCES guacamole_connection (connection_id)\n    ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_sharing_profile_primary_connection_id\n    ON guacamole_sharing_profile(primary_connection_id);\n\n--\n--
+    Table of connection parameters. Each parameter is simply a name/value pair\n--
+    associated with a connection.\n--\n\nCREATE TABLE guacamole_connection_parameter
+    (\n\n  connection_id   integer       NOT NULL,\n  parameter_name  varchar(128)
+    \ NOT NULL,\n  parameter_value varchar(4096) NOT NULL,\n\n  PRIMARY KEY (connection_id,parameter_name),\n\n
+    \ CONSTRAINT guacamole_connection_parameter_ibfk_1\n    FOREIGN KEY (connection_id)\n
+    \   REFERENCES guacamole_connection (connection_id) ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_connection_parameter_connection_id\n    ON guacamole_connection_parameter(connection_id);\n\n--\n--
+    Table of sharing profile parameters. Each parameter is simply\n-- name/value pair
+    associated with a sharing profile. These parameters dictate\n-- the restrictions/features
+    which apply to the user joining the associated\n-- connection via the sharing
+    profile.\n--\n\nCREATE TABLE guacamole_sharing_profile_parameter (\n\n  sharing_profile_id
+    integer       NOT NULL,\n  parameter_name     varchar(128)  NOT NULL,\n  parameter_value
+    \   varchar(4096) NOT NULL,\n\n  PRIMARY KEY (sharing_profile_id, parameter_name),\n\n
+    \ CONSTRAINT guacamole_sharing_profile_parameter_ibfk_1\n    FOREIGN KEY (sharing_profile_id)\n
+    \   REFERENCES guacamole_sharing_profile (sharing_profile_id) ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_sharing_profile_parameter_sharing_profile_id\n    ON guacamole_sharing_profile_parameter(sharing_profile_id);\n\n--\n--
+    Table of arbitrary user attributes. Each attribute is simply a name/value\n--
+    pair associated with a user. Arbitrary attributes are defined by other\n-- extensions.
+    Attributes defined by this extension will be mapped to\n-- properly-typed columns
+    of a specific table.\n--\n\nCREATE TABLE guacamole_user_attribute (\n\n  user_id
+    \        integer       NOT NULL,\n  attribute_name  varchar(128)  NOT NULL,\n
+    \ attribute_value varchar(4096) NOT NULL,\n\n  PRIMARY KEY (user_id, attribute_name),\n\n
+    \ CONSTRAINT guacamole_user_attribute_ibfk_1\n    FOREIGN KEY (user_id)\n    REFERENCES
+    guacamole_user (user_id) ON DELETE CASCADE\n\n);\n\nCREATE INDEX guacamole_user_attribute_user_id\n
+    \   ON guacamole_user_attribute(user_id);\n\n--\n-- Table of arbitrary user group
+    attributes. Each attribute is simply a\n-- name/value pair associated with a user
+    group. Arbitrary attributes are\n-- defined by other extensions. Attributes defined
+    by this extension will be\n-- mapped to properly-typed columns of a specific table.\n--\n\nCREATE
+    TABLE guacamole_user_group_attribute (\n\n  user_group_id   integer       NOT
+    NULL,\n  attribute_name  varchar(128)  NOT NULL,\n  attribute_value varchar(4096)
+    NOT NULL,\n\n  PRIMARY KEY (user_group_id, attribute_name),\n\n  CONSTRAINT guacamole_user_group_attribute_ibfk_1\n
+    \   FOREIGN KEY (user_group_id)\n    REFERENCES guacamole_user_group (user_group_id)
+    ON DELETE CASCADE\n\n);\n\nCREATE INDEX guacamole_user_group_attribute_user_group_id\n
+    \   ON guacamole_user_group_attribute(user_group_id);\n\n--\n-- Table of arbitrary
+    connection attributes. Each attribute is simply a\n-- name/value pair associated
+    with a connection. Arbitrary attributes are\n-- defined by other extensions. Attributes
+    defined by this extension will be\n-- mapped to properly-typed columns of a specific
+    table.\n--\n\nCREATE TABLE guacamole_connection_attribute (\n\n  connection_id
+    \  integer       NOT NULL,\n  attribute_name  varchar(128)  NOT NULL,\n  attribute_value
+    varchar(4096) NOT NULL,\n\n  PRIMARY KEY (connection_id, attribute_name),\n\n
+    \ CONSTRAINT guacamole_connection_attribute_ibfk_1\n    FOREIGN KEY (connection_id)\n
+    \   REFERENCES guacamole_connection (connection_id) ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_connection_attribute_connection_id\n    ON guacamole_connection_attribute(connection_id);\n\n--\n--
+    Table of arbitrary connection group attributes. Each attribute is simply a\n--
+    name/value pair associated with a connection group. Arbitrary attributes are\n--
+    defined by other extensions. Attributes defined by this extension will be\n--
+    mapped to properly-typed columns of a specific table.\n--\n\nCREATE TABLE guacamole_connection_group_attribute
+    (\n\n  connection_group_id integer       NOT NULL,\n  attribute_name      varchar(128)
+    \ NOT NULL,\n  attribute_value     varchar(4096) NOT NULL,\n\n  PRIMARY KEY (connection_group_id,
+    attribute_name),\n\n  CONSTRAINT guacamole_connection_group_attribute_ibfk_1\n
+    \   FOREIGN KEY (connection_group_id)\n    REFERENCES guacamole_connection_group
+    (connection_group_id) ON DELETE CASCADE\n\n);\n\nCREATE INDEX guacamole_connection_group_attribute_connection_group_id\n
+    \   ON guacamole_connection_group_attribute(connection_group_id);\n\n--\n-- Table
+    of arbitrary sharing profile attributes. Each attribute is simply a\n-- name/value
+    pair associated with a sharing profile. Arbitrary attributes are\n-- defined by
+    other extensions. Attributes defined by this extension will be\n-- mapped to properly-typed
+    columns of a specific table.\n--\n\nCREATE TABLE guacamole_sharing_profile_attribute
+    (\n\n  sharing_profile_id integer       NOT NULL,\n  attribute_name     varchar(128)
+    \ NOT NULL,\n  attribute_value    varchar(4096) NOT NULL,\n\n  PRIMARY KEY (sharing_profile_id,
+    attribute_name),\n\n  CONSTRAINT guacamole_sharing_profile_attribute_ibfk_1\n
+    \   FOREIGN KEY (sharing_profile_id)\n    REFERENCES guacamole_sharing_profile
+    (sharing_profile_id) ON DELETE CASCADE\n\n);\n\nCREATE INDEX guacamole_sharing_profile_attribute_sharing_profile_id\n
+    \   ON guacamole_sharing_profile_attribute(sharing_profile_id);\n\n--\n-- Table
+    of connection permissions. Each connection permission grants a user or\n-- user
+    group specific access to a connection.\n--\n\nCREATE TABLE guacamole_connection_permission
+    (\n\n  entity_id     integer NOT NULL,\n  connection_id integer NOT NULL,\n  permission
+    \   guacamole_object_permission_type NOT NULL,\n\n  PRIMARY KEY (entity_id, connection_id,
+    permission),\n\n  CONSTRAINT guacamole_connection_permission_ibfk_1\n    FOREIGN
+    KEY (connection_id)\n    REFERENCES guacamole_connection (connection_id) ON DELETE
+    CASCADE,\n\n  CONSTRAINT guacamole_connection_permission_entity\n    FOREIGN KEY
+    (entity_id)\n    REFERENCES guacamole_entity (entity_id) ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_connection_permission_connection_id\n    ON guacamole_connection_permission(connection_id);\n\nCREATE
+    INDEX guacamole_connection_permission_entity_id\n    ON guacamole_connection_permission(entity_id);\n\n--\n--
+    Table of connection group permissions. Each group permission grants a user\n--
+    or user group specific access to a connection group.\n--\n\nCREATE TABLE guacamole_connection_group_permission
+    (\n\n  entity_id           integer NOT NULL,\n  connection_group_id integer NOT
+    NULL,\n  permission          guacamole_object_permission_type NOT NULL,\n\n  PRIMARY
+    KEY (entity_id, connection_group_id, permission),\n\n  CONSTRAINT guacamole_connection_group_permission_ibfk_1\n
+    \   FOREIGN KEY (connection_group_id)\n    REFERENCES guacamole_connection_group
+    (connection_group_id) ON DELETE CASCADE,\n\n  CONSTRAINT guacamole_connection_group_permission_entity\n
+    \   FOREIGN KEY (entity_id)\n    REFERENCES guacamole_entity (entity_id) ON DELETE
+    CASCADE\n\n);\n\nCREATE INDEX guacamole_connection_group_permission_connection_group_id\n
+    \   ON guacamole_connection_group_permission(connection_group_id);\n\nCREATE INDEX
+    guacamole_connection_group_permission_entity_id\n    ON guacamole_connection_group_permission(entity_id);\n\n--\n--
+    Table of sharing profile permissions. Each sharing profile permission grants\n--
+    a user or user group specific access to a sharing profile.\n--\n\nCREATE TABLE
+    guacamole_sharing_profile_permission (\n\n  entity_id          integer NOT NULL,\n
+    \ sharing_profile_id integer NOT NULL,\n  permission         guacamole_object_permission_type
+    NOT NULL,\n\n  PRIMARY KEY (entity_id, sharing_profile_id, permission),\n\n  CONSTRAINT
+    guacamole_sharing_profile_permission_ibfk_1\n    FOREIGN KEY (sharing_profile_id)\n
+    \   REFERENCES guacamole_sharing_profile (sharing_profile_id) ON DELETE CASCADE,\n\n
+    \ CONSTRAINT guacamole_sharing_profile_permission_entity\n    FOREIGN KEY (entity_id)\n
+    \   REFERENCES guacamole_entity (entity_id) ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_sharing_profile_permission_sharing_profile_id\n    ON guacamole_sharing_profile_permission(sharing_profile_id);\n\nCREATE
+    INDEX guacamole_sharing_profile_permission_entity_id\n    ON guacamole_sharing_profile_permission(entity_id);\n\n--\n--
+    Table of system permissions. Each system permission grants a user or user\n--
+    group a system-level privilege of some kind.\n--\n\nCREATE TABLE guacamole_system_permission
+    (\n\n  entity_id  integer NOT NULL,\n  permission guacamole_system_permission_type
+    NOT NULL,\n\n  PRIMARY KEY (entity_id, permission),\n\n  CONSTRAINT guacamole_system_permission_entity\n
+    \   FOREIGN KEY (entity_id)\n    REFERENCES guacamole_entity (entity_id) ON DELETE
+    CASCADE\n\n);\n\nCREATE INDEX guacamole_system_permission_entity_id\n    ON guacamole_system_permission(entity_id);\n\n--\n--
+    Table of user permissions. Each user permission grants a user or user group\n--
+    access to another user (the \"affected\" user) for a specific type of\n-- operation.\n--\n\nCREATE
+    TABLE guacamole_user_permission (\n\n  entity_id        integer NOT NULL,\n  affected_user_id
+    integer NOT NULL,\n  permission       guacamole_object_permission_type NOT NULL,\n\n
+    \ PRIMARY KEY (entity_id, affected_user_id, permission),\n\n  CONSTRAINT guacamole_user_permission_ibfk_1\n
+    \   FOREIGN KEY (affected_user_id)\n    REFERENCES guacamole_user (user_id) ON
+    DELETE CASCADE,\n\n  CONSTRAINT guacamole_user_permission_entity\n    FOREIGN
+    KEY (entity_id)\n    REFERENCES guacamole_entity (entity_id) ON DELETE CASCADE\n\n);\n\nCREATE
+    INDEX guacamole_user_permission_affected_user_id\n    ON guacamole_user_permission(affected_user_id);\n\nCREATE
+    INDEX guacamole_user_permission_entity_id\n    ON guacamole_user_permission(entity_id);\n\n--\n--
+    Table of user group permissions. Each user group permission grants a user\n--
+    or user group access to a another user group (the \"affected\" user group) for\n--
+    a specific type of operation.\n--\n\nCREATE TABLE guacamole_user_group_permission
+    (\n\n  entity_id              integer NOT NULL,\n  affected_user_group_id integer
+    NOT NULL,\n  permission             guacamole_object_permission_type NOT NULL,\n\n
+    \ PRIMARY KEY (entity_id, affected_user_group_id, permission),\n\n  CONSTRAINT
+    guacamole_user_group_permission_affected_user_group\n    FOREIGN KEY (affected_user_group_id)\n
+    \   REFERENCES guacamole_user_group (user_group_id) ON DELETE CASCADE,\n\n  CONSTRAINT
+    guacamole_user_group_permission_entity\n    FOREIGN KEY (entity_id)\n    REFERENCES
+    guacamole_entity (entity_id) ON DELETE CASCADE\n\n);\n\nCREATE INDEX guacamole_user_group_permission_affected_user_group_id\n
+    \   ON guacamole_user_group_permission(affected_user_group_id);\n\nCREATE INDEX
+    guacamole_user_group_permission_entity_id\n    ON guacamole_user_group_permission(entity_id);\n\n--\n--
+    Table of connection history records. Each record defines a specific user's\n--
+    session, including the connection used, the start time, and the end time\n-- (if
+    any).\n--\n\nCREATE TABLE guacamole_connection_history (\n\n  history_id           serial
+    \      NOT NULL,\n  user_id              integer      DEFAULT NULL,\n  username
+    \            varchar(128) NOT NULL,\n  remote_host          varchar(256) DEFAULT
+    NULL,\n  connection_id        integer      DEFAULT NULL,\n  connection_name      varchar(128)
+    NOT NULL,\n  sharing_profile_id   integer      DEFAULT NULL,\n  sharing_profile_name
+    varchar(128) DEFAULT NULL,\n  start_date           timestamptz  NOT NULL,\n  end_date
+    \            timestamptz  DEFAULT NULL,\n\n  PRIMARY KEY (history_id),\n\n  CONSTRAINT
+    guacamole_connection_history_ibfk_1\n    FOREIGN KEY (user_id)\n    REFERENCES
+    guacamole_user (user_id) ON DELETE SET NULL,\n\n  CONSTRAINT guacamole_connection_history_ibfk_2\n
+    \   FOREIGN KEY (connection_id)\n    REFERENCES guacamole_connection (connection_id)
+    ON DELETE SET NULL,\n\n  CONSTRAINT guacamole_connection_history_ibfk_3\n    FOREIGN
+    KEY (sharing_profile_id)\n    REFERENCES guacamole_sharing_profile (sharing_profile_id)
+    ON DELETE SET NULL\n\n);\n\nCREATE INDEX guacamole_connection_history_user_id\n
+    \   ON guacamole_connection_history(user_id);\n\nCREATE INDEX guacamole_connection_history_connection_id\n
+    \   ON guacamole_connection_history(connection_id);\n\nCREATE INDEX guacamole_connection_history_sharing_profile_id\n
+    \   ON guacamole_connection_history(sharing_profile_id);\n\nCREATE INDEX guacamole_connection_history_start_date\n
+    \   ON guacamole_connection_history(start_date);\n\nCREATE INDEX guacamole_connection_history_end_date\n
+    \   ON guacamole_connection_history(end_date);\n\nCREATE INDEX guacamole_connection_history_connection_id_start_date\n
+    \   ON guacamole_connection_history(connection_id, start_date);\n\n--\n-- User
+    login/logout history\n--\n\nCREATE TABLE guacamole_user_history (\n\n  history_id
+    \          serial       NOT NULL,\n  user_id              integer      DEFAULT
+    NULL,\n  username             varchar(128) NOT NULL,\n  remote_host          varchar(256)
+    DEFAULT NULL,\n  start_date           timestamptz  NOT NULL,\n  end_date             timestamptz
+    \ DEFAULT NULL,\n\n  PRIMARY KEY (history_id),\n\n  CONSTRAINT guacamole_user_history_ibfk_1\n
+    \   FOREIGN KEY (user_id)\n    REFERENCES guacamole_user (user_id) ON DELETE SET
+    NULL\n\n);\n\nCREATE INDEX guacamole_user_history_user_id\n    ON guacamole_user_history(user_id);\n\nCREATE
+    INDEX guacamole_user_history_start_date\n    ON guacamole_user_history(start_date);\n\nCREATE
+    INDEX guacamole_user_history_end_date\n    ON guacamole_user_history(end_date);\n\nCREATE
+    INDEX guacamole_user_history_user_id_start_date\n    ON guacamole_user_history(user_id,
+    start_date);\n\n--\n-- User password history\n--\n\nCREATE TABLE guacamole_user_password_history
+    (\n\n  password_history_id serial  NOT NULL,\n  user_id             integer NOT
+    NULL,\n\n  -- Salted password\n  password_hash bytea        NOT NULL,\n  password_salt
+    bytea,\n  password_date timestamptz  NOT NULL,\n\n  PRIMARY KEY (password_history_id),\n\n
+    \ CONSTRAINT guacamole_user_password_history_ibfk_1\n    FOREIGN KEY (user_id)\n
+    \   REFERENCES guacamole_user (user_id) ON DELETE CASCADE\n\n);\n\nCREATE INDEX
+    guacamole_user_password_history_user_id\n    ON guacamole_user_password_history(user_id);\n\n--\n--
+    Licensed to the Apache Software Foundation (ASF) under one\n-- or more contributor
+    license agreements.  See the NOTICE file\n-- distributed with this work for additional
+    information\n-- regarding copyright ownership.  The ASF licenses this file\n--
+    to you under the Apache License, Version 2.0 (the\n-- \"License\"); you may not
+    use this file except in compliance\n-- with the License.  You may obtain a copy
+    of the License at\n--\n--   http://www.apache.org/licenses/LICENSE-2.0\n--\n--
+    Unless required by applicable law or agreed to in writing,\n-- software distributed
+    under the License is distributed on an\n-- \"AS IS\" BASIS, WITHOUT WARRANTIES
+    OR CONDITIONS OF ANY\n-- KIND, either express or implied.  See the License for
+    the\n-- specific language governing permissions and limitations\n-- under the
+    License.\n--\n\n-- Create default user \"guacadmin\" with password \"guacadmin\"\nINSERT
+    INTO guacamole_entity (name, type) VALUES ('guacadmin', 'USER');\nINSERT INTO
+    guacamole_user (entity_id, password_hash, password_salt, password_date)\nSELECT\n
+    \   entity_id,\n    decode('CA458A7D494E3BE824F5E1E175A1556C0F8EEF2C2D7DF3633BEC4A29C4411960',
+    'hex'),  -- 'guacadmin'\n    decode('FE24ADC5E11E2B25288D1704ABE67A79E342ECC26064CE69C5B3177795A82264',
+    'hex'),\n    CURRENT_TIMESTAMP\nFROM guacamole_entity WHERE name = 'guacadmin'
+    AND guacamole_entity.type = 'USER';\n\n-- Grant this user all system permissions\nINSERT
+    INTO guacamole_system_permission (entity_id, permission)\nSELECT entity_id, permission::guacamole_system_permission_type\nFROM
+    (\n    VALUES\n        ('guacadmin', 'CREATE_CONNECTION'),\n        ('guacadmin',
+    'CREATE_CONNECTION_GROUP'),\n        ('guacadmin', 'CREATE_SHARING_PROFILE'),\n
+    \       ('guacadmin', 'CREATE_USER'),\n        ('guacadmin', 'CREATE_USER_GROUP'),\n
+    \       ('guacadmin', 'ADMINISTER')\n) permissions (username, permission)\nJOIN
+    guacamole_entity ON permissions.username = guacamole_entity.name AND guacamole_entity.type
+    = 'USER';\n\n-- Grant admin permission to read/update/administer self\nINSERT
+    INTO guacamole_user_permission (entity_id, affected_user_id, permission)\nSELECT
+    guacamole_entity.entity_id, guacamole_user.user_id, permission::guacamole_object_permission_type\nFROM
+    (\n    VALUES\n        ('guacadmin', 'guacadmin', 'READ'),\n        ('guacadmin',
+    'guacadmin', 'UPDATE'),\n        ('guacadmin', 'guacadmin', 'ADMINISTER')\n) permissions
+    (username, affected_username, permission)\nJOIN guacamole_entity          ON permissions.username
+    = guacamole_entity.name AND guacamole_entity.type = 'USER'\nJOIN guacamole_entity
+    affected ON permissions.affected_username = affected.name AND guacamole_entity.type
+    = 'USER'\nJOIN guacamole_user            ON guacamole_user.entity_id = affected.entity_id;\n\n"
+kind: ConfigMap
+metadata:
+  name: guacamole-postgres-init
+  namespace: apps
