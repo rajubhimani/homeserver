@@ -29,7 +29,7 @@ Open `https://temporal.<domain>/` (or `http://<host>:8138` in dev) — no login/
 
 ## `temporal-worker` — a placeholder, not an official Temporal component
 
-Unlike Airflow or Dagster, Temporal doesn't execute your workflow logic itself — a **Worker** is just a regular process (any language, official SDKs exist for Go/Java/Python/TypeScript/.NET/PHP/Ruby) that connects out to the Temporal frontend (`temporal:7233`) and runs whatever Workflow/Activity code you give it. There's no generic "Temporal worker" image to pull, because a worker with no code is meaningless — it's exactly as service-specific as Dagster's user-code container, and for the same reason gets the same one exception to this repo's image-only convention: `services/temporal/worker/Dockerfile` (`python:3.13-slim` + `pip install temporalio docker`) installs dependencies only.
+Unlike Airflow or Dagster, Temporal doesn't execute your workflow logic itself — a **Worker** is just a regular process (any language, official SDKs exist for Go/Java/Python/TypeScript/.NET/PHP/Ruby) that connects out to the Temporal frontend (`temporal:7233`) and runs whatever Workflow/Activity code you give it. There's no generic "Temporal worker" image to pull, because a worker with no code is meaningless — it's exactly as service-specific as Dagster's user-code container, and for the same reason gets the same one exception to this repo's image-only convention: `services/temporal/worker/Dockerfile` (`python:3.14-slim`, dependencies declared in `pyproject.toml` and installed via `uv sync --locked` against a committed `uv.lock`) installs dependencies only.
 
 ## Where your workflow code actually lives
 
@@ -156,6 +156,36 @@ docker exec -it temporal-admin-tools temporal schedule create --address temporal
   --schedule-id daily-retry-demo --cron "0 6 * * *" \
   --workflow-id daily-run --task-queue homeserver --type RetryableActivityWorkflow --input '"scheduled"'
 ```
+
+## Namespaces — the isolation boundary, not the task queue name
+
+A **Namespace** is Temporal's top-level unit of isolation: Workflow ID uniqueness, task queue scope, and visibility (search) are all namespace-scoped, even though every namespace here is served by the same cluster. Two namespaces can each have a task queue literally named `homeserver` and a workflow literally named `namespace-demo` running at the same time, with zero collision or shared state between them — same idea as a Kubernetes namespace or a DB schema, one deployment, cleanly separated tenants inside it.
+
+This stack registers three: `default`, `staging`, `production` (`temporal-create-namespace` in `compose.yml`, idempotent — a no-op on every start after the first). `temporal-worker` runs one `Worker` loop per namespace, concurrently, in the same process (`worker.py`'s `NAMESPACES` list + `asyncio.gather`) — all three poll a task queue named `homeserver`, and never see each other's work. Every CLI example elsewhere in this doc implicitly targets `default` (Temporal assumes it when `--namespace` isn't passed); add `--namespace staging`/`--namespace production` to run the exact same commands against an isolated environment.
+
+Verified: started the identical Workflow ID (`namespace-demo`, type `GreetSourceWorkflow`) in all three namespaces with a different input each —
+
+```bash
+for ns in default staging production; do
+  docker exec temporal-admin-tools temporal workflow start --address temporal:7233 \
+    --namespace "$ns" --task-queue homeserver --type GreetSourceWorkflow \
+    --workflow-id namespace-demo --input "\"hello-from-$ns\""
+done
+```
+
+— all three accepted with no ID collision, and each completed with its own distinct, correct result (`"processed hello-from-default"`, `"processed hello-from-staging"`, `"processed hello-from-production"`), proving genuinely independent execution, not just non-interference.
+
+This is also the real, common reason to reach for multiple namespaces on one cluster in the first place: environment isolation (dev/staging/production sharing one Temporal deployment instead of standing up three) — and it's the exact boundary [Nexus](#notes) is built to bridge *between*, for when two namespaces need to call into each other rather than stay fully separate.
+
+**A more concrete version of that, using a real workflow instead of the toy greeting one**: test a change to `OrderFulfillmentSagaWorkflow` in `staging` first, without it ever touching `production`.
+
+```bash
+docker exec temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --namespace staging --task-queue homeserver --type OrderFulfillmentSagaWorkflow \
+  --workflow-id saga-staging-test --input '{"order_id": "test-1", "amount": 50}'
+```
+
+Verified: this completed normally in `staging` (`"Order test-1 fulfilled: ..."`), and querying `production` for that same workflow type immediately after (`temporal workflow list --namespace production --query "WorkflowType='OrderFulfillmentSagaWorkflow'"`) returns **zero results** — not filtered out, genuinely never existed there. Once you trust the change, the identical command with `--namespace production` (and a real `--workflow-id`, not a `-test` one) is how it actually goes live — same workflow code, same task queue name, same worker process even, just a different namespace on the client call.
 
 ## Resource caps — deliberately conservative starting points
 

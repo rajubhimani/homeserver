@@ -99,8 +99,15 @@ services:
 
   # temporalio/auto-setup used to also register the "default" namespace on
   # first boot — temporalio/server doesn't, so this replaces that half too.
-  # Idempotent (describe-then-create, same as auto-setup's own logic) so it's
-  # a harmless no-op on every start after the first.
+  # Also registers "staging" as a second Namespace — the isolation boundary
+  # demo: temporal-worker (worker.py) runs one Worker loop per Namespace,
+  # both polling a task queue named "homeserver", and they never see each
+  # other's work despite the identical queue name — see
+  # docs/services/temporal.md's "Namespaces" section. "staging"/"production"
+  # demonstrate the real, common reason to reach for multiple Namespaces on
+  # one cluster: environment isolation without a second Temporal deployment.
+  # Idempotent (describe-then-create, same as auto-setup's own logic) so
+  # it's a harmless no-op on every start after the first.
   temporal-create-namespace:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
     container_name: temporal-create-namespace
@@ -112,11 +119,13 @@ services:
     command:
       - |
         set -eu
-        if ! temporal operator namespace describe --namespace default; then
-          temporal operator namespace create --retention 24h --description "Default namespace for Temporal Server." --namespace default
-        else
-          echo "Default namespace already registered."
-        fi
+        for ns in default staging production; do
+          if ! temporal operator namespace describe --namespace "$$ns"; then
+            temporal operator namespace create --retention 24h --description "Homeserver namespace: $$ns" --namespace "$$ns"
+          else
+            echo "Namespace $$ns already registered."
+          fi
+        done
     depends_on:
       temporal:
         condition: service_healthy

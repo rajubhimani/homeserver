@@ -4,12 +4,25 @@
 # lives"). Dagster has no generic pre-built "just runs" webserver/daemon the
 # way Airflow or Temporal's server do — a code location IS your pipeline
 # code by definition.
-FROM python:3.13-slim
+#
+# Dependencies come from pyproject.toml/uv.lock (uv lock) — `uv sync --locked`
+# fails the build outright if uv.lock is out of date instead of silently
+# re-resolving. Multi-stage so the final image only carries the resulting
+# .venv, not uv itself or its build/download cache.
+FROM python:3.14-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN pip install --no-cache-dir \
-    dagster==1.13.18 \
-    dagster-postgres==0.29.18 \
-    dagster-docker==0.29.18
+ENV UV_PYTHON_DOWNLOADS=0 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+WORKDIR /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
+FROM python:3.14-slim
+COPY --from=builder /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /opt/dagster/app
 
