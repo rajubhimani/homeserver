@@ -9,4 +9,9 @@ sed \
   -e "s/SITE_NAME_PLACEHOLDER/${SITE_NAME}/g" \
   -e "s/TAGLINE_PLACEHOLDER/${TAGLINE}/g" \
   /template/index.html > /usr/share/nginx/html/index.html
+# nginx.conf needs DOMAIN too — some health checks (Zulip's) validate the
+# Host header strictly and reject anything but the real configured domain.
+sed \
+  -e "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" \
+  /template/nginx.conf > /etc/nginx/conf.d/default.conf
 exec nginx -g 'daemon off;'

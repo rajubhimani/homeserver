@@ -61,6 +61,10 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Airflow | [docs/services/airflow.md](services/airflow.md) |
 | Temporal | [docs/services/temporal.md](services/temporal.md) |
 | Dagster | [docs/services/dagster.md](services/dagster.md) |
+| Mailpit | [docs/services/mailpit.md](services/mailpit.md) |
+| Mattermost | [docs/services/mattermost.md](services/mattermost.md) |
+| Rocket.Chat | [docs/services/rocketchat.md](services/rocketchat.md) |
+| Zulip | [docs/services/zulip.md](services/zulip.md) |
 | CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
 | Wallabag | [docs/services/wallabag.md](services/wallabag.md) |
 | Atuin | [docs/services/atuin.md](services/atuin.md) |

@@ -38,6 +38,14 @@ services:
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
         /entrypoint airflow db migrate
         /entrypoint airflow users create --username "${_AIRFLOW_WWW_USER_USERNAME}" --password "${_AIRFLOW_WWW_USER_PASSWORD}" --firstname Admin --lastname User --role Admin --email "${_AIRFLOW_WWW_USER_EMAIL}" || true
+        # email_on_failure/email_on_retry route through SmtpNotifier in
+        # Airflow 3, which reads this Connection, not AIRFLOW__SMTP__* config
+        # (that's the older utils.email.send_email_smtp direct-config path,
+        # still set separately for anyone wiring that up instead) — without
+        # this, every alert email fails with "conn_id smtp_default isn't
+        # defined" even with SMTP config fully set (hit this exact error
+        # building example_email_alert_on_failure.py).
+        /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "${SMTP_HOST}" --conn-port "${SMTP_PORT}" --conn-extra "{\"from_email\": \"${SMTP_FROM_EMAIL}\", \"disable_tls\": true, \"disable_ssl\": true}" || true
     env_file: .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -139,6 +147,18 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
       AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
       AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+      # Points at the shared services/mailpit/ catcher (also used by other
+      # services in this stack) — this is what actually makes
+      # AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_RETRY/FAILURE (documented as a
+      # no-op default in .env.example) genuinely send mail instead of
+      # silently doing nothing. Mailpit only catches — nothing leaves this
+      # host — so this is safe as an always-on default, not just a demo
+      # toggle. See example_email_alert_on_failure.py.
+      AIRFLOW__SMTP__SMTP_HOST: ${SMTP_HOST}
+      AIRFLOW__SMTP__SMTP_PORT: ${SMTP_PORT}
+      AIRFLOW__SMTP__SMTP_MAIL_FROM: ${SMTP_FROM_EMAIL}
+      AIRFLOW__SMTP__SMTP_STARTTLS: "false"
+      AIRFLOW__SMTP__SMTP_SSL: "false"
       # DockerOperator support — LocalExecutor runs tasks directly in this
       # container, so this is the one that needs both the socket and the
       # provider package to let a DAG launch its own (optionally

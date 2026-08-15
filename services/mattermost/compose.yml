@@ -1,0 +1,76 @@
+services:
+  mattermost-db:
+    image: postgres:18.4-alpine
+    container_name: mattermost-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - mattermost-postgres-alpine:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:${MATTERMOST_VERSION}
+    container_name: mattermost
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: UTC
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mattermost-db:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
+      MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+      MM_SERVICESETTINGS_SITEURL: https://mattermost.${DOMAIN}
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      # Routed through the shared Mailpit catcher — see docs/services/mailpit.md.
+      # No auth needed (Mailpit accepts any/none).
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: "true"
+      MM_EMAILSETTINGS_SMTPSERVER: mailpit
+      MM_EMAILSETTINGS_SMTPPORT: "1025"
+      MM_EMAILSETTINGS_ENABLESMTPAUTH: "false"
+      MM_EMAILSETTINGS_CONNECTIONSECURITY: ""
+    # Official image runs as uid 2000 — matches DATA_ROOT subdirs created
+    # (and chowned) in Setup below.
+    user: "2000:2000"
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    volumes:
+      - ${DATA_ROOT}/config:/mattermost/config
+      - ${DATA_ROOT}/data:/mattermost/data
+      - ${DATA_ROOT}/logs:/mattermost/logs
+      - ${DATA_ROOT}/plugins:/mattermost/plugins
+      - ${DATA_ROOT}/client-plugins:/mattermost/client/plugins
+      - ${DATA_ROOT}/bleve-indexes:/mattermost/bleve-indexes
+    # No healthcheck override — the official image is genuinely distroless
+    # (no shell, no wget/curl, not even `ls`; confirmed the mattermost
+    # binary itself has no ping/health subcommand either), but it bakes its
+    # own HEALTHCHECK into the image (`mmctl system status --local`), which
+    # this correctly falls back to as long as nothing here overrides it.
+    depends_on:
+      mattermost-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  mattermost-postgres-alpine:
+
+networks:
+  homeserver:
+    external: true

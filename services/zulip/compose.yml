@@ -1,0 +1,186 @@
+services:
+  # Zulip's own Postgres image (not this stack's usual postgres:18.4-alpine
+  # default) — bakes in extensions/config Zulip specifically requires, same
+  # reasoning as immich's custom Postgres image (see homeserver-postgres skill).
+  zulip-db:
+    image: zulip/zulip-postgresql:14
+    container_name: zulip-db
+    restart: unless-stopped
+    secrets:
+      - zulip__postgres_password
+    environment:
+      POSTGRES_DB: zulip
+      POSTGRES_USER: zulip
+      POSTGRES_PASSWORD_FILE: /run/secrets/zulip__postgres_password
+    volumes:
+      - zulip-postgres:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - homeserver
+
+  zulip-memcached:
+    image: memcached:alpine
+    container_name: zulip-memcached
+    restart: unless-stopped
+    secrets:
+      - zulip__memcached_password
+    environment:
+      SASL_CONF_PATH: /home/memcache/memcached.conf
+      MEMCACHED_SASL_PWDB: /home/memcache/memcached-sasl-db
+      MEMCACHED_PASSWORD_FILE: /run/secrets/zulip__memcached_password
+    command:
+      - sh
+      - -euc
+      - |
+        echo 'mech_list: plain' > "$$SASL_CONF_PATH"
+        echo "zulip@$$HOSTNAME:$$(cat $$MEMCACHED_PASSWORD_FILE)" > "$$MEMCACHED_SASL_PWDB"
+        echo "zulip@localhost:$$(cat $$MEMCACHED_PASSWORD_FILE)" >> "$$MEMCACHED_SASL_PWDB"
+        exec memcached -S
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - homeserver
+
+  zulip-rabbitmq:
+    image: rabbitmq:4.2
+    container_name: zulip-rabbitmq
+    restart: unless-stopped
+    secrets:
+      - zulip__rabbitmq_password
+    environment:
+      RABBITMQ_DEFAULT_USER: zulip
+      RABBITMQ_PASSWORD_FILE: /run/secrets/zulip__rabbitmq_password
+    command:
+      - sh
+      - -euc
+      - |
+        export RABBITMQ_DEFAULT_PASS="$$(cat $$RABBITMQ_PASSWORD_FILE)"
+        echo "default_user = $$RABBITMQ_DEFAULT_USER" >> /etc/rabbitmq/rabbitmq.conf
+        echo "default_pass = $$RABBITMQ_DEFAULT_PASS" >> /etc/rabbitmq/rabbitmq.conf
+        exec docker-entrypoint.sh rabbitmq-server
+    volumes:
+      - zulip-rabbitmq:/var/lib/rabbitmq
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - homeserver
+
+  zulip-redis:
+    image: redis:alpine
+    container_name: zulip-redis
+    restart: unless-stopped
+    secrets:
+      - zulip__redis_password
+    environment:
+      REDIS_PASSWORD_FILE: /run/secrets/zulip__redis_password
+    command:
+      - sh
+      - -euc
+      - /usr/local/bin/docker-entrypoint.sh --requirepass "$$(cat $$REDIS_PASSWORD_FILE)"
+    volumes:
+      - zulip-redis:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - homeserver
+
+  zulip:
+    image: ghcr.io/zulip/zulip-server:${ZULIP_VERSION}
+    container_name: zulip
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SETTING_REMOTE_POSTGRES_HOST: zulip-db
+      SETTING_MEMCACHED_LOCATION: zulip-memcached:11211
+      SETTING_RABBITMQ_HOST: zulip-rabbitmq
+      SETTING_REDIS_HOST: zulip-redis
+      SETTING_EXTERNAL_HOST: zulip.${DOMAIN}
+      SETTING_ZULIP_ADMINISTRATOR: ${ZULIP_ADMIN_EMAIL}
+      # Off by default upstream — anyone who can reach zulip.${DOMAIN} could
+      # otherwise create an org, not just you. Defaults to enabled here
+      # (see ZULIP_OPEN_REALM_CREATION in .env.example) for this playground;
+      # adds a "Create new organization" link to the homepage and makes
+      # plain /new/ work with no token. Set to False in .env to go back to
+      # single-use CLI-generated links only.
+      SETTING_OPEN_REALM_CREATION: ${ZULIP_OPEN_REALM_CREATION:-True}
+      # Routed through the shared Mailpit catcher — see docs/services/mailpit.md.
+      # No auth needed (Mailpit accepts any/none).
+      SETTING_EMAIL_HOST: mailpit
+      SETTING_EMAIL_PORT: "1025"
+      SETTING_EMAIL_USE_TLS: "False"
+      SETTING_EMAIL_USE_SSL: "False"
+      # nginx-plain/landing terminate TLS and proxy plain HTTP to this
+      # container on the shared homeserver network — trust their
+      # X-Forwarded-* headers instead of requiring Zulip do its own
+      # certbot/self-signed TLS termination (the alternative this image
+      # supports but nothing else in this stack uses). TRUST_GATEWAY_IP
+      # alone isn't enough: it only trusts connections arriving from the
+      # Docker gateway address specifically, but sibling containers here
+      # connect as peers on the bridge network (their own container IP),
+      # not routed through the gateway — hit real 500s from every
+      # container-to-container health/proxy check until this covered the
+      # whole subnet instead. 172.16.0.0/12 is Docker's entire default
+      # bridge-network allocation range, not this specific deployment's
+      # actual subnet (`docker network inspect homeserver` showed
+      # 172.18.0.0/16 here, but that's assigned per-host at network
+      # creation time and isn't the same on every machine this repo runs
+      # on) — deliberately broad for portability, still RFC1918-internal
+      # only, never reachable from outside this host either way.
+      LOADBALANCER_IPS: 172.16.0.0/12
+    secrets:
+      - zulip__postgres_password
+      - zulip__memcached_password
+      - zulip__rabbitmq_password
+      - zulip__redis_password
+      - zulip__secret_key
+      - zulip__email_password
+    volumes:
+      - zulip-data:/data
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1048576
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    depends_on:
+      - zulip-db
+      - zulip-memcached
+      - zulip-rabbitmq
+      - zulip-redis
+    networks:
+      - homeserver
+
+secrets:
+  zulip__postgres_password:
+    environment: "ZULIP__POSTGRES_PASSWORD"
+  zulip__memcached_password:
+    environment: "ZULIP__MEMCACHED_PASSWORD"
+  zulip__rabbitmq_password:
+    environment: "ZULIP__RABBITMQ_PASSWORD"
+  zulip__redis_password:
+    environment: "ZULIP__REDIS_PASSWORD"
+  zulip__secret_key:
+    environment: "ZULIP__SECRET_KEY"
+  zulip__email_password:
+    environment: "ZULIP__EMAIL_PASSWORD"
+
+volumes:
+  zulip-postgres:
+  zulip-rabbitmq:
+  zulip-redis:
+  zulip-data:
+
+networks:
+  homeserver:
+    external: true

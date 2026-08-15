@@ -7,7 +7,7 @@ services:
     entrypoint: ["/entrypoint.sh"]
     volumes:
       - ./index.html:/template/index.html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.conf:/template/nginx.conf:ro
       - ./entrypoint.sh:/entrypoint.sh:ro
       - ../../services.json:/usr/share/nginx/html/services.json:ro
     healthcheck:

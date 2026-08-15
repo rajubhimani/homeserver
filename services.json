@@ -10,7 +10,8 @@
     "git": "Git & CI",
     "automation": "Automation & Low-code",
     "identity": "Identity & Secrets",
-    "tools": "Tools"
+    "tools": "Tools",
+    "communication": "Chat & Messaging"
   },
   "services": [
     {
@@ -339,6 +340,36 @@
       "desc": "Bookmark manager with AI auto-tagging and full-text search of saved pages."
     },
     {
+      "slug": "mattermost",
+      "tier": "extra",
+      "name": "Mattermost",
+      "category": "productivity",
+      "subcategory": "communication",
+      "icon": "teal",
+      "svg": "<path d=\"M3 4 h12 a1.5 1.5 0 0 1 1.5 1.5 v6 a1.5 1.5 0 0 1 -1.5 1.5 h-8 l-3.5 3 v-3 h-0.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-6 A1.5 1.5 0 0 1 3 4 Z\" stroke=\"#0F5C57\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "Slack-style team chat: channels, DMs, threads. Lighter self-hosted footprint than Rocket.Chat/Zulip."
+    },
+    {
+      "slug": "rocketchat",
+      "tier": "extra",
+      "name": "Rocket.Chat",
+      "category": "productivity",
+      "subcategory": "communication",
+      "icon": "red",
+      "svg": "<path d=\"M3 4 h12 a1.5 1.5 0 0 1 1.5 1.5 v6 a1.5 1.5 0 0 1 -1.5 1.5 h-8 l-3.5 3 v-3 h-0.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-6 A1.5 1.5 0 0 1 3 4 Z\" stroke=\"#8A1F1F\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <circle cx=\"6.5\" cy=\"8\" r=\"0.8\" fill=\"#8A1F1F\"/> <circle cx=\"9\" cy=\"8\" r=\"0.8\" fill=\"#8A1F1F\"/> <circle cx=\"11.5\" cy=\"8\" r=\"0.8\" fill=\"#8A1F1F\"/>",
+      "desc": "Full-featured team chat with channels, apps, and webhooks. Heaviest of the chat playground trio (MongoDB replica set + NATS)."
+    },
+    {
+      "slug": "zulip",
+      "tier": "extra",
+      "name": "Zulip",
+      "category": "productivity",
+      "subcategory": "communication",
+      "icon": "purple",
+      "svg": "<path d=\"M3 4 h12 a1.5 1.5 0 0 1 1.5 1.5 v6 a1.5 1.5 0 0 1 -1.5 1.5 h-8 l-3.5 3 v-3 h-0.5 a1.5 1.5 0 0 1 -1.5 -1.5 v-6 A1.5 1.5 0 0 1 3 4 Z\" stroke=\"#5B2A86\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <path d=\"M6 7.5 h6 M6 10 h4\" stroke=\"#5B2A86\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
+      "desc": "Topic-threaded team chat, good for organized async discussion. Postgres + RabbitMQ + Redis + Memcached backing services."
+    },
+    {
       "slug": "ntfy",
       "tier": "extra",
       "name": "ntfy",
@@ -396,6 +427,16 @@
       "icon": "gray",
       "svg": "<rect x=\"3\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"10\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"6.5\" y=\"10\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <path d=\"M5.5 8 L8.5 10.5 M12.5 8 L9.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
       "desc": "Data orchestrator built around software-defined assets \u2014 track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline."
+    },
+    {
+      "slug": "mailpit",
+      "tier": "extra",
+      "name": "Mailpit",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "yellow",
+      "svg": "<path d=\"M2.5 4.5 h13 a1 1 0 0 1 1 1 v7 a1 1 0 0 1 -1 1 h-13 a1 1 0 0 1 -1 -1 v-7 a1 1 0 0 1 1 -1 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M2 5 l7 5.5 L16 5\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "SMTP catcher for the whole stack \u2014 point any service at it and see the email it would have sent, nothing ever actually delivered."
     },
     {
       "slug": "crowdsec",

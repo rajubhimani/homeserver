@@ -39,6 +39,10 @@
 | [Airflow](docs/services/airflow.md) | Programmatic workflow orchestration (Python DAGs) | — |
 | [Temporal](docs/services/temporal.md) | Durable execution engine for reliable distributed workflows | — |
 | [Dagster](docs/services/dagster.md) | Data orchestrator built around software-defined assets | — |
+| [Mailpit](docs/services/mailpit.md) | Shared SMTP catcher — see what any service in this stack would have emailed, nothing ever really sent | Mailtrap |
+| [Mattermost](docs/services/mattermost.md) | Slack-style team chat — lightest of the chat playground trio | Slack |
+| [Rocket.Chat](docs/services/rocketchat.md) | Full-featured team chat — heaviest of the trio (MongoDB replica set + NATS) | Slack |
+| [Zulip](docs/services/zulip.md) | Topic-threaded team chat — Postgres + RabbitMQ + Redis + Memcached | Slack |
 | [CrowdSec](docs/services/crowdsec.md) | Collaborative intrusion detection (detection-only, see TODO.md) | fail2ban |
 | [Wallabag](docs/services/wallabag.md) | Read-it-later app | Pocket |
 | [Atuin](docs/services/atuin.md) | Shell history sync across machines | plain bash/zsh history file |
@@ -213,6 +217,10 @@ uv run homeserver.py prod up all
     ├── airflow/
     ├── temporal/
     ├── dagster/
+    ├── mailpit/
+    ├── mattermost/
+    ├── rocketchat/
+    ├── zulip/
     ├── crowdsec/
     ├── wallabag/
     ├── atuin/
@@ -270,6 +278,10 @@ service_data/
 ├── airflow/          (dags/, logs/, config/, plugins/) — DB lives in a named volume, not this tree
 ├── temporal/         (empty — DB lives in a named volume; dynamicconfig/ and worker/ are checked-in config/code, not DATA_ROOT-scoped)
 ├── dagster/          (empty — DB lives in a named volume; user-code/ and webserver-daemon/ are checked-in config/code, not DATA_ROOT-scoped)
+├── mailpit/          (data/) — SQLite message store
+├── mattermost/       (config/, data/, logs/, plugins/, client-plugins/, bleve-indexes/) — DB lives in a named volume, not this tree
+├── rocketchat/       (uploads/) — MongoDB lives in named volumes, not this tree
+├── zulip/            (empty — Postgres/RabbitMQ/Redis/Zulip's own /data all live in named volumes)
 ├── crowdsec/         (config/) — parsed decisions/DB live in a named volume, not this tree
 ├── wallabag/         (postgres/, data/, images/)
 ├── atuin/            (postgres/, config/)
