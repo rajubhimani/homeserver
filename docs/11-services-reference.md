@@ -14,8 +14,8 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing |
-| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, portainer |
+| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, portainer |
+| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
 `down all` always stops everything in reverse order — no list to maintain.
@@ -40,6 +40,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Beszel | `beszel` | 8106 | 8090 | min |
 | nginx-plain | `nginx-plain` | 80 / 443 | 80 / 443 | min |
 | Landing Page | `landing` | 8080 | 80 | min |
+| Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | min |
 | Nextcloud | `nextcloud` | 8081 | 80 | core |
 | Vaultwarden | `vaultwarden` | 8200 | 80 | core |
 | Forgejo | `forgejo` | 3002 / 2223 (SSH) | 3000 / 22 | core |
@@ -47,7 +48,6 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Immich | `immich-server` | 2283 | 2283 | core |
 | Jellyfin | `jellyfin` | 8096 | 8096 | core |
 | Guacamole | `guacamole` | 8107 | 8080 | core |
-| Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | core |
 | Dozzle | `dozzle` | 9999 | 8080 | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | extra |

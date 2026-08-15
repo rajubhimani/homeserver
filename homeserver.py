@@ -4,12 +4,20 @@
 Usage:
   python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
   python homeserver.py <env> -r <service...>   (shorthand for restart)
+  python homeserver.py <env> precreate <min|core|all|service...>
+                                                create containers without starting them, so a
+                                                never-started service shows up as a stack in
+                                                Portainer (auto-detected by its labels) and can be
+                                                started from there later — skips anything that
+                                                already has containers. Manual-tier services aren't
+                                                included in 'all' here either — list them by name
+                                                alongside 'all' if you want them too.
   python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
   python homeserver.py orphaned-volumes [service|all] [--yes]
                                                 list/remove volumes not declared in a service's current compose.yml
 
 Service tiers:
-  min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing)
+  min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, portainer)
   core   — full default stack, includes min (starts with 'up core' or 'up all')
   all    — core + extra (everything); down all always stops everything
   extra  — optional services, started with 'up all' or individually
@@ -120,9 +128,9 @@ if os.path.exists(DOCKER_SOCKET):
 #
 #   down min/core/all = same sets, reversed
 
-SERVICES_MIN = ["beszel", "cloudflared", "nginx-plain", "landing"]
+SERVICES_MIN = ["beszel", "cloudflared", "nginx-plain", "landing", "portainer"]
 
-SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole", "portainer"]
+SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole"]
 
 SERVICES_EXTRA = [
     "dozzle", "dockge", "uptime-kuma", "openproject", "paperless",
@@ -253,6 +261,13 @@ class DockerBackend(ABC):
         used for the roles dump above, where 'role already exists' for
         roles the fresh cluster's own initdb already created is expected
         and harmless). Returns (success, stderr_text)."""
+
+    @abstractmethod
+    def compose_create(self, files: list[Path], env: dict[str, str], profile: str | None) -> tuple[bool, str]:
+        """docker compose create — makes containers (pulls images, wires
+        networks/volumes) without starting them. Used by 'precreate' so a
+        service becomes visible/startable from Portainer's own UI without
+        actually running it yet. Returns (success, combined output)."""
 
     @abstractmethod
     def compose_down(self, files: list[Path], env: dict[str, str], profile: str | None) -> bool: ...
@@ -393,6 +408,10 @@ class SubprocessBackend(DockerBackend):
             input=sql, capture_output=True,
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def compose_create(self, files, env, profile):
+        proc = self._run(self._compose_args(files, profile) + ["create"], env=env)
+        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
     def compose_down(self, files, env, profile):
         proc = self._run(self._compose_args(files, profile) + ["down"], env=env)
@@ -582,6 +601,17 @@ class PythonOnWhalesBackend(DockerBackend):
             input=sql, capture_output=True,
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def compose_create(self, files, env, profile):
+        from python_on_whales.exceptions import DockerException  # noqa: PLC0415
+        client = self._client(files, profile)
+        try:
+            with self._env(env):
+                client.compose.create()
+            return True, ""
+        except DockerException as e:
+            out = f"{e.stderr or ''}\n{e.stdout or ''}"
+            return False, out
 
     def compose_down(self, files, env, profile):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
@@ -1050,6 +1080,42 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
             warn("Podman dependency tracking error — checking container status...")
 
     return wait_healthy(service)
+
+
+def do_precreate(service: str, env: str, profile: str | None) -> bool:
+    """Creates a service's containers without starting them — so it shows
+    up as a stack in Portainer (which auto-detects any compose project by
+    its container labels, running or not) and can be started from there
+    later, without ever needing Portainer's own API/credentials. Skips
+    services that already have containers (running or previously started)
+    so this never touches/recreates anything already in use."""
+    d = SERVICES_DIR / service
+    if not d.is_dir():
+        error(f"Service '{service}' not found")
+        return False
+
+    all_names = BACKEND.all_container_names()
+    if any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in all_names):
+        info(f"{service} already has containers — skipping (use 'up' to start it)")
+        return True
+
+    files = compose_files(service, env)
+    cenv = compose_env(service)
+    # Precreate everything a service defines, including profile-gated
+    # containers (e.g. ollama's docker-ollama profile) — the point is
+    # making the whole thing visible/startable in Portainer, not
+    # replicating 'up's normal profile-gating.
+    cenv.setdefault("COMPOSE_PROFILES", "*")
+
+    if profile:
+        info(f"Pre-creating {service} ({env}) --profile {profile}...")
+    else:
+        info(f"Pre-creating {service} ({env})...")
+
+    ok, out = BACKEND.compose_create(files, cenv, profile)
+    if out:
+        print(out)
+    return ok
 
 
 def do_down(service: str, env: str, profile: str | None, no_backup: bool = False) -> bool:
@@ -1600,6 +1666,7 @@ def show_help() -> None:
     print("    python homeserver.py <env> -u <service...>                     (up shorthand)")
     print("    python homeserver.py <env> -d <service...>                     (down shorthand)")
     print("    python homeserver.py <env> -r <service...>                     (restart shorthand)")
+    print("    python homeserver.py <env> precreate <tier|service...>          create without starting (visible in Portainer)")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
     print()
@@ -1608,7 +1675,7 @@ def show_help() -> None:
     print("    prod   ports on 127.0.0.1 only (nginx proxy handles external)")
     print()
     print(f"  {BOLD}Tiers:{RESET}")
-    print("    min     bare minimum — beszel, cloudflared, nginx-plain, landing")
+    print("    min     bare minimum — beszel, cloudflared, nginx-plain, landing, portainer")
     print("    core    full default stack (includes min)")
     print("    all     core + extra — starts/stops everything")
     print("    running update only — currently running services")
@@ -1633,6 +1700,9 @@ def show_help() -> None:
     print("    python homeserver.py dev down mealie                 stop AND auto-snapshot (default)")
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
+    print("    python homeserver.py dev precreate all gitlab stirling-pdf photoprism")
+    print("                                                         create every never-started service (incl. manual-tier) so")
+    print("                                                         they all show up as start-able stacks in Portainer")
     print("    python homeserver.py dev backup all                  snapshot every service now, regardless of running state")
     print("    python homeserver.py dev snapshots mealie            list available snapshots for a service")
     print("    python homeserver.py dev restore mealie              restore the latest snapshot")
@@ -1684,6 +1754,8 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
         else:
             if action_fn is do_up:
                 success(f"{service} started")
+            elif action_fn is do_precreate:
+                success(f"{service} pre-created")
             elif action_fn is do_update:
                 success(f"{service} updated")
             elif action_fn is do_backup:
@@ -1739,11 +1811,11 @@ def main() -> int:
 
     if action not in (
         "up", "-u", "down", "-d", "restart", "-r", "logs", "update",
-        "backup", "restore", "snapshots", "dump", "migrate",
+        "backup", "restore", "snapshots", "dump", "migrate", "precreate",
     ):
         error(
             "Unknown action "
-            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, or migrate"
+            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, or precreate"
         )
         show_help()
         return 1
@@ -1834,6 +1906,21 @@ def main() -> int:
         else:
             header(f"Starting services in {env} mode...")
             run_list(do_up, services_to_run, env, profile, "Services", extra=exclude)
+
+    elif action == "precreate":
+        ensure_network()
+        if run_all:
+            header(f"Pre-creating all services (min + core + extra) in {env} mode...")
+            run_list(do_precreate, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+        elif run_core:
+            header(f"Pre-creating core services (min + core) in {env} mode...")
+            run_list(do_precreate, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+        elif run_min:
+            header(f"Pre-creating min services in {env} mode...")
+            run_list(do_precreate, SERVICES_MIN + services_to_run, env, profile, "Min services")
+        else:
+            header(f"Pre-creating services in {env} mode...")
+            run_list(do_precreate, services_to_run, env, profile, "Services")
 
     elif action in ("down", "-d"):
         if run_all:
