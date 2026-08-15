@@ -14,15 +14,15 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `uv run homeserver.py dev up min` | dozzle, beszel, cloudflared, nginx-plain, landing |
+| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing |
 | `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, portainer |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
 `down all` always stops everything in reverse order — no list to maintain.
 
 **Extra services** (started with `up all` or individually):
-dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
-mealie, syncthing, authentik,
+dozzle, dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
+mealie, homebox, syncthing, authentik,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
 trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, it-tools,
 n8n, crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
@@ -37,7 +37,6 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 
 | Service | Container | Dev port | Container port | Tier |
 | --- | --- | --- | --- | --- |
-| Dozzle | `dozzle` | 9999 | 8080 | min |
 | Beszel | `beszel` | 8106 | 8090 | min |
 | nginx-plain | `nginx-plain` | 80 / 443 | 80 / 443 | min |
 | Landing Page | `landing` | 8080 | 80 | min |
@@ -49,12 +48,14 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Jellyfin | `jellyfin` | 8096 | 8096 | core |
 | Guacamole | `guacamole` | 8107 | 8080 | core |
 | Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | core |
+| Dozzle | `dozzle` | 9999 | 8080 | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |
 | Paperless-ngx | `paperless` | 8010 | 8000 | extra |
 | Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | extra |
 | Mealie | `mealie` | 9925 | 9000 | extra |
+| HomeBox | `homebox` | 8136 | 7745 | extra |
 | Syncthing | `syncthing` | 8087 | 8384 | extra |
 | Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | extra |
 | Miniflux | `miniflux` | 8093 | 8080 | extra |
@@ -96,7 +97,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
-**Next available ports:** web `8136`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8137`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -122,7 +123,6 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 
 | Domain | Forward Hostname | Forward Port | Tier |
 | --- | --- | --- | --- |
-| `dozzle.yourdomain.com` | `dozzle` | `8080` | min |
 | `beszel.yourdomain.com` | `beszel` | `8090` | min |
 | `nextcloud.yourdomain.com` | `nextcloud` | `80` | core |
 | `vaultwarden.yourdomain.com` | `vaultwarden` | `80` | core |
@@ -133,6 +133,7 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `photos.yourdomain.com` | `immich-server` | `2283` | core |
 | `jellyfin.yourdomain.com` | `jellyfin` | `8096` | core |
 | `guacamole.yourdomain.com` | `guacamole` | `8080` | core |
+| `dozzle.yourdomain.com` | `dozzle` | `8080` | extra |
 | `paperless.yourdomain.com` | `paperless` | `8000` | extra |
 | `stirling-pdf.yourdomain.com` | `stirling-pdf-lite` | `8080` | extra |
 | `mealie.yourdomain.com` | `mealie` | `9000` | extra |

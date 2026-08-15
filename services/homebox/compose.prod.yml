@@ -1,0 +1,4 @@
+services:
+  homebox:
+    ports:
+      - "127.0.0.1:8136:7745"

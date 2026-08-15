@@ -9,7 +9,7 @@ Usage:
                                                 list/remove volumes not declared in a service's current compose.yml
 
 Service tiers:
-  min    — bare minimum to run the server (dozzle, nginx-plain, landing)
+  min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing)
   core   — full default stack, includes min (starts with 'up core' or 'up all')
   all    — core + extra (everything); down all always stops everything
   extra  — optional services, started with 'up all' or individually
@@ -120,19 +120,19 @@ if os.path.exists(DOCKER_SOCKET):
 #
 #   down min/core/all = same sets, reversed
 
-SERVICES_MIN = ["dozzle", "beszel", "cloudflared", "nginx-plain", "landing"]
+SERVICES_MIN = ["beszel", "cloudflared", "nginx-plain", "landing"]
 
 SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole", "portainer"]
 
 SERVICES_EXTRA = [
-    "dockge", "uptime-kuma", "openproject", "paperless",
+    "dozzle", "dockge", "uptime-kuma", "openproject", "paperless",
     "stirling-pdf-lite", "mealie",
     "syncthing", "authentik", "miniflux", "audiobookshelf",
     "invoiceshelf", "appflowy", "plane", "ollama", "open-webui", "vikunja",
     "trilium", "silverbullet", "outline", "bookstack", "excalidraw", "karakeep",
     "ntfy", "it-tools", "n8n", "crowdsec", "wallabag", "atuin", "adguard-home",
     "orangehrm", "nocodb", "listmonk", "documenso", "calcom", "plausible",
-    "penpot", "coolify", "supabase", "observability",
+    "penpot", "coolify", "supabase", "observability", "homebox",
 ]
 
 # Manual-only — never started by 'up min/core/all' (or their down/restart/
@@ -1608,7 +1608,7 @@ def show_help() -> None:
     print("    prod   ports on 127.0.0.1 only (nginx proxy handles external)")
     print()
     print(f"  {BOLD}Tiers:{RESET}")
-    print("    min     bare minimum — dozzle, nginx-plain, landing")
+    print("    min     bare minimum — beszel, cloudflared, nginx-plain, landing")
     print("    core    full default stack (includes min)")
     print("    all     core + extra — starts/stops everything")
     print("    running update only — currently running services")
