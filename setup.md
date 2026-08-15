@@ -134,7 +134,7 @@ Quick links for day-to-day use once the stack is running.
 
 ```bash
 # Service tiers — MIN ⊂ CORE ⊂ ALL
-uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing)
+uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing, portainer)
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything (core + all extra services)
 
