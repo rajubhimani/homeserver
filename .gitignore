@@ -9,6 +9,10 @@ service_data-test/
 .env
 *.log
 *.json
+# services.json is the single source of truth for tiers + landing-page
+# grouping (homeserver.py, services/landing/index.html both read it) — must
+# override the blanket *.json ignore above or it silently never gets committed.
+!services.json
 *.pem
 ._*
 *.sqlite

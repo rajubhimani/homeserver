@@ -51,7 +51,9 @@ Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `d
 - **SERVICES_EXTRA** (`up all` or individually): dozzle → dockge → uptime-kuma → openproject → paperless → stirling-pdf-lite → mealie → syncthing → authentik → miniflux → audiobookshelf → invoiceshelf → appflowy → plane → ollama → open-webui → vikunja → trilium → silverbullet → outline → bookstack → excalidraw → karakeep → ntfy → it-tools → n8n → crowdsec → wallabag → atuin → adguard-home → orangehrm → nocodb → listmonk → documenso → calcom → plausible → penpot → coolify → supabase → observability
 - **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory), photoprism (redundant with immich, extra memory/maintenance cost)
 
-The lists above live in `homeserver.py` (`SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL`) — treat that as the source of truth and re-check it if this ever looks out of sync, rather than trusting this file blindly.
+**`services.json`** (repo root) is the actual source of truth for the lists above — `homeserver.py` derives `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL` from its `tier` field, and `services/landing/index.html` fetches the same file at page load for its category/subcategory cards, so a service's tier and its landing metadata can never drift apart. Re-check `services.json` (not this file) if the summary above ever looks stale.
+
+Every `category`/`subcategory` value in `services.json` is also a startable group: `up group:<name>` (works with every action — `down`/`restart`/`update`/etc.) starts every service sharing that category or subcategory, e.g. `up group:notes` or `up group:productivity`.
 
 Adding or moving a service between tiers, wiring up a new service end-to-end (landing page, health route, docs, ports): **see the `homeserver-add-service` skill.**
 
