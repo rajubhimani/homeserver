@@ -47,7 +47,7 @@ This isn't an optional executor choice bolted on afterward — it's Dagster's ow
 
 ## Try the starter examples
 
-Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), and `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below). There's also a non-asset job, `ops_pipeline_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
+Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below), and `customer_orders` (description/owners/kinds/column-schema metadata — see below). There's also a non-asset job, `ops_pipeline_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
@@ -107,6 +107,17 @@ docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launch
 docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
   "executionParams": {
     "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["orders_raw"]}, {"path": ["orders_staged"]}, {"path": ["orders_final"]}]},
+    "mode": "default"
+  }
+}'
+```
+
+**`customer_orders`** is the "catalog" side of Dagster, none of the other assets above use any of it: `description`/`owners`/`kinds` set on the asset definition itself (fixed, shown on every run), plus per-materialization `metadata` computed fresh each time — a row count, a markdown preview table, and a real column-by-column schema via `TableSchema`/`TableColumn` that renders as an actual table on the asset's own UI page, not just prose. This is the difference between an asset graph and something that actually functions as documentation. Verified via GraphQL after materializing: `description`/`kinds: ["postgres"]`/`owners: [{"team": "data-eng"}]` all present on the asset node, and the materialization's `metadataEntries` show `row_count: 3`, the rendered markdown preview, and all 4 columns (`order_id`/`customer_email`/`amount`/`status`) with their types and descriptions intact.
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
+  "executionParams": {
+    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["customer_orders"]}]},
     "mode": "default"
   }
 }'

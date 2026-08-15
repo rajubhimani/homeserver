@@ -43,6 +43,14 @@ Things this is meant to show a new user:
    a pipeline genuinely isn't shaped around producing/tracking data (a batch
    of side-effecting steps), or you're integrating code that's already
    op-shaped. See docs/12-orchestration.md for when this fits vs. an asset.
+10. customer_orders: the "catalog" side of Dagster — description, owners,
+    kinds, and metadata (both static and computed at materialization time:
+    row count, a markdown preview, a real column-by-column schema via
+    TableSchema/TableColumn). None of the assets above set any of this;
+    every one of them works without it, but this is what makes an asset's
+    own page in the UI genuinely documentation instead of just a lineage
+    node — the column schema in particular renders as a real table, not
+    just text.
 """
 
 from pathlib import Path
@@ -56,10 +64,14 @@ from dagster import (
     DailyPartitionsDefinition,
     Definitions,
     FilesystemIOManager,
+    MetadataValue,
+    Output,
     RunRequest,
     ScheduleDefinition,
     SensorEvaluationContext,
     SkipReason,
+    TableColumn,
+    TableSchema,
     asset,
     asset_check,
     define_asset_job,
@@ -183,6 +195,50 @@ def orders_multi_asset(context: AssetExecutionContext):
     return raw, staged, final
 
 
+@asset(
+    description="Order records pulled from the source system, one row per order.",
+    owners=["team:data-eng"],
+    kinds={"postgres"},
+)
+def customer_orders() -> Output[list[dict]]:
+    # Real version: read from the actual orders table. Stubbed the same way
+    # as raw_data() above; the point here isn't the data, it's everything
+    # attached to it below.
+    rows = [
+        {"order_id": 1, "customer_email": "a@example.com", "amount": 42.50, "status": "shipped"},
+        {"order_id": 2, "customer_email": "b@example.com", "amount": 15.00, "status": "pending"},
+        {"order_id": 3, "customer_email": "c@example.com", "amount": 99.99, "status": "shipped"},
+    ]
+
+    # Static description/owners/kinds above are fixed at definition time.
+    # This metadata is computed fresh on every materialization instead —
+    # shows up on this specific run, not just the asset in the abstract.
+    return Output(
+        rows,
+        metadata={
+            "row_count": MetadataValue.int(len(rows)),
+            "preview": MetadataValue.md(
+                "\n".join(
+                    ["| order_id | customer_email | amount | status |", "| --- | --- | --- | --- |"]
+                    + [f"| {r['order_id']} | {r['customer_email']} | {r['amount']} | {r['status']} |" for r in rows]
+                )
+            ),
+            # Renders as a real column-by-column table on the asset's own UI
+            # page — name/type/description per column, not just prose.
+            "column_schema": MetadataValue.table_schema(
+                TableSchema(
+                    columns=[
+                        TableColumn("order_id", "int", description="Primary key"),
+                        TableColumn("customer_email", "string"),
+                        TableColumn("amount", "float", description="Order total, USD"),
+                        TableColumn("status", "string", description="pending | shipped | cancelled"),
+                    ]
+                )
+            ),
+        },
+    )
+
+
 @op
 def extract_numbers() -> list[int]:
     # Real version: read from a file, queue, or API. Deliberately the same
@@ -233,6 +289,7 @@ defs = Definitions(
         daily_sales,
         source_system_summary,
         orders_multi_asset,
+        customer_orders,
     ],
     asset_checks=[report_freshness_check],
     jobs=[ops_pipeline_job],

@@ -149,13 +149,25 @@ docker exec -it temporal-admin-tools temporal workflow describe --address tempor
 
 Keep the `activities.py`/`workflows.py` split if an activity needs a non-deterministic import (`docker`, `requests`, anything with I/O) — Temporal's sandbox rejects those inside a workflow's own module even when only the activity uses them (bit this exact setup during development; see the comment at the top of `activities.py`).
 
-**Native scheduling**, independent of Airflow: any workflow can run on a cron without a separate scheduler service. Modern Temporal uses first-class Schedule objects (`temporal schedule create`), not the deprecated `cron_schedule` workflow-start parameter:
+**Native scheduling**, independent of Airflow: any workflow can run on a cron without a separate scheduler service. Modern Temporal uses first-class Schedule objects (`temporal schedule create`), not the deprecated `cron_schedule` workflow-start parameter — `--cron`/`--calendar`/`--interval` are all supported. Verified with a real running Schedule (`--interval 1m` against `GreetSourceWorkflow`, so it was actually observable within a couple minutes instead of waiting for a real cron tick): it auto-started a new Workflow Execution every 60 seconds, each with its own timestamped Workflow ID (`greet-scheduled-2026-08-15T21:27:00Z`, `...T21:28:00Z`), both completed — then paused (not deleted) so `schedule describe` still shows the evidence (`ActionCounts: {"Total":2,...}`) without it running forever:
 
 ```bash
 docker exec -it temporal-admin-tools temporal schedule create --address temporal:7233 \
   --schedule-id daily-retry-demo --cron "0 6 * * *" \
   --workflow-id daily-run --task-queue homeserver --type RetryableActivityWorkflow --input '"scheduled"'
+docker exec -it temporal-admin-tools temporal schedule describe --address temporal:7233 --schedule-id daily-retry-demo
+docker exec -it temporal-admin-tools temporal schedule toggle --address temporal:7233 --schedule-id daily-retry-demo --pause --reason "not needed yet"
 ```
+
+**Batch operations** — acting on many Workflow Executions at once via a search query, instead of one Workflow ID at a time. Tracked as its own job (`temporal batch list`/`describe`), separate from the workflows it acts on. Verified: started 3 `ApprovalWorkflow` instances (`approval-batch-1/2/3`, each `pending`), then a single command signaled all three simultaneously —
+
+```bash
+docker exec -it temporal-admin-tools temporal workflow signal --address temporal:7233 \
+  --query "WorkflowType='ApprovalWorkflow' AND WorkflowId STARTS_WITH 'approval-batch-' AND ExecutionStatus='Running'" \
+  --name approve --reason "batch approval demo"
+```
+
+— `temporal batch describe --job-id <id>` showed `CompletedCount: 3/3, FailureCount: 0/3`, and all three workflows independently confirmed `"approved"` via query immediately after, then ran to completion. The same `--query` mechanism works for `workflow cancel`/`workflow terminate` — the real use case is something like "cancel every `Running` workflow of a type that turned out to have a bug," across however many are currently in flight, in one command instead of a loop.
 
 ## Namespaces — the isolation boundary, not the task queue name
 
