@@ -7,7 +7,7 @@
 **Purpose:** Self-hosted home inventory tracker — log items (pendrives, cables, tools, anything in a box/drawer/closet) under locations and labels, print QR codes for boxes, then scan with your phone to pull up what's inside.
 **Port:** `8136` (host) → `7745` (container) | **Data:** `service_data/data/homebox/` | **Requires:** nothing (bundled SQLite)
 
-Maintained fork: [`sysadminsmedia/homebox`](https://github.com/sysadminsmedia/homebox) — the original `hay-kot/homebox` repo was archived in June 2024. Image: `ghcr.io/sysadminsmedia/homebox:latest`.
+Maintained fork: [`sysadminsmedia/homebox`](https://github.com/sysadminsmedia/homebox) — the original `hay-kot/homebox` repo was archived in June 2024. Image: `ghcr.io/sysadminsmedia/homebox:0.26.2`, pinned — check [releases](https://github.com/sysadminsmedia/homebox/releases) for updates.
 
 ## Setup
 

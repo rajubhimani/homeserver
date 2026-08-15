@@ -172,7 +172,7 @@ services:
   # their own resource-limited containers.
   temporal-worker:
     build: ./worker
-    image: homeserver/temporal-worker:latest
+    image: homeserver/temporal-worker:1.31.0
     container_name: temporal-worker
     restart: unless-stopped
     deploy:

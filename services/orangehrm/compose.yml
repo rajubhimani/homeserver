@@ -26,7 +26,8 @@ services:
       - homeserver
 
   orangehrm:
-    image: orangehrm/orangehrm:latest
+    # Pin explicitly, check https://hub.docker.com/r/orangehrm/orangehrm/tags for updates
+    image: orangehrm/orangehrm:5.8.1
     container_name: orangehrm
     restart: unless-stopped
     # No volume mount to a data path yet — see docs/services/orangehrm.md.

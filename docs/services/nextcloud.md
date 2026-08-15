@@ -94,7 +94,7 @@ Named volumes sidestep both checks entirely (daemon-managed, no host-filesystem 
 
 ```bash
 docker volume create nextcloud_nextcloud-config
-docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to alpine sh -c "cp -a /from/. /to/ && chown -R 33:33 /to"
+docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to alpine:3.24.1 sh -c "cp -a /from/. /to/ && chown -R 33:33 /to"
 # repeat for data (nextcloud_nextcloud-data) and html (nextcloud_nextcloud-html)
 ```
 

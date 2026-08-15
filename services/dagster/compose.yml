@@ -30,7 +30,7 @@ services:
   # this service's own `image:` tag below.
   dagster-user-code:
     build: ./user-code
-    image: homeserver/dagster-user-code:latest
+    image: homeserver/dagster-user-code:1.13.18
     container_name: dagster-user-code
     restart: unless-stopped
     env_file: .env
@@ -38,7 +38,7 @@ services:
       DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
       DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
       DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
-      DAGSTER_CURRENT_IMAGE: homeserver/dagster-user-code:latest
+      DAGSTER_CURRENT_IMAGE: homeserver/dagster-user-code:1.13.18
     deploy:
       resources:
         limits:
@@ -58,7 +58,7 @@ services:
 
   dagster-webserver:
     build: ./webserver-daemon
-    image: homeserver/dagster:latest
+    image: homeserver/dagster:1.13.18
     container_name: dagster-webserver
     restart: unless-stopped
     entrypoint: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
@@ -96,7 +96,7 @@ services:
   # submitted to QueuedRunCoordinator.
   dagster-daemon:
     build: ./webserver-daemon
-    image: homeserver/dagster:latest
+    image: homeserver/dagster:1.13.18
     container_name: dagster-daemon
     restart: unless-stopped
     entrypoint: ["dagster-daemon", "run"]
