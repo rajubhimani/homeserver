@@ -29,6 +29,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Paperless-ngx | [docs/services/paperless.md](services/paperless.md) |
 | Stirling PDF (Lite + Full) | [docs/services/stirling-pdf.md](services/stirling-pdf.md) |
 | Mealie | [docs/services/mealie.md](services/mealie.md) |
+| HomeBox | [docs/services/homebox.md](services/homebox.md) |
 | Forgejo | [docs/services/forgejo.md](services/forgejo.md) |
 | GitLab CE | [docs/services/gitlab.md](services/gitlab.md) |
 | Uptime Kuma | [docs/services/uptime-kuma.md](services/uptime-kuma.md) |

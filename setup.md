@@ -17,6 +17,7 @@
 | [Paperless-ngx](docs/services/paperless.md) | Document management | Scansnap cloud |
 | [Stirling PDF](docs/services/stirling-pdf.md) | PDF toolkit | Adobe Acrobat |
 | [Mealie](docs/services/mealie.md) | Recipe manager | Recipe apps |
+| [HomeBox](docs/services/homebox.md) | Home inventory tracker with QR labels | Sortly |
 | [Open WebUI + Ollama](docs/services/open-webui.md) | Local LLM chat interface | ChatGPT |
 | [Forgejo](docs/services/forgejo.md) | Git hosting | GitHub |
 | [GitLab CE](docs/services/gitlab.md) | Full DevOps platform | GitHub / GitLab.com |
@@ -133,7 +134,7 @@ Quick links for day-to-day use once the stack is running.
 
 ```bash
 # Service tiers — MIN ⊂ CORE ⊂ ALL
-uv run homeserver.py dev up min          # infrastructure only (dozzle, cloudflared, nginx-plain, landing)
+uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing)
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything (core + all extra services)
 
@@ -186,6 +187,7 @@ uv run homeserver.py prod up all
     ├── stirling-pdf/
     ├── stirling-pdf-lite/
     ├── mealie/
+    ├── homebox/
     ├── forgejo/
     ├── gitlab/
     ├── uptime-kuma/

@@ -1,0 +1,4 @@
+services:
+  homebox:
+    security_opt:
+      - label=disable
