@@ -23,6 +23,7 @@ def process() -> None:
 with DAG(
     dag_id="example_branching",
     description="Starter example: shell command + conditional branch",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

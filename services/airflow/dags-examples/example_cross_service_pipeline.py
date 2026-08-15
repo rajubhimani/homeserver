@@ -20,6 +20,7 @@ from airflow.sdk import dag, task
 @dag(
     dag_id="example_cross_service_pipeline",
     description="Starter example: Airflow schedules a durable Temporal workflow that materializes a Dagster asset",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

@@ -18,6 +18,7 @@ def call_flaky_api() -> None:
 with DAG(
     dag_id="example_scheduled_with_retries",
     description="Starter example: daily schedule + per-task retry/backoff",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule="@daily",
     catchup=False,

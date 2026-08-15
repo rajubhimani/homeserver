@@ -22,6 +22,7 @@ MARKER_FILE = Path("/opt/airflow/dags/.sensor_trigger")
 @dag(
     dag_id="example_sensor",
     description="Starter example: wait for a condition before proceeding",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

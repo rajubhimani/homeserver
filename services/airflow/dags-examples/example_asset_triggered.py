@@ -21,6 +21,7 @@ report_asset = Asset("homeserver://example/report")
 @dag(
     dag_id="example_asset_producer",
     description="Starter example: a task that updates an Asset",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,
@@ -37,6 +38,7 @@ def example_asset_producer():
 @dag(
     dag_id="example_asset_consumer",
     description="Starter example: scheduled to run when the Asset above updates",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=[report_asset],
     catchup=False,

@@ -10,6 +10,7 @@ from airflow.sdk import dag, task
 @dag(
     dag_id="example_etl_pipeline",
     description="Starter example: extract -> transform -> load task chain",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

@@ -1,8 +1,8 @@
 """Placeholder Temporal worker — replace with real workflow/activity code.
 
-Five starter workflows, each demonstrating a different Temporal strength —
-see workflows.py's docstrings and docs/services/temporal.md for how to run
-each one from temporal-admin-tools.
+Starter workflows, each demonstrating a different Temporal strength — see
+workflows.py's docstrings and docs/services/temporal.md for how to run each
+one from temporal-admin-tools.
 """
 
 import asyncio
@@ -22,8 +22,13 @@ from activities import (
 )
 from workflows import (
     ApprovalWorkflow,
+    BatchProcessingWorkflow,
+    ConfigurableCounterWorkflow,
+    DelayedReminderWorkflow,
+    GreetSourceWorkflow,
     MaterializeDagsterAssetWorkflow,
     OrderFulfillmentSagaWorkflow,
+    RecurringPollWorkflow,
     RetryableActivityWorkflow,
     RunContainerWorkflow,
 )
@@ -42,6 +47,11 @@ async def main() -> None:
             ApprovalWorkflow,
             MaterializeDagsterAssetWorkflow,
             OrderFulfillmentSagaWorkflow,
+            GreetSourceWorkflow,
+            BatchProcessingWorkflow,
+            DelayedReminderWorkflow,
+            ConfigurableCounterWorkflow,
+            RecurringPollWorkflow,
         ],
         activities=[
             run_container_activity,

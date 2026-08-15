@@ -41,7 +41,7 @@ Changing the code only needs a restart, not a rebuild:
 docker restart temporal-worker
 ```
 
-`worker/` ships five real, working workflows instead of a truly empty scaffold — each one demonstrates a different reason to reach for Temporal specifically, and each is runnable from `temporal-admin-tools` right now:
+`worker/` ships real, working workflows instead of a truly empty scaffold — each one demonstrates a different reason to reach for Temporal specifically, and each is runnable from `temporal-admin-tools` right now:
 
 **`RunContainerWorkflow`** — resource-bounded execution. The worker has `${DOCKER_SOCKET}` mounted; its Activity calls the Docker SDK with explicit `mem_limit`/`cpu_count`, so a step's actual container never has an unbounded footprint on the host — the same pattern as Airflow's `DockerOperator`.
 
@@ -94,6 +94,59 @@ docker exec -it temporal-admin-tools temporal workflow start --address temporal:
   --task-queue homeserver --type MaterializeDagsterAssetWorkflow --input '"report_job"'
 ```
 
+**`BatchProcessingWorkflow`** + **`GreetSourceWorkflow`** — composition via Child Workflows. The parent starts 3 children concurrently (`asyncio.gather` + `execute_child_workflow`), each with its own Workflow ID and Event History — one child's failure doesn't corrupt the parent's or another child's state. Compare against Airflow's `example_parallel_tasks.py`: similar fan-out shape at a glance, but each child here is independently durable and independently queryable, not just a step inside one shared DAG run.
+
+```bash
+docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --task-queue homeserver --type BatchProcessingWorkflow --workflow-id batch-demo-1 \
+  --input '["source_a", "source_b", "source_c"]'
+docker exec -it temporal-admin-tools temporal workflow list --address temporal:7233 \
+  --query "WorkflowType='GreetSourceWorkflow'"   # each child has its own WorkflowId (batch-demo-1-child-*)
+```
+
+**`DelayedReminderWorkflow`** — a durable timer. `asyncio.sleep()` inside a workflow *is* the durable timer (Temporal's deterministic asyncio event loop makes the same stdlib call replay-safe) — it costs nothing while waiting, no polling loop, no cron job to keep alive, and it survives the worker going away entirely. Verified: started with a 20s delay, killed and restarted `temporal-worker` mid-sleep (`docker restart temporal-worker`), and it still fired at the original time — Temporal Server tracks the timer, not the worker process.
+
+```bash
+docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --task-queue homeserver --type DelayedReminderWorkflow --workflow-id reminder-demo-1 --input '20'
+# try it yourself: docker restart temporal-worker partway through, then check the result still lands on time
+docker exec -it temporal-admin-tools temporal workflow result --address temporal:7233 --workflow-id reminder-demo-1
+```
+
+**`ConfigurableCounterWorkflow`** — Update, the newer sibling of Signal for anything that needs a value back or needs the caller to know their change was actually accepted. A Signal is fire-and-forget; an Update blocks the caller until the handler returns, and a `@<name>.validator` can reject the change before it's even written to Event History — a negative `amount` never touches workflow state:
+
+```bash
+docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --task-queue homeserver --type ConfigurableCounterWorkflow --workflow-id counter-demo-1
+docker exec -it temporal-admin-tools temporal workflow update execute --address temporal:7233 \
+  --workflow-id counter-demo-1 --name increment --input '5'    # -> Result: 5
+docker exec -it temporal-admin-tools temporal workflow update execute --address temporal:7233 \
+  --workflow-id counter-demo-1 --name increment --input '-1'   # -> rejected by the validator, never applied
+docker exec -it temporal-admin-tools temporal workflow signal --address temporal:7233 \
+  --workflow-id counter-demo-1 --name finish
+```
+
+**`RecurringPollWorkflow`** — Continue-As-New, Temporal's answer to "this workflow runs forever" (a recurring poll loop, a counter that never stops) without its Event History growing without bound. Every 3 iterations it closes the current Run and starts a fresh one under the *same* Workflow ID — the WorkflowId stays constant across every Run, only the RunId changes. Verified: started it, watched the RunId change from `01a00701…` to `eda784d0…` under the unchanged WorkflowId `poll-demo-1` after the first cycle. It never stops on its own — terminate it when you're done watching:
+
+```bash
+docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --task-queue homeserver --type RecurringPollWorkflow --workflow-id poll-demo-1
+docker exec -it temporal-admin-tools temporal workflow describe --address temporal:7233 \
+  --workflow-id poll-demo-1   # RunId changes every 3 polls; WorkflowId doesn't
+docker exec -it temporal-admin-tools temporal workflow terminate --address temporal:7233 \
+  --workflow-id poll-demo-1
+```
+
+**`--start-delay`** — not a workflow, a client-side start option: delays when a Workflow Execution actually *begins*, without occupying a Schedule or spending any of the workflow's own history on a timer. Different from `DelayedReminderWorkflow` above (that delays partway *through* an already-running workflow) — this delays the start itself, the shape for "run this once, but not until later" without setting up recurring Scheduling. Verified: started `GreetSourceWorkflow` (which executes instantly once it starts) with a 15s delay — `ExecutionTime` read "9 seconds from now" while the workflow was still waiting, and the Run's total `StartTime`-to-`CloseTime` span was ~15s despite the workflow itself doing effectively no work.
+
+```bash
+docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --task-queue homeserver --type GreetSourceWorkflow --workflow-id start-delay-demo-1 \
+  --input '"homeserver"' --start-delay 15s
+docker exec -it temporal-admin-tools temporal workflow describe --address temporal:7233 \
+  --workflow-id start-delay-demo-1   # ExecutionTime counts down before it actually starts
+```
+
 Keep the `activities.py`/`workflows.py` split if an activity needs a non-deterministic import (`docker`, `requests`, anything with I/O) — Temporal's sandbox rejects those inside a workflow's own module even when only the activity uses them (bit this exact setup during development; see the comment at the top of `activities.py`).
 
 **Native scheduling**, independent of Airflow: any workflow can run on a cron without a separate scheduler service. Modern Temporal uses first-class Schedule objects (`temporal schedule create`), not the deprecated `cron_schedule` workflow-start parameter:
@@ -113,6 +166,7 @@ Every container here has a `deploy.resources.limits.memory` cap (`temporal-db` 5
 - **No built-in auth on the UI or the `temporal-worker`/`temporal-admin-tools` connection to the server** — anyone who can reach `temporal.<domain>` can see and operate on every workflow. Fine for a single-user homelab behind Cloudflare Tunnel; if this ever needs to be shared, put it behind Authentik (this stack already has it) rather than relying on Temporal's own (enterprise-only) auth.
 - `DYNAMIC_CONFIG_FILE_PATH` points at `dynamicconfig/development-sql.yaml` — Temporal's own official "development" config (`system.forceSearchAttributesCacheRefreshOnRead: true`), fine for a homelab's workflow volume; their docs explicitly say not to use it in a real production deployment (immediate-consistency search-attribute reads have a real perf cost at scale).
 - Elasticsearch is **not** deployed — the official compose set has an Elasticsearch variant for advanced visibility queries; this uses the plain SQL (Postgres) visibility store instead, which covers normal workflow search/filtering fine and is one less container to run.
+- **Nexus (cross-namespace/cross-cloud workflow calls, GA) is not set up here** — worth knowing it exists, not something this stack currently uses. Nexus lets one Temporal namespace call into Workflows/Signals/Updates/Queries running in a *different* namespace (even a different cluster/cloud) through a versioned API contract, instead of hand-rolling a webhook or a REST call between them — the same problem `MaterializeDagsterAssetWorkflow` solves today by calling Dagster's GraphQL API directly, generalized to Temporal-to-Temporal. Not added here because this deployment only runs a single namespace (`default`) — Nexus's whole value is connecting *separate* namespaces owned by separate teams/services, which doesn't apply until there's a second namespace worth isolating. If that ever changes: `temporal operator nexus endpoint create`, then a Nexus service/operation defined in the calling workflow's worker — see [Temporal's Nexus docs](https://docs.temporal.io/nexus).
 
 ---
 

@@ -11,6 +11,7 @@ from airflow.providers.docker.operators.docker import DockerOperator
 with DAG(
     dag_id="example_docker_operator",
     description="Starter example: run one task in a resource-limited container",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

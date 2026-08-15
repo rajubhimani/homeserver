@@ -2,6 +2,7 @@
 pass-through, since the Activity's own module (activities.py) imports
 `docker`, which the deterministic workflow sandbox would otherwise reject."""
 
+import asyncio
 from datetime import timedelta
 
 from temporalio import workflow
@@ -111,6 +112,147 @@ class MaterializeDagsterAssetWorkflow:
             start_to_close_timeout=timedelta(minutes=10),
             heartbeat_timeout=timedelta(seconds=30),
         )
+
+
+@workflow.defn
+class GreetSourceWorkflow:
+    """Child workflow for BatchProcessingWorkflow below — small and
+    self-contained on purpose, since the point of this pair is the
+    parent/child relationship, not what the child itself computes."""
+
+    @workflow.run
+    async def run(self, source_name: str) -> str:
+        return f"processed {source_name}"
+
+
+@workflow.defn
+class BatchProcessingWorkflow:
+    """Strength: composition — a parent workflow durably coordinating
+    multiple independent child workflows. Each child gets its own Workflow
+    ID and its own Event History; one child failing doesn't corrupt another
+    child's state or the parent's. Runs children concurrently via
+    asyncio.gather + execute_child_workflow (Temporal's deterministic
+    asyncio event loop makes this safe, unlike a raw thread pool).
+
+    Compare to Airflow's example_parallel_tasks.py fan-out: same shape at a
+    glance, but each child here is independently durable and independently
+    queryable/signalable — not just a step scheduled inside one DAG run."""
+
+    @workflow.run
+    async def run(self, sources: list[str]) -> list[str]:
+        parent_id = workflow.info().workflow_id
+        results = await asyncio.gather(
+            *[
+                workflow.execute_child_workflow(
+                    GreetSourceWorkflow.run,
+                    source,
+                    id=f"{parent_id}-child-{source}",
+                )
+                for source in sources
+            ]
+        )
+        return list(results)
+
+
+@workflow.defn
+class DelayedReminderWorkflow:
+    """Strength: a durable timer. `asyncio.sleep()` inside a workflow *is*
+    the durable timer — Temporal's deterministic asyncio event loop makes
+    the same stdlib call replay-safe, unlike a plain script's asyncio.sleep
+    which just blocks that one process. Kill the worker mid-sleep
+    (`docker stop temporal-worker`) and bring it back up
+    (`docker start temporal-worker`): the timer still fires at the original
+    time, not delayed by however long the worker was down, because it's
+    tracked by Temporal Server, not the worker process. Sleeping costs
+    nothing while waiting — no polling loop, no cron job to keep alive — so
+    the same call works unchanged for `timedelta(days=30)` as it does here
+    for a few seconds."""
+
+    @workflow.run
+    async def run(self, delay_seconds: int = 5) -> str:
+        await asyncio.sleep(delay_seconds)
+        return f"Reminder fired after {delay_seconds}s durable sleep."
+
+
+@workflow.defn
+class ConfigurableCounterWorkflow:
+    """Strength: Update — request/response messaging into a running
+    workflow, the newer sibling of Signal for anything that needs the
+    caller to get a value back or to know their change was accepted before
+    moving on. A Signal is fire-and-forget; an Update blocks the caller
+    until the handler returns, and a validator can reject the change before
+    it's even written to Event History.
+
+    Send an Update and read back the new count:
+      docker exec -it temporal-admin-tools temporal workflow update execute \\
+        --address temporal:7233 --workflow-id <id> --name increment --input 5
+
+    A negative amount is rejected by the validator before it ever touches
+    workflow state:
+      docker exec -it temporal-admin-tools temporal workflow update execute \\
+        --address temporal:7233 --workflow-id <id> --name increment --input -1
+
+    Finish it (plain Signal, same pattern as ApprovalWorkflow above):
+      docker exec -it temporal-admin-tools temporal workflow signal \\
+        --address temporal:7233 --workflow-id <id> --name finish
+    """
+
+    def __init__(self) -> None:
+        self._count = 0
+        self._done = False
+
+    @workflow.update
+    def increment(self, amount: int) -> int:
+        self._count += amount
+        return self._count
+
+    @increment.validator
+    def _validate_increment(self, amount: int) -> None:
+        if amount <= 0:
+            raise ValueError("amount must be positive")
+
+    @workflow.signal
+    def finish(self) -> None:
+        self._done = True
+
+    @workflow.run
+    async def run(self) -> int:
+        await workflow.wait_condition(lambda: self._done)
+        return self._count
+
+
+@workflow.defn
+class RecurringPollWorkflow:
+    """Strength: Continue-As-New — Temporal's answer to "this workflow runs
+    forever" (a recurring poll loop, a counter that never stops) without its
+    Event History growing without bound. Every `ITERATIONS_PER_RUN` loops,
+    it closes the current Run and starts a brand-new one under the *same*
+    Workflow ID — same logical workflow, fresh empty History, indefinitely
+    cheap. The WorkflowId stays constant across every Run; only the RunId
+    changes — that's how "still the same workflow, just continued" is told
+    apart from "a new workflow." Contrast with DelayedReminderWorkflow
+    above: that one is durable but finite. This one is durable *and*
+    unbounded.
+
+    It never stops on its own — watch the RunId change, then terminate it:
+      docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \\
+        --task-queue homeserver --type RecurringPollWorkflow --workflow-id poll-demo-1
+      docker exec -it temporal-admin-tools temporal workflow describe --address temporal:7233 \\
+        --workflow-id poll-demo-1   # RunId here changes every 3 polls — same WorkflowId throughout
+      docker exec -it temporal-admin-tools temporal workflow terminate --address temporal:7233 \\
+        --workflow-id poll-demo-1
+    """
+
+    ITERATIONS_PER_RUN = 3
+
+    @workflow.run
+    async def run(self, poll_count: int = 0) -> None:
+        for _ in range(self.ITERATIONS_PER_RUN):
+            poll_count += 1
+            workflow.logger.info(f"poll #{poll_count}")
+            await asyncio.sleep(2)
+
+        workflow.continue_as_new(poll_count)
 
 
 @workflow.defn

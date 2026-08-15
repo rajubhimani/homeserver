@@ -84,6 +84,14 @@ services:
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
       AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
       AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      # Admin -> Configuration in the UI 403s by default ("Your Airflow
+      # administrator chose not to expose the configuration") — this is that
+      # switch. Note it moved sections between major versions: [webserver]
+      # expose_config in Airflow 2, [api] expose_config here in 3.x, since
+      # the UI's config page is now served by airflow-apiserver, not a
+      # separate webserver process. "True" still masks sensitive values
+      # (passwords/secrets/keys) automatically — it doesn't dump raw secrets.
+      AIRFLOW__API__EXPOSE_CONFIG: ${AIRFLOW_EXPOSE_CONFIG:-False}
       AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
       FORWARDED_ALLOW_IPS: "*"
     user: "${AIRFLOW_UID}:0"
@@ -238,6 +246,13 @@ services:
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
       AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
       AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+      # Deferrable operators serialize their Trigger's classpath as a bare
+      # module name (e.g. "example_deferrable_sensor.MarkerFileTrigger") and
+      # the triggerer resolves it with plain import_string — unlike the
+      # scheduler/dag-processor, which add each DAG file's own directory to
+      # sys.path while parsing it, the triggerer never does that, so a
+      # trigger class living in a DAG file is otherwise unimportable here.
+      PYTHONPATH: /opt/airflow/dags
     user: "${AIRFLOW_UID}:0"
     deploy:
       resources:

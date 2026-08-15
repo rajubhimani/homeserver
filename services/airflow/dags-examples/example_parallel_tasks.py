@@ -63,6 +63,7 @@ def notify(ti=None, **_) -> None:
 with DAG(
     dag_id="example_parallel_tasks",
     description="Starter example: fan-out to parallel tasks, fan-in to one that waits for all of them",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

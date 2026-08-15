@@ -1,3 +1,9 @@
+# Dagster phones home anonymous usage stats by default (confirmed active —
+# dagster-daemon's own startup banner announces it). Self-hosted homelab
+# default should be opted out, not opted in silently.
+telemetry:
+  enabled: false
+
 scheduler:
   module: dagster.core.scheduler
   class: DagsterDaemonScheduler

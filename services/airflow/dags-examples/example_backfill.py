@@ -28,6 +28,7 @@ from airflow.sdk import dag, task
 @dag(
     dag_id="example_backfill",
     description="Starter example: catchup fills in missed historical runs on unpause",
+    doc_md=__doc__,
     start_date=datetime.now() - timedelta(days=5),
     schedule="@daily",
     catchup=True,

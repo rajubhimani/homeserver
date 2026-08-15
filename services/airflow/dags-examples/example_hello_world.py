@@ -10,6 +10,7 @@ from airflow.sdk import dag, task
 @dag(
     dag_id="example_hello_world",
     description="Starter example: the simplest possible DAG",
+    doc_md=__doc__,
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

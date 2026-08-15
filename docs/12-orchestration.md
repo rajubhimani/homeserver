@@ -54,6 +54,8 @@ flowchart LR
 - **You care what data exists, where it came from, and whether it's still fresh/valid** → **Dagster**. Lineage and Asset Checks are first-class; reprocessing one partition instead of a whole pipeline is often the actual point.
 - **A multi-step process that must not be lost partway through** — anything touching money, inventory, or multiple services that need to stay consistent, or that waits on a human/external event for an unpredictable amount of time → **Temporal**. The Saga pattern (`OrderFulfillmentSagaWorkflow`) and the Signal/Query pair (`ApprovalWorkflow`) are the shapes this solves that the other two don't attempt.
 
+**Inside Dagster specifically**, assets aren't the only option: `ops_pipeline_job` in `definitions.py` is the older `@op`/`@job` style, wired by explicit function calls instead of Dagster inferring an edge from a parameter name. Reach for ops when a pipeline's steps aren't naturally shaped around producing/tracking a piece of data (a batch of side-effecting actions — send some emails, hit some webhooks) or you're integrating code that's already written that way — assets remain the default for anything data-shaped, which is most things.
+
 They're not mutually exclusive — see below.
 
 ## They compose: the cross-service example actually running in this stack

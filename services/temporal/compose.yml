@@ -24,12 +24,47 @@ services:
     networks:
       - homeserver
 
-  # auto-setup: provisions the Postgres schema on first start, then runs the
-  # actual server (frontend/history/matching/worker services bundled in one
-  # process — this is Temporal's own internal "worker", unrelated to the
-  # temporal-worker container below, which runs *your* workflow code).
+  # temporalio/auto-setup is deprecated upstream (replaced by temporalio/server
+  # + external schema setup) — temporal-schema-setup below does what
+  # auto-setup used to do at boot (temporal-sql-tool create/setup-schema/
+  # update-schema for both the main and visibility databases), once, as its
+  # own one-shot step, matching Temporal's own current reference compose
+  # (temporalio/samples-server). Both `create` and `update-schema` are
+  # idempotent no-ops when already applied — verified directly against this
+  # stack's live temporal-db before switching (exit 0, "found zero updates
+  # from current version" on a DB that already existed).
+  temporal-schema-setup:
+    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
+    container_name: temporal-schema-setup
+    restart: "no"
+    environment:
+      SQL_PASSWORD: ${POSTGRES_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for db in ${POSTGRES_DB} temporal_visibility; do
+          temporal-sql-tool --plugin postgres12 --ep temporal-db -u ${POSTGRES_USER} -p 5432 --db "$$db" create
+          temporal-sql-tool --plugin postgres12 --ep temporal-db -u ${POSTGRES_USER} -p 5432 --db "$$db" setup-schema -v 0.0
+        done
+        temporal-sql-tool --plugin postgres12 --ep temporal-db -u ${POSTGRES_USER} -p 5432 --db ${POSTGRES_DB} update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
+        temporal-sql-tool --plugin postgres12 --ep temporal-db -u ${POSTGRES_USER} -p 5432 --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  # Runs the actual server (frontend/history/matching/worker services bundled
+  # in one process — this is Temporal's own internal "worker", unrelated to
+  # the temporal-worker container below, which runs *your* workflow code).
+  # temporalio/server (unlike the deprecated auto-setup) expects the schema
+  # to already exist — temporal-schema-setup above provides that — and does
+  # nothing else differently; same env-var-driven config, same entrypoint.sh
+  # under the hood, verified both `temporal` CLI and `nc` are present in this
+  # image so the healthcheck below needed no changes either.
   temporal:
-    image: temporalio/auto-setup:${TEMPORAL_VERSION}
+    image: temporalio/server:${TEMPORAL_VERSION}
     container_name: temporal
     restart: unless-stopped
     env_file: .env
@@ -56,6 +91,34 @@ services:
       start_period: 60s
     depends_on:
       temporal-db:
+        condition: service_healthy
+      temporal-schema-setup:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+  # temporalio/auto-setup used to also register the "default" namespace on
+  # first boot — temporalio/server doesn't, so this replaces that half too.
+  # Idempotent (describe-then-create, same as auto-setup's own logic) so it's
+  # a harmless no-op on every start after the first.
+  temporal-create-namespace:
+    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
+    container_name: temporal-create-namespace
+    restart: "no"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        if ! temporal operator namespace describe --namespace default; then
+          temporal operator namespace create --retention 24h --description "Default namespace for Temporal Server." --namespace default
+        else
+          echo "Default namespace already registered."
+        fi
+    depends_on:
+      temporal:
         condition: service_healthy
     networks:
       - homeserver

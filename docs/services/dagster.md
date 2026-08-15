@@ -47,7 +47,7 @@ This isn't an optional executor choice bolted on afterward — it's Dagster's ow
 
 ## Try the starter examples
 
-Open the UI's **Assets** tab — you'll see 5 assets: `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check`, and `daily_sales` (partitioned — see below). Easiest way to run anything is the UI (select assets → **Materialize selected**) — each materialization launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
+Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), and `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below). There's also a non-asset job, `ops_pipeline_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
@@ -65,6 +65,12 @@ The `raw_data`/`cleaned_data`/`report` chain is Dagster's actual differentiator,
 `report_freshness_check` is an **Asset Check** — Dagster's built-in data-quality concept (a pass/fail validation attached to a specific asset, shown right on that asset's page). Neither Airflow nor Temporal have a native equivalent; you'd hand-roll the same idea as a plain extra task.
 
 `report_job` + `report_daily_schedule` show the scheduling side — toggle the schedule on from the **Schedules** tab (need `dagster-daemon` running, which it is) to have it run on its own at 6am daily instead of only on manual materialization.
+
+**`report_notification`** shows a third scheduling paradigm: **Declarative Automation**, alongside the explicit Schedule above and the explicit Sensor below. Instead of either, it declares `automation_condition=AutomationCondition.eager()` — "materialize me whenever `report` updates" — and `dagster-daemon`'s built-in `default_automation_condition_sensor` handles the rest, no schedule or sensor function of your own. That sensor is off by default like any other sensor; turn it on from the **Sensors** tab (or the mutation below), then materialize `report_job` and watch `report_notification` appear on its own shortly after — verified it auto-materialized ~28s after `report`'s own materialization, with no manual trigger:
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -t 'mutation { startSensor(sensorSelector: {repositoryLocationName: "user_code", repositoryName: "__repository__", sensorName: "default_automation_condition_sensor"}) { ... on Sensor { sensorState { status } } } }'
+```
 
 **`daily_sales`** is Dagster's actual answer to "backdated ingestion from a source system" — a `DailyPartitionsDefinition`-partitioned asset. Each calendar day is an independent partition; materializing an old one *is* the backfill, not a separate concept layered on top (contrast with Airflow's `example_backfill.py`, which re-runs the whole DAG per missed day — see `docs/12-orchestration.md` for the real distinction). From the UI: open `daily_sales` → **Partitions** tab → pick a date (or a range) → **Materialize**. Via GraphQL, tag the run with the partition:
 
@@ -84,6 +90,41 @@ docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launch
 docker exec dagster-user-code touch /tmp/io_manager_storage/.dagster_sensor_trigger
 ```
 
+**`source_system_summary`** uses a **Resource** (`SourceSystemResource`) — how an asset gets a configurable connection to something external (an API base URL, credentials) instead of hardcoding a client inline. The asset's `source_system: SourceSystemResource` parameter is a giveaway that it's a dependency injection, not a lineage edge — Dagster checks the `Definitions(resources=...)` dict for a matching key first, *then* falls back to treating the parameter as another asset. Swapping environments means changing the `SourceSystemResource(...)` value passed into `Definitions`, not the asset's code.
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
+  "executionParams": {
+    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["source_system_summary"]}]},
+    "mode": "default"
+  }
+}'
+```
+
+**`orders_multi_asset`** produces `orders_raw`/`orders_staged`/`orders_final` as one `@multi_asset` function instead of three separate `@asset` functions — the point is that all three share data in memory within a single materialization (one source round-trip, no IO manager hop between them the way `cleaned_data` depends on `raw_data`'s output above). A real fit for tightly-coupled steps: one API call that naturally yields a raw, a staged, and a validated view of the same batch. Verified: materializing selects all 3 asset keys in one `launchPipelineExecution` call and all 3 appear as separate nodes in the asset graph.
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
+  "executionParams": {
+    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["orders_raw"]}, {"path": ["orders_staged"]}, {"path": ["orders_final"]}]},
+    "mode": "default"
+  }
+}'
+```
+
+**`ops_pipeline_job`** (`extract_numbers` → `total_numbers` → `print_total`) is the classic `@op`/`@job` style, included deliberately next to the asset examples so the two are easy to compare — same 3-step shape as `raw_data`/`cleaned_data`/`report`, but wired by explicit function calls (`print_total(total_numbers(extract_numbers()))`) instead of Dagster inferring an edge from a parameter name. Reach for this when a pipeline genuinely isn't shaped around producing/tracking data, or you're integrating code that's already op-shaped — see `docs/12-orchestration.md` for when ops fit better than assets.
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
+  "executionParams": {
+    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "ops_pipeline_job"},
+    "mode": "default"
+  }
+}'
+```
+
+Dagster 1.13 also added partitioned Asset Checks (a check scoped to one partition instead of the whole asset), deliberately **not** included here — it requires `partitions_def` on an `AssetCheckSpec`, which Dagster itself flags with a `PreviewWarning` ("not considered ready for production use"), the same preview-status concern as the newer virtual-assets feature. Worth knowing it exists once it's stable; not included as a starter example while it isn't.
+
 `report_job` is also the target of the cross-service capstone example: Temporal's `MaterializeDagsterAssetWorkflow` launches it via this same GraphQL API and durably waits for it, triggered on a schedule by Airflow's `example_cross_service_pipeline` DAG — **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**. See `docs/services/temporal.md` for the workflow side; verified working end to end.
 
 ## Resource caps on the platform's own containers
@@ -93,6 +134,7 @@ Separately from the per-run/per-step caps above, the 4 platform containers thems
 ## Notes
 
 - **No built-in auth on the UI** — same situation as Temporal (see `docs/services/temporal.md`'s Notes): anyone who can reach `dagster.<domain>` can see and operate on every pipeline. RBAC/SSO is a Dagster+ (paid) feature, not available in open-source Dagster. Fine for a single-user homelab behind Cloudflare Tunnel; put it behind Authentik's forward-auth if this ever needs to be shared.
+- `docker_executor`/`DockerRunLauncher` (the container-per-run/per-step mechanism everything here relies on for resource limits) is a **beta** API per Dagster's own docs — stable enough to build on, but Dagster reserves the right to make breaking changes in a minor version bump, unlike the fully-stable core APIs (`@asset`, `Definitions`, etc.). Worth knowing before pinning a much newer Dagster version later without re-checking this specifically.
 - Elasticsearch/advanced search isn't deployed — Postgres-backed run/schedule/event-log storage covers normal usage fine.
 - `DAGSTER_CURRENT_IMAGE` on `dagster-user-code` must match that service's own `image:` tag in `compose.yml` — it's how the run launcher knows which image to use when it launches a new run container. If you ever rename the image tag, update both places together.
 
