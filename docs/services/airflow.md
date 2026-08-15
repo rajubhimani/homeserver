@@ -40,18 +40,23 @@ This deployment uses `LocalExecutor` instead — tasks run directly inside the s
 
 ## Try the starter examples
 
-Four DAGs ship in `service_data/data/airflow/dags/`, tagged `example` in the UI. All have `schedule=None` except the last, so trigger them manually the first time — either **DAGs list → toggle on → ▶ Trigger DAG** in the UI, or from the CLI:
+Ten DAGs ship in `service_data/data/airflow/dags/`, tagged `example` in the UI. All have `schedule=None` except `example_scheduled_with_retries` and `example_backfill`, so trigger them manually the first time — either **DAGs list → toggle on → ▶ Trigger DAG** in the UI, or from the CLI:
 
 ```bash
 docker exec airflow-scheduler airflow dags unpause example_etl_pipeline
 docker exec airflow-scheduler airflow dags trigger example_etl_pipeline
-# then watch it: Grid/Graph view in the UI, or:
-docker exec airflow-scheduler airflow dags list-runs -d example_etl_pipeline
+# then watch it: Grid/Graph view in the UI, or (dag_id is positional, no -d flag):
+docker exec airflow-scheduler airflow dags list-runs example_etl_pipeline
 ```
 
+- `example_hello_world` — a single task, nothing else. Start here if you've never used Airflow before.
 - `example_etl_pipeline` — extract → transform → load, TaskFlow (`@task`) with data passed via XCom. The "how do I chain tasks and pass data between them" starting point.
 - `example_branching` — `BashOperator` + `BranchPythonOperator`: run a shell command, then conditionally skip a downstream task based on a Python function's result.
+- `example_parallel_tasks` — fan-out to 3 independent tasks that run concurrently under LocalExecutor, then fan-in to a task that waits for all of them before running, then one more downstream of that. Shows both dependency-declaration styles: the `>>` shorthand used everywhere else in these examples, and the explicit `.set_downstream()`/`.set_upstream()` method calls it's shorthand for. Verified: the 3 parallel tasks' start times overlap by design (check with `airflow tasks states-for-dag-run example_parallel_tasks <run_id>`), and the fan-in/next-task only start once every upstream task has succeeded.
 - `example_scheduled_with_retries` — same idea, but `schedule="@daily"` (runs on its own, no manual trigger needed) with `retries`/`retry_delay`/backoff configured — the two things almost every real production DAG needs.
+- `example_backfill` — Airflow's answer to "process historical dates": `start_date` 5 days in the past + `schedule="@daily"` + `catchup=True` means unpausing creates 5 backfill runs automatically, one per missed day. Whole-DAG-run granularity — see `docs/12-orchestration.md` for how this differs from Dagster's per-partition backfill.
+- `example_sensor` — `@task.sensor` polling for a marker file (`service_data/data/airflow/dags/.sensor_trigger`) every 10s in `reschedule` mode (frees the worker slot between polls instead of blocking it). Create the file to watch it complete: `touch service_data/data/airflow/dags/.sensor_trigger`.
+- `example_asset_triggered` — Airflow's Asset feature (renamed from "Dataset" in 3.0): `example_asset_producer` tags a task's output with an `Asset`; `example_asset_consumer` is scheduled to run whenever that Asset updates, with no cron and no manual trigger of its own. Trigger the producer once and watch the consumer run appear on its own. Not the same concept as a Dagster asset — see `docs/12-orchestration.md`.
 - `example_docker_operator` — the resource-limited-container pattern from the section below.
 - `example_cross_service_pipeline` — the capstone: one task starts a Temporal workflow (`temporalio` is installed on `airflow-scheduler` alongside the Docker provider — see the compose.yml comment) and awaits its result. That workflow durably orchestrates a Dagster job materialization via GraphQL — **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**. See `docs/services/temporal.md`'s `MaterializeDagsterAssetWorkflow` for the other half. Verified working end to end.
 
