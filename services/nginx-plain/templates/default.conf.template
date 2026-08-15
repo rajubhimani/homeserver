@@ -353,6 +353,57 @@ server {
     }
 }
 
+# ── Airflow ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name airflow.${DOMAIN};
+    location / {
+        set $upstream http://airflow-apiserver:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# ── Temporal ─────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name temporal.${DOMAIN};
+    location / {
+        set $upstream http://temporal-ui:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# ── Dagster ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name dagster.${DOMAIN};
+    location / {
+        set $upstream http://dagster-webserver:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
 # ── Wallabag ──────────────────────────────────────────────────────────────────
 server {
     listen 80;

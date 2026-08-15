@@ -1,0 +1,4 @@
+services:
+  temporal-worker:
+    security_opt:
+      - label=disable

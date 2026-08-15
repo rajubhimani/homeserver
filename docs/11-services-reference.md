@@ -75,6 +75,9 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | ntfy | `ntfy` | 8118 | 80 | extra |
 | IT-Tools | `it-tools` | 8119 | 80 | extra |
 | n8n | `n8n` | 8120 | 5678 | extra |
+| Airflow | `airflow-apiserver` | 8137 | 8080 | extra |
+| Temporal | `temporal-ui` | 8138 | 8080 | extra |
+| Dagster | `dagster-webserver` | 8139 | 3000 | extra |
 | CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Wallabag | `wallabag` | 8121 | 80 | extra |
 | Atuin | `atuin` | 8122 | 8888 | extra |
@@ -97,7 +100,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
-**Next available ports:** web `8137`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8140`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -158,6 +161,9 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `ntfy.yourdomain.com` | `ntfy` | `80` | extra |
 | `it-tools.yourdomain.com` | `it-tools` | `80` | extra |
 | `n8n.yourdomain.com` | `n8n` | `5678` | extra |
+| `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | extra |
+| `temporal.yourdomain.com` | `temporal-ui` | `8080` | extra |
+| `dagster.yourdomain.com` | `dagster-webserver` | `3000` | extra |
 | `wallabag.yourdomain.com` | `wallabag` | `80` | extra |
 | `atuin.yourdomain.com` | `atuin` | `8888` | extra |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | extra |

@@ -1,0 +1,88 @@
+scheduler:
+  module: dagster.core.scheduler
+  class: DagsterDaemonScheduler
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 5
+
+# Every run launches as its own new container (not inside dagster-webserver/
+# dagster-daemon) — DAGSTER_CURRENT_IMAGE on dagster-user-code tells this
+# which image to use. container_kwargs caps let this be a conservative
+# starting point rather than an unbounded footprint on the host; raise if a
+# run gets OOM-killed under real load (see docs/services/dagster.md).
+run_launcher:
+  module: dagster_docker
+  class: DockerRunLauncher
+  config:
+    env_vars:
+      - DAGSTER_POSTGRES_USER
+      - DAGSTER_POSTGRES_PASSWORD
+      - DAGSTER_POSTGRES_DB
+    network: homeserver
+    container_kwargs:
+      mem_limit: "512m"
+      nano_cpus: 1000000000
+      auto_remove: true
+      # The run container itself launches STEP containers via docker_executor
+      # (see user-code/definitions.py) — it needs the socket too, not just
+      # dagster-webserver/dagster-daemon which launch the run container.
+      # Dropping this (as an earlier version of this file did) makes every
+      # run fail immediately with "Error while fetching server API version:
+      # FileNotFoundError" the moment its first step tries to launch.
+      # /opt/dagster/app: the run container uses the same
+      # homeserver/dagster-user-code image (DAGSTER_CURRENT_IMAGE), which no
+      # longer bakes in definitions.py (see user-code/Dockerfile) — needs
+      # this bind mount too, or the run container can't import the code it's
+      # supposed to run. Hardcoded absolute host path, not
+      # ${DATA_ROOT}/service_data/... — this file is baked into the image at
+      # build time, not compose-interpolated, so env var substitution
+      # doesn't apply here. Update this if service_data/ ever moves.
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - dagster-io-manager-storage:/tmp/io_manager_storage
+        - /mnt/mydata/homeserver/service_data/data/dagster/user-code:/opt/dagster/app
+
+run_storage:
+  module: dagster_postgres.run_storage
+  class: PostgresRunStorage
+  config:
+    postgres_db:
+      hostname: dagster-db
+      username:
+        env: DAGSTER_POSTGRES_USER
+      password:
+        env: DAGSTER_POSTGRES_PASSWORD
+      db_name:
+        env: DAGSTER_POSTGRES_DB
+      port: 5432
+
+schedule_storage:
+  module: dagster_postgres.schedule_storage
+  class: PostgresScheduleStorage
+  config:
+    postgres_db:
+      hostname: dagster-db
+      username:
+        env: DAGSTER_POSTGRES_USER
+      password:
+        env: DAGSTER_POSTGRES_PASSWORD
+      db_name:
+        env: DAGSTER_POSTGRES_DB
+      port: 5432
+
+event_log_storage:
+  module: dagster_postgres.event_log
+  class: PostgresEventLogStorage
+  config:
+    postgres_db:
+      hostname: dagster-db
+      username:
+        env: DAGSTER_POSTGRES_USER
+      password:
+        env: DAGSTER_POSTGRES_PASSWORD
+      db_name:
+        env: DAGSTER_POSTGRES_DB
+      port: 5432

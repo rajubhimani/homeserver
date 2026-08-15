@@ -368,6 +368,36 @@
       "desc": "Self-hosted workflow automation. Webhook \u2192 transform \u2192 notify style glue for homelab scripts."
     },
     {
+      "slug": "airflow",
+      "tier": "extra",
+      "name": "Airflow",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "teal",
+      "svg": "<circle cx=\"3.5\" cy=\"9\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"4.5\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"13.5\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"14.5\" cy=\"9\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <path d=\"M5.1 8.1 L7.4 5.6 M5.1 9.9 L7.4 12.4 M10.6 5.6 L12.9 8.1 M10.6 12.4 L12.9 9.9\" stroke=\"#0F6E56\" stroke-width=\"1.3\" stroke-linecap=\"round\"/>",
+      "desc": "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator."
+    },
+    {
+      "slug": "temporal",
+      "tier": "extra",
+      "name": "Temporal",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "red",
+      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9 L12 11\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Durable execution engine for reliable distributed workflows \u2014 automatic retries, state persistence, and long-running processes that survive crashes."
+    },
+    {
+      "slug": "dagster",
+      "tier": "extra",
+      "name": "Dagster",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "gray",
+      "svg": "<rect x=\"3\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"10\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"6.5\" y=\"10\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <path d=\"M5.5 8 L8.5 10.5 M12.5 8 L9.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
+      "desc": "Data orchestrator built around software-defined assets \u2014 track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline."
+    },
+    {
       "slug": "crowdsec",
       "tier": "extra"
     },

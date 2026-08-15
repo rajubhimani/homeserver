@@ -36,6 +36,9 @@
 | [ntfy](docs/services/ntfy.md) | Self-hosted push notifications | Pushover / Pushbullet |
 | [IT-Tools](docs/services/it-tools.md) | ~80 browser-only dev utilities | assorted sketchy websites |
 | [n8n](docs/services/n8n.md) | Self-hosted workflow automation | Zapier / Make |
+| [Airflow](docs/services/airflow.md) | Programmatic workflow orchestration (Python DAGs) | — |
+| [Temporal](docs/services/temporal.md) | Durable execution engine for reliable distributed workflows | — |
+| [Dagster](docs/services/dagster.md) | Data orchestrator built around software-defined assets | — |
 | [CrowdSec](docs/services/crowdsec.md) | Collaborative intrusion detection (detection-only, see TODO.md) | fail2ban |
 | [Wallabag](docs/services/wallabag.md) | Read-it-later app | Pocket |
 | [Atuin](docs/services/atuin.md) | Shell history sync across machines | plain bash/zsh history file |
@@ -113,6 +116,7 @@ Go through these in order. Each doc links to the next.
 | [09](docs/09-firewall.md) | Firewall | UFW rules, port binding strategy (dev vs prod) |
 | [10](docs/10-new-services.md) | New Services | Add any service from the stack — step-by-step for each |
 | [11](docs/11-services-reference.md) | Services Reference | All ports, proxy config, per-service notes |
+| [12](docs/12-orchestration.md) | Orchestration Services | Airflow vs. Temporal vs. Dagster — what each is actually for and how they compose (only relevant if you're using one of the three) |
 
 **Start here → [01 — Prepare Data Drive](docs/01-data-drive.md)**
 
@@ -206,6 +210,9 @@ uv run homeserver.py prod up all
     ├── ntfy/
     ├── it-tools/
     ├── n8n/
+    ├── airflow/
+    ├── temporal/
+    ├── dagster/
     ├── crowdsec/
     ├── wallabag/
     ├── atuin/
@@ -260,6 +267,9 @@ service_data/
 ├── ntfy/             (data/)
 ├── it-tools/         (empty — no persistent data, no DB)
 ├── n8n/              (postgres/, data/)
+├── airflow/          (dags/, logs/, config/, plugins/) — DB lives in a named volume, not this tree
+├── temporal/         (empty — DB lives in a named volume; dynamicconfig/ and worker/ are checked-in config/code, not DATA_ROOT-scoped)
+├── dagster/          (empty — DB lives in a named volume; user-code/ and webserver-daemon/ are checked-in config/code, not DATA_ROOT-scoped)
 ├── crowdsec/         (config/) — parsed decisions/DB live in a named volume, not this tree
 ├── wallabag/         (postgres/, data/, images/)
 ├── atuin/            (postgres/, config/)

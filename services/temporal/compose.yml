@@ -1,0 +1,133 @@
+services:
+  temporal-db:
+    image: postgres:18.4-alpine
+    container_name: temporal-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - temporal-postgres-alpine:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  # auto-setup: provisions the Postgres schema on first start, then runs the
+  # actual server (frontend/history/matching/worker services bundled in one
+  # process — this is Temporal's own internal "worker", unrelated to the
+  # temporal-worker container below, which runs *your* workflow code).
+  temporal:
+    image: temporalio/auto-setup:${TEMPORAL_VERSION}
+    container_name: temporal
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: temporal-db
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    volumes:
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  temporal-admin-tools:
+    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
+    container_name: temporal-admin-tools
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    stdin_open: true
+    tty: true
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  temporal-ui:
+    image: temporalio/ui:${TEMPORAL_UI_VERSION}
+    container_name: temporal-ui
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: https://temporal.${DOMAIN}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  # The image only has dependencies baked in (worker/Dockerfile) — the actual
+  # workflow/activity code is bind-mounted from DATA_ROOT/worker (your live,
+  # gitignored copy — see docs/services/temporal.md's "Where your workflow
+  # code actually lives"). Docker socket mounted so activities can launch
+  # their own resource-limited containers.
+  temporal-worker:
+    build: ./worker
+    image: homeserver/temporal-worker:latest
+    container_name: temporal-worker
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${DATA_ROOT}/worker:/app
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  temporal-postgres-alpine:
+
+networks:
+  homeserver:
+    external: true
