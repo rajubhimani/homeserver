@@ -2,8 +2,12 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
   python homeserver.py <env> -r <service...>   (shorthand for restart)
+  python homeserver.py <env> up group:notes    start every service in category/subcategory
+                                                'notes' (or any other group — see services.json's
+                                                'category'/'subcategory' fields for valid names).
+                                                Works with every action, same as min/core/all.
   python homeserver.py <env> precreate <min|core|all|service...>
                                                 create containers without starting them, so a
                                                 never-started service shows up as a stack in
@@ -51,6 +55,7 @@ shell at all, so none of that applies here — no workarounds needed.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -97,6 +102,19 @@ def load_env_file(path: Path) -> dict[str, str]:
     return result
 
 
+def load_services_json(path: Path) -> dict:
+    """services.json is the single source of truth for both tier membership
+    (this file) and landing-page grouping (services/landing/index.html,
+    fetched at page load) — one entry per service instead of two hand-synced
+    lists. See the homeserver-add-service skill for the schema. Called at
+    module load time, before the colored-output helpers below exist yet —
+    plain stderr on failure, not error()/warn()."""
+    if not path.is_file():
+        print(f"{path} not found — this repo can't run without it (services/tiers are defined there).", file=sys.stderr)
+        sys.exit(1)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
@@ -127,36 +145,42 @@ if os.path.exists(DOCKER_SOCKET):
 #   up all  = MIN + CORE + EXTRA
 #
 #   down min/core/all = same sets, reversed
+#
+# Derived from services.json (the single source of truth for tier membership
+# AND landing-page grouping — see the homeserver-add-service skill) rather
+# than hand-maintained here, so this file and the landing page can never
+# drift out of sync with each other. Order is preserved from the JSON array,
+# which is what actually matters (startup sequencing) — grouped by tier
+# there for the same reason it was grouped here before.
+#   - manual-only (SERVICES_MANUAL): never started by 'up min/core/all' (or
+#     their down/restart/update/backup/restore equivalents) — start
+#     individually with 'up <service>'. Currently gitlab/stirling-pdf/
+#     photoprism, each redundant with an always-on equivalent (forgejo,
+#     stirling-pdf-lite, immich) at meaningfully higher resource cost — see
+#     each one's "tier" comment in services.json for specifics.
 
-SERVICES_MIN = ["beszel", "cloudflared", "nginx-plain", "landing", "portainer"]
+_SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
 
-SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole"]
+SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min"]
+SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core"]
+SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra"]
+SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual"]
 
-SERVICES_EXTRA = [
-    "dozzle", "dockge", "uptime-kuma", "openproject", "paperless",
-    "stirling-pdf-lite", "mealie",
-    "syncthing", "authentik", "miniflux", "audiobookshelf",
-    "invoiceshelf", "appflowy", "plane", "ollama", "open-webui", "vikunja",
-    "trilium", "silverbullet", "outline", "bookstack", "excalidraw", "karakeep",
-    "ntfy", "it-tools", "n8n", "crowdsec", "wallabag", "atuin", "adguard-home",
-    "orangehrm", "nocodb", "listmonk", "documenso", "calcom", "plausible",
-    "penpot", "coolify", "supabase", "observability", "homebox",
-]
-
-# Manual-only — never started by 'up min/core/all' (or their down/restart/
-# update/backup/restore equivalents). Start individually with 'up <service>'.
-#   - gitlab: redundant with forgejo (same git-hosting role) at far higher
-#     memory cost — forgejo is the default; start gitlab only when actually
-#     needed for something forgejo doesn't cover
-#   - stirling-pdf (full): redundant with stirling-pdf-lite (same PDF
-#     toolset) at ~2x the memory (OCR/LibreOffice extras) — lite is the
-#     default; start the full image only when those extras are actually needed
-#   - photoprism: redundant with immich (same AI photo-management role) at
-#     extra memory/maintenance cost from running a second photo library
-#     stack — immich is the default; start photoprism only if its specific
-#     feature set (e.g. its different face-recognition/tagging approach) is
-#     actually needed
-SERVICES_MANUAL = ["gitlab", "stirling-pdf", "photoprism"]
+# category/subcategory -> ordered list of slugs, e.g. SERVICE_GROUPS["notes"]
+# or SERVICE_GROUPS["productivity"] — powers 'up group:<name>' (and every
+# other tier-aware action) the same way SERVICES_MIN/CORE/EXTRA do. Only
+# entries with an independent tier are groupable — a group is something you
+# can start/stop, and firefly-importer (no tier, rides along with firefly)
+# isn't independently startable.
+SERVICE_GROUPS: dict[str, list[str]] = {}
+for _s in _SERVICES_DATA["services"]:
+    if not _s.get("tier"):
+        continue
+    for _key in ("category", "subcategory"):
+        _val = _s.get(_key)
+        if _val:
+            SERVICE_GROUPS.setdefault(_val, []).append(_s["slug"])
+del _s, _key, _val
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is
@@ -1680,6 +1704,10 @@ def show_help() -> None:
     print("    all     core + extra — starts/stops everything")
     print("    running update only — currently running services")
     print()
+    print(f"  {BOLD}Groups:{RESET}")
+    print("    group:<name>  every service in category/subcategory <name> — works with any action")
+    print(f"    valid names: {', '.join(sorted(SERVICE_GROUPS))}")
+    print()
     print(f"  {BOLD}Examples:{RESET}")
     print("    python homeserver.py dev up min                      start bare minimum")
     print("    python homeserver.py dev up core                     start full default stack")
@@ -1700,6 +1728,8 @@ def show_help() -> None:
     print("    python homeserver.py dev down mealie                 stop AND auto-snapshot (default)")
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
+    print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
+    print("    python homeserver.py dev down group:notes            stop the same group")
     print("    python homeserver.py dev precreate all gitlab stirling-pdf photoprism")
     print("                                                         create every never-started service (incl. manual-tier) so")
     print("                                                         they all show up as start-able stacks in Portainer")
@@ -1861,6 +1891,12 @@ def main() -> int:
             run_min = True
         elif tok == "running":
             run_running = True
+        elif tok.startswith("group:"):
+            group_name = tok[len("group:"):]
+            if group_name not in SERVICE_GROUPS:
+                error(f"Unknown group '{group_name}' — valid groups: {', '.join(sorted(SERVICE_GROUPS))}")
+                return 1
+            services_to_run.extend(SERVICE_GROUPS[group_name])
         else:
             if is_valid_service(tok):
                 services_to_run.append(tok)
@@ -1869,6 +1905,11 @@ def main() -> int:
                 show_help()
                 return 1
         i += 1
+
+    # A group can overlap with another group or an explicitly named service
+    # (e.g. 'up group:notes group:productivity') — dedupe while preserving
+    # first-seen order so nothing runs twice.
+    services_to_run = list(dict.fromkeys(services_to_run))
 
     if not (run_all or run_core or run_min or run_running) and not services_to_run:
         error("No services specified")
