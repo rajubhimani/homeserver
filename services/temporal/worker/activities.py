@@ -165,3 +165,68 @@ async def reference_activity(should_heartbeat: bool) -> str:
     if should_heartbeat:
         activity.heartbeat("reference_activity: still working")
     return "reference_activity completed"
+
+
+@activity.defn
+async def slow_activity_for_concurrency_demo(seconds: int) -> str:
+    """Companion to ConcurrencyLimitedWorkflow — exists purely to sit busy
+    long enough to observe the worker's own max_concurrent_activities cap
+    (see worker.py) actually queuing extra activities instead of running
+    them all in parallel."""
+    await asyncio.sleep(seconds)
+    return f"slept {seconds}s"
+
+
+@activity.defn
+async def fast_computation_activity(n: int) -> int:
+    """Deliberately trivial — the point of LocalActivityWorkflow isn't what
+    this computes, it's comparing Event History cost between calling this
+    as a regular vs. local activity."""
+    return n * n
+
+
+@activity.defn
+async def cancelable_countdown_activity(seconds: int) -> str:
+    """Heartbeats every second so Temporal can actually deliver a
+    cancellation — an activity that never heartbeats can't be canceled
+    mid-flight, it can only be abandoned by the workflow (the activity
+    keeps running to completion on the worker, just orphaned)."""
+    try:
+        for remaining in range(seconds, 0, -1):
+            activity.heartbeat(f"{remaining}s remaining")
+            await asyncio.sleep(1)
+        return "completed without cancellation"
+    except asyncio.CancelledError:
+        # Real version: release a lock, delete a temp resource, etc. Must
+        # re-raise (or return normally after cleanup) — swallowing this
+        # silently would leave the activity "running" from Temporal's
+        # point of view even though the process gave up on it.
+        activity.logger.info("cancelable_countdown_activity: cleaning up after cancellation")
+        raise
+
+
+ASYNC_COMPLETION_TOKEN_PATH = "/tmp/.async_completion_task_token"
+
+
+@activity.defn
+async def start_async_completion_activity() -> str:
+    """Writes its own completion token to a file, then tells Temporal it
+    won't complete itself — does NOT compute the result here. A real
+    version hands the token off to an external system (a ticketing API, a
+    human's approval queue, a webhook callback) that completes the
+    activity later, from an entirely separate process, using the token
+    alone. This file is that "external system," standing in for a real
+    one — see docs/services/temporal/temporal.md for the script that reads
+    it. Return type is `str`, not `None`: whatever the external completer
+    passes to `handle.complete(...)` must match this activity's declared
+    return type — completing with a mismatched type doesn't fail cleanly,
+    it corrupts every future replay of this workflow (`WorkflowTaskFailed`,
+    retried forever) since Temporal deserializes the *original* activity's
+    type on each replay, not the completer's. Hit this exact failure
+    mode live building this example."""
+    import base64
+    from pathlib import Path
+
+    token_b64 = base64.b64encode(activity.info().task_token).decode()
+    await asyncio.to_thread(Path(ASYNC_COMPLETION_TOKEN_PATH).write_text, token_b64)
+    activity.raise_complete_async()

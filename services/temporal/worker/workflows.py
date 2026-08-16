@@ -7,13 +7,16 @@ from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ApplicationError
+from temporalio.exceptions import ActivityError, ApplicationError
+from temporalio.workflow import ActivityCancellationType
 
 with workflow.unsafe.imports_passed_through():
     from activities import (
         RunContainerInput,
+        cancelable_countdown_activity,
         charge_payment_activity,
         create_shipment_activity,
+        fast_computation_activity,
         flaky_activity,
         materialize_dagster_asset_activity,
         reference_activity,
@@ -21,6 +24,8 @@ with workflow.unsafe.imports_passed_through():
         release_inventory_activity,
         reserve_inventory_activity,
         run_container_activity,
+        slow_activity_for_concurrency_demo,
+        start_async_completion_activity,
     )
 
 
@@ -369,4 +374,96 @@ class ReferenceWorkflow:
             # versioning_intent=None,           # Worker Versioning hint — irrelevant unless you've opted into that feature
             # summary=None,                     # short human-readable label shown in the UI's Event History, separate from the activity's actual input
             # priority=Priority(),               # Task Queue priority — higher-priority activities are dispatched first when a queue is backed up
+        )
+
+
+@workflow.defn
+class LocalActivityWorkflow:
+    """Strength: cost. `execute_local_activity()` runs `fast_computation_activity`
+    directly inside this Workflow Worker process — no Activity Task Queue
+    round-trip, no separate Activity Worker slot consumed, far fewer Event
+    History entries than the regular `execute_activity()` call right next
+    to it below. The tradeoff, not glossed over: a local activity is bound
+    by the *Workflow Task* timeout (a few seconds by default) rather than
+    its own independent timeout, and weaker retry/cancellation guarantees
+    — reach for it only for genuinely short, cheap calls, never for
+    anything that might run long or that other workers need to be able to
+    pick up."""
+
+    @workflow.run
+    async def run(self, n: int) -> dict:
+        regular_result = await workflow.execute_activity(
+            fast_computation_activity, n, start_to_close_timeout=timedelta(seconds=10)
+        )
+        local_result = await workflow.execute_local_activity(
+            fast_computation_activity, n, start_to_close_timeout=timedelta(seconds=10)
+        )
+        return {"regular": regular_result, "local": local_result}
+
+
+@workflow.defn
+class CancelableWorkflow:
+    """Strength: propagating a cancellation into a running Activity, not
+    just the Workflow around it. `cancelable_countdown_activity` heartbeats
+    every second specifically so this works — an activity that never
+    heartbeats can't be told to stop mid-flight; Temporal has no way to
+    interrupt code it isn't polling. `cancellation_type=WAIT_CANCELLATION_COMPLETED`
+    means this workflow call doesn't return until the activity has
+    actually acknowledged the cancellation (run its cleanup and re-raised),
+    not just until the cancel request was sent."""
+
+    @workflow.run
+    async def run(self, seconds: int = 30) -> str:
+        try:
+            return await workflow.execute_activity(
+                cancelable_countdown_activity,
+                seconds,
+                start_to_close_timeout=timedelta(seconds=seconds + 30),
+                heartbeat_timeout=timedelta(seconds=5),
+                cancellation_type=ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
+            )
+        except ActivityError:
+            return "workflow observed the activity being canceled"
+
+
+@workflow.defn
+class AsyncCompletionWorkflow:
+    """Strength: handing an Activity off to a completely separate,
+    external process — a ticketing system, a human's approval queue, a
+    webhook callback — that finishes it later using a token, not by the
+    workflow polling or waiting on a Signal (contrast with `ApprovalWorkflow`'s
+    Signal-based human-in-the-loop: here it's the *Activity itself* that
+    stays pending, completed by whoever holds the token, not the workflow).
+    `start_async_completion_activity` returns nothing itself — it writes
+    its token to a file and tells Temporal not to expect a result from
+    this process. See `docs/services/temporal/temporal.md` for the
+    external script that completes it using that token."""
+
+    @workflow.run
+    async def run(self) -> str:
+        return await workflow.execute_activity(
+            start_async_completion_activity,
+            start_to_close_timeout=timedelta(minutes=10),
+        )
+
+
+@workflow.defn
+class ConcurrencyLimitedWorkflow:
+    """Strength: demonstrating `Worker(max_concurrent_activities=...)` (see
+    worker.py) actually capping throughput — a process-wide setting, not a
+    per-workflow one, so this workflow is just a thin wrapper around
+    slow_activity_for_concurrency_demo to make the cap observable. Start
+    several of these at once (more than the configured cap) and watch
+    activities past the limit sit `Scheduled` instead of `Started` until a
+    slot frees up — the direct Temporal analog of Airflow's
+    example_max_active_runs (max_active_runs=1) and Dagster's `pool=`,
+    except this caps activity *execution* worker-wide, not runs of one
+    specific workflow."""
+
+    @workflow.run
+    async def run(self, seconds: int = 10) -> str:
+        return await workflow.execute_activity(
+            slow_activity_for_concurrency_demo,
+            seconds,
+            start_to_close_timeout=timedelta(seconds=seconds + 30),
         )

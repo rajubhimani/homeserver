@@ -11,8 +11,10 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from activities import (
+    cancelable_countdown_activity,
     charge_payment_activity,
     create_shipment_activity,
+    fast_computation_activity,
     flaky_activity,
     materialize_dagster_asset_activity,
     reference_activity,
@@ -20,13 +22,19 @@ from activities import (
     release_inventory_activity,
     reserve_inventory_activity,
     run_container_activity,
+    slow_activity_for_concurrency_demo,
+    start_async_completion_activity,
 )
 from workflows import (
     ApprovalWorkflow,
+    AsyncCompletionWorkflow,
     BatchProcessingWorkflow,
+    CancelableWorkflow,
+    ConcurrencyLimitedWorkflow,
     ConfigurableCounterWorkflow,
     DelayedReminderWorkflow,
     GreetSourceWorkflow,
+    LocalActivityWorkflow,
     MaterializeDagsterAssetWorkflow,
     OrderFulfillmentSagaWorkflow,
     RecurringPollWorkflow,
@@ -60,6 +68,10 @@ WORKFLOWS = [
     ConfigurableCounterWorkflow,
     RecurringPollWorkflow,
     ReferenceWorkflow,
+    LocalActivityWorkflow,
+    CancelableWorkflow,
+    AsyncCompletionWorkflow,
+    ConcurrencyLimitedWorkflow,
 ]
 
 ACTIVITIES = [
@@ -72,6 +84,10 @@ ACTIVITIES = [
     refund_payment_activity,
     create_shipment_activity,
     reference_activity,
+    fast_computation_activity,
+    cancelable_countdown_activity,
+    start_async_completion_activity,
+    slow_activity_for_concurrency_demo,
 ]
 
 
@@ -89,7 +105,7 @@ async def run_worker(namespace: str) -> None:
     #       activity_executor=None,                # thread/process pool for *synchronous* activities — required if any activity isn't `async def`; none here are
     #       max_cached_workflows=1000,              # sticky-cache size — how many workflow executions stay warm in memory between tasks
     #       max_concurrent_workflow_tasks=None,     # cap concurrent workflow-task processing — None = SDK-chosen default
-    #       max_concurrent_activities=None,         # cap concurrent activity executions on this worker — the actual throughput/resource knob most homelab tuning wants
+    #       max_concurrent_activities=20,            # cap concurrent activity executions on this worker — the actual throughput/resource knob most homelab tuning wants; set for real below (see ConcurrencyLimitedWorkflow)
     #       max_concurrent_local_activities=None,   # same, for local activities (execute_local_activity — none used in this repo's workflows)
     #       graceful_shutdown_timeout=timedelta(0), # how long to let in-flight activities finish before SIGTERM force-kills them — 0 = immediate
     #       max_activities_per_second=None,         # global rate limit across all activities on this worker
@@ -100,7 +116,17 @@ async def run_worker(namespace: str) -> None:
     #       workflow_task_poller_behavior=PollerBehaviorSimpleMaximum(maximum=5),  # how many pollers this worker runs for workflow tasks
     #       activity_task_poller_behavior=PollerBehaviorSimpleMaximum(maximum=5), # same, for activity tasks
     #   )
-    worker = Worker(client, task_queue=TASK_QUEUE, workflows=WORKFLOWS, activities=ACTIVITIES)
+    # max_concurrent_activities=20: a real, permanent cap, not just a demo
+    # value — the SDK default is unbounded (effectively however many the
+    # server hands out), which for this repo means e.g. RunContainerWorkflow
+    # could launch an unbounded number of Docker containers at once if
+    # enough workflows started together. 20 is a reasonable homelab ceiling;
+    # see ConcurrencyLimitedWorkflow for a workflow that makes this
+    # observably cap throughput instead of just being a config value nobody
+    # ever sees do anything.
+    worker = Worker(
+        client, task_queue=TASK_QUEUE, workflows=WORKFLOWS, activities=ACTIVITIES, max_concurrent_activities=20
+    )
     await worker.run()
 
 

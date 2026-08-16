@@ -65,6 +65,10 @@ docker restart temporal-worker
 - [`ConfigurableCounterWorkflow`](examples/ConfigurableCounterWorkflow.md) — Update (with a validator) alongside Signal.
 - [`RecurringPollWorkflow`](examples/RecurringPollWorkflow.md) — Continue-As-New, an unbounded loop with bounded Event History.
 - [`ReferenceWorkflow`](examples/ReferenceWorkflow.md) — reference: every `execute_activity()`/`RetryPolicy` option, real defaults.
+- [`LocalActivityWorkflow`](examples/LocalActivityWorkflow.md) — `execute_local_activity()`, no Task Queue round-trip.
+- [`CancelableWorkflow`](examples/CancelableWorkflow.md) — cancellation genuinely delivered into a heartbeating Activity.
+- [`AsyncCompletionWorkflow`](examples/AsyncCompletionWorkflow.md) — an Activity completed later by a separate process holding only a token.
+- [`ConcurrencyLimitedWorkflow`](examples/ConcurrencyLimitedWorkflow.md) — `Worker(max_concurrent_activities=20)` actually capping throughput.
 
 Keep the `activities.py`/`workflows.py` split if an activity needs a non-deterministic import (`docker`, `requests`, anything with I/O) — Temporal's sandbox rejects those inside a workflow's own module even when only the activity uses them (bit this exact setup during development; see the comment at the top of `activities.py`).
 
