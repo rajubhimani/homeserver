@@ -4,7 +4,7 @@
 
 ---
 
-A shared SMTP catcher — any service in this stack can point its mail-sending config at `mailpit:1025` and see exactly what it would have sent, in a real inbox UI, with nothing ever actually delivered anywhere. No MX records, no port 25 open to the internet, no real mail server to operate or secure. Started life scoped inside Airflow's own `compose.yml` (built to prove `AIRFLOW__EMAIL__*` alerting actually works — see `docs/services/airflow.md`'s `example_email_alert_on_failure.py`), then promoted here so any other service can use the same instance instead of each standing up its own.
+A shared SMTP catcher — any service in this stack can point its mail-sending config at `mailpit:1025` and see exactly what it would have sent, in a real inbox UI, with nothing ever actually delivered anywhere. No MX records, no port 25 open to the internet, no real mail server to operate or secure. Started life scoped inside Airflow's own `compose.yml` (built to prove `AIRFLOW__EMAIL__*` alerting actually works — see `docs/services/airflow/airflow.md`'s `example_email_alert_on_failure.py`), then promoted here so any other service can use the same instance instead of each standing up its own.
 
 ## Setup
 

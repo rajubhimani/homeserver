@@ -1,6 +1,6 @@
 """Starter example — a DAG that runs one task as its own resource-limited
 container via DockerOperator, using the socket mounted into airflow-scheduler
-(see docs/services/airflow.md's "DAGs can launch their own containers"
+(see docs/services/airflow/airflow.md's "DAGs can launch their own containers"
 section). Delete this file, or use it as a template for a real DAG."""
 
 from datetime import datetime

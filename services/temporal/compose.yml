@@ -103,7 +103,7 @@ services:
   # demo: temporal-worker (worker.py) runs one Worker loop per Namespace,
   # both polling a task queue named "homeserver", and they never see each
   # other's work despite the identical queue name — see
-  # docs/services/temporal.md's "Namespaces" section. "staging"/"production"
+  # docs/services/temporal/temporal.md's "Namespaces" section. "staging"/"production"
   # demonstrate the real, common reason to reach for multiple Namespaces on
   # one cluster: environment isolation without a second Temporal deployment.
   # Idempotent (describe-then-create, same as auto-setup's own logic) so
@@ -176,7 +176,7 @@ services:
 
   # The image only has dependencies baked in (worker/Dockerfile) — the actual
   # workflow/activity code is bind-mounted from DATA_ROOT/worker (your live,
-  # gitignored copy — see docs/services/temporal.md's "Where your workflow
+  # gitignored copy — see docs/services/temporal/temporal.md's "Where your workflow
   # code actually lives"). Docker socket mounted so activities can launch
   # their own resource-limited containers.
   temporal-worker:

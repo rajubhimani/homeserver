@@ -70,9 +70,9 @@
       - [Authentik](/docs/services/authentik.md "Single sign-on for all your services. One login, one identity, full access control. Replaces: Okta / Auth0.")
     - Automation & Low-code
       - [n8n](/docs/services/n8n.md "Self-hosted workflow automation — connect apps and services together with a drag-and-drop builder, like Zapier or Make, without writing code.")
-      - [Airflow](/docs/services/airflow.md "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator.")
-      - [Temporal](/docs/services/temporal.md "Durable execution engine for reliable distributed workflows — automatic retries, state persistence, and long-running processes that survive crashes.")
-      - [Dagster](/docs/services/dagster.md "Data orchestrator built around software-defined assets — track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline.")
+      - [Airflow](/docs/services/airflow/airflow.md "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator.")
+      - [Temporal](/docs/services/temporal/temporal.md "Durable execution engine for reliable distributed workflows — automatic retries, state persistence, and long-running processes that survive crashes.")
+      - [Dagster](/docs/services/dagster/dagster.md "Data orchestrator built around software-defined assets — track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline.")
       - [NocoDB](/docs/services/nocodb.md "Turn a database into an easy-to-use spreadsheet — browse, filter, and edit data without writing SQL. A self-hosted alternative to Airtable.")
       - [Supabase](/docs/services/supabase.md "Self-hosted backend for building apps — database, user logins, file storage, and live data updates in one place. A self-hosted alternative to Firebase.")
     - Tools

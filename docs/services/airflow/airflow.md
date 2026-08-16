@@ -1,6 +1,6 @@
 # Airflow
 
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+[← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)
 
 ---
 
@@ -44,7 +44,7 @@ flowchart TD
 
 No `redis`/`airflow-worker`/`flower` — those only exist to support `CeleryExecutor`'s distributed task queue, which this deployment doesn't use.
 
-`AIRFLOW__EMAIL__*` alerting is pointed at [Mailpit](../services/mailpit.md), a shared SMTP catcher used by other services in this stack too (not scoped to Airflow) — nothing leaves this host. See `example_email_alert_on_failure.py` below.
+`AIRFLOW__EMAIL__*` alerting is pointed at [Mailpit](../mailpit.md), a shared SMTP catcher used by other services in this stack too (not scoped to Airflow) — nothing leaves this host. See `example_email_alert_on_failure.py` below.
 
 ## Required env vars
 
@@ -101,11 +101,11 @@ docker exec airflow-scheduler airflow dags list-runs example_etl_pipeline
 - `example_trigger_rules` — `trigger_rule` controls whether a task runs after an upstream *failure*, not just success (every other example here uses the implicit `all_success` default). `risky_task` always fails; `cleanup` (`ALL_DONE`) and `alert_on_failure` (`ONE_FAILED`) run anyway — verified both succeeded specifically because the upstream failed, while `only_if_all_ok` (default rule) correctly never ran (`upstream_failed`).
 - `example_stateful_retry` — the Task State Store (AIP-103, new in Airflow 3.3): a task persists key-value state that survives across *retries* of that same task, not just between different tasks in a run like XCom does. The task always fails right after "submitting" a job on try 1; verified try 2 read back the identical `job_id` and reattached instead of submitting a duplicate (`Try 1: submitted job: job-tabkx0z8` → `Try 2: reattaching to existing job: job-tabkx0z8`).
 - `example_variables_and_connections` — Airflow's own lightweight, Fernet-encrypted secrets/config store (Variables + Connections), no external secrets manager needed at homelab scale. Needs a one-time setup step (create the demo Connection) before triggering — see the file's own docstring for the exact command. Verified: read back the Variable correctly, resolved the Connection's host/login with the password properly masked in logs, and confirmed directly against the metadata DB that the stored password is a real Fernet token (`gAAAAAB...`), not plaintext.
-- `example_email_alert_on_failure` — `AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_FAILURE`/`ON_RETRY` (in `.env.example`) actually working, not just documented. The task always fails with `email_on_failure=True`; [Mailpit](../services/mailpit.md) (shared SMTP catcher, `services/mailpit/`, web UI on `:8140`) receives it — nothing leaves this host. Verified: the email genuinely landed in Mailpit's inbox, correct recipient, subject/body containing the real failure (`Exception: Simulated failure...`). One real gotcha this surfaced: `email_on_failure` in Airflow 3 routes through `SmtpNotifier`, which needs an actual `smtp_default` **Connection** — the classic `AIRFLOW__SMTP__*` config vars alone aren't enough and fail with `conn_id smtp_default isn't defined`; `airflow-init` now creates that connection automatically (idempotent, same pattern as the admin user). Minor cosmetic note: the `From` header shows a container-default address rather than the configured `SMTP_FROM_EMAIL` on this specific internal notification path — doesn't affect delivery or content.
+- `example_email_alert_on_failure` — `AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_FAILURE`/`ON_RETRY` (in `.env.example`) actually working, not just documented. The task always fails with `email_on_failure=True`; [Mailpit](../mailpit.md) (shared SMTP catcher, `services/mailpit/`, web UI on `:8140`) receives it — nothing leaves this host. Verified: the email genuinely landed in Mailpit's inbox, correct recipient, subject/body containing the real failure (`Exception: Simulated failure...`). One real gotcha this surfaced: `email_on_failure` in Airflow 3 routes through `SmtpNotifier`, which needs an actual `smtp_default` **Connection** — the classic `AIRFLOW__SMTP__*` config vars alone aren't enough and fail with `conn_id smtp_default isn't defined`; `airflow-init` now creates that connection automatically (idempotent, same pattern as the admin user). Minor cosmetic note: the `From` header shows a container-default address rather than the configured `SMTP_FROM_EMAIL` on this specific internal notification path — doesn't affect delivery or content.
 - `example_docker_operator` — the resource-limited-container pattern from the section below.
 - `example_all_options` — reference, not a pattern demo: every `@dag`/`@task` option in one file, each shown at its real default with a one-line explanation (a handful set for real, everything else commented-out as a checklist to copy from). Captured against Airflow 3.3.1 via `inspect.signature()` against `DAG.__init__`/`BaseOperator.__init__` — the source of truth if this ever drifts. Verified: parses with no import errors and runs to `success` end to end.
 - `example_human_in_the_loop` — the built-in Human-in-the-Loop (HITL, new in 3.1) `ApprovalOperator`: pause a task until a human responds via the UI's Human-in-the-loop tab or a REST API call, no Signal-handling code to write — the direct built-in parallel to Temporal's `ApprovalWorkflow`. Shows its own `awaiting_input` state (distinct from `deferred` — on Airflow 3.3+ this holds no `airflow-triggerer` slot at all, tracked directly instead). It's a gate, not a branch router: Approve lets `proceed` run, Reject **skips** it (not a failure). Verified both outcomes live via the REST API (`PATCH .../hitlDetails`): approving completed `proceed` to `success`; rejecting on a second run left `approval_gate` at `success` (a human responded) with `proceed` `skipped`.
-- `example_cross_service_pipeline` — the capstone: one task starts a Temporal workflow (`temporalio` is installed on `airflow-scheduler` alongside the Docker provider — see the compose.yml comment) and awaits its result. That workflow durably orchestrates a Dagster job materialization via GraphQL — **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**. See `docs/services/temporal.md`'s `MaterializeDagsterAssetWorkflow` for the other half. Verified working end to end.
+- `example_cross_service_pipeline` — the capstone: one task starts a Temporal workflow (`temporalio` is installed on `airflow-scheduler` alongside the Docker provider — see the compose.yml comment) and awaits its result. That workflow durably orchestrates a Dagster job materialization via GraphQL — **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**. See `docs/services/temporal/temporal.md`'s `MaterializeDagsterAssetWorkflow` for the other half. Verified working end to end.
 
 ## Reverse proxy — needs `--proxy-headers`, not just `X-Forwarded-Proto`
 
@@ -142,4 +142,4 @@ Only `airflow-scheduler` has the socket — with `LocalExecutor`, that's the one
 
 ---
 
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+[← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)

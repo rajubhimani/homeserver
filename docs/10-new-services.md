@@ -58,9 +58,9 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | ntfy | [docs/services/ntfy.md](services/ntfy.md) |
 | IT-Tools | [docs/services/it-tools.md](services/it-tools.md) |
 | n8n | [docs/services/n8n.md](services/n8n.md) |
-| Airflow | [docs/services/airflow.md](services/airflow.md) |
-| Temporal | [docs/services/temporal.md](services/temporal.md) |
-| Dagster | [docs/services/dagster.md](services/dagster.md) |
+| Airflow | [docs/services/airflow/airflow.md](services/airflow/airflow.md) |
+| Temporal | [docs/services/temporal/temporal.md](services/temporal/temporal.md) |
+| Dagster | [docs/services/dagster/dagster.md](services/dagster/dagster.md) |
 | Mailpit | [docs/services/mailpit.md](services/mailpit.md) |
 | Mattermost | [docs/services/mattermost.md](services/mattermost.md) |
 | Rocket.Chat | [docs/services/rocketchat.md](services/rocketchat.md) |

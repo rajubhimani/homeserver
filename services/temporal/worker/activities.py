@@ -57,7 +57,7 @@ async def materialize_dagster_asset_activity(job_name: str) -> str:
     """Cross-service orchestration: launches a Dagster job via its GraphQL
     API and polls until it finishes, heartbeating so Temporal knows this
     long-running activity is still alive (not stuck) — the same call
-    docs/services/dagster.md's "Try the starter examples" section makes by
+    docs/services/dagster/dagster.md's "Try the starter examples" section makes by
     hand with dagster-graphql, just driven durably from a workflow instead."""
     graphql_url = "http://dagster-webserver:3000/graphql"
 

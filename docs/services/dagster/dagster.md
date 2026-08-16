@@ -1,6 +1,6 @@
 # Dagster
 
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+[← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)
 
 ---
 
@@ -80,7 +80,7 @@ docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launch
 }'
 ```
 
-The `raw_data`/`cleaned_data`/`report` chain is Dagster's actual differentiator, worth looking at closely: `cleaned_data`'s function signature is `def cleaned_data(raw_data: list[dict])` — that parameter name **is** the dependency declaration. Dagster inspects it and wires the lineage edge automatically; there's no `>>` operator or explicit DAG object anywhere, unlike the equivalent Airflow example (`example_etl_pipeline` in `docs/services/airflow.md`) which chains tasks explicitly. Open `report` in the UI's asset graph to see the inferred lineage rendered.
+The `raw_data`/`cleaned_data`/`report` chain is Dagster's actual differentiator, worth looking at closely: `cleaned_data`'s function signature is `def cleaned_data(raw_data: list[dict])` — that parameter name **is** the dependency declaration. Dagster inspects it and wires the lineage edge automatically; there's no `>>` operator or explicit DAG object anywhere, unlike the equivalent Airflow example (`example_etl_pipeline` in `docs/services/airflow/airflow.md`) which chains tasks explicitly. Open `report` in the UI's asset graph to see the inferred lineage rendered.
 
 `report_freshness_check` is an **Asset Check** — Dagster's built-in data-quality concept (a pass/fail validation attached to a specific asset, shown right on that asset's page). Neither Airflow nor Temporal have a native equivalent; you'd hand-roll the same idea as a plain extra task.
 
@@ -178,19 +178,19 @@ docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launch
 
 Dagster 1.13 also added partitioned Asset Checks (a check scoped to one partition instead of the whole asset), deliberately **not** included here — it requires `partitions_def` on an `AssetCheckSpec`, which Dagster itself flags with a `PreviewWarning` ("not considered ready for production use"), the same preview-status concern as the newer virtual-assets feature. Worth knowing it exists once it's stable; not included as a starter example while it isn't.
 
-`report_job` is also the target of the cross-service capstone example: Temporal's `MaterializeDagsterAssetWorkflow` launches it via this same GraphQL API and durably waits for it, triggered on a schedule by Airflow's `example_cross_service_pipeline` DAG — **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**. See `docs/services/temporal.md` for the workflow side; verified working end to end.
+`report_job` is also the target of the cross-service capstone example: Temporal's `MaterializeDagsterAssetWorkflow` launches it via this same GraphQL API and durably waits for it, triggered on a schedule by Airflow's `example_cross_service_pipeline` DAG — **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**. See `docs/services/temporal/temporal.md` for the workflow side; verified working end to end.
 
 ## Resource caps on the platform's own containers
 
-Separately from the per-run/per-step caps above, the 4 platform containers themselves have `deploy.resources.limits.memory` caps: `dagster-db` 512M, `dagster-user-code` 256M (just serves gRPC, lightweight), `dagster-webserver` 512M, `dagster-daemon` 384M — conservative starting points, same reasoning as Temporal's (see `docs/services/temporal.md`'s "Resource caps" section).
+Separately from the per-run/per-step caps above, the 4 platform containers themselves have `deploy.resources.limits.memory` caps: `dagster-db` 512M, `dagster-user-code` 256M (just serves gRPC, lightweight), `dagster-webserver` 512M, `dagster-daemon` 384M — conservative starting points, same reasoning as Temporal's (see `docs/services/temporal/temporal.md`'s "Resource caps" section).
 
 ## Notes
 
-- **No built-in auth on the UI** — same situation as Temporal (see `docs/services/temporal.md`'s Notes): anyone who can reach `dagster.<domain>` can see and operate on every pipeline. RBAC/SSO is a Dagster+ (paid) feature, not available in open-source Dagster. Fine for a single-user homelab behind Cloudflare Tunnel; put it behind Authentik's forward-auth if this ever needs to be shared.
+- **No built-in auth on the UI** — same situation as Temporal (see `docs/services/temporal/temporal.md`'s Notes): anyone who can reach `dagster.<domain>` can see and operate on every pipeline. RBAC/SSO is a Dagster+ (paid) feature, not available in open-source Dagster. Fine for a single-user homelab behind Cloudflare Tunnel; put it behind Authentik's forward-auth if this ever needs to be shared.
 - `docker_executor`/`DockerRunLauncher` (the container-per-run/per-step mechanism everything here relies on for resource limits) is a **beta** API per Dagster's own docs — stable enough to build on, but Dagster reserves the right to make breaking changes in a minor version bump, unlike the fully-stable core APIs (`@asset`, `Definitions`, etc.). Worth knowing before pinning a much newer Dagster version later without re-checking this specifically.
 - Elasticsearch/advanced search isn't deployed — Postgres-backed run/schedule/event-log storage covers normal usage fine.
 - `DAGSTER_CURRENT_IMAGE` on `dagster-user-code` must match that service's own `image:` tag in `compose.yml` — it's how the run launcher knows which image to use when it launches a new run container. If you ever rename the image tag, update both places together.
 
 ---
 
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+[← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)

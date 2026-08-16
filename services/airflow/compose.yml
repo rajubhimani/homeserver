@@ -191,7 +191,7 @@ services:
     #
     # This memory cap is for the scheduler process itself — containers a DAG
     # launches via DockerOperator are separate sibling containers with their
-    # own mem_limit/cpuset_cpus params (see docs/services/airflow.md), not
+    # own mem_limit/cpuset_cpus params (see docs/services/airflow/airflow.md), not
     # counted against this cap.
     group_add:
       - "${DOCKER_SOCKET_GID}"

@@ -1,7 +1,7 @@
 # Dependencies only — the actual worker.py/activities.py/workflows.py are
 # bind-mounted from service_data/data/temporal/worker/ at runtime (compose.yml),
 # not copied in here. This file is the only git-tracked, image-baked part
-# (see docs/services/temporal.md's "Where your workflow code actually lives"
+# (see docs/services/temporal/temporal.md's "Where your workflow code actually lives"
 # section for why) — changing what packages the worker needs still means
 # editing pyproject.toml, re-running `uv lock`, and rebuilding; changing the
 # workflow/activity code itself only needs a container restart.

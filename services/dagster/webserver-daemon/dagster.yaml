@@ -18,7 +18,7 @@ run_coordinator:
 # dagster-daemon) — DAGSTER_CURRENT_IMAGE on dagster-user-code tells this
 # which image to use. container_kwargs caps let this be a conservative
 # starting point rather than an unbounded footprint on the host; raise if a
-# run gets OOM-killed under real load (see docs/services/dagster.md).
+# run gets OOM-killed under real load (see docs/services/dagster/dagster.md).
 run_launcher:
   module: dagster_docker
   class: DockerRunLauncher

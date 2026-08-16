@@ -4,7 +4,7 @@
 
 ---
 
-Three different answers to "run this thing, reliably, on a schedule or in response to something." Per-service setup, architecture, and worked examples live in each one's own doc — [`airflow.md`](services/airflow.md), [`temporal.md`](services/temporal.md), [`dagster.md`](services/dagster.md). This doc is only the comparison those three don't make of themselves.
+Three different answers to "run this thing, reliably, on a schedule or in response to something." Per-service setup, architecture, and worked examples live in each one's own doc — [`airflow.md`](services/airflow/airflow.md), [`temporal.md`](services/temporal/temporal.md), [`dagster.md`](services/dagster/dagster.md). This doc is only the comparison those three don't make of themselves.
 
 ## The actual difference, not just the marketing
 

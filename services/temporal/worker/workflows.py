@@ -27,7 +27,7 @@ with workflow.unsafe.imports_passed_through():
 @workflow.defn
 class RunContainerWorkflow:
     """Strength: resource-bounded execution — every step can run as its own
-    container with explicit mem/CPU limits (see docs/services/temporal.md)."""
+    container with explicit mem/CPU limits (see docs/services/temporal/temporal.md)."""
 
     @workflow.run
     async def run(self, inp: RunContainerInput) -> str:

@@ -1,6 +1,6 @@
 # Temporal
 
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+[← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)
 
 ---
 
@@ -99,7 +99,7 @@ docker exec -it temporal-admin-tools temporal workflow start --address temporal:
 
 A real bug this caught during development, worth knowing about if you write your own compensation logic: the plain `raise RuntimeError(...)` a first version of `charge_payment_activity` used got retried by Temporal's *default* policy — indefinitely, since a declined payment looks identical to a transient fault unless you say otherwise. The workflow never reached its `except` block to compensate; it just sat retrying forever. Fix: raise `temporalio.exceptions.ApplicationError(..., non_retryable=True)` for genuine business-decision failures.
 
-**`MaterializeDagsterAssetWorkflow`** — cross-service architecture. Calls Dagster's GraphQL API (`http://dagster-webserver:3000/graphql`) to launch a job, then polls until it finishes — durably: if this worker crashes mid-poll, Temporal replays and keeps waiting, no state lost, something a plain polling script can't do. `example_cross_service_pipeline` in `docs/services/airflow.md`'s Airflow DAGs starts this on a schedule — the capstone example: **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**, each tool doing the one thing it's actually best at. Verified working end to end (`docker exec airflow-scheduler airflow dags trigger example_cross_service_pipeline`, run completed with state `success`).
+**`MaterializeDagsterAssetWorkflow`** — cross-service architecture. Calls Dagster's GraphQL API (`http://dagster-webserver:3000/graphql`) to launch a job, then polls until it finishes — durably: if this worker crashes mid-poll, Temporal replays and keeps waiting, no state lost, something a plain polling script can't do. `example_cross_service_pipeline` in `docs/services/airflow/airflow.md`'s Airflow DAGs starts this on a schedule — the capstone example: **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**, each tool doing the one thing it's actually best at. Verified working end to end (`docker exec airflow-scheduler airflow dags trigger example_cross_service_pipeline`, run completed with state `success`).
 
 ```bash
 docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
@@ -233,4 +233,4 @@ Every container here has a `deploy.resources.limits.memory` cap (`temporal-db` 5
 
 ---
 
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+[← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)

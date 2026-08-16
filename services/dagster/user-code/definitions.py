@@ -8,7 +8,7 @@ Things this is meant to show a new user:
    no >> operator, no manual DAG wiring), and every materialization is
    automatically resource-bounded via docker_executor below, the same
    pattern as Airflow's DockerOperator and Temporal's worker (see
-   docs/services/dagster.md and the other two services' docs).
+   docs/services/dagster/dagster.md and the other two services' docs).
 3. report_freshness_check: an Asset Check — Dagster's built-in data-quality
    concept, distinct from Airflow/Temporal, which have no equivalent.
 4. daily_sales: a partitioned asset — Dagster's actual answer to "backdated

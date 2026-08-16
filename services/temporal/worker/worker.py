@@ -1,7 +1,7 @@
 """Placeholder Temporal worker — replace with real workflow/activity code.
 
 Starter workflows, each demonstrating a different Temporal strength — see
-workflows.py's docstrings and docs/services/temporal.md for how to run each
+workflows.py's docstrings and docs/services/temporal/temporal.md for how to run each
 one from temporal-admin-tools.
 """
 
@@ -41,7 +41,7 @@ TASK_QUEUE = "homeserver"
 # queue each time — a Namespace is the isolation boundary, not the queue
 # name. One worker process here runs one Worker loop per Namespace,
 # concurrently, all polling "homeserver" — proves it: start the same
-# Workflow ID in two or more of these (see docs/services/temporal.md) and
+# Workflow ID in two or more of these (see docs/services/temporal/temporal.md) and
 # they run as fully independent executions with zero shared state or
 # history. "staging"/"production" here are a real, common reason to reach
 # for multiple Namespaces on one cluster: environment isolation without
