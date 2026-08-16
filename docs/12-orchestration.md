@@ -58,6 +58,28 @@ flowchart LR
 
 They're not mutually exclusive — see below.
 
+## Feature parity — the same concept, three tools (or two, or one)
+
+Easy to assume a concept you've only seen demoed in one of these three is exclusive to it — it usually isn't; it's just which example got written up. Same concept, one worked, verified example per tool that actually has it — `—` means that tool genuinely doesn't do this natively, by design, not an oversight:
+
+| Concept | Airflow | Temporal | Dagster |
+| --- | --- | --- | --- |
+| Retries with backoff | `example_scheduled_with_retries` | `RetryableActivityWorkflow` (`flaky_activity`) | `flaky_retry_asset` |
+| Wait for an external condition | `example_sensor` / `example_file_sensor` (built-in `FileSensor`) | `ApprovalWorkflow` (`wait_condition()` + Signal) | `marker_file_sensor` |
+| Human-in-the-loop approval | `example_human_in_the_loop` (`ApprovalOperator`, Airflow 3.1+) | `ApprovalWorkflow` | — (closest analog is a sensor waiting on an external signal, not a first-class approval gate) |
+| One unit depending on another | `example_cross_dag_dependencies` (`ExternalTaskSensor` pull + `TriggerDagRunOperator` push) | `execute_child_workflow` (`BatchProcessingWorkflow`) | parameter-name dependency (`raw_data`→`cleaned_data`) — data lineage, a genuinely different kind of "depends on" than the other two |
+| Scheduling on a cron | `schedule="@daily"` (`example_scheduled_with_retries`) | `temporal schedule create` (see `temporal.md`, client-side construct — no workflow code of its own) | `report_daily_schedule` |
+| Capping concurrent executions | `example_max_active_runs` (`max_active_runs=1`) | `Worker`'s `max_concurrent_*` (documented in `worker.py`, process-wide, not per-workflow) | `pool=` (documented in `reference_op`, not demoed live) |
+| Resource-bounded per-step execution | `example_docker_operator` | `RunContainerWorkflow` | `docker_executor` (every asset in this stack's `definitions.py`) |
+| Fan-out / parallelism | `example_parallel_tasks` | `BatchProcessingWorkflow` (`asyncio.gather` children) | `docker_executor` can run independent assets' steps concurrently (subject to its own concurrency limits) — not independently verified here, no dedicated fan-out demo |
+| Backfill / historical reprocessing | `example_backfill` (whole-DAG-run) | — (not a Temporal concept — see "Backdated / historical processing" above) | `daily_sales` (per-partition) |
+| Compensation on partial failure (Saga) | — (write your own on-failure cleanup tasks) | `OrderFulfillmentSagaWorkflow` | — |
+| Data lineage / catalog | — (Airflow's own "Asset" is a trigger label, not lineage — see above) | — | `raw_data`→`cleaned_data`→`report`, `customer_orders` |
+| Built-in data-quality checks | — | — | `report_freshness_check` |
+| Durable long wait / timer | — | `DelayedReminderWorkflow` | — |
+| Runtime-determined number of parallel units | `example_dynamic_task_mapping` (`.expand()`) | — | — |
+| Built-in secrets/config store | `example_variables_and_connections` | — | `ConfigurableResource` (a config object, not quite a secrets store) |
+
 ## Built-in features that mean you don't need another service
 
 Each tool bundles a capability that would otherwise mean standing up something separate elsewhere in this stack. Worth knowing before reaching for a dedicated service out of habit:
@@ -65,7 +87,7 @@ Each tool bundles a capability that would otherwise mean standing up something s
 - **Dagster's asset metadata is a real data catalog, built in.** `customer_orders` in `definitions.py` — `description`/`owners`/`kinds` on the asset itself, plus a real column-by-column schema (`TableSchema`/`TableColumn`) and a computed preview attached to every materialization. [Dagster's own docs](https://dagster.io/platform-overview/data-catalog) draw the contrast deliberately: a standalone catalog tool ingests metadata from external systems *after the fact* and drifts stale; this is captured live, as a byproduct of the run that just happened, so it can't drift. No separate data-catalog service needed for "what does this data actually look like."
 - **Dagster's Asset Checks are a lightweight data-quality tool, built in.** `report_freshness_check` — a pass/fail validation attached directly to the asset it checks, visible right on that asset's page. Not a Great-Expectations-class rules engine, but covers the common case (row counts, null checks, freshness) without a second service to deploy and keep in sync with the pipeline.
 - **Temporal's Saga pattern + retry policies replace hand-rolled reliability plumbing.** `OrderFulfillmentSagaWorkflow` — Temporal tracks the full execution state of the workflow itself rather than moving messages between services, so there's no dead-letter queue, no separate state-tracking table, no retry-counter logic to write. The tradeoff, from Temporal's own guidance: it only pays for itself once you're spending real engineering time on exactly this kind of plumbing — it's not a blanket replacement for a message queue, just for the durable-execution slice of what one would otherwise be doing.
-- **Temporal's Signals/Queries/Updates replace a message queue for human-in-the-loop.** `ApprovalWorkflow` — "pause a process until a human acts, durably, for however long that takes" needs no external queue or polling service; the workflow itself durably waits.
+- **Temporal's Signals/Queries/Updates replace a message queue for human-in-the-loop.** `ApprovalWorkflow` — "pause a process until a human acts, durably, for however long that takes" needs no external queue or polling service; the workflow itself durably waits. Airflow independently ships the same underlying idea as a first-class primitive since 3.1 — `example_human_in_the_loop` (`ApprovalOperator`) — no Signal-handling code required, at the cost of the flexibility Temporal's Signal/Query pair gives you (Airflow's version is a fixed Approve/Reject gate; Temporal's is whatever your workflow code decides to expose). Dagster has no equivalent primitive — the closest analog is a sensor waiting on an external signal, same shape as `marker_file_sensor`.
 - **Temporal's Schedules + Batch replace a cron container and a scripted loop.** `temporal.md`'s Schedule example (`--interval`/`--cron`, verified firing on its own) and Batch example (`temporal workflow signal --query ...` against many workflows at once, verified `3/3` completed) — no separate cron sidecar, no hand-written loop over a workflow list.
 - **Temporal's Namespaces replace 2-3 separate deployments for environment isolation.** `default`/`staging`/`production`, verified running the identical workflow ID independently in all three with zero collision — one cluster instead of three.
 - **Airflow's FabAuthManager is real login, built in.** The one genuine asymmetry worth naming: Airflow ships actual username/password auth with RBAC and audit logging (`_AIRFLOW_WWW_USER_USERNAME`/`PASSWORD` in `airflow/.env`) — Temporal and Dagster explicitly have **none** (see both their Notes sections). No Authentik forward-auth needed for Airflow specifically; it's the one of the three that doesn't need help here.
