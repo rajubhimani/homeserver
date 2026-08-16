@@ -53,120 +53,18 @@ Changing the code only needs a restart, not a rebuild:
 docker restart temporal-worker
 ```
 
-`worker/` ships real, working workflows instead of a truly empty scaffold — each one demonstrates a different reason to reach for Temporal specifically, and each is runnable from `temporal-admin-tools` right now:
+`worker/` ships real, working workflows instead of a truly empty scaffold — each one demonstrates a different reason to reach for Temporal specifically, and each is runnable from `temporal-admin-tools` right now. Each has its own page — description, a sequence/flow diagram, a `file:line` pointer into the real source, and the exact CLI commands to run it:
 
-**`RunContainerWorkflow`** — resource-bounded execution. The worker has `${DOCKER_SOCKET}` mounted; its Activity calls the Docker SDK with explicit `mem_limit`/`cpu_count`, so a step's actual container never has an unbounded footprint on the host — the same pattern as Airflow's `DockerOperator`.
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver \
-  --type RunContainerWorkflow \
-  --input '{"image": "alpine:3.21", "command": ["echo", "hello"], "mem_limit": "128m", "cpu_count": 1}'
-```
-
-**`RetryableActivityWorkflow`** — durability. `flaky_activity` fails on its first two calls and succeeds on the third; the Workflow code has zero retry logic written — Temporal's `RetryPolicy` handles it. Watch it retry live: start it, then open the workflow in the UI and look at its Event History (`ActivityTaskStarted`/`ActivityTaskFailed` pairs before the final success).
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver \
-  --type RetryableActivityWorkflow \
-  --input '"demo-1"'
-```
-
-**`ApprovalWorkflow`** — durable state across arbitrarily long waits, resumed by an external Signal, inspectable at any time via a Query (Signals push data *in*; Queries read state back *out* without affecting execution — the two are normally taught as a pair). Start it (it'll sit paused), check on it, then approve it whenever:
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type ApprovalWorkflow --workflow-id approval-demo-1
-docker exec -it temporal-admin-tools temporal workflow query --address temporal:7233 \
-  --workflow-id approval-demo-1 --type status        # -> "pending"
-docker exec -it temporal-admin-tools temporal workflow signal --address temporal:7233 \
-  --workflow-id approval-demo-1 --name approve
-docker exec -it temporal-admin-tools temporal workflow query --address temporal:7233 \
-  --workflow-id approval-demo-1 --type status        # -> "approved"
-```
-
-**`OrderFulfillmentSagaWorkflow`** — the Saga pattern, Temporal's actual flagship real-world use case: this exact shape (a distributed transaction across services, with compensation if a later step fails) is how Uber dispatches rides, Netflix handles billing retries, and Amazon does multi-warehouse fulfillment, at production scale. Reserve inventory → charge payment → create shipment, all plain sequential code — no separate saga-definition DSL, no hand-tracking of which steps already committed. `amount > 1000` simulates a declined payment so both outcomes are real:
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type OrderFulfillmentSagaWorkflow --workflow-id saga-1 \
-  --input '{"order_id": "ord-1", "amount": 50}'      # succeeds
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type OrderFulfillmentSagaWorkflow --workflow-id saga-2 \
-  --input '{"order_id": "ord-2", "amount": 5000}'    # declined -> compensates (releases inventory)
-```
-
-A real bug this caught during development, worth knowing about if you write your own compensation logic: the plain `raise RuntimeError(...)` a first version of `charge_payment_activity` used got retried by Temporal's *default* policy — indefinitely, since a declined payment looks identical to a transient fault unless you say otherwise. The workflow never reached its `except` block to compensate; it just sat retrying forever. Fix: raise `temporalio.exceptions.ApplicationError(..., non_retryable=True)` for genuine business-decision failures.
-
-**`MaterializeDagsterAssetWorkflow`** — cross-service architecture. Calls Dagster's GraphQL API (`http://dagster-webserver:3000/graphql`) to launch a job, then polls until it finishes — durably: if this worker crashes mid-poll, Temporal replays and keeps waiting, no state lost, something a plain polling script can't do. `example_cross_service_pipeline` in `docs/services/airflow/airflow.md`'s Airflow DAGs starts this on a schedule — the capstone example: **Airflow schedules, Temporal durably orchestrates, Dagster materializes assets with lineage**, each tool doing the one thing it's actually best at. Verified working end to end (`docker exec airflow-scheduler airflow dags trigger example_cross_service_pipeline`, run completed with state `success`).
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type MaterializeDagsterAssetWorkflow --input '"report_job"'
-```
-
-**`BatchProcessingWorkflow`** + **`GreetSourceWorkflow`** — composition via Child Workflows. The parent starts 3 children concurrently (`asyncio.gather` + `execute_child_workflow`), each with its own Workflow ID and Event History — one child's failure doesn't corrupt the parent's or another child's state. Compare against Airflow's `example_parallel_tasks.py`: similar fan-out shape at a glance, but each child here is independently durable and independently queryable, not just a step inside one shared DAG run.
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type BatchProcessingWorkflow --workflow-id batch-demo-1 \
-  --input '["source_a", "source_b", "source_c"]'
-docker exec -it temporal-admin-tools temporal workflow list --address temporal:7233 \
-  --query "WorkflowType='GreetSourceWorkflow'"   # each child has its own WorkflowId (batch-demo-1-child-*)
-```
-
-**`DelayedReminderWorkflow`** — a durable timer. `asyncio.sleep()` inside a workflow *is* the durable timer (Temporal's deterministic asyncio event loop makes the same stdlib call replay-safe) — it costs nothing while waiting, no polling loop, no cron job to keep alive, and it survives the worker going away entirely. Verified: started with a 20s delay, killed and restarted `temporal-worker` mid-sleep (`docker restart temporal-worker`), and it still fired at the original time — Temporal Server tracks the timer, not the worker process.
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type DelayedReminderWorkflow --workflow-id reminder-demo-1 --input '20'
-# try it yourself: docker restart temporal-worker partway through, then check the result still lands on time
-docker exec -it temporal-admin-tools temporal workflow result --address temporal:7233 --workflow-id reminder-demo-1
-```
-
-**`ConfigurableCounterWorkflow`** — Update, the newer sibling of Signal for anything that needs a value back or needs the caller to know their change was actually accepted. A Signal is fire-and-forget; an Update blocks the caller until the handler returns, and a `@<name>.validator` can reject the change before it's even written to Event History — a negative `amount` never touches workflow state:
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type ConfigurableCounterWorkflow --workflow-id counter-demo-1
-docker exec -it temporal-admin-tools temporal workflow update execute --address temporal:7233 \
-  --workflow-id counter-demo-1 --name increment --input '5'    # -> Result: 5
-docker exec -it temporal-admin-tools temporal workflow update execute --address temporal:7233 \
-  --workflow-id counter-demo-1 --name increment --input '-1'   # -> rejected by the validator, never applied
-docker exec -it temporal-admin-tools temporal workflow signal --address temporal:7233 \
-  --workflow-id counter-demo-1 --name finish
-```
-
-**`RecurringPollWorkflow`** — Continue-As-New, Temporal's answer to "this workflow runs forever" (a recurring poll loop, a counter that never stops) without its Event History growing without bound. Every 3 iterations it closes the current Run and starts a fresh one under the *same* Workflow ID — the WorkflowId stays constant across every Run, only the RunId changes. Verified: started it, watched the RunId change from `01a00701…` to `eda784d0…` under the unchanged WorkflowId `poll-demo-1` after the first cycle. It never stops on its own — terminate it when you're done watching:
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type RecurringPollWorkflow --workflow-id poll-demo-1
-docker exec -it temporal-admin-tools temporal workflow describe --address temporal:7233 \
-  --workflow-id poll-demo-1   # RunId changes every 3 polls; WorkflowId doesn't
-docker exec -it temporal-admin-tools temporal workflow terminate --address temporal:7233 \
-  --workflow-id poll-demo-1
-```
-
-**`--start-delay`** — not a workflow, a client-side start option: delays when a Workflow Execution actually *begins*, without occupying a Schedule or spending any of the workflow's own history on a timer. Different from `DelayedReminderWorkflow` above (that delays partway *through* an already-running workflow) — this delays the start itself, the shape for "run this once, but not until later" without setting up recurring Scheduling. Verified: started `GreetSourceWorkflow` (which executes instantly once it starts) with a 15s delay — `ExecutionTime` read "9 seconds from now" while the workflow was still waiting, and the Run's total `StartTime`-to-`CloseTime` span was ~15s despite the workflow itself doing effectively no work.
-
-```bash
-docker exec -it temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type GreetSourceWorkflow --workflow-id start-delay-demo-1 \
-  --input '"homeserver"' --start-delay 15s
-docker exec -it temporal-admin-tools temporal workflow describe --address temporal:7233 \
-  --workflow-id start-delay-demo-1   # ExecutionTime counts down before it actually starts
-```
-
-**`ReferenceWorkflow`** — reference, not a pattern demo like the workflows above: every `workflow.execute_activity()` and `RetryPolicy` option in one place, each shown at its real default with a one-line explanation (a checklist to copy from, not a live example of any one pattern). `@activity.defn`'s own (shorter) option list is documented the same way right above `reference_activity` in `activities.py`, and `Worker.__init__`'s process-wide options (concurrency limits, poller behavior, versioning...) are documented as a comment in `worker.py` next to this repo's one `Worker(...)` construction — those apply to the whole worker process, not to any single workflow. Verified end to end:
-
-```bash
-docker exec temporal-admin-tools temporal workflow start --address temporal:7233 \
-  --task-queue homeserver --type ReferenceWorkflow --workflow-id reference-demo-1
-docker exec temporal-admin-tools temporal workflow result --address temporal:7233 --workflow-id reference-demo-1
-# -> Result: "reference_activity completed"
-```
+- [`RunContainerWorkflow`](RunContainerWorkflow.md) — resource-bounded execution via the Docker SDK.
+- [`RetryableActivityWorkflow`](RetryableActivityWorkflow.md) — `RetryPolicy` retrying a flaky activity, zero hand-written retry logic.
+- [`ApprovalWorkflow`](ApprovalWorkflow.md) — durable wait resumed by a Signal, inspectable via a Query.
+- [`OrderFulfillmentSagaWorkflow`](OrderFulfillmentSagaWorkflow.md) — the Saga pattern: sequential steps with compensation on failure.
+- [`MaterializeDagsterAssetWorkflow`](MaterializeDagsterAssetWorkflow.md) — cross-service capstone: durably orchestrates a Dagster job via GraphQL.
+- [`BatchProcessingWorkflow` / `GreetSourceWorkflow`](BatchProcessingWorkflow.md) — composition via Child Workflows, `--start-delay` too.
+- [`DelayedReminderWorkflow`](DelayedReminderWorkflow.md) — a durable timer that survives the worker restarting.
+- [`ConfigurableCounterWorkflow`](ConfigurableCounterWorkflow.md) — Update (with a validator) alongside Signal.
+- [`RecurringPollWorkflow`](RecurringPollWorkflow.md) — Continue-As-New, an unbounded loop with bounded Event History.
+- [`ReferenceWorkflow`](ReferenceWorkflow.md) — reference: every `execute_activity()`/`RetryPolicy` option, real defaults.
 
 Keep the `activities.py`/`workflows.py` split if an activity needs a non-deterministic import (`docker`, `requests`, anything with I/O) — Temporal's sandbox rejects those inside a workflow's own module even when only the activity uses them (bit this exact setup during development; see the comment at the top of `activities.py`).
 
