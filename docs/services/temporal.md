@@ -159,6 +159,15 @@ docker exec -it temporal-admin-tools temporal workflow describe --address tempor
   --workflow-id start-delay-demo-1   # ExecutionTime counts down before it actually starts
 ```
 
+**`ReferenceWorkflow`** — reference, not a pattern demo like the workflows above: every `workflow.execute_activity()` and `RetryPolicy` option in one place, each shown at its real default with a one-line explanation (a checklist to copy from, not a live example of any one pattern). `@activity.defn`'s own (shorter) option list is documented the same way right above `reference_activity` in `activities.py`, and `Worker.__init__`'s process-wide options (concurrency limits, poller behavior, versioning...) are documented as a comment in `worker.py` next to this repo's one `Worker(...)` construction — those apply to the whole worker process, not to any single workflow. Verified end to end:
+
+```bash
+docker exec temporal-admin-tools temporal workflow start --address temporal:7233 \
+  --task-queue homeserver --type ReferenceWorkflow --workflow-id reference-demo-1
+docker exec temporal-admin-tools temporal workflow result --address temporal:7233 --workflow-id reference-demo-1
+# -> Result: "reference_activity completed"
+```
+
 Keep the `activities.py`/`workflows.py` split if an activity needs a non-deterministic import (`docker`, `requests`, anything with I/O) — Temporal's sandbox rejects those inside a workflow's own module even when only the activity uses them (bit this exact setup during development; see the comment at the top of `activities.py`).
 
 **Native scheduling**, independent of Airflow: any workflow can run on a cron without a separate scheduler service. Modern Temporal uses first-class Schedule objects (`temporal schedule create`), not the deprecated `cron_schedule` workflow-start parameter — `--cron`/`--calendar`/`--interval` are all supported. Verified with a real running Schedule (`--interval 1m` against `GreetSourceWorkflow`, so it was actually observable within a couple minutes instead of waiting for a real cron tick): it auto-started a new Workflow Execution every 60 seconds, each with its own timestamped Workflow ID (`greet-scheduled-2026-08-15T21:27:00Z`, `...T21:28:00Z`), both completed — then paused (not deleted) so `schedule describe` still shows the evidence (`ActionCounts: {"Total":2,...}`) without it running forever:

@@ -51,6 +51,18 @@ Things this is meant to show a new user:
     own page in the UI genuinely documentation instead of just a lineage
     node — the column schema in particular renders as a real table, not
     just text.
+11. reference_asset / reference_op / reference_job / reference_schedule /
+    reference_sensor: reference, not a pattern demo like everything above —
+    every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option in one
+    place, each shown at its real default with a one-line explanation (a
+    handful set for real, everything else commented-out as a checklist to
+    copy from). Captured against this image's pinned Dagster version via
+    `inspect.signature()` against each — the source of truth if this ever
+    drifts from a future Dagster version. reference_schedule/reference_sensor
+    both default to DefaultScheduleStatus.STOPPED/DefaultSensorStatus.STOPPED
+    (Dagster's own real default — every schedule/sensor starts off until you
+    flip it on from the Schedules/Sensors tab), so registering them here has
+    zero effect until you do.
 """
 
 from pathlib import Path
@@ -60,12 +72,17 @@ from dagster import (
     AssetExecutionContext,
     AssetOut,
     AutomationCondition,
+    Backoff,
     ConfigurableResource,
     DailyPartitionsDefinition,
+    DefaultScheduleStatus,
+    DefaultSensorStatus,
     Definitions,
     FilesystemIOManager,
+    Jitter,
     MetadataValue,
     Output,
+    RetryPolicy,
     RunRequest,
     ScheduleDefinition,
     SensorEvaluationContext,
@@ -279,6 +296,137 @@ def marker_file_sensor(context: SensorEvaluationContext):
     return RunRequest(run_key=f"marker-{context.cursor or '0'}")
 
 
+# Reference, not a pattern demo like everything above: every @asset/@op/
+# @job/ScheduleDefinition/@sensor option in one place, each shown at its
+# real default with a one-line explanation — a checklist to copy from, not
+# a live example of any one pattern. A handful are set for real below;
+# everything else is commented-out. Captured via inspect.signature()
+# against this image's pinned Dagster version — the source of truth if
+# this ever drifts from a future Dagster version.
+@asset(
+    # --- commonly set ---
+    description="Reference asset: every @asset option, real defaults documented inline.",
+    # --- everything below: commented out, shown at its real default ---
+    # name=None,                    # asset name — defaults to the function name
+    # key_prefix=None,              # namespace the asset key, e.g. ["raw", "reference_asset"] — shows as a folder in the UI's asset graph
+    # ins=None,                     # explicit AssetIn mapping when a parameter name can't/shouldn't match the upstream asset's own name
+    # deps=None,                    # extra upstream dependencies that aren't function parameters (no data passed, just ordering)
+    # metadata=None,                # static key/value metadata shown on the asset's own UI page — see customer_orders above for the computed-per-run alternative
+    # tags=None,                    # freeform key/value tags for filtering/grouping in the UI
+    # config_schema=None,           # a Config schema — makes this asset accept structured run-time config (Launchpad "Config" tab)
+    # required_resource_keys=None,  # explicit resource-key set when a resource isn't picked up via a type-hinted parameter (see source_system_summary above for that style)
+    # resource_defs=None,           # per-asset resource overrides — rare; usually resources are set once in Definitions(resources=...) below
+    # hooks=None,                   # HookDefinitions (on_success/on_failure callbacks) attached directly to this asset
+    # io_manager_def=None,          # inline IO manager just for this asset, instead of io_manager_key below pointing at a shared one
+    # io_manager_key=None,          # which Definitions(resources=...) IO manager stores this asset's output — None = the default one (FilesystemIOManager below)
+    # dagster_type=None,            # explicit DagsterType for the return value, beyond what a plain Python type hint already infers
+    # partitions_def=None,          # e.g. DailyPartitionsDefinition — see daily_sales above for a real one
+    # op_tags=None,                 # tags on the underlying Op specifically, distinct from the asset-level tags above
+    # group_name=None,              # groups this asset under a named section in the UI's asset graph (default group is "default")
+    # output_required=True,         # False = this asset is allowed to not yield an output on some runs (conditional materialization) without Dagster treating that as a failure
+    # automation_condition=None,    # Declarative Automation — see report_notification above for AutomationCondition.eager() actually wired up
+    # freshness_policy=None,        # declare how stale this asset is allowed to get before the UI flags it — a data-quality signal, not a hard blocker
+    # backfill_policy=None,         # BackfillPolicy.single_run() vs. the default (one run per partition) — only relevant alongside partitions_def
+    # retry_policy=None,            # RetryPolicy(max_retries=1, delay=None, backoff=None, jitter=None) — see reference_op below for the same concept on the @op side
+    # code_version=None,            # a version string Dagster compares run-to-run to flag "this asset's *logic* changed since it last materialized," independent of the data itself
+    # key=None,                     # fully explicit AssetKey, overriding name/key_prefix entirely
+    # check_specs=None,             # declare AssetCheckSpecs inline instead of a separate @asset_check function (see report_freshness_check above for that style)
+    # owners=None,                  # e.g. ["team:data-eng"] — see customer_orders above for a real one
+    # kinds=None,                   # e.g. {"postgres"} — technology tags shown as small icons on the asset in the UI
+    # pool=None,                    # named concurrency pool limiting how many ops/assets using this pool run at once cluster-wide — same concept as Airflow's Pool
+)
+def reference_asset() -> str:
+    return "This asset exists to document options, not to do real work."
+
+
+@op(
+    # --- commonly set ---
+    description="Reference op: every @op option, real defaults documented inline.",
+    # --- everything below: commented out, shown at its real default ---
+    # name=None,                    # op name — defaults to the function name
+    # ins=None,                     # explicit In() mapping for this op's inputs — the @op equivalent of @asset's `ins`
+    # out=None,                     # explicit Out() for this op's output(s) — description/metadata/io_manager_key on the output itself
+    # config_schema=None,           # same Config-schema concept as @asset above
+    # required_resource_keys=None,  # same resource-key concept as @asset above
+    # tags=None,                    # freeform key/value tags for filtering/grouping in the UI
+    # version=None,                 # deprecated alias for code_version below — use code_version in new code
+    # retry_policy=RetryPolicy(max_retries=1, delay=None, backoff=None, jitter=None),  # active default shown explicitly — max_retries=1 means Dagster retries a failed op once before giving up; delay/backoff/jitter tune the wait between attempts (Backoff.LINEAR/EXPONENTIAL, Jitter.FULL/PLUS_MINUS)
+    # code_version=None,            # same "did the logic change" version string as @asset's code_version above
+    # pool=None,                    # same named concurrency pool as @asset's pool above
+)
+def reference_op() -> str:
+    return "This op exists to document options, not to do real work."
+
+
+@job(
+    # --- commonly set ---
+    description="Reference job: every @job option, real defaults documented inline.",
+    # --- everything below: commented out, shown at its real default ---
+    # name=None,                    # job name — defaults to the function name
+    # resource_defs=None,           # per-job resource overrides — rare; usually resources are set once in Definitions(resources=...) below
+    # config=None,                  # default run config for every launch of this job (a dict, RunConfig, or PartitionedConfig)
+    # tags=None,                    # freeform key/value tags shown on every run of this job
+    # run_tags=None,                # tags applied to the Dagster Run specifically (distinct from the job-definition tags above)
+    # metadata=None,                # static key/value metadata shown on the job's own UI page
+    # logger_defs=None,             # custom LoggerDefinitions available to ops in this job, beyond the default console logger
+    # executor_def=None,            # override which Executor runs this one job — None = the Definitions(executor=...) default (docker_executor below)
+    # hooks=None,                   # HookDefinitions attached to every op in this job
+    # op_retry_policy=None,         # a RetryPolicy applied to every op in this job that doesn't set its own — same RetryPolicy shape as reference_op's above
+    # partitions_def=None,          # partition this whole job the way daily_sales partitions a single asset
+    # input_values=None,            # hardcoded input values for this job's root inputs, bypassing config entirely
+    # owners=None,                  # e.g. ["team:data-eng"] — same concept as @asset's owners above
+)
+def reference_job():
+    reference_op()
+
+
+reference_schedule = ScheduleDefinition(
+    # --- commonly set ---
+    name="reference_schedule",
+    cron_schedule="0 0 * * *",  # required if execution_fn isn't set — standard 5-field cron
+    job=reference_job,
+    description="Reference schedule: every ScheduleDefinition option, real defaults documented inline.",
+    default_status=DefaultScheduleStatus.STOPPED,  # real default — every schedule starts off; flip it on from the Schedules tab (or DefaultScheduleStatus.RUNNING to start it enabled)
+    # --- everything below: commented out, shown at its real default ---
+    # job_name=None,                # target a job by name string instead of passing the job object directly via `job` above
+    # run_config=None,              # static run config applied to every scheduled run
+    # run_config_fn=None,           # compute run config dynamically from a ScheduleEvaluationContext instead of a static run_config
+    # tags=None,                    # static tags applied to every scheduled run
+    # tags_fn=None,                 # compute tags dynamically from a ScheduleEvaluationContext
+    # metadata=None,                # static key/value metadata shown on the schedule's own UI page
+    # should_execute=None,          # callable(context) -> bool — skip a tick entirely without even creating a (skipped) run
+    # environment_vars=None,        # env vars available specifically to should_execute/run_config_fn/tags_fn at evaluation time
+    # execution_timezone=None,      # IANA timezone for interpreting cron_schedule — None = UTC
+    # execution_fn=None,            # full custom scheduling logic in place of a plain cron_schedule — rare, most schedules just need cron_schedule
+    # required_resource_keys=None,  # resource keys needed by should_execute/run_config_fn/tags_fn specifically
+    # target=None,                  # target an AssetSelection instead of a whole job — schedule a subset of assets directly
+    # owners=None,                  # e.g. ["team:data-eng"] — same concept as @asset's owners above
+)
+
+
+@sensor(
+    # --- commonly set ---
+    name="reference_sensor",
+    job=reference_job,
+    description="Reference sensor: every @sensor option, real defaults documented inline.",
+    default_status=DefaultSensorStatus.STOPPED,  # real default — every sensor starts off; flip it on from the Sensors tab (or DefaultSensorStatus.RUNNING to start it enabled)
+    # --- everything below: commented out, shown at its real default ---
+    # job_name=None,                # target a job by name string instead of the positional job_name/job kwarg above
+    # minimum_interval_seconds=None,  # floor on how often dagster-daemon evaluates this sensor — None = daemon's own default cadence (~30s)
+    # jobs=None,                    # target several jobs at once instead of one via `job` above — each RunRequest picks which one it's for
+    # asset_selection=None,         # target specific assets directly instead of a whole job — the sensor equivalent of ScheduleDefinition's `target` above
+    # required_resource_keys=None,  # resource keys needed inside the sensor function itself
+    # tags=None,                    # static tags applied to every run this sensor requests
+    # metadata=None,                # static key/value metadata shown on the sensor's own UI page
+    # target=None,                  # same AssetSelection-targeting concept as ScheduleDefinition's `target` above
+    # owners=None,                  # e.g. ["team:data-eng"] — same concept as @asset's owners above
+)
+def reference_sensor(context: SensorEvaluationContext):
+    # Always skips — this sensor exists to document @sensor's options, not
+    # to actually fire. Compare marker_file_sensor above for a real one.
+    return SkipReason("reference_sensor never fires — it exists to document @sensor's options, not to run.")
+
+
 defs = Definitions(
     assets=[
         hello_homeserver,
@@ -290,11 +438,12 @@ defs = Definitions(
         source_system_summary,
         orders_multi_asset,
         customer_orders,
+        reference_asset,
     ],
     asset_checks=[report_freshness_check],
-    jobs=[ops_pipeline_job],
-    schedules=[report_daily_schedule],
-    sensors=[marker_file_sensor],
+    jobs=[ops_pipeline_job, reference_job],
+    schedules=[report_daily_schedule, reference_schedule],
+    sensors=[marker_file_sensor, reference_sensor],
     # Every step runs in its own ephemeral container (a fresh filesystem each
     # time) — the default IO manager's per-run temp dir isn't shared between
     # them, so cleaned_data can't see raw_data's output unless both point at

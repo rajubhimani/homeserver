@@ -149,3 +149,19 @@ async def refund_payment_activity(inp: dict) -> str:
 @activity.defn
 async def create_shipment_activity(order_id: str) -> str:
     return f"Shipment created for order {order_id}"
+
+
+# @activity.defn's own options, real defaults — the decorator itself, not
+# execute_activity() below which is how a *caller* invokes one:
+#   @activity.defn(
+#       name=None,                     # Activity Type name sent over the wire — defaults to the function name
+#       no_thread_cancel_exception=False,  # True = don't raise a CancelledError into a sync activity's thread on cancel; check activity.is_cancelled() instead
+#       dynamic=False,                 # True = catch-all activity invoked for any name not otherwise registered on this worker
+#   )
+@activity.defn
+async def reference_activity(should_heartbeat: bool) -> str:
+    """Companion to ReferenceWorkflow in workflows.py — see that class's
+    docstring for the full execute_activity()/RetryPolicy option list."""
+    if should_heartbeat:
+        activity.heartbeat("reference_activity: still working")
+    return "reference_activity completed"

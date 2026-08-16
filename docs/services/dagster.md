@@ -67,7 +67,7 @@ Every box on the right is short-lived — created for one run or one step, then 
 
 ## Try the starter examples
 
-Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below), and `customer_orders` (description/owners/kinds/column-schema metadata — see below). There's also a non-asset job, `ops_pipeline_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
+Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below), `customer_orders` (description/owners/kinds/column-schema metadata — see below), and `reference_asset` (every `@asset` option documented inline — see below). There's also two non-asset jobs, `ops_pipeline_job` and `reference_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
@@ -149,6 +149,17 @@ docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launch
 docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
   "executionParams": {
     "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "ops_pipeline_job"},
+    "mode": "default"
+  }
+}'
+```
+
+**`reference_asset`** / **`reference_op`** / **`reference_job`** / **`reference_schedule`** / **`reference_sensor`** — reference, not a pattern demo like everything above: every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option in one place, each shown at its real default with a one-line explanation (a checklist to copy from, not a live example of any one pattern). `reference_schedule`/`reference_sensor` both default to `DefaultScheduleStatus.STOPPED`/`DefaultSensorStatus.STOPPED` — Dagster's own real default, every schedule/sensor starts off — so registering them here has zero effect until you flip one on from its own tab. Verified: `reference_job` shows up in the repository's job list, and materializing `reference_asset` completes with `SUCCESS`.
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
+  "executionParams": {
+    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["reference_asset"]}]},
     "mode": "default"
   }
 }'

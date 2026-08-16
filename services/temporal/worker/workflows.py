@@ -16,6 +16,7 @@ with workflow.unsafe.imports_passed_through():
         create_shipment_activity,
         flaky_activity,
         materialize_dagster_asset_activity,
+        reference_activity,
         refund_payment_activity,
         release_inventory_activity,
         reserve_inventory_activity,
@@ -304,3 +305,68 @@ class OrderFulfillmentSagaWorkflow:
             raise ApplicationError(f"Order {order_id} failed at shipping, compensated: {e}") from e
 
         return f"Order {order_id} fulfilled: inventory reserved, payment charged, shipment created"
+
+
+# @workflow.defn's own options, real defaults — commented since none of
+# them need changing for this reference workflow to work:
+#   @workflow.defn(
+#       name=None,                  # Workflow Type name sent over the wire — defaults to the class name
+#       sandboxed=True,             # False = skip the deterministic-import sandbox entirely for this workflow (rarely needed; costs you replay-safety guarantees)
+#       dynamic=False,              # True = catch-all workflow invoked for any Workflow Type not otherwise registered on this worker
+#       failure_exception_types=[], # exception types that fail the *workflow task* (retried forever) instead of just this run — advanced, see Temporal's Workflow Failure docs
+#       versioning_behavior=VersioningBehavior.UNSPECIFIED,  # Worker Versioning (Worker Deployments) — irrelevant unless you've opted into that feature
+#   )
+@workflow.defn
+class ReferenceWorkflow:
+    """Reference, not a pattern demo like the workflows above: every
+    `workflow.execute_activity()` and `RetryPolicy` option in one place,
+    each shown at its real default with a one-line explanation — a
+    checklist to copy from, not a live example of any one pattern. See
+    `reference_activity` in activities.py, and `@activity.defn`'s own
+    (much shorter) option list documented right above it there.
+
+    Two things `execute_activity()` has no real default for and *requires*
+    one of: `schedule_to_close_timeout` or `start_to_close_timeout` — pick
+    at least one, or the call raises `TypeError` before ever reaching the
+    server. `start_to_close_timeout` is set below since it's the one
+    almost every real activity call actually wants (a per-attempt cap;
+    `schedule_to_close_timeout` is the rarer end-to-end cap across every
+    retry combined).
+
+    Captured against `temporalio` (see `services/temporal/worker/pyproject.toml`
+    for the pinned version) via `inspect.signature()` against
+    `workflow.execute_activity`/`RetryPolicy.__init__`/`Worker.__init__` —
+    the source of truth if this ever drifts from a future SDK version.
+    `Worker.__init__`'s own process-wide options (concurrency limits, poller
+    behavior, versioning...) are documented as a comment in `worker.py`
+    itself, next to where this repo's one `Worker(...)` is actually
+    constructed — those apply to the whole worker process, not to any one
+    workflow, so they don't belong in a per-workflow reference like this.
+    """
+
+    @workflow.run
+    async def run(self) -> str:
+        return await workflow.execute_activity(
+            # --- commonly set ---
+            reference_activity,
+            True,  # `arg` — the single positional input; use `args=[...]` instead for more than one
+            start_to_close_timeout=timedelta(seconds=30),  # per-attempt cap — required (see docstring above)
+            retry_policy=RetryPolicy(
+                initial_interval=timedelta(seconds=1),  # wait before the *first* retry
+                backoff_coefficient=2.0,  # multiply the wait by this each subsequent retry
+                maximum_interval=None,  # cap on the wait between retries — real default is 100x initial_interval, not unbounded
+                maximum_attempts=0,  # total attempts including the first — 0 means unlimited, retries forever until start_to_close_timeout/schedule_to_close_timeout gives up
+                non_retryable_error_types=None,  # error class names that skip retry entirely — see charge_payment_activity's ApplicationError(non_retryable=True) above for the per-raise equivalent
+            ),
+            # --- everything below: commented out, shown at its real default ---
+            # task_queue=None,                  # route this activity to a different Task Queue than the workflow's own — None = same queue
+            # result_type=None,                 # explicit return-type hint for the SDK's deserializer — usually unneeded, inferred from the activity's own type hints
+            # schedule_to_close_timeout=None,   # end-to-end cap across every retry combined — set this OR start_to_close_timeout (both is fine, whichever is tighter wins)
+            # schedule_to_start_timeout=None,   # how long an activity may sit queued before a worker even picks it up — catches "no worker is listening" fast
+            # heartbeat_timeout=None,           # required for a long activity to report liveness via activity.heartbeat() — see materialize_dagster_asset_activity above for a real one
+            # cancellation_type=ActivityCancellationType.TRY_CANCEL,  # how workflow-side cancellation reaches this activity — TRY_CANCEL (default) / WAIT_CANCELLATION / ABANDON
+            # activity_id=None,                 # explicit Activity ID instead of an auto-generated one — rarely needed
+            # versioning_intent=None,           # Worker Versioning hint — irrelevant unless you've opted into that feature
+            # summary=None,                     # short human-readable label shown in the UI's Event History, separate from the activity's actual input
+            # priority=Priority(),               # Task Queue priority — higher-priority activities are dispatched first when a queue is backed up
+        )
