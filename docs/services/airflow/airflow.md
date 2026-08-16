@@ -55,7 +55,7 @@ No `redis`/`airflow-worker`/`flower` — those only exist to support `CeleryExec
 
 ## Try the starter examples
 
-Twenty-three DAGs ship in `service_data/data/airflow/dags/`, tagged `example` in the UI. Each file's own module docstring is passed as `doc_md=__doc__`, so the full explanation below is also readable right inside the UI — DAGs list page (doc snippet under the DAG name) and each DAG's own **Details → Docs** tab — not just by opening the source file. All have `schedule=None` except `example_scheduled_with_retries`, `example_backfill`, and `example_max_active_runs`, so trigger them manually the first time — either **DAGs list → toggle on → ▶ Trigger DAG** in the UI, or from the CLI:
+Twenty-seven DAGs ship in `service_data/data/airflow/dags/`, tagged `example` in the UI. Each file's own module docstring is passed as `doc_md=__doc__`, so the full explanation below is also readable right inside the UI — DAGs list page (doc snippet under the DAG name) and each DAG's own **Details → Docs** tab — not just by opening the source file. All have `schedule=None` except `example_scheduled_with_retries`, `example_backfill`, `example_max_active_runs`, and `example_flow_control`, so trigger them manually the first time — either **DAGs list → toggle on → ▶ Trigger DAG** in the UI, or from the CLI:
 
 ```bash
 docker exec airflow-scheduler airflow dags unpause example_etl_pipeline
@@ -86,6 +86,10 @@ Each has its own page — description, a diagram of the actual task graph, and a
 - [`example_docker_operator`](examples/example_docker_operator.md) — a task as its own resource-limited container.
 - [`example_all_options`](examples/example_all_options.md) — reference: every `@dag`/`@task` option, real defaults.
 - [`example_human_in_the_loop`](examples/example_human_in_the_loop.md) — built-in HITL approval gate.
+- [`example_flow_control`](examples/example_flow_control.md) — `LatestOnlyOperator`, `ShortCircuitOperator`, `BranchDayOfWeekOperator`.
+- [`example_object_storage_path`](examples/example_object_storage_path.md) — `ObjectStoragePath`, storage-agnostic DAG code.
+- [`example_custom_notifier`](examples/example_custom_notifier.md) — a custom `BaseNotifier` subclass, reusable/templated.
+- [`example_python_virtualenv_operator`](examples/example_python_virtualenv_operator.md) — a task in its own isolated venv.
 - [`example_cross_service_pipeline`](examples/example_cross_service_pipeline.md) — the capstone: starts a Temporal workflow that materializes a Dagster asset.
 
 ## Reverse proxy — needs `--proxy-headers`, not just `X-Forwarded-Proto`
