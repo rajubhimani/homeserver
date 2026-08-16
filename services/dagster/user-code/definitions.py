@@ -63,6 +63,17 @@ Things this is meant to show a new user:
     (Dagster's own real default — every schedule/sensor starts off until you
     flip it on from the Schedules/Sensors tab), so registering them here has
     zero effect until you do.
+12. flaky_retry_asset: `retry_policy=RetryPolicy(max_retries=2, delay=2)` —
+    the same "fails twice, succeeds on the third attempt" shape as
+    Temporal's flaky_activity (services/temporal/worker/activities.py) and
+    Airflow's example_scheduled_with_retries.py, so the three tools' retry
+    stories are directly comparable. The interesting wrinkle here, not
+    present in the other two: each retry is a *fresh step container*
+    (docker_executor), so an in-memory attempt counter would just reset to
+    0 every time — this persists the count to a file on the same
+    io_manager_storage volume every asset here already shares, the same
+    problem (and same kind of fix) Airflow's example_stateful_retry.py
+    solves via the Task State Store instead of a plain module-level dict.
 """
 
 from pathlib import Path
@@ -146,6 +157,31 @@ def report_notification(report: dict) -> str:
 
 report_job = define_asset_job(name="report_job", selection=[raw_data, cleaned_data, report])
 report_daily_schedule = ScheduleDefinition(job=report_job, cron_schedule="0 6 * * *")
+
+
+RETRY_COUNTER_PATH = Path("/tmp/io_manager_storage/.dagster_retry_counter")
+
+
+@asset(retry_policy=RetryPolicy(max_retries=2, delay=2))
+def flaky_retry_asset() -> str:
+    # Real version: an actual flaky external call. A retry here launches a
+    # *fresh* step container (docker_executor, same as every asset in this
+    # file) — an in-memory counter, unlike Temporal's flaky_activity in
+    # services/temporal/worker/activities.py, would just reset to 0 on
+    # every attempt instead of remembering how many already happened. Same
+    # reason Airflow's example_stateful_retry.py persists to an external
+    # store instead of a plain module-level dict: this counter file (on the
+    # same io_manager_storage volume every asset here already shares) is
+    # this repo's Dagster answer to that identical problem.
+    attempt = int(RETRY_COUNTER_PATH.read_text()) + 1 if RETRY_COUNTER_PATH.exists() else 1
+    RETRY_COUNTER_PATH.write_text(str(attempt))
+    if attempt < 3:
+        raise Exception(f"simulated transient failure (attempt {attempt}/3)")
+    RETRY_COUNTER_PATH.unlink(missing_ok=True)  # reset so the next materialization starts at attempt 1 again
+    return f"succeeded on attempt {attempt} — Dagster retried this automatically, no retry loop written by hand"
+
+
+flaky_retry_job = define_asset_job(name="flaky_retry_job", selection=[flaky_retry_asset])
 
 
 daily_partitions = DailyPartitionsDefinition(start_date="2026-08-01")
@@ -439,9 +475,10 @@ defs = Definitions(
         orders_multi_asset,
         customer_orders,
         reference_asset,
+        flaky_retry_asset,
     ],
     asset_checks=[report_freshness_check],
-    jobs=[ops_pipeline_job, reference_job],
+    jobs=[ops_pipeline_job, reference_job, flaky_retry_job],
     schedules=[report_daily_schedule, reference_schedule],
     sensors=[marker_file_sensor, reference_sensor],
     # Every step runs in its own ephemeral container (a fresh filesystem each

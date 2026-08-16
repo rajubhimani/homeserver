@@ -67,7 +67,7 @@ Every box on the right is short-lived — created for one run or one step, then 
 
 ## Try the starter examples
 
-Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below), `customer_orders` (description/owners/kinds/column-schema metadata — see below), and `reference_asset` (every `@asset` option documented inline — see below). There's also two non-asset jobs, `ops_pipeline_job` and `reference_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
+Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below), `customer_orders` (description/owners/kinds/column-schema metadata — see below), `reference_asset` (every `@asset` option documented inline — see below), and `flaky_retry_asset` (`retry_policy` actually retrying — see below). There's also three non-asset jobs, `ops_pipeline_job`, `reference_job`, and `flaky_retry_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
@@ -160,6 +160,17 @@ docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launch
 docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
   "executionParams": {
     "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["reference_asset"]}]},
+    "mode": "default"
+  }
+}'
+```
+
+**`flaky_retry_asset`** — `retry_policy=RetryPolicy(max_retries=2, delay=2)` genuinely retrying, not just documented: the same "fails twice, succeeds on the third attempt" shape as Temporal's `flaky_activity` and Airflow's `example_scheduled_with_retries`, so the three tools' retry stories are directly comparable side by side. The wrinkle unique to this one: every run — and every step within it — launches as its own container here (see "Every run — and every step — launches as its own container" above), so a retry is a *fresh* step container, not a re-executed function in the same process. An in-memory attempt counter would reset to 0 every time; this persists the count to a file on `io_manager_storage` (the same shared volume every asset here already uses) instead — the same class of problem, and same kind of fix, as Airflow's `example_stateful_retry.py` using the Task State Store instead of a plain module-level dict. Verified via the run's own event log (`event_logs` table, `dagster-db`): `STEP_UP_FOR_RETRY: 2`, `STEP_RESTARTED: 2`, `STEP_WORKER_STARTED: 3` (three separate step containers), then `STEP_SUCCESS: 1`.
+
+```bash
+docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
+  "executionParams": {
+    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["flaky_retry_asset"]}]},
     "mode": "default"
   }
 }'
