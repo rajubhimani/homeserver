@@ -55,16 +55,16 @@ docker restart temporal-worker
 
 `worker/` ships real, working workflows instead of a truly empty scaffold — each one demonstrates a different reason to reach for Temporal specifically, and each is runnable from `temporal-admin-tools` right now. Each has its own page — description, a sequence/flow diagram, a `file:line` pointer into the real source, and the exact CLI commands to run it:
 
-- [`RunContainerWorkflow`](RunContainerWorkflow.md) — resource-bounded execution via the Docker SDK.
-- [`RetryableActivityWorkflow`](RetryableActivityWorkflow.md) — `RetryPolicy` retrying a flaky activity, zero hand-written retry logic.
-- [`ApprovalWorkflow`](ApprovalWorkflow.md) — durable wait resumed by a Signal, inspectable via a Query.
-- [`OrderFulfillmentSagaWorkflow`](OrderFulfillmentSagaWorkflow.md) — the Saga pattern: sequential steps with compensation on failure.
-- [`MaterializeDagsterAssetWorkflow`](MaterializeDagsterAssetWorkflow.md) — cross-service capstone: durably orchestrates a Dagster job via GraphQL.
-- [`BatchProcessingWorkflow` / `GreetSourceWorkflow`](BatchProcessingWorkflow.md) — composition via Child Workflows, `--start-delay` too.
-- [`DelayedReminderWorkflow`](DelayedReminderWorkflow.md) — a durable timer that survives the worker restarting.
-- [`ConfigurableCounterWorkflow`](ConfigurableCounterWorkflow.md) — Update (with a validator) alongside Signal.
-- [`RecurringPollWorkflow`](RecurringPollWorkflow.md) — Continue-As-New, an unbounded loop with bounded Event History.
-- [`ReferenceWorkflow`](ReferenceWorkflow.md) — reference: every `execute_activity()`/`RetryPolicy` option, real defaults.
+- [`RunContainerWorkflow`](examples/RunContainerWorkflow.md) — resource-bounded execution via the Docker SDK.
+- [`RetryableActivityWorkflow`](examples/RetryableActivityWorkflow.md) — `RetryPolicy` retrying a flaky activity, zero hand-written retry logic.
+- [`ApprovalWorkflow`](examples/ApprovalWorkflow.md) — durable wait resumed by a Signal, inspectable via a Query.
+- [`OrderFulfillmentSagaWorkflow`](examples/OrderFulfillmentSagaWorkflow.md) — the Saga pattern: sequential steps with compensation on failure.
+- [`MaterializeDagsterAssetWorkflow`](examples/MaterializeDagsterAssetWorkflow.md) — cross-service capstone: durably orchestrates a Dagster job via GraphQL.
+- [`BatchProcessingWorkflow` / `GreetSourceWorkflow`](examples/BatchProcessingWorkflow.md) — composition via Child Workflows, `--start-delay` too.
+- [`DelayedReminderWorkflow`](examples/DelayedReminderWorkflow.md) — a durable timer that survives the worker restarting.
+- [`ConfigurableCounterWorkflow`](examples/ConfigurableCounterWorkflow.md) — Update (with a validator) alongside Signal.
+- [`RecurringPollWorkflow`](examples/RecurringPollWorkflow.md) — Continue-As-New, an unbounded loop with bounded Event History.
+- [`ReferenceWorkflow`](examples/ReferenceWorkflow.md) — reference: every `execute_activity()`/`RetryPolicy` option, real defaults.
 
 Keep the `activities.py`/`workflows.py` split if an activity needs a non-deterministic import (`docker`, `requests`, anything with I/O) — Temporal's sandbox rejects those inside a workflow's own module even when only the activity uses them (bit this exact setup during development; see the comment at the top of `activities.py`).
 

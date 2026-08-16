@@ -66,27 +66,27 @@ docker exec airflow-scheduler airflow dags list-runs example_etl_pipeline
 
 Each has its own page — description, a diagram of the actual task graph, and a `file:line` pointer into the real source:
 
-- [`example_hello_world`](example_hello_world.md) — a single task, nothing else. Start here.
-- [`example_etl_pipeline`](example_etl_pipeline.md) — extract → transform → load via XCom.
-- [`example_branching`](example_branching.md) — `BashOperator` + `BranchPythonOperator`, conditional downstream.
-- [`example_parallel_tasks`](example_parallel_tasks.md) — fan-out/fan-in, both `>>` and explicit dependency styles.
-- [`example_scheduled_with_retries`](example_scheduled_with_retries.md) — `schedule="@daily"` + retries/backoff.
-- [`example_backfill`](example_backfill.md) — `catchup=True`, whole-DAG-run historical reprocessing.
-- [`example_max_active_runs`](example_max_active_runs.md) — `max_active_runs=1`, serializes overlapping runs.
-- [`example_sensor`](example_sensor.md) — hand-rolled poke/reschedule sensor.
-- [`example_deferrable_sensor`](example_deferrable_sensor.md) — hand-rolled deferrable sensor, zero worker slot.
-- [`example_file_sensor`](example_file_sensor.md) — the **built-in** `FileSensor`, both modes side by side.
-- [`example_cross_dag_dependencies`](example_cross_dag_dependencies.md) — built-in `ExternalTaskSensor` (pull) + `TriggerDagRunOperator` (push).
-- [`example_asset_triggered`](example_asset_triggered.md) — Airflow's Asset (label-based cross-DAG trigger).
-- [`example_dynamic_task_mapping`](example_dynamic_task_mapping.md) — `.partial()`/`.expand()`, runtime-determined fan-out.
-- [`example_trigger_rules`](example_trigger_rules.md) — run after an upstream *failure*, not just success.
-- [`example_stateful_retry`](example_stateful_retry.md) — Task State Store, state surviving across retries.
-- [`example_variables_and_connections`](example_variables_and_connections.md) — Fernet-encrypted secrets/config store.
-- [`example_email_alert_on_failure`](example_email_alert_on_failure.md) — real failure email via Mailpit.
-- [`example_docker_operator`](example_docker_operator.md) — a task as its own resource-limited container.
-- [`example_all_options`](example_all_options.md) — reference: every `@dag`/`@task` option, real defaults.
-- [`example_human_in_the_loop`](example_human_in_the_loop.md) — built-in HITL approval gate.
-- [`example_cross_service_pipeline`](example_cross_service_pipeline.md) — the capstone: starts a Temporal workflow that materializes a Dagster asset.
+- [`example_hello_world`](examples/example_hello_world.md) — a single task, nothing else. Start here.
+- [`example_etl_pipeline`](examples/example_etl_pipeline.md) — extract → transform → load via XCom.
+- [`example_branching`](examples/example_branching.md) — `BashOperator` + `BranchPythonOperator`, conditional downstream.
+- [`example_parallel_tasks`](examples/example_parallel_tasks.md) — fan-out/fan-in, both `>>` and explicit dependency styles.
+- [`example_scheduled_with_retries`](examples/example_scheduled_with_retries.md) — `schedule="@daily"` + retries/backoff.
+- [`example_backfill`](examples/example_backfill.md) — `catchup=True`, whole-DAG-run historical reprocessing.
+- [`example_max_active_runs`](examples/example_max_active_runs.md) — `max_active_runs=1`, serializes overlapping runs.
+- [`example_sensor`](examples/example_sensor.md) — hand-rolled poke/reschedule sensor.
+- [`example_deferrable_sensor`](examples/example_deferrable_sensor.md) — hand-rolled deferrable sensor, zero worker slot.
+- [`example_file_sensor`](examples/example_file_sensor.md) — the **built-in** `FileSensor`, both modes side by side.
+- [`example_cross_dag_dependencies`](examples/example_cross_dag_dependencies.md) — built-in `ExternalTaskSensor` (pull) + `TriggerDagRunOperator` (push).
+- [`example_asset_triggered`](examples/example_asset_triggered.md) — Airflow's Asset (label-based cross-DAG trigger).
+- [`example_dynamic_task_mapping`](examples/example_dynamic_task_mapping.md) — `.partial()`/`.expand()`, runtime-determined fan-out.
+- [`example_trigger_rules`](examples/example_trigger_rules.md) — run after an upstream *failure*, not just success.
+- [`example_stateful_retry`](examples/example_stateful_retry.md) — Task State Store, state surviving across retries.
+- [`example_variables_and_connections`](examples/example_variables_and_connections.md) — Fernet-encrypted secrets/config store.
+- [`example_email_alert_on_failure`](examples/example_email_alert_on_failure.md) — real failure email via Mailpit.
+- [`example_docker_operator`](examples/example_docker_operator.md) — a task as its own resource-limited container.
+- [`example_all_options`](examples/example_all_options.md) — reference: every `@dag`/`@task` option, real defaults.
+- [`example_human_in_the_loop`](examples/example_human_in_the_loop.md) — built-in HITL approval gate.
+- [`example_cross_service_pipeline`](examples/example_cross_service_pipeline.md) — the capstone: starts a Temporal workflow that materializes a Dagster asset.
 
 ## Reverse proxy — needs `--proxy-headers`, not just `X-Forwarded-Proto`
 

@@ -71,18 +71,18 @@ Open the UI's **Assets** tab to browse everything below live. Easiest way to run
 
 Each asset/job grouping has its own page — description, a diagram, a `file:line` pointer into the real source, and the GraphQL call to run it:
 
-- [`hello_homeserver`](hello_homeserver.md) — the simplest possible asset. Start here.
-- [`report_pipeline`](report_pipeline.md) — `raw_data` → `cleaned_data` → `report`, lineage inferred from parameter names; `report_job` + `report_daily_schedule` for the scheduling side.
-- [`report_freshness_check`](report_freshness_check.md) — an Asset Check, Dagster's built-in data-quality concept.
-- [`report_notification`](report_notification.md) — Declarative Automation, a third scheduling paradigm.
-- [`daily_sales`](daily_sales.md) — a `DailyPartitionsDefinition`-partitioned asset, per-partition backfill.
-- [`marker_file_sensor`](marker_file_sensor.md) — Dagster's parallel to Airflow's Sensor.
-- [`source_system_summary`](source_system_summary.md) — a `ConfigurableResource`, dependency injection not lineage.
-- [`orders_multi_asset`](orders_multi_asset.md) — `@multi_asset`, several assets from one materialization.
-- [`customer_orders`](customer_orders.md) — the "catalog" side: description/owners/kinds/column-schema metadata.
-- [`ops_pipeline_job`](ops_pipeline_job.md) — the classic `@op`/`@job` style, compared against assets.
-- [`reference_asset`](reference_asset.md) — reference: every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option.
-- [`flaky_retry_asset`](flaky_retry_asset.md) — `retry_policy` actually retrying, live, across fresh step containers.
+- [`hello_homeserver`](examples/hello_homeserver.md) — the simplest possible asset. Start here.
+- [`report_pipeline`](examples/report_pipeline.md) — `raw_data` → `cleaned_data` → `report`, lineage inferred from parameter names; `report_job` + `report_daily_schedule` for the scheduling side.
+- [`report_freshness_check`](examples/report_freshness_check.md) — an Asset Check, Dagster's built-in data-quality concept.
+- [`report_notification`](examples/report_notification.md) — Declarative Automation, a third scheduling paradigm.
+- [`daily_sales`](examples/daily_sales.md) — a `DailyPartitionsDefinition`-partitioned asset, per-partition backfill.
+- [`marker_file_sensor`](examples/marker_file_sensor.md) — Dagster's parallel to Airflow's Sensor.
+- [`source_system_summary`](examples/source_system_summary.md) — a `ConfigurableResource`, dependency injection not lineage.
+- [`orders_multi_asset`](examples/orders_multi_asset.md) — `@multi_asset`, several assets from one materialization.
+- [`customer_orders`](examples/customer_orders.md) — the "catalog" side: description/owners/kinds/column-schema metadata.
+- [`ops_pipeline_job`](examples/ops_pipeline_job.md) — the classic `@op`/`@job` style, compared against assets.
+- [`reference_asset`](examples/reference_asset.md) — reference: every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option.
+- [`flaky_retry_asset`](examples/flaky_retry_asset.md) — `retry_policy` actually retrying, live, across fresh step containers.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
