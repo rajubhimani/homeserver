@@ -15,7 +15,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer |
-| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole |
+| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
 `down all` always stops everything in reverse order — no list to maintain.
@@ -24,7 +24,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 dozzle, dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
 mealie, homebox, syncthing, authentik,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
-trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, it-tools,
+trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy,
 n8n, crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
 documenso, calcom, plausible, penpot, coolify, supabase, observability.
 
@@ -73,7 +73,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Excalidraw | `excalidraw` | 8116 | 80 | extra |
 | Karakeep | `karakeep` | 8117 | 3000 | extra |
 | ntfy | `ntfy` | 8118 | 80 | extra |
-| IT-Tools | `it-tools` | 8119 | 80 | extra |
+| IT-Tools | `it-tools` | 8119 | 80 | core |
 | n8n | `n8n` | 8120 | 5678 | extra |
 | Airflow | `airflow-apiserver` | 8137 | 8080 | extra |
 | Temporal | `temporal-ui` | 8138 | 8080 | extra |
@@ -164,7 +164,7 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `excalidraw.yourdomain.com` | `excalidraw` | `80` | extra |
 | `karakeep.yourdomain.com` | `karakeep` | `3000` | extra |
 | `ntfy.yourdomain.com` | `ntfy` | `80` | extra |
-| `it-tools.yourdomain.com` | `it-tools` | `80` | extra |
+| `it-tools.yourdomain.com` | `it-tools` | `80` | core |
 | `n8n.yourdomain.com` | `n8n` | `5678` | extra |
 | `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | extra |
 | `temporal.yourdomain.com` | `temporal-ui` | `8080` | extra |

@@ -130,6 +130,16 @@
       "desc": "Clientless remote desktop gateway — access VNC/RDP/SSH targets from any browser, on your LAN or over the internet."
     },
     {
+      "slug": "it-tools",
+      "tier": "core",
+      "name": "IT-Tools",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "blue",
+      "svg": "<path d=\"M11 2.5 a3 3 0 0 0 -3.9 3.9 L2.5 11 l1.5 1.5 l0.7 -0.7 l1 1 l0.8 -0.8 l-1 -1 l1.9 -1.9 a3 3 0 0 0 3.9 -3.9 l-2 2 l-1.4 -1.4 Z\" stroke=\"#1565C0\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>",
+      "desc": "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester."
+    },
+    {
       "slug": "dozzle",
       "tier": "extra",
       "name": "Dozzle",
@@ -386,16 +396,6 @@
       "icon": "yellow",
       "svg": "<path d=\"M9 2.5 a3 3 0 0 0 -3 3 v2.5 l-1.5 2.5 h9 l-1.5 -2.5 v-2.5 a3 3 0 0 0 -3 -3 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7.5 12.5 a1.5 1.5 0 0 0 3 0\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
       "desc": "Self-hosted push notifications. Scripts and services curl a message straight to your phone."
-    },
-    {
-      "slug": "it-tools",
-      "tier": "extra",
-      "name": "IT-Tools",
-      "category": "dev",
-      "subcategory": "tools",
-      "icon": "blue",
-      "svg": "<path d=\"M11 2.5 a3 3 0 0 0 -3.9 3.9 L2.5 11 l1.5 1.5 l0.7 -0.7 l1 1 l0.8 -0.8 l-1 -1 l1.9 -1.9 a3 3 0 0 0 3.9 -3.9 l-2 2 l-1.4 -1.4 Z\" stroke=\"#1565C0\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>",
-      "desc": "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester."
     },
     {
       "slug": "n8n",
