@@ -14,6 +14,12 @@ services:
       # build step. Read-only so a container compromise can't touch source.
       - ../../docs:/usr/share/nginx/html/docs:ro
       - ../../setup.md:/usr/share/nginx/html/setup.md:ro
+      # docker/README.md is linked from docs/08-maintenance.md, and
+      # kubernetes/README.md + TROUBLESHOOTING.md are the pilot's own docs
+      # — mount both whole dirs (not just the .md files) so their relative
+      # links resolve live, same pattern as docs/ above.
+      - ../../docker:/usr/share/nginx/html/docker:ro
+      - ../../kubernetes:/usr/share/nginx/html/kubernetes:ro
       # Docsify's persistent sidebar nav (loadSidebar: true in index.html).
       # Single-file mount, same stale-bind-mount caveat as setup.md above.
       - ../../_sidebar.md:/usr/share/nginx/html/_sidebar.md:ro

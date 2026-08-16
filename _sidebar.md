@@ -17,6 +17,7 @@
   - [12 — Orchestration Services](/docs/12-orchestration.md "Airflow vs. Temporal vs. Dagster — what each is for and how they compose")
   - [13 — Auth Posture](/docs/13-auth-posture.md "Which services have real accounts, a shared password, or no login at all — and Authentik forward-auth candidacy")
   - [Docker Cheatsheet](/docs/docker-cheatsheet.md "Images, containers, volumes, networks, cleanup commands")
+  - [Docker Resource Limits](/docker/README.md "Cap the Docker daemon's total CPU, memory, and disk usage on the host")
 
 - Services
   - Storage & Media
@@ -97,3 +98,10 @@
     - [nginx-plain](/docs/04-nginx.md "Reverse proxy, default — replaces Manual nginx config")
     - [CrowdSec](/docs/services/crowdsec.md "Collaborative intrusion detection, detection-only, see TODO.md — replaces fail2ban")
     - [Landing Page](/docs/07-landing.md "Service dashboard with live status")
+
+- Kubernetes Pilot (Experimental)
+  - [Overview](/kubernetes/README.md "Parallel Kubernetes port of the stack, one service at a time — not a replacement for Compose")
+  - [Troubleshooting](/kubernetes/TROUBLESHOOTING.md "Every gotcha hit so far — disk-full recovery, ArgoCD bootstrap, Compose-vs-k8s semantic traps")
+
+- Research Notes
+  - [PostHog Self-Hosting](/docs/research/posthog-self-hosting.md "Deferred — why a self-hosted PostHog was ruled out for now")
