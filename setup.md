@@ -134,6 +134,7 @@ Go through these in order. Each doc links to the next.
 | [10](docs/10-new-services.md) | New Services | Add any service from the stack — step-by-step for each |
 | [11](docs/11-services-reference.md) | Services Reference | All ports, proxy config, per-service notes |
 | [12](docs/12-orchestration.md) | Orchestration Services | Airflow vs. Temporal vs. Dagster — what each is actually for and how they compose (only relevant if you're using one of the three) |
+| [13](docs/13-auth-posture.md) | Auth Posture | Which services have real accounts vs. a shared password vs. no login at all, and which are realistic candidates for Authentik forward-auth |
 
 **Start here → [01 — Prepare Data Drive](docs/01-data-drive.md)**
 

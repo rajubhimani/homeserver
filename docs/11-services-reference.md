@@ -4,7 +4,7 @@
 
 ---
 
-Quick reference for all services — ports and proxy config. For setup steps, credentials, architecture, and troubleshooting per service, see [docs/services/](services/) — linked per-service below and from [10 — New Services](10-new-services.md).
+Quick reference for all services — ports and proxy config. For setup steps, credentials, architecture, and troubleshooting per service, see [docs/services/](services/) — linked per-service below and from [10 — New Services](10-new-services.md). For which services have real per-person accounts vs. a single shared password vs. no login at all, see [13 — Auth Posture](13-auth-posture.md).
 
 ---
 

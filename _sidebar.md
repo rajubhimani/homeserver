@@ -15,6 +15,7 @@
   - [10 — New Services](/docs/10-new-services.md "Add any service from the stack — step-by-step for each")
   - [11 — Services Reference](/docs/11-services-reference.md "All ports, proxy config, per-service notes")
   - [12 — Orchestration Services](/docs/12-orchestration.md "Airflow vs. Temporal vs. Dagster — what each is for and how they compose")
+  - [13 — Auth Posture](/docs/13-auth-posture.md "Which services have real accounts, a shared password, or no login at all — and Authentik forward-auth candidacy")
   - [Docker Cheatsheet](/docs/docker-cheatsheet.md "Images, containers, volumes, networks, cleanup commands")
 
 - Services
