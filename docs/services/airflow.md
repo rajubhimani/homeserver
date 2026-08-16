@@ -12,6 +12,8 @@
 ```bash
 cp services/airflow/.env.example services/airflow/.env
 # generate real values for FERNET_KEY, JWT_SECRET, API_SECRET_KEY, POSTGRES_PASSWORD, _AIRFLOW_WWW_USER_PASSWORD
+# set DOCKER_SOCKET_GID (needed for DockerOperator, see "DAGs can launch their own containers" below):
+#   stat -c '%g' /var/run/docker.sock
 mkdir -p service_data/data/airflow/dags
 cp services/airflow/dags-examples/*.py service_data/data/airflow/dags/   # optional — the starter examples below
 uv run homeserver.py dev up airflow
@@ -104,7 +106,7 @@ DockerOperator(
 
 See `service_data/data/airflow/dags/` for this and other worked examples (ETL task chain, branching, retries/scheduling) — dropped in place, not just documented, so they show up in the UI on first login.
 
-Only `airflow-scheduler` has the socket — with `LocalExecutor`, that's the one container that actually runs tasks. See its `compose.yml` comment for why it deliberately doesn't set the same `user:` override as the other `airflow-*` containers (docker.sock permission, not an oversight).
+Only `airflow-scheduler` has the socket — with `LocalExecutor`, that's the one container that actually runs tasks. It joins the socket's owning group via `group_add: ["${DOCKER_SOCKET_GID}"]` instead of running as root — `user: "0:0"` looks like the obvious fix (and is what dockge/portainer effectively get for free, since *their* images already default to root) but actively breaks this specific container: Apache's official image ships a guard script at `/root/bin/pip` that hard-`exit 1`s any pip invocation made as root, specifically to block `_PIP_ADDITIONAL_REQUIREMENTS` above — as root, `apache-airflow-providers-docker`/`temporalio` silently fail to install on every start and the scheduler crash-loops with no traceback. `DOCKER_SOCKET_GID` (in `.env`) isn't portable to hardcode — see `.env.example` for the one-time `stat -c '%g' /var/run/docker.sock` lookup. See `compose.yml`'s own comment for the full story (reproduced and confirmed live via `docker run --user 0:0 apache/airflow:3.3.1 pip install ...`).
 
 ## Notes
 

@@ -171,19 +171,30 @@ services:
       _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-docker temporalio==1.31.0
     # No user: override here (unlike the other airflow-* containers) — the
     # host's docker.sock is normally root:docker mode 660, and AIRFLOW_UID:0
-    # (group 0 = root, not docker) can't open it. Every other socket-mounting
-    # service in this repo (dockge, forgejo's runner) sidesteps the same
-    # problem by just running as the image's root default instead of trying
-    # to match the host's docker group GID (which varies per host/isn't
-    # portable to commit a fixed value for). Files this container creates
-    # under DATA_ROOT/logs end up root-owned as a result — airflow-init still
-    # chowns everything to AIRFLOW_UID at startup, so this only affects new
-    # log files the scheduler itself writes after that.
+    # (group 0 = root, not docker) can't open it by default. The fix is
+    # group_add below, deliberately NOT user: "0:0" — tried that first and
+    # it breaks this exact container in a much worse way: Apache's official
+    # image ships a guard script at /root/bin/pip (shadows the real pip,
+    # first on PATH only when $HOME=/root i.e. only as UID 0) that hard
+    # `exit 1`s any pip invocation run as root, specifically to stop people
+    # doing what _PIP_ADDITIONAL_REQUIREMENTS below does. With user: "0:0",
+    # apache-airflow-providers-docker/temporalio silently fail to install on
+    # every container start and the scheduler crash-loops with no traceback
+    # — confirmed by reproducing standalone: `docker run --user 0:0
+    # apache/airflow:3.3.1 pip install ...` prints only the guard script's
+    # two-line warning and exits 1, nothing else, regardless of any mounts.
+    # group_add (a supplementary group, not a UID/GID swap) sidesteps that
+    # entirely: stays the image's normal UID 50000 (pip installs fine, same
+    # as every other airflow-* container), just also joins the group that
+    # owns the socket. DOCKER_SOCKET_GID isn't portable to hardcode (differs
+    # per host/distro) — see .env.example for the one-time lookup command.
     #
     # This memory cap is for the scheduler process itself — containers a DAG
     # launches via DockerOperator are separate sibling containers with their
     # own mem_limit/cpuset_cpus params (see docs/services/airflow.md), not
     # counted against this cap.
+    group_add:
+      - "${DOCKER_SOCKET_GID}"
     deploy:
       resources:
         limits:
