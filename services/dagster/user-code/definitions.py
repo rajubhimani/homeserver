@@ -74,6 +74,24 @@ Things this is meant to show a new user:
     io_manager_storage volume every asset here already shares, the same
     problem (and same kind of fix) Airflow's example_stateful_retry.py
     solves via the Task State Store instead of a plain module-level dict.
+13. fan_out_a / fan_out_b / fan_out_c: 3 independent assets, no shared
+    dependency between them, each in its own step container — proof (not
+    just an assumption) that Dagster materializes independent assets
+    concurrently, the direct analog of Airflow's example_parallel_tasks.py
+    and Temporal's BatchProcessingWorkflow.
+14. daily_sales_single_run: same shape as daily_sales above, with
+    backfill_policy=BackfillPolicy.single_run() — backfilling a range of
+    partitions launches exactly one run processing the whole range, not
+    one run per partition like daily_sales's default.
+15. ops_pipeline_job's log_job_success: a @success_hook, Dagster's parallel
+    to Airflow's on_success_callback/custom Notifier — attached
+    declaratively via @job(hooks=...) instead of passed as a callback
+    argument, fires once per op (not once per whole job).
+16. process_uploaded_file + new_file_sensor: a DynamicPartitionsDefinition
+    — partitions created at runtime, by name, as files show up (tracked in
+    Dagster's own metadata DB via add_dynamic_partitions), unlike
+    daily_sales's fixed DailyPartitionsDefinition where every partition is
+    known in advance.
 """
 
 from pathlib import Path
@@ -84,12 +102,15 @@ from dagster import (
     AssetOut,
     AutomationCondition,
     Backoff,
+    BackfillPolicy,
     ConfigurableResource,
     DailyPartitionsDefinition,
     DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    DynamicPartitionsDefinition,
     FilesystemIOManager,
+    HookContext,
     Jitter,
     MetadataValue,
     Output,
@@ -107,6 +128,7 @@ from dagster import (
     multi_asset,
     op,
     sensor,
+    success_hook,
 )
 from dagster_docker import docker_executor
 
@@ -184,6 +206,40 @@ def flaky_retry_asset() -> str:
 flaky_retry_job = define_asset_job(name="flaky_retry_job", selection=[flaky_retry_asset])
 
 
+# Fan-out: 3 independent assets (no shared dependency between them) sleeping
+# briefly and logging start/end timestamps — the point is proving they
+# actually overlap in time when materialized together, not just that all 3
+# eventually finish. Each runs in its own step container (docker_executor),
+# so this is genuine process-level parallelism, not just interleaved
+# asyncio — the direct Dagster analog of Airflow's example_parallel_tasks
+# and Temporal's BatchProcessingWorkflow (see docs/12-orchestration.md's
+# feature-parity table).
+def _fan_out_leaf(name: str) -> None:
+    import time
+
+    print(f"{name}: starting at {time.time():.2f}")
+    time.sleep(5)
+    print(f"{name}: finished at {time.time():.2f}")
+
+
+@asset
+def fan_out_a() -> None:
+    _fan_out_leaf("fan_out_a")
+
+
+@asset
+def fan_out_b() -> None:
+    _fan_out_leaf("fan_out_b")
+
+
+@asset
+def fan_out_c() -> None:
+    _fan_out_leaf("fan_out_c")
+
+
+fan_out_job = define_asset_job(name="fan_out_job", selection=[fan_out_a, fan_out_b, fan_out_c])
+
+
 daily_partitions = DailyPartitionsDefinition(start_date="2026-08-01")
 
 
@@ -203,6 +259,30 @@ def daily_sales(context: AssetExecutionContext) -> dict:
 # A real range/backfill goes through the UI (Asset -> Partitions tab ->
 # select a range -> Materialize) or `dagster asset materialize
 # --partition-range 2026-08-01...2026-08-05`.
+
+
+@asset(partitions_def=daily_partitions, backfill_policy=BackfillPolicy.single_run())
+def daily_sales_single_run(context: AssetExecutionContext) -> None:
+    # Same shape as daily_sales above, one crucial difference:
+    # backfill_policy=BackfillPolicy.single_run() means backfilling a
+    # *range* of partitions launches exactly one run (one step container)
+    # that processes the whole range itself via context.partition_keys —
+    # not one run per partition the way daily_sales's default backfill
+    # policy does. Real fit: a source system where fetching 5 days in one
+    # query is cheaper than 5 separate queries, or a downstream system
+    # that only accepts bulk writes.
+    #
+    # Return type is None, not dict: a real gotcha hit building this — the
+    # default filesystem IO manager can't persist one output covering
+    # multiple partitions ("does not support persisting an output
+    # associated with multiple partitions"), only one file path per
+    # partition. Dagster's own error message suggests exactly this fix
+    # (opt out of the IO manager by returning None) as the alternative to
+    # writing a custom IO manager that does support multi-partition
+    # outputs.
+    keys = context.partition_keys
+    totals = {d: 1000 + (hash(d) % 500) for d in keys}
+    print(f"daily_sales_single_run processed {len(keys)} partitions in one run: {totals}")
 
 
 class SourceSystemResource(ConfigurableResource):
@@ -310,7 +390,17 @@ def print_total(total: int) -> None:
     print(f"ops_pipeline_job total: {total}")
 
 
-@job
+@success_hook(required_resource_keys=set())
+def log_job_success(context: HookContext) -> None:
+    # Real version: post to ntfy/Slack, same real-world job as Airflow's
+    # on_success_callback (see example_all_options.py's reference) and a
+    # custom Notifier (example_custom_notifier.py) — Dagster's own version
+    # of "run this when a step/job finishes," attached declaratively via
+    # @job(hooks=...) below instead of passed as a callback argument.
+    print(f"HOOK: {context.op.name} succeeded in job {context.job_name}")
+
+
+@job(hooks={log_job_success})
 def ops_pipeline_job():
     # Explicit function-call wiring, not inferred from a parameter name —
     # this is the entire difference from the asset examples above. Compare
@@ -330,6 +420,40 @@ def marker_file_sensor(context: SensorEvaluationContext):
         return SkipReason("Marker file not present yet.")
     marker.unlink()
     return RunRequest(run_key=f"marker-{context.cursor or '0'}")
+
+
+# Dynamic partitions: unlike daily_sales's fixed DailyPartitionsDefinition
+# (every partition known in advance, one per calendar day forever),
+# uploaded_files_partitions starts with *zero* partitions — new ones are
+# added at runtime, by name, as files actually show up. Tracked in
+# Dagster's own metadata DB (get_dynamic_partitions/add_dynamic_partitions
+# below), not in-memory, so this survives dagster-daemon restarting.
+uploaded_files_partitions = DynamicPartitionsDefinition(name="uploaded_files")
+
+
+@asset(partitions_def=uploaded_files_partitions)
+def process_uploaded_file(context: AssetExecutionContext) -> str:
+    # Real version: process the actual file named by this partition key.
+    filename = context.partition_key
+    return f"processed {filename}"
+
+
+process_uploaded_file_job = define_asset_job(name="process_uploaded_file_job", selection=[process_uploaded_file])
+
+
+@sensor(job=process_uploaded_file_job, minimum_interval_seconds=15)
+def new_file_sensor(context: SensorEvaluationContext):
+    watch_dir = Path("/tmp/io_manager_storage/.dynamic_partition_uploads")
+    watch_dir.mkdir(exist_ok=True, parents=True)
+    existing = set(context.instance.get_dynamic_partitions("uploaded_files"))
+    new_files = sorted(f.name for f in watch_dir.iterdir() if f.is_file() and f.name not in existing)
+    if not new_files:
+        return SkipReason("No new files.")
+    # This is the actual point: a brand-new partition key, created here,
+    # at sensor-evaluation time — not declared anywhere in this file ahead
+    # of time the way daily_sales's dates are.
+    context.instance.add_dynamic_partitions("uploaded_files", new_files)
+    return [RunRequest(partition_key=f, run_key=f"upload-{f}") for f in new_files]
 
 
 # Reference, not a pattern demo like everything above: every @asset/@op/
@@ -476,11 +600,16 @@ defs = Definitions(
         customer_orders,
         reference_asset,
         flaky_retry_asset,
+        fan_out_a,
+        fan_out_b,
+        fan_out_c,
+        daily_sales_single_run,
+        process_uploaded_file,
     ],
     asset_checks=[report_freshness_check],
-    jobs=[ops_pipeline_job, reference_job, flaky_retry_job],
+    jobs=[ops_pipeline_job, reference_job, flaky_retry_job, fan_out_job, process_uploaded_file_job],
     schedules=[report_daily_schedule, reference_schedule],
-    sensors=[marker_file_sensor, reference_sensor],
+    sensors=[marker_file_sensor, reference_sensor, new_file_sensor],
     # Every step runs in its own ephemeral container (a fresh filesystem each
     # time) — the default IO manager's per-run temp dir isn't shared between
     # them, so cleaned_data can't see raw_data's output unless both point at

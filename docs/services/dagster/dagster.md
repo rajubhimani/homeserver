@@ -83,6 +83,10 @@ Each asset/job grouping has its own page — description, a diagram, a `file:lin
 - [`ops_pipeline_job`](examples/ops_pipeline_job.md) — the classic `@op`/`@job` style, compared against assets.
 - [`reference_asset`](examples/reference_asset.md) — reference: every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option.
 - [`flaky_retry_asset`](examples/flaky_retry_asset.md) — `retry_policy` actually retrying, live, across fresh step containers.
+- [`fan_out`](examples/fan_out.md) — 3 independent assets materializing concurrently, verified via timestamps.
+- [`daily_sales_single_run`](examples/daily_sales_single_run.md) — `BackfillPolicy.single_run()`, one run for a whole partition range.
+- [`log_job_success`](examples/log_job_success.md) — a `@success_hook`, Dagster's parallel to a custom Notifier.
+- [`process_uploaded_file`](examples/process_uploaded_file.md) — `DynamicPartitionsDefinition`, partitions created at runtime.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
