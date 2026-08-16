@@ -67,7 +67,22 @@ Every box on the right is short-lived — created for one run or one step, then 
 
 ## Try the starter examples
 
-Open the UI's **Assets** tab — you'll see `hello_homeserver` (simplest possible asset), a `raw_data` → `cleaned_data` → `report` chain plus `report_freshness_check` and `report_notification` (Declarative Automation — see below), `daily_sales` (partitioned — see below), `source_system_summary` (uses a Resource — see below), `orders_raw`/`orders_staged`/`orders_final` (one `@multi_asset` function producing all three — see below), `customer_orders` (description/owners/kinds/column-schema metadata — see below), `reference_asset` (every `@asset` option documented inline — see below), and `flaky_retry_asset` (`retry_policy` actually retrying — see below). There's also three non-asset jobs, `ops_pipeline_job`, `reference_job`, and `flaky_retry_job`, under the **Jobs** tab. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
+Open the UI's **Assets** tab to browse everything below live. Easiest way to run anything is the UI (select assets → **Materialize selected**, or a job → **Launchpad** → **Launch Run**) — each materialization/run launches as its own container per the section above, watch it happen with `docker ps` in another terminal while it runs.
+
+Each asset/job grouping has its own page — description, a diagram, a `file:line` pointer into the real source, and the GraphQL call to run it:
+
+- [`hello_homeserver`](hello_homeserver.md) — the simplest possible asset. Start here.
+- [`report_pipeline`](report_pipeline.md) — `raw_data` → `cleaned_data` → `report`, lineage inferred from parameter names; `report_job` + `report_daily_schedule` for the scheduling side.
+- [`report_freshness_check`](report_freshness_check.md) — an Asset Check, Dagster's built-in data-quality concept.
+- [`report_notification`](report_notification.md) — Declarative Automation, a third scheduling paradigm.
+- [`daily_sales`](daily_sales.md) — a `DailyPartitionsDefinition`-partitioned asset, per-partition backfill.
+- [`marker_file_sensor`](marker_file_sensor.md) — Dagster's parallel to Airflow's Sensor.
+- [`source_system_summary`](source_system_summary.md) — a `ConfigurableResource`, dependency injection not lineage.
+- [`orders_multi_asset`](orders_multi_asset.md) — `@multi_asset`, several assets from one materialization.
+- [`customer_orders`](customer_orders.md) — the "catalog" side: description/owners/kinds/column-schema metadata.
+- [`ops_pipeline_job`](ops_pipeline_job.md) — the classic `@op`/`@job` style, compared against assets.
+- [`reference_asset`](reference_asset.md) — reference: every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option.
+- [`flaky_retry_asset`](flaky_retry_asset.md) — `retry_policy` actually retrying, live, across fresh step containers.
 
 From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's own docs lead with) only works run *locally against a file*, which doesn't apply here (nothing under `/opt/dagster/app` on `dagster-webserver` — `dagster-user-code` is the only container with `definitions.py` mounted, and it has no Docker socket to launch anything with). Target the already-deployed workspace over GraphQL instead — the same thing the UI's Materialize button does internally:
 
@@ -75,102 +90,6 @@ From the CLI, `dagster asset materialize -f definitions.py` (the form Dagster's 
 docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
   "executionParams": {
     "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "report_job"},
-    "mode": "default"
-  }
-}'
-```
-
-The `raw_data`/`cleaned_data`/`report` chain is Dagster's actual differentiator, worth looking at closely: `cleaned_data`'s function signature is `def cleaned_data(raw_data: list[dict])` — that parameter name **is** the dependency declaration. Dagster inspects it and wires the lineage edge automatically; there's no `>>` operator or explicit DAG object anywhere, unlike the equivalent Airflow example (`example_etl_pipeline` in `docs/services/airflow/airflow.md`) which chains tasks explicitly. Open `report` in the UI's asset graph to see the inferred lineage rendered.
-
-`report_freshness_check` is an **Asset Check** — Dagster's built-in data-quality concept (a pass/fail validation attached to a specific asset, shown right on that asset's page). Neither Airflow nor Temporal have a native equivalent; you'd hand-roll the same idea as a plain extra task.
-
-`report_job` + `report_daily_schedule` show the scheduling side — toggle the schedule on from the **Schedules** tab (need `dagster-daemon` running, which it is) to have it run on its own at 6am daily instead of only on manual materialization.
-
-**`report_notification`** shows a third scheduling paradigm: **Declarative Automation**, alongside the explicit Schedule above and the explicit Sensor below. Instead of either, it declares `automation_condition=AutomationCondition.eager()` — "materialize me whenever `report` updates" — and `dagster-daemon`'s built-in `default_automation_condition_sensor` handles the rest, no schedule or sensor function of your own. That sensor is off by default like any other sensor; turn it on from the **Sensors** tab (or the mutation below), then materialize `report_job` and watch `report_notification` appear on its own shortly after — verified it auto-materialized ~28s after `report`'s own materialization, with no manual trigger:
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -t 'mutation { startSensor(sensorSelector: {repositoryLocationName: "user_code", repositoryName: "__repository__", sensorName: "default_automation_condition_sensor"}) { ... on Sensor { sensorState { status } } } }'
-```
-
-**`daily_sales`** is Dagster's actual answer to "backdated ingestion from a source system" — a `DailyPartitionsDefinition`-partitioned asset. Each calendar day is an independent partition; materializing an old one *is* the backfill, not a separate concept layered on top (contrast with Airflow's `example_backfill.py`, which re-runs the whole DAG per missed day — see `docs/12-orchestration.md` for the real distinction). From the UI: open `daily_sales` → **Partitions** tab → pick a date (or a range) → **Materialize**. Via GraphQL, tag the run with the partition:
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["daily_sales"]}]},
-    "mode": "default",
-    "executionMetadata": {"tags": [{"key": "dagster/partition", "value": "2026-08-03"}]}
-  }
-}'
-```
-
-**`marker_file_sensor`** is Dagster's parallel to Airflow's Sensor — reacts to an external signal instead of a fixed schedule, same self-contained marker-file pattern as `example_sensor.py`. Turn it on from the **Sensors** tab (sensors default to off), then from *inside the `dagster-user-code` container specifically* — that's where sensor code actually executes, not `dagster-daemon` (bit this exact mismatch during development):
-
-```bash
-docker exec dagster-user-code touch /tmp/io_manager_storage/.dagster_sensor_trigger
-```
-
-**`source_system_summary`** uses a **Resource** (`SourceSystemResource`) — how an asset gets a configurable connection to something external (an API base URL, credentials) instead of hardcoding a client inline. The asset's `source_system: SourceSystemResource` parameter is a giveaway that it's a dependency injection, not a lineage edge — Dagster checks the `Definitions(resources=...)` dict for a matching key first, *then* falls back to treating the parameter as another asset. Swapping environments means changing the `SourceSystemResource(...)` value passed into `Definitions`, not the asset's code.
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["source_system_summary"]}]},
-    "mode": "default"
-  }
-}'
-```
-
-**`orders_multi_asset`** produces `orders_raw`/`orders_staged`/`orders_final` as one `@multi_asset` function instead of three separate `@asset` functions — the point is that all three share data in memory within a single materialization (one source round-trip, no IO manager hop between them the way `cleaned_data` depends on `raw_data`'s output above). A real fit for tightly-coupled steps: one API call that naturally yields a raw, a staged, and a validated view of the same batch. Verified: materializing selects all 3 asset keys in one `launchPipelineExecution` call and all 3 appear as separate nodes in the asset graph.
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["orders_raw"]}, {"path": ["orders_staged"]}, {"path": ["orders_final"]}]},
-    "mode": "default"
-  }
-}'
-```
-
-**`customer_orders`** is the "catalog" side of Dagster, none of the other assets above use any of it: `description`/`owners`/`kinds` set on the asset definition itself (fixed, shown on every run), plus per-materialization `metadata` computed fresh each time — a row count, a markdown preview table, and a real column-by-column schema via `TableSchema`/`TableColumn` that renders as an actual table on the asset's own UI page, not just prose. This is the difference between an asset graph and something that actually functions as documentation. Verified via GraphQL after materializing: `description`/`kinds: ["postgres"]`/`owners: [{"team": "data-eng"}]` all present on the asset node, and the materialization's `metadataEntries` show `row_count: 3`, the rendered markdown preview, and all 4 columns (`order_id`/`customer_email`/`amount`/`status`) with their types and descriptions intact.
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["customer_orders"]}]},
-    "mode": "default"
-  }
-}'
-```
-
-**`ops_pipeline_job`** (`extract_numbers` → `total_numbers` → `print_total`) is the classic `@op`/`@job` style, included deliberately next to the asset examples so the two are easy to compare — same 3-step shape as `raw_data`/`cleaned_data`/`report`, but wired by explicit function calls (`print_total(total_numbers(extract_numbers()))`) instead of Dagster inferring an edge from a parameter name. Reach for this when a pipeline genuinely isn't shaped around producing/tracking data, or you're integrating code that's already op-shaped — see `docs/12-orchestration.md` for when ops fit better than assets.
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "ops_pipeline_job"},
-    "mode": "default"
-  }
-}'
-```
-
-**`reference_asset`** / **`reference_op`** / **`reference_job`** / **`reference_schedule`** / **`reference_sensor`** — reference, not a pattern demo like everything above: every `@asset`/`@op`/`@job`/`ScheduleDefinition`/`@sensor` option in one place, each shown at its real default with a one-line explanation (a checklist to copy from, not a live example of any one pattern). `reference_schedule`/`reference_sensor` both default to `DefaultScheduleStatus.STOPPED`/`DefaultSensorStatus.STOPPED` — Dagster's own real default, every schedule/sensor starts off — so registering them here has zero effect until you flip one on from its own tab. Verified: `reference_job` shows up in the repository's job list, and materializing `reference_asset` completes with `SUCCESS`.
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["reference_asset"]}]},
-    "mode": "default"
-  }
-}'
-```
-
-**`flaky_retry_asset`** — `retry_policy=RetryPolicy(max_retries=2, delay=2)` genuinely retrying, not just documented: the same "fails twice, succeeds on the third attempt" shape as Temporal's `flaky_activity` and Airflow's `example_scheduled_with_retries`, so the three tools' retry stories are directly comparable side by side. The wrinkle unique to this one: every run — and every step within it — launches as its own container here (see "Every run — and every step — launches as its own container" above), so a retry is a *fresh* step container, not a re-executed function in the same process. An in-memory attempt counter would reset to 0 every time; this persists the count to a file on `io_manager_storage` (the same shared volume every asset here already uses) instead — the same class of problem, and same kind of fix, as Airflow's `example_stateful_retry.py` using the Task State Store instead of a plain module-level dict. Verified via the run's own event log (`event_logs` table, `dagster-db`): `STEP_UP_FOR_RETRY: 2`, `STEP_RESTARTED: 2`, `STEP_WORKER_STARTED: 3` (three separate step containers), then `STEP_SUCCESS: 1`.
-
-```bash
-docker exec dagster-webserver dagster-graphql -r http://localhost:3000 -p launchPipelineExecution -v '{
-  "executionParams": {
-    "selector": {"repositoryLocationName": "user_code", "repositoryName": "__repository__", "pipelineName": "__ASSET_JOB", "assetSelection": [{"path": ["flaky_retry_asset"]}]},
     "mode": "default"
   }
 }'
