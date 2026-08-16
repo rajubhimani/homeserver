@@ -19,6 +19,8 @@ Usage:
   python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
   python homeserver.py orphaned-volumes [service|all] [--yes]
                                                 list/remove volumes not declared in a service's current compose.yml
+  python homeserver.py status (or ps)          list every known service, tier by tier, marking which are running,
+                                                plus every group and exactly which services 'group:<name>' resolves to
 
 Service tiers:
   min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, docs, portainer)
@@ -173,6 +175,12 @@ SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier"
 # can start/stop, and firefly-importer (no tier, rides along with firefly)
 # isn't independently startable.
 SERVICE_GROUPS: dict[str, list[str]] = {}
+# category -> its subcategories (sorted), e.g. CATEGORY_SUBGROUPS["dev"] ==
+# ["automation", "git", "identity", "tools"] — only dev/productivity split
+# further; storage/system have no subcategory, so they're already the
+# smallest group for those areas. Purely for 'status'/'ps' to render the
+# category/subcategory nesting instead of one flat list.
+CATEGORY_SUBGROUPS: dict[str, set[str]] = {}
 for _s in _SERVICES_DATA["services"]:
     if not _s.get("tier"):
         continue
@@ -180,7 +188,10 @@ for _s in _SERVICES_DATA["services"]:
         _val = _s.get(_key)
         if _val:
             SERVICE_GROUPS.setdefault(_val, []).append(_s["slug"])
-del _s, _key, _val
+    _cat, _sub = _s.get("category"), _s.get("subcategory")
+    if _cat and _sub:
+        CATEGORY_SUBGROUPS.setdefault(_cat, set()).add(_sub)
+del _s, _key, _val, _cat, _sub
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is
@@ -895,6 +906,42 @@ def get_running_services() -> list[str]:
         if any(re.match(rf"^{re.escape(svc)}(-|$)", n) for n in names):
             result.append(svc)
     return result
+
+
+def do_status() -> int:
+    running = set(get_running_services())
+    all_services = SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + SERVICES_MANUAL
+
+    def show_tier(label: str, services: list[str]) -> None:
+        if not services:
+            return
+        print(f"  {BOLD}{label}:{RESET}")
+        for s in services:
+            marker = f"{GREEN}●{RESET}" if s in running else "○"
+            print(f"    {marker} {s}")
+        print()
+
+    header("Service status (● running, ○ stopped):")
+    show_tier("MIN", SERVICES_MIN)
+    show_tier("CORE", SERVICES_CORE)
+    show_tier("EXTRA", SERVICES_EXTRA)
+    show_tier("MANUAL", SERVICES_MANUAL)
+    success(f"{len(running)}/{len(all_services)} service(s) running")
+
+    def show_group(name: str, indent: int) -> None:
+        members = SERVICE_GROUPS[name]
+        up = sum(1 for s in members if s in running)
+        print(f"{'  ' * indent}{BOLD}{name}{RESET} ({up}/{len(members)} running): {' '.join(members)}")
+
+    print()
+    print(f"  {BOLD}Groups ({len(SERVICE_GROUPS)} — 'up group:<name>' / 'precreate group:<name>' starts exactly these):{RESET}")
+    categories = {s.get("category") for s in _SERVICES_DATA["services"] if s.get("tier") and s.get("category")}
+    for cat in sorted(categories):
+        show_group(cat, indent=2)
+        for sub in sorted(CATEGORY_SUBGROUPS.get(cat, [])):
+            show_group(sub, indent=3)
+
+    return 0
 
 
 # ── Wait for healthy ─────────────────────────────────────────────────
@@ -1693,6 +1740,7 @@ def show_help() -> None:
     print("    python homeserver.py <env> precreate <tier|service...>          create without starting (visible in Portainer)")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
+    print("    python homeserver.py status (or ps)                             list every service + every group (tier by tier, marking which are running)")
     print()
     print(f"  {BOLD}Environments:{RESET}")
     print("    dev    ports on all interfaces (direct access)")
@@ -1744,6 +1792,7 @@ def show_help() -> None:
     print("                                                         explicit target — required for non-official Postgres images")
     print("    python homeserver.py gc                              prune + (Windows) compact Docker Desktop's WSL2 VHDX")
     print("    python homeserver.py gc --yes                        same, skip the confirmation prompt")
+    print("    python homeserver.py status                          list every service + every group, marking which are running")
     print()
     print(f"  {BOLD}MIN (infrastructure):{RESET}")
     print(f"    {' '.join(SERVICES_MIN)}")
@@ -1822,6 +1871,11 @@ def main() -> int:
     if argv and argv[0] == "orphaned-volumes":
         target = next((a for a in argv[1:] if not a.startswith("-")), "all")
         return do_orphaned_volumes(target, assume_yes="--yes" in argv or "-y" in argv)
+
+    # Same reasoning — which containers are running doesn't depend on
+    # dev/prod (only the port bindings do), so this needs no env argument.
+    if argv and argv[0] in ("status", "ps"):
+        return do_status()
 
     if len(argv) < 3:
         show_help()

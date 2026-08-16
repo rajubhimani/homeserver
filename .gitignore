@@ -13,6 +13,7 @@ service_data-test/
 # grouping (homeserver.py, services/landing/index.html both read it) — must
 # override the blanket *.json ignore above or it silently never gets committed.
 !services.json
+!.vscode/settings.json
 *.pem
 ._*
 *.sqlite
