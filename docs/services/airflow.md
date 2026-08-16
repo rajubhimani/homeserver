@@ -55,7 +55,7 @@ No `redis`/`airflow-worker`/`flower` — those only exist to support `CeleryExec
 
 ## Try the starter examples
 
-Nineteen DAGs ship in `service_data/data/airflow/dags/`, tagged `example` in the UI. Each file's own module docstring is passed as `doc_md=__doc__`, so the full explanation below is also readable right inside the UI — DAGs list page (doc snippet under the DAG name) and each DAG's own **Details → Docs** tab — not just by opening the source file. All have `schedule=None` except `example_scheduled_with_retries`, `example_backfill`, and `example_max_active_runs`, so trigger them manually the first time — either **DAGs list → toggle on → ▶ Trigger DAG** in the UI, or from the CLI:
+Twenty-two DAGs ship in `service_data/data/airflow/dags/`, tagged `example` in the UI. Each file's own module docstring is passed as `doc_md=__doc__`, so the full explanation below is also readable right inside the UI — DAGs list page (doc snippet under the DAG name) and each DAG's own **Details → Docs** tab — not just by opening the source file. All have `schedule=None` except `example_scheduled_with_retries`, `example_backfill`, and `example_max_active_runs`, so trigger them manually the first time — either **DAGs list → toggle on → ▶ Trigger DAG** in the UI, or from the CLI:
 
 ```bash
 docker exec airflow-scheduler airflow dags unpause example_etl_pipeline
@@ -83,6 +83,19 @@ docker exec airflow-scheduler airflow dags list-runs example_etl_pipeline
   ```
 
   Verified: `poke_mode_task` showed `up_for_reschedule` between polls, `deferred_mode_task` showed `deferred` (not `running`) the whole wait, and both — plus their downstream `report_*` tasks — completed to `success` once the marker files appeared.
+- `producer_dag` / `waiter_dag` / `trigger_only_dag` (one file, `example_cross_dag_dependencies.py`) — Airflow's two built-in ways to make one DAG depend on another, neither needing a Sensor/Trigger you write yourself: **`ExternalTaskSensor`** (`waiter_dag`, the "pull" direction — waits for a specific task in `producer_dag`'s run to reach a matching state, matched by `logical_date` by default) and **`TriggerDagRunOperator`** (`trigger_only_dag`, the "push" direction — actively starts a fresh `producer_dag` run and, with `wait_for_completion=True`, blocks until it finishes; the closest built-in analog to Temporal's `execute_child_workflow` or Dagster's `RunRequest`, minus their independent Event History/asset lineage). Verified both directions: `trigger_only_dag` completed to `success` and its push spawned a real `producer_dag` run; separately, triggering `producer_dag` and `waiter_dag` with the same explicit `--logical-date` completed `waiter_dag` to `success` once `producer_dag`'s `do_work` task matched.
+
+  ```bash
+  # push: TriggerDagRunOperator
+  docker exec airflow-scheduler airflow dags unpause trigger_only_dag
+  docker exec airflow-scheduler airflow dags trigger trigger_only_dag
+
+  # pull: ExternalTaskSensor — same logical_date on both triggers is what makes it match
+  docker exec airflow-scheduler airflow dags unpause producer_dag
+  docker exec airflow-scheduler airflow dags unpause waiter_dag
+  docker exec airflow-scheduler airflow dags trigger producer_dag --logical-date 2026-01-02T00:00:00+00:00
+  docker exec airflow-scheduler airflow dags trigger waiter_dag --logical-date 2026-01-02T00:00:00+00:00
+  ```
 - `example_asset_triggered` — Airflow's Asset feature (renamed from "Dataset" in 3.0): `example_asset_producer` tags a task's output with an `Asset`; `example_asset_consumer` is scheduled to run whenever that Asset updates, with no cron and no manual trigger of its own. Trigger the producer once and watch the consumer run appear on its own. Not the same concept as a Dagster asset — see `docs/12-orchestration.md`.
 - `example_dynamic_task_mapping` — `.partial()`/`.expand()`: the number of task instances is decided at runtime, not when the DAG file is parsed (a variable number of files/rows/sources, not a fixed set you wrote by hand). Verified: `list_sources()` returns 4 items, `process_source` ran as 4 separate mapped instances (`map_index` 0–3), and `sum_totals` received their aggregated results automatically.
 - `example_trigger_rules` — `trigger_rule` controls whether a task runs after an upstream *failure*, not just success (every other example here uses the implicit `all_success` default). `risky_task` always fails; `cleanup` (`ALL_DONE`) and `alert_on_failure` (`ONE_FAILED`) run anyway — verified both succeeded specifically because the upstream failed, while `only_if_all_ok` (default rule) correctly never ran (`upstream_failed`).
