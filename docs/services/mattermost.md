@@ -11,6 +11,7 @@ Slack-style team chat — channels, DMs, threads, plugins (Playbooks/Calls ship 
 ```bash
 cp services/mattermost/.env.example services/mattermost/.env
 mkdir -p service_data/data/mattermost/{config,data,logs,plugins,client-plugins,bleve-indexes}
+sudo chown -R 2000:2000 service_data/data/mattermost/   # container runs as uid 2000
 uv run homeserver.py dev up mattermost
 ```
 

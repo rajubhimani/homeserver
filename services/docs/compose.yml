@@ -14,6 +14,9 @@ services:
       # build step. Read-only so a container compromise can't touch source.
       - ../../docs:/usr/share/nginx/html/docs:ro
       - ../../setup.md:/usr/share/nginx/html/setup.md:ro
+      # Docsify's persistent sidebar nav (loadSidebar: true in index.html).
+      # Single-file mount, same stale-bind-mount caveat as setup.md above.
+      - ../../_sidebar.md:/usr/share/nginx/html/_sidebar.md:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
       interval: 10s

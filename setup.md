@@ -8,71 +8,68 @@
 
 ## What's in the stack
 
-| Service | Purpose | Replaces |
-| --- | --- | --- |
-| [Nextcloud](docs/services/nextcloud.md) | File storage + sharing | Google Drive |
-| [Immich](docs/services/immich.md) | Photo management | Google Photos |
-| [Jellyfin](docs/services/jellyfin.md) | Media streaming | Netflix / Plex |
-| [Vaultwarden](docs/services/vaultwarden.md) | Password manager | 1Password / LastPass |
-| [Paperless-ngx](docs/services/paperless.md) | Document management | Scansnap cloud |
-| [Stirling PDF](docs/services/stirling-pdf.md) | PDF toolkit | Adobe Acrobat |
-| [Mealie](docs/services/mealie.md) | Recipe manager | Recipe apps |
-| [HomeBox](docs/services/homebox.md) | Home inventory tracker with QR labels | Sortly |
-| [Open WebUI + Ollama](docs/services/open-webui.md) | Local LLM chat interface | ChatGPT |
-| [Forgejo](docs/services/forgejo.md) | Git hosting | GitHub |
-| [GitLab CE](docs/services/gitlab.md) | Full DevOps platform | GitHub / GitLab.com |
-| [Uptime Kuma](docs/services/uptime-kuma.md) | Service monitoring | Pingdom |
-| [Beszel](docs/services/beszel.md) | Server resource monitoring | Netdata / Datadog |
-| [Syncthing](docs/services/syncthing.md) | Peer-to-peer file sync | Dropbox Sync |
-| [Authentik](docs/services/authentik.md) | Identity provider / SSO | Okta / Auth0 |
-| [Miniflux](docs/services/miniflux.md) | RSS reader | Feedly |
-| [Vikunja](docs/services/vikunja.md) | To-do / task management | Todoist |
-| [Trilium Notes](docs/services/trilium.md) | Hierarchical, scriptable notes | Personal wiki / Evernote |
-| [SilverBullet](docs/services/silverbullet.md) | Markdown notes with a query language | Obsidian (self-hosted) |
-| [Outline](docs/services/outline.md) | Self-hosted team wiki / docs | Notion / Confluence |
-| [BookStack](docs/services/bookstack.md) | Shelves/books/chapters/pages wiki | Confluence |
-| [Excalidraw](docs/services/excalidraw.md) | Hand-drawn-style whiteboard/diagrams | draw.io / Miro |
-| [Karakeep](docs/services/karakeep.md) | Bookmark manager with AI auto-tagging | Pocket / Raindrop |
-| [ntfy](docs/services/ntfy.md) | Self-hosted push notifications | Pushover / Pushbullet |
-| [IT-Tools](docs/services/it-tools.md) | ~80 browser-only dev utilities | assorted sketchy websites |
-| [n8n](docs/services/n8n.md) | Self-hosted workflow automation | Zapier / Make |
-| [Airflow](docs/services/airflow.md) | Programmatic workflow orchestration (Python DAGs) | — |
-| [Temporal](docs/services/temporal.md) | Durable execution engine for reliable distributed workflows | — |
-| [Dagster](docs/services/dagster.md) | Data orchestrator built around software-defined assets | — |
-| [Mailpit](docs/services/mailpit.md) | Shared SMTP catcher — see what any service in this stack would have emailed, nothing ever really sent | Mailtrap |
-| [Mattermost](docs/services/mattermost.md) | Slack-style team chat — lightest of the chat playground trio | Slack |
-| [Rocket.Chat](docs/services/rocketchat.md) | Full-featured team chat — heaviest of the trio (MongoDB replica set + NATS) | Slack |
-| [Zulip](docs/services/zulip.md) | Topic-threaded team chat — Postgres + RabbitMQ + Redis + Memcached | Slack |
-| [Docs](docs/services/docs.md) | Searchable site over every doc in this repo, live off the source `.md` files | Read the Docs |
-| [CrowdSec](docs/services/crowdsec.md) | Collaborative intrusion detection (detection-only, see TODO.md) | fail2ban |
-| [Wallabag](docs/services/wallabag.md) | Read-it-later app | Pocket |
-| [Atuin](docs/services/atuin.md) | Shell history sync across machines | plain bash/zsh history file |
-| [AdGuard Home](docs/services/adguard-home.md) | Network-wide DNS ad/tracker blocking | Pi-hole |
-| [PhotoPrism](docs/services/photoprism.md) | AI-powered photo library (manual-only, redundant with Immich) | Google Photos (alt.) |
-| [OrangeHRM](docs/services/orangehrm.md) | Open-source HR management | BambooHR / Workday |
-| [NocoDB](docs/services/nocodb.md) | Spreadsheet UI over a database | Airtable |
-| [Listmonk](docs/services/listmonk.md) | Newsletter / mailing list manager | Mailchimp |
-| [Documenso](docs/services/documenso.md) | Document e-signing | DocuSign |
-| [Cal.com](docs/services/calcom.md) | Scheduling / booking pages | Calendly |
-| [Plausible](docs/services/plausible.md) | Privacy-friendly web analytics | Google Analytics |
-| [Penpot](docs/services/penpot.md) | Design / prototyping tool | Figma |
-| [Coolify](docs/services/coolify.md) | Self-hosted PaaS for deploying other projects | Vercel / Heroku |
-| [Supabase](docs/services/supabase.md) | Self-hosted backend platform (DB, auth, storage, functions) | Firebase |
-| [Observability](docs/services/observability.md) | Metrics + log dashboards (Grafana + Prometheus + Loki + Alloy + cAdvisor + node-exporter) | Datadog / Grafana Cloud |
-| [Audiobookshelf](docs/services/audiobookshelf.md) | Audiobooks + podcasts | Audible |
-| [OpenProject](docs/services/openproject.md) | Project management | Jira / Asana |
-| [Plane](docs/services/plane.md) | Issue tracking | Linear / Jira |
-| [InvoiceShelf](docs/services/invoiceshelf.md) | Invoicing | FreshBooks |
-| [Firefly III](docs/services/firefly.md) | Personal finance manager | YNAB / Mint |
-| [AppFlowy](docs/services/appflowy.md) | Notion alternative | Notion |
-| [Portainer](docs/services/portainer.md) | Container management UI | — |
-| [Dockge](docs/services/dockge.md) | Compose stack manager UI | — |
-| [Guacamole](docs/services/guacamole.md) | Remote desktop gateway (VNC/RDP/SSH) | TeamViewer / AnyDesk |
-| [Dozzle](docs/services/dozzle.md) | Docker log viewer | — |
-| nginx-plain | Reverse proxy (default) | Manual nginx config |
-| Nginx Proxy Manager | Reverse proxy (optional, UI-based) | — |
-| Landing page | Service dashboard with live status | — |
-| Cloudflare Tunnel | Public HTTPS access, no open ports | Port forwarding |
+63 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
+links — hover (or tap-and-hold on mobile) any name for what it does and what it replaces.
+
+### Storage & Media
+
+[Nextcloud](docs/services/nextcloud.md "Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more.") ·
+[Immich](docs/services/immich.md "Self-hosted photo and video backup. Google Photos alternative with facial recognition and smart search.") ·
+[Jellyfin](docs/services/jellyfin.md "Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.") ·
+[Syncthing](docs/services/syncthing.md "Continuous P2P file sync between your devices. No cloud middleman — direct device-to-device. Replaces: Dropbox Sync.") ·
+[Audiobookshelf](docs/services/audiobookshelf.md "Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app. Replaces: Audible.") ·
+[PhotoPrism](docs/services/photoprism.md "AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately). Replaces: Google Photos (alt.).")
+
+### Productivity
+
+**Notes & Knowledge** — [Trilium Notes](docs/services/trilium.md "Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid.") · [SilverBullet](docs/services/silverbullet.md "Markdown notes with a query language over your own space. Lightweight, single space. Replaces: Obsidian (self-hosted).") · [Outline](docs/services/outline.md "Polished self-hosted team wiki and docs, good search. Logs in via Authentik. Replaces: Notion / Confluence.") · [BookStack](docs/services/bookstack.md "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha. Replaces: Confluence.") · [AppFlowy](docs/services/appflowy.md "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools.") · [Excalidraw](docs/services/excalidraw.md "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage. Replaces: draw.io / Miro.") · [Karakeep](docs/services/karakeep.md "Bookmark manager with AI auto-tagging and full-text search of saved pages. Replaces: Pocket / Raindrop.")
+
+**Project & Task Mgmt** — [Vikunja](docs/services/vikunja.md "To-do list and task management app. Organize projects, set due dates, and track work. Replaces: Todoist.") · [OpenProject](docs/services/openproject.md "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking. Replaces: Jira / Asana.") · [Plane](docs/services/plane.md "Modern open-source project management. Issues, cycles, modules and analytics. Jira alternative.")
+
+**Documents** — [Paperless-ngx](docs/services/paperless.md "Scan, index, and archive all your documents. Full-text search with OCR — go paperless. Replaces: Scansnap cloud.") · [Stirling PDF](docs/services/stirling-pdf.md "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand. Replaces: Adobe Acrobat.") · [Documenso](docs/services/documenso.md "Sign documents electronically and collect signatures from others — a self-hosted alternative to DocuSign.")
+
+**Finance & Business** — [Firefly III](docs/services/firefly.md "Personal finance manager. Track income, expenses, budgets and accounts in one place. Replaces: YNAB / Mint.") · [InvoiceShelf](docs/services/invoiceshelf.md "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments. Replaces: FreshBooks.") · [Cal.com](docs/services/calcom.md "Share a booking page so people can schedule meetings with you automatically — a self-hosted alternative to Calendly.") · [OrangeHRM](docs/services/orangehrm.md "Open-source HR management — employee records, leave, time tracking, recruitment. Replaces: BambooHR / Workday.")
+
+**Reading & Feeds** — [Miniflux](docs/services/miniflux.md "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms. Replaces: Feedly.") · [Wallabag](docs/services/wallabag.md "Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles.") · [Listmonk](docs/services/listmonk.md "Send and manage email newsletters and mailing lists — a self-hosted alternative to Mailchimp.")
+
+**Chat & Messaging** — [Mattermost](docs/services/mattermost.md "Slack-style team chat: channels, DMs, threads. Lighter self-hosted footprint than Rocket.Chat/Zulip.") · [Rocket.Chat](docs/services/rocketchat.md "Full-featured team chat with channels, apps, and webhooks. Heaviest of the chat playground trio (MongoDB replica set + NATS). Replaces: Slack.") · [Zulip](docs/services/zulip.md "Topic-threaded team chat, good for organized async discussion. Postgres + RabbitMQ + Redis + Memcached backing services. Replaces: Slack.")
+
+**AI** — [Open WebUI + Ollama](docs/services/open-webui.md "Chat interface for AI models running entirely on your own hardware, served by Ollama — like ChatGPT, but private, offline, and free to use.")
+
+**Home** — [Mealie](docs/services/mealie.md "Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists. Replaces: Recipe apps.") · [HomeBox](docs/services/homebox.md "Home inventory tracker with QR labels. Log what's in every box, drawer, and closet, then scan to find it. Replaces: Sortly.")
+
+### Dev & Security
+
+**Git & CI** — [Forgejo](docs/services/forgejo.md "Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage. Replaces: GitHub.") · [GitLab CE](docs/services/gitlab.md "Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking. Replaces: GitHub / GitLab.com.")
+
+**Identity & Secrets** — [Vaultwarden](docs/services/vaultwarden.md "Self-hosted password manager. Bitwarden-compatible — use any Bitwarden app to sync passwords. Replaces: 1Password / LastPass.") · [Authentik](docs/services/authentik.md "Single sign-on for all your services. One login, one identity, full access control. Replaces: Okta / Auth0.")
+
+**Automation & Low-code** — [n8n](docs/services/n8n.md "Self-hosted workflow automation — connect apps and services together with a drag-and-drop builder, like Zapier or Make, without writing code.") · [Airflow](docs/services/airflow.md "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator.") · [Temporal](docs/services/temporal.md "Durable execution engine for reliable distributed workflows — automatic retries, state persistence, and long-running processes that survive crashes.") · [Dagster](docs/services/dagster.md "Data orchestrator built around software-defined assets — track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline.") · [NocoDB](docs/services/nocodb.md "Turn a database into an easy-to-use spreadsheet — browse, filter, and edit data without writing SQL. A self-hosted alternative to Airtable.") · [Supabase](docs/services/supabase.md "Self-hosted backend for building apps — database, user logins, file storage, and live data updates in one place. A self-hosted alternative to Firebase.")
+
+**Tools** — [IT-Tools](docs/services/it-tools.md "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester. Replaces: assorted sketchy websites.") · [Mailpit](docs/services/mailpit.md "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered. Replaces: Mailtrap.") · [Coolify](docs/services/coolify.md "Deploy your own apps and websites from a Git repo with one click — a self-hosted alternative to Vercel or Heroku.") · [Penpot](docs/services/penpot.md "Design app mockups, websites, and interfaces, then share them for feedback — a self-hosted alternative to Figma.") · [Plausible](docs/services/plausible.md "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.") · [Atuin](docs/services/atuin.md "Sync your command-line history across all your machines and search it with context (folder, exit code) — like browser history, but for your terminal. Replaces: plain bash/zsh history file.")
+
+### System
+
+[Uptime Kuma](docs/services/uptime-kuma.md "Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking. Replaces: Pingdom.") ·
+[Beszel](docs/services/beszel.md "Lightweight server monitoring. CPU, memory, disk, and Docker container stats with alerts. Replaces: Netdata / Datadog.") ·
+[Observability](docs/services/observability.md "Dashboards showing how healthy and busy every service in this stack is — CPU, memory, and searchable logs in one place, powered by Grafana. Replaces: Datadog / Grafana Cloud.") ·
+[Portainer](docs/services/portainer.md "Docker container management UI. Inspect, start/stop, and manage all containers from the browser.") ·
+[Dockge](docs/services/dockge.md "Fancy Docker Compose stack manager. Deploy and manage stacks via a clean web UI.") ·
+[Dozzle](docs/services/dozzle.md "Real-time Docker container log viewer in the browser. Quickly tail logs from any running container.") ·
+[Guacamole](docs/services/guacamole.md "Remote-control another computer from any web browser, no software to install — over VNC, RDP, or SSH, from your LAN or anywhere on the internet. Replaces: TeamViewer / AnyDesk.") ·
+[AdGuard Home](docs/services/adguard-home.md "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) — this links to the admin panel. Replaces: Pi-hole.") ·
+[ntfy](docs/services/ntfy.md "Self-hosted push notifications. Scripts and services curl a message straight to your phone. Replaces: Pushover / Pushbullet.") ·
+[Docs](docs/services/docs.md "Searchable site over every doc in this repo — setup guides, service reference, all per-service notes, live off the source files. Replaces: Read the Docs.")
+
+### Infrastructure
+
+[Cloudflare Tunnel](docs/services/cloudflared.md "Public HTTPS access, no open ports — replaces Port forwarding") ·
+[nginx-plain](docs/04-nginx.md "Reverse proxy, default — replaces Manual nginx config") ·
+Nginx Proxy Manager (optional, UI-based reverse proxy — see [04 — Nginx](docs/04-nginx.md)) ·
+[CrowdSec](docs/services/crowdsec.md "Collaborative intrusion detection, detection-only, see TODO.md — replaces fail2ban") ·
+[Landing page](docs/07-landing.md "Service dashboard with live status")
+
+Full per-service detail (ports, setup steps, gotchas): [Services Reference](docs/11-services-reference.md).
 
 ---
 
@@ -268,17 +265,23 @@ Service data (gitignored):
 
 ```text
 service_data/
+├── nginx-plain/      (certs/)
+├── nginx/            (data/, letsencrypt/) — optional NPM proxy
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
 ├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
 ├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
 ├── vaultwarden/      (data/)
+├── guacamole/        (empty — DB lives in a named volume, not this tree)
+├── portainer/        (data/)
 ├── paperless/        (postgres/, app/)
 ├── stirling-pdf/     (configs/, logs/, customFiles/, pipeline/, tessdata/)
 ├── stirling-pdf-lite/ (configs/, logs/, customFiles/, pipeline/)
 ├── mealie/           (postgres/, data/)
+├── homebox/          (data/)
 ├── forgejo/          (postgres/, app/)
 ├── gitlab/           (config/, logs/, data/)
 ├── uptime-kuma/      (data/)
+├── dockge/           (data/) — compose stacks it manages live outside this tree, in service_data/stacks/dockge/ (same reason as immich's photo library)
 ├── syncthing/        (data/)
 ├── authentik/        (postgres/, media/, certs/, templates/)
 ├── miniflux/         (postgres/)
@@ -313,6 +316,7 @@ service_data/
 ├── penpot/           (postgres/ named volume, assets/ bind mount)
 ├── coolify/          (postgres/, redis/ named volumes; data/, ssh/, applications/, databases/, backups/, services/ bind mounts)
 ├── supabase/         (db-data/, db-config/, deno-cache/ named volumes; storage/ bind mount)
+├── appflowy/         (minio/) — Postgres lives in a named volume, not this tree
 ├── audiobookshelf/   (config/, metadata/)
 ├── openproject/      (pgdata/, assets/)
 ├── plane/            (postgres/, uploads/, logs/)

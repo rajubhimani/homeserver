@@ -11,7 +11,7 @@
 
 ```bash
 cp services/forgejo/.env.example services/forgejo/.env
-# set POSTGRES_PASSWORD, FORGEJO_DOMAIN, FORGEJO_ROOT_URL
+# set POSTGRES_PASSWORD (DOMAIN/ROOT_URL are derived from the root .env's DOMAIN, not set here)
 uv run homeserver.py dev up forgejo
 ```
 
@@ -23,7 +23,7 @@ docker exec -it forgejo forgejo admin user create --username admin --password yo
 
 ## Notes
 
-- Image: `codeberg.org/forgejo/forgejo:15`
+- Image: `codeberg.org/forgejo/forgejo:16.0.2`
 - Config env vars use the `FORGEJO__` prefix
 - Setup wizard is skipped via `FORGEJO__security__INSTALL_LOCK=true`
 - `FORGEJO__server__ROOT_URL` must be `https://forgejo.${DOMAIN}` (not `http`) since Cloudflare always terminates TLS

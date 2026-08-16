@@ -16,7 +16,6 @@ cp services/nextcloud/.env.example services/nextcloud/.env
 Edit `services/nextcloud/.env`:
 
 ```env
-DATA_ROOT=/mnt/seagate
 USER_DATA_ROOT=/mnt/seagate
 OS_ISO_ROOT=/mnt/os-iso
 

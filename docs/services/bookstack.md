@@ -29,7 +29,7 @@ No env var toggle — BookStack's self-registration is controlled entirely throu
 ## Notes
 
 - Uses the `linuxserver/bookstack` image, which follows the `PUID`/`PGID`/`/config` convention (same pattern as `syncthing` in this stack) rather than this repo's usual `DATA_ROOT` bind-mount-only shape — config, uploads, and BookStack's own `.env` all live under `service_data/data/bookstack/config/`.
-- `bookstack-db` uses `mariadb:11.8.8` — the first MariaDB (rather than Postgres) instance in this stack; see the `homeserver-postgres` skill for why DB data still needs a named volume (`bookstack-mariadb`, mounted at `/var/lib/mysql`) rather than a bind mount.
+- `bookstack-db` uses `mariadb:12.3.2` — the first MariaDB (rather than Postgres) instance in this stack; see the `homeserver-postgres` skill for why DB data still needs a named volume (`bookstack-mariadb`, mounted at `/var/lib/mysql`) rather than a bind mount.
 - Health endpoint: `/status`.
 
 ---

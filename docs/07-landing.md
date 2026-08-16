@@ -48,7 +48,7 @@ sequenceDiagram
     participant C as service container
 
     JS->>NX: fetch /services.json (once, on page load)
-    NX-->>JS: card data — name, category, icon, desc
+    NX-->>JS: card data — name, category, icon, desc, replaces
     loop every 60s, per card
         JS->>NX: fetch /health/<service>
         NX->>C: proxy_pass http://<container>:<port>
@@ -66,6 +66,26 @@ Health endpoints are in `nginx.conf`. Docker's internal DNS (`127.0.0.11`) with
 
 Redirects (e.g. GitLab's 302) are treated as online using `redirect: 'manual'` in the
 JS fetch call — opaque responses count as up.
+
+## Card content
+
+`desc` (what the service does, written for both technical and non-technical readers) is
+shown as visible text on every card. `replaces` (the familiar product it substitutes for,
+e.g. `"Google Drive"`) is optional — services with no direct commercial equivalent
+(Portainer, Dozzle, Airflow, etc.) omit it — and isn't shown as its own line on the card;
+instead `buildCard()` folds it into the card's `title` attribute alongside `desc`, so
+hovering (or tap-and-hold on mobile) any card shows both in one native tooltip.
+
+`buildCard()` skips the `" Replaces: X."` suffix when `desc` already names that product
+(case-insensitive substring check on each `/`-separated alternative) — several `desc`
+strings read more naturally by naming the familiar equivalent directly (e.g. nextcloud's
+`"...Google Drive alternative with calendar, contacts, and more."`), and appending
+`"Replaces: Google Drive."` after that would just say it twice.
+
+This mirrors the tooltip pattern used for every service link in `setup.md`'s "What's in
+the stack" section and in `_sidebar.md` — same computed text (same `desc`, same
+redundancy-skip rule), three places, kept in sync deliberately (see the
+`homeserver-add-service` skill's index-files step).
 
 ## Start
 
@@ -85,8 +105,8 @@ Cards are no longer hand-written in `index.html` — they're generated at page l
 membership. One entry drives both, so there's no second file to keep in sync.
 
 1. Add one entry to the `services` array in `services.json` — `slug`/`tier` plus, for a
-   landing card, `name`/`category`/`icon`/`svg`/`desc` (see the `homeserver-add-service`
-   skill for the full field reference)
+   landing card, `name`/`category`/`icon`/`svg`/`desc`, and optionally `replaces` (see the
+   `homeserver-add-service` skill for the full field reference)
 2. Add a `/health/<service>` location block in `landing/nginx.conf` **and**
    `nginx.podman.conf`
 3. `services.json` is a live bind mount — editing it takes effect on the next browser

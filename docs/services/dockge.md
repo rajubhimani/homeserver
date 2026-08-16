@@ -5,12 +5,13 @@
 ---
 
 **Purpose:** Docker Compose stack manager UI.
-**Port:** `5001` | **Requires:** — | **Memory:** no hard limit set; measured idle ~132MB
+**Port:** `5001` | **Data:** `service_data/data/dockge/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~132MB
 
 ## Setup
 
 ```bash
 cp services/dockge/.env.example services/dockge/.env
+# set DOCKGE_STACKS_DIR to an absolute path and mkdir -p it before starting
 uv run homeserver.py dev up dockge
 ```
 

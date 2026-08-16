@@ -11,13 +11,13 @@
 
 ```bash
 cp services/miniflux/.env.example services/miniflux/.env
-# set ADMIN_USERNAME, ADMIN_PASSWORD, POSTGRES_PASSWORD
+# set MINIFLUX_ADMIN_USER, MINIFLUX_ADMIN_PASSWORD, POSTGRES_PASSWORD
 uv run homeserver.py dev up miniflux
 ```
 
 ## Admin account
 
-Created on first start from `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `.env`.
+Created on first start from `MINIFLUX_ADMIN_USER` / `MINIFLUX_ADMIN_PASSWORD` in `.env`.
 
 ## Notes
 

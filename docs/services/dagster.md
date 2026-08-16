@@ -25,7 +25,7 @@ Dagster's self-hosted webserver+daemon aren't published as ready-to-run images �
 
 **`dagster-user-code` is the reason this can't be a plain image at all** — it's the gRPC server exposing your actual pipeline code, and "your actual pipeline code" doesn't exist as a generic Docker Hub image by definition. See "Where your pipeline code actually lives" below for where `definitions.py` really is and why.
 
-5 containers total: `dagster-db`, `dagster-user-code`, `dagster-webserver`, `dagster-daemon` (plus two named volumes: Postgres data and `io_manager_storage`, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
+4 containers total: `dagster-db`, `dagster-user-code`, `dagster-webserver`, `dagster-daemon` (plus two named volumes: Postgres data and `io_manager_storage`, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
 
 ```mermaid
 flowchart LR
@@ -63,7 +63,7 @@ flowchart TD
     Step1 & Step2 --> DB[("dagster-db")]
 ```
 
-Every box on the right is short-lived — created for one run or one step, then removed — unlike the 5 long-running containers above.
+Every box on the right is short-lived — created for one run or one step, then removed — unlike the 4 long-running containers above.
 
 ## Try the starter examples
 

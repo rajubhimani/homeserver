@@ -11,7 +11,8 @@
 
 ```bash
 cp services/audiobookshelf/.env.example services/audiobookshelf/.env
-# set AUDIOBOOKS_PATH and PODCASTS_PATH to your media locations
+# place/symlink your library under service_data/data/audiobookshelf/audiobooks/
+# and .../podcasts/ — both are subdirectories of DATA_ROOT, not separate env vars
 uv run homeserver.py dev up audiobookshelf
 ```
 

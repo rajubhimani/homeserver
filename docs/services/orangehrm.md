@@ -40,7 +40,7 @@ None — HR admin creates employee accounts from inside the app after setup. No 
 
 ## Notes
 
-- `orangehrm-db` uses `mariadb:10.4` specifically — the version OrangeHRM's own install docs test against, not this stack's usual `mariadb:11.8.8`/`postgres:18.4-alpine` default. Don't "helpfully" bump this without checking OrangeHRM's own compatibility notes first.
+- `orangehrm-db` uses `mariadb:12.3.2` — the same stack-wide MariaDB default every other MariaDB-backed service uses (was `mariadb:10.4`, the version OrangeHRM's own install docs test against, until the stack-wide DB-engine standardization bump). Not separately verified against OrangeHRM's own compatibility notes; keep an eye out for DB-related issues since this diverges from OrangeHRM's tested version.
 - No confirmed health/status endpoint — both the compose healthcheck and the landing-page health route just check that `/` responds.
 
 ---

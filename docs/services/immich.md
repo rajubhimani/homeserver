@@ -16,7 +16,7 @@ cp services/immich/.env.example services/immich/.env
 Edit `services/immich/.env`:
 
 ```env
-UPLOAD_LOCATION=/mnt/seagate/immich
+UPLOAD_LOCATION=../../service_data/media/immich
 # Postgres data lives in a named Docker volume (declared in compose.yml), not
 # a bind mount — no path to set here. Back it up with
 # `uv run homeserver.py <env> backup immich`.

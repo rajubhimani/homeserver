@@ -31,7 +31,7 @@ Routing everything through `plane-web` (as an early version of this setup did) s
 The official `Caddyfile` is the source of truth for this routing — extract it from the real proxy image:
 
 ```bash
-docker run --rm --entrypoint cat makeplane/plane-proxy:v1.3.1 /etc/caddy/Caddyfile
+docker run --rm --entrypoint cat makeplane/plane-proxy:v1.4.0 /etc/caddy/Caddyfile
 ```
 
 It 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then routes each to its own container on port 3000.
@@ -43,7 +43,7 @@ It 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then
 
 ## Operational notes
 
-- `plane-mq` (RabbitMQ) needs `start_period: 60s` on its healthcheck — a fresh vhost/mnesia init can take >30s, especially on a loaded host, and the default was too tight
+- `plane-mq` (RabbitMQ) needs `start_period: 90s` on its healthcheck — a fresh vhost/mnesia init can take >30s, especially on a loaded host, and the default was too tight
 - After editing `plane/Caddyfile`, run `docker restart plane-proxy` — compose only recreates a container when the *service definition* changes, not when a bind-mounted file's contents change, so editing the Caddyfile alone does **not** reload the proxy
 
 ---

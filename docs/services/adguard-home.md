@@ -47,7 +47,3 @@ Something else is already bound to UDP/TCP port 53 — confirmed via `Get-NetUDP
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
-
----
-
-[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

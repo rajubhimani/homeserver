@@ -21,7 +21,7 @@ uv run homeserver.py dev up vaultwarden
 
 ## Registration
 
-Signups disabled by default (`SIGNUPS_ALLOWED=false`) — invite users via the admin panel → Users → Invite.
+`.env.example` ships with `SIGNUPS_ALLOWED=true` (self-signup enabled) — set it to `false` to invite-only via the admin panel → Users → Invite instead.
 
 ---
 

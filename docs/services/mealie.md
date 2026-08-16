@@ -21,7 +21,7 @@ uv run homeserver.py dev up mealie
 
 ## Registration
 
-Disabled by default (`ALLOW_SIGNUP=false`).
+Enabled by default (`ALLOW_SIGNUP=true` in `.env.example`) — set to `false` to close signups once your account exists.
 
 ---
 

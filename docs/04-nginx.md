@@ -55,8 +55,8 @@ uv run homeserver.py dev up nginx
 
 Admin UI:
 
-- **Cloudflare path:** `http://localhost:81` (or SSH tunnel: `ssh -L 8181:127.0.0.1:81 user@server`)
-- **Tailscale path:** `http://100.x.x.x:81`
+- **Cloudflare path:** `http://localhost:8181` (or SSH tunnel: `ssh -L 8181:127.0.0.1:8181 user@server`)
+- **Tailscale path:** `http://100.x.x.x:8181`
 
 Default login: `admin@example.com` / `changeme` — change immediately.
 
@@ -72,13 +72,14 @@ The Forward Hostname is the Docker **container name** — NPM resolves via the `
 
 ## Switching between proxies
 
-To switch from `nginx-plain` to NPM (or back):
+To switch from `nginx-plain` to NPM (or back), just start the one you want:
 
-1. Stop the current proxy: `uv run homeserver.py dev down nginx-plain` (or `nginx`)
-2. In `homeserver.py`, move the service between `SERVICES_MIN` / `SERVICES_CORE` as needed
-3. Start the new proxy: `uv run homeserver.py dev up nginx`
+```bash
+uv run homeserver.py dev up nginx        # auto-stops nginx-plain if running
+uv run homeserver.py dev up nginx-plain  # auto-stops nginx (NPM) if running
+```
 
-Both are in `SERVICES_EXTRA` by default except `nginx-plain` which is in `SERVICES_MIN`.
+`homeserver.py` detects the conflict and stops the other proxy for you — no manual editing needed. `nginx-plain` is in `SERVICES_MIN` (auto-starts with `up min`/`core`/`all`); `nginx` (NPM) is manual-only — never auto-started by any tier, start it explicitly with `up nginx`.
 
 ---
 

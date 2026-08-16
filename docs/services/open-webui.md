@@ -94,9 +94,9 @@ already gives it — no homeserver-side config needed.
 ### Image variant
 
 `services/open-webui/compose.yml` picks its image tag from `OPEN_WEBUI_IMAGE_TAG` in
-`services/open-webui/.env`, defaulting to `0.10.2-slim` (no bundled local RAG/embeddings/Whisper/TTS
+`services/open-webui/.env`, defaulting to `v0.11.0-slim` (no bundled local RAG/embeddings/Whisper/TTS
 stack — smaller image, less runtime memory). When GPU passthrough lands and local RAG or
-voice features are wanted, change it to the standard tag (`0.10.2`, no `-slim` suffix) and
+voice features are wanted, change it to the standard tag (`v0.11.0`, no `-slim` suffix) and
 run `uv run homeserver.py dev update open-webui` to pull and recreate. Chat history and
 settings carry over unchanged — the image swap doesn't touch `service_data/data/open-webui/`.
 

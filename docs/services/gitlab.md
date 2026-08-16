@@ -6,12 +6,13 @@
 
 **Purpose:** Full DevOps platform — Git, CI/CD, registry, issue tracking.
 **Port:** `8085` (web), `2224` (SSH) | **Data:** `service_data/data/gitlab/` | **Requires:** ~8 GB RAM minimum per GitLab's own docs (16 GB recommended for single-node) — corrected from a previous, lower unverified figure in this doc
+**Tier:** manual-only — not started by `up min`/`core`/`all`, start with `uv run homeserver.py dev up gitlab` (redundant with Forgejo, already core in this stack, at far higher memory cost)
 
 ## Setup
 
 ```bash
 cp services/gitlab/.env.example services/gitlab/.env
-# set GITLAB_HOSTNAME, GITLAB_EXTERNAL_URL
+# set GITLAB_SSH_PORT/SIGNUP_ENABLED if you want non-default values (hostname/external URL derive from the root .env's DOMAIN)
 uv run homeserver.py dev up gitlab
 ```
 

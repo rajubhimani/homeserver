@@ -50,7 +50,7 @@ tailscale ip -4
 | Nextcloud | `http://100.x.x.x:8081` |
 | Immich | `http://100.x.x.x:2283` |
 | Dozzle | `http://100.x.x.x:9999` |
-| NPM admin (if using NPM) | `http://100.x.x.x:81` |
+| NPM admin (if using NPM) | `http://100.x.x.x:8181` |
 | SSH | `ssh user@100.x.x.x` |
 
 > Replace `100.x.x.x` with your actual Tailscale IP everywhere in the remaining steps.

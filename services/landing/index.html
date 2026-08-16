@@ -518,6 +518,13 @@
       const sub = s.sub || s.slug;
       const url = `https://${sub}.${DOMAIN}`;
       const label = `${sub}.${DOMAIN}`;
+      // Skip the "Replaces: X" suffix when desc already names X (e.g.
+      // "Google Drive alternative...") — avoids saying it twice.
+      const mentionsReplaces = s.replaces && s.replaces.split(' / ').some(
+        alt => s.desc.toLowerCase().includes(alt.split(' (')[0].trim().toLowerCase())
+      );
+      const tooltip = (s.replaces && !mentionsReplaces) ? `${s.desc} Replaces: ${s.replaces}.` : s.desc;
+      card.title = tooltip;
 
       let secondaryLink = '';
       if (s.testSub) {

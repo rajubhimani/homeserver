@@ -34,7 +34,7 @@ Open `https://documenso.<domain>/` (or `http://<host>:8128` in dev) and create t
 
 ## Registration
 
-Self-registration is on by default through the UI — no env var toggle is documented; if you need to close it, check Documenso's own admin settings once running.
+Self-registration is on by default (`NEXT_PUBLIC_DISABLE_SIGNUP=false` in `.env.example`). Set it to `true` to close the instance to new signups.
 
 ## Notes
 

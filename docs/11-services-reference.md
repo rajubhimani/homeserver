@@ -25,7 +25,8 @@ dozzle, dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
 mealie, homebox, syncthing, authentik,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
 trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy,
-n8n, crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
+n8n, airflow, temporal, dagster, mailpit, mattermost, rocketchat, zulip,
+crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
 documenso, calcom, plausible, penpot, coolify, supabase, observability.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
@@ -38,7 +39,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Service | Container | Dev port | Container port | Tier |
 | --- | --- | --- | --- | --- |
 | Beszel | `beszel` | 8106 | 8090 | min |
-| nginx-plain | `nginx-plain` | 80 / 443 | 80 / 443 | min |
+| nginx-plain | `nginx-plain` | 8180 / 8443 | 80 / 443 | min |
 | Landing Page | `landing` | 8080 | 80 | min |
 | Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | min |
 | Nextcloud | `nextcloud` | 8081 | 80 | core |
@@ -101,7 +102,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Observability (Grafana) | `grafana` | 8134 | 3000 | extra |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | extra |
 | Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
-| Nginx Proxy Manager | `nginx-proxy-manager` | 80 / 443 / 81 (admin) | same | extra (optional) |
+| Nginx Proxy Manager | `nginx-proxy-manager` | 8180 / 8443 / 8181 (admin) | same | manual (optional) |
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
@@ -121,10 +122,10 @@ No UI — edit the template file and recreate the container to reload.
 
 ### Nginx Proxy Manager (optional)
 
-UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
+UI at `http://<server>:8181`. Add proxy hosts manually through the web interface.
 
-> Run only one proxy at a time — both bind to ports 80/443.
-> To switch: replace `nginx-plain` with `nginx` in `SERVICES_MIN` in `homeserver.py`.
+> Run only one proxy at a time — both bind to ports 80/443 inside the container.
+> To switch: `uv run homeserver.py dev up nginx` (or `up nginx-plain`) — `homeserver.py` detects the conflict and automatically stops the other proxy.
 
 **Forward Hostname** = Docker container name (NPM resolves via `homeserver` network).
 **Scheme** = `http` for all (Cloudflare handles TLS).
@@ -132,6 +133,8 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | Domain | Forward Hostname | Forward Port | Tier |
 | --- | --- | --- | --- |
 | `beszel.yourdomain.com` | `beszel` | `8090` | min |
+| `portainer.yourdomain.com` | `portainer` | `9000` | min |
+| `docs.yourdomain.com` | `docs` | `80` | min |
 | `nextcloud.yourdomain.com` | `nextcloud` | `80` | core |
 | `vaultwarden.yourdomain.com` | `vaultwarden` | `80` | core |
 | `forgejo.yourdomain.com` | `forgejo` | `3000` | core |
@@ -142,9 +145,11 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `jellyfin.yourdomain.com` | `jellyfin` | `8096` | core |
 | `guacamole.yourdomain.com` | `guacamole` | `8080` | core |
 | `dozzle.yourdomain.com` | `dozzle` | `8080` | extra |
+| `dockge.yourdomain.com` | `dockge` | `5001` | extra |
 | `paperless.yourdomain.com` | `paperless` | `8000` | extra |
 | `stirling-pdf.yourdomain.com` | `stirling-pdf-lite` | `8080` | extra |
 | `mealie.yourdomain.com` | `mealie` | `9000` | extra |
+| `homebox.yourdomain.com` | `homebox` | `7745` | extra |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | extra |
 | `status.yourdomain.com` | `uptime-kuma` | `3001` | extra |
 | `syncthing.yourdomain.com` | `syncthing` | `8384` | extra |
@@ -169,6 +174,10 @@ UI at `http://<server>:81`. Add proxy hosts manually through the web interface.
 | `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | extra |
 | `temporal.yourdomain.com` | `temporal-ui` | `8080` | extra |
 | `dagster.yourdomain.com` | `dagster-webserver` | `3000` | extra |
+| `mailpit.yourdomain.com` | `mailpit` | `8025` | extra |
+| `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |
+| `rocketchat.yourdomain.com` | `rocketchat` | `3000` | extra |
+| `zulip.yourdomain.com` | `zulip` | `80` | extra |
 | `wallabag.yourdomain.com` | `wallabag` | `80` | extra |
 | `atuin.yourdomain.com` | `atuin` | `8888` | extra |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | extra |

@@ -25,7 +25,7 @@ docker exec -it paperless python manage.py createsuperuser
 
 ## Usage notes
 
-- Consumption folder: drop PDFs into `service_data/data/paperless/consume/` to auto-import
+- Consumption folder: drop PDFs into `service_data/data/paperless/app/consume/` to auto-import
 - No public signup — always admin-managed
 
 ---

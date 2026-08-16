@@ -1,6 +1,6 @@
 # 08 — Maintenance
 
-[← Landing Page](07-landing.md) | [Home](../setup.md)
+[← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)
 
 ---
 
@@ -473,4 +473,4 @@ Preventive knowledge — things to know *before* they bite you, as opposed to th
 
 ---
 
-[← Landing Page](07-landing.md) | [Home](../setup.md)
+[← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)

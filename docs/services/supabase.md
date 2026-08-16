@@ -9,7 +9,7 @@
 
 ## The heaviest service in this stack
 
-12 containers: `supabase-db` (Postgres), `supabase-auth` (GoTrue), `supabase-rest` (PostgREST), `supabase-realtime`, `supabase-storage`, `supabase-imgproxy`, `supabase-meta` (schema API used by Studio), `supabase-functions` (Deno edge runtime), `supabase-studio` (dashboard), `supabase-kong` (API gateway — the single entry point everything else sits behind), `supabase-pooler` (Supavisor, connection pooling). This is genuinely on the same scale as running a small platform, not a single app — expect noticeably higher combined memory/CPU than anything else in this stack.
+11 containers: `supabase-db` (Postgres), `supabase-auth` (GoTrue), `supabase-rest` (PostgREST), `supabase-realtime`, `supabase-storage`, `supabase-imgproxy`, `supabase-meta` (schema API used by Studio), `supabase-functions` (Deno edge runtime), `supabase-studio` (dashboard), `supabase-kong` (API gateway — the single entry point everything else sits behind), `supabase-pooler` (Supavisor, connection pooling). This is genuinely on the same scale as running a small platform, not a single app — expect noticeably higher combined memory/CPU than anything else in this stack.
 
 ## Setup
 
