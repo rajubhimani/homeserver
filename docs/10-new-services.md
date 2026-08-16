@@ -70,7 +70,6 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Wallabag | [docs/services/wallabag.md](services/wallabag.md) |
 | Atuin | [docs/services/atuin.md](services/atuin.md) |
 | AdGuard Home | [docs/services/adguard-home.md](services/adguard-home.md) |
-| PhotoPrism | [docs/services/photoprism.md](services/photoprism.md) |
 | OrangeHRM | [docs/services/orangehrm.md](services/orangehrm.md) |
 | NocoDB | [docs/services/nocodb.md](services/nocodb.md) |
 | Listmonk | [docs/services/listmonk.md](services/listmonk.md) |

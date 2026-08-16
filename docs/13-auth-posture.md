@@ -4,7 +4,7 @@
 
 ---
 
-Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login.
+Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 57 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login.
 
 **Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`, `ollama`.
 
@@ -31,7 +31,7 @@ A and B are the ones worth acting on — nobody using them is individually ident
 | Dagster | Dev | Asset/pipeline UI. Same story — RBAC is Dagster+ (paid) only. |
 | Excalidraw | Productivity | Whiteboard — [its own doc](services/excalidraw.md) notes it's local-only by default, nothing persisted server-side. |
 
-## Bucket B — single shared credential (11)
+## Bucket B — single shared credential (10)
 
 | Service | Category | Notes |
 | --- | --- | --- |
@@ -39,7 +39,6 @@ A and B are the ones worth acting on — nobody using them is individually ident
 | Uptime Kuma | System | Has a public-status-page feature that's *meant* to be unauthenticated — only the admin dashboard needs gating. |
 | AdGuard Home | System | Admin UI only (port 3000); DNS itself (port 53) is LAN-only and unaffected by any of this. |
 | Syncthing | Storage | GUI password only — the actual device-to-device sync protocol uses separate device IDs/certs, untouched by anything here. |
-| PhotoPrism | Storage | Manual-tier, redundant with Immich. Has official mobile apps that log in directly against its API — see forward-auth caveat below. |
 | Stirling PDF Lite | Productivity | Exposes an API for programmatic PDF conversion in addition to its UI. |
 | Stirling PDF (Full) | Productivity | Manual-tier duplicate of the above; same caveat. |
 | Trilium | Productivity | Single-space notes app. Also supports desktop/mobile sync clients speaking their own protocol, not just the browser. |
@@ -92,12 +91,6 @@ The service has one path that must stay reachable *without* Authentik's login, a
 | Mailpit | Its REST API, *if* anything scripts/CI reads captured mail programmatically | Fine to fully gate if only ever used interactively in a browser — check first. |
 | Stirling PDF Lite / Full | The conversion API, *if* anything calls it programmatically | Same caveat as Mailpit — audit actual usage before gating the whole vhost. |
 | Trilium | N/A for the web UI, but check before gating if you use Trilium's desktop/mobile sync clients against this server | Those speak Trilium's own sync protocol, not a browser session — forward-auth wouldn't cover them. |
-
-### Poor fit — think twice before replacing the existing login
-
-| Service | Why |
-| --- | --- |
-| **PhotoPrism** | Ships official mobile apps that log in directly against its API with a username/password — there's no browser redirect for a mobile app to follow. Forward-auth would gate the web UI fine but wouldn't cover (and might conflict with) native app login. Given PhotoPrism is already manual-tier and redundant with Immich here, may not be worth the complexity either way. |
 
 ---
 

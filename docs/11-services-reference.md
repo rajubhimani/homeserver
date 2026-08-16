@@ -30,7 +30,7 @@ crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
 documenso, calcom, plausible, penpot, coolify, supabase, observability.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
-gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory), photoprism (redundant with immich, same AI photo-management role).
+gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
 
 ---
 
@@ -89,7 +89,6 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Atuin | `atuin` | 8122 | 8888 | extra |
 | AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | extra (manual) |
-| PhotoPrism | `photoprism` | 8124 | 2342 | extra (manual) |
 | OrangeHRM | `orangehrm` | 8125 | 80 | extra |
 | NocoDB | `nocodb` | 8126 | 8080 | extra |
 | Listmonk | `listmonk` | 8127 | 9000 | extra |
@@ -182,7 +181,6 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `atuin.yourdomain.com` | `atuin` | `8888` | extra |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | extra |
 | `gitlab.yourdomain.com` | `gitlab` | `80` | extra (manual) |
-| `photoprism.yourdomain.com` | `photoprism` | `2342` | extra (manual) |
 | `orangehrm.yourdomain.com` | `orangehrm` | `80` | extra |
 | `nocodb.yourdomain.com` | `nocodb` | `8080` | extra |
 | `listmonk.yourdomain.com` | `listmonk` | `9000` | extra |

@@ -156,9 +156,9 @@ if os.path.exists(DOCKER_SOCKET):
 # there for the same reason it was grouped here before.
 #   - manual-only (SERVICES_MANUAL): never started by 'up min/core/all' (or
 #     their down/restart/update/backup/restore equivalents) — start
-#     individually with 'up <service>'. Currently gitlab/stirling-pdf/
-#     photoprism, each redundant with an always-on equivalent (forgejo,
-#     stirling-pdf-lite, immich) at meaningfully higher resource cost — see
+#     individually with 'up <service>'. Currently gitlab/stirling-pdf,
+#     each redundant with an always-on equivalent (forgejo,
+#     stirling-pdf-lite) at meaningfully higher resource cost — see
 #     each one's "tier" comment in services.json for specifics.
 
 _SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
@@ -1778,7 +1778,7 @@ def show_help() -> None:
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
-    print("    python homeserver.py dev precreate all gitlab stirling-pdf photoprism")
+    print("    python homeserver.py dev precreate all gitlab stirling-pdf")
     print("                                                         create every never-started service (incl. manual-tier) so")
     print("                                                         they all show up as start-able stacks in Portainer")
     print("    python homeserver.py dev backup all                  snapshot every service now, regardless of running state")

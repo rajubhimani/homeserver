@@ -25,7 +25,6 @@
     - [Jellyfin](/docs/services/jellyfin.md "Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.")
     - [Syncthing](/docs/services/syncthing.md "Continuous P2P file sync between your devices. No cloud middleman — direct device-to-device. Replaces: Dropbox Sync.")
     - [Audiobookshelf](/docs/services/audiobookshelf.md "Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app. Replaces: Audible.")
-    - [PhotoPrism](/docs/services/photoprism.md "AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately). Replaces: Google Photos (alt.).")
   - Productivity
     - Notes & Knowledge
       - [Trilium Notes](/docs/services/trilium.md "Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid.")

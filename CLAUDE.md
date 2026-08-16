@@ -49,7 +49,7 @@ Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `d
 - **SERVICES_MIN** (infrastructure): beszel → cloudflared → nginx-plain → landing → docs → portainer
 - **SERVICES_CORE** (always-on apps, on top of MIN): nextcloud → vaultwarden → forgejo → firefly → immich → jellyfin → guacamole → it-tools
 - **SERVICES_EXTRA** (`up all` or individually): dozzle → dockge → uptime-kuma → openproject → paperless → stirling-pdf-lite → mealie → syncthing → authentik → miniflux → audiobookshelf → invoiceshelf → appflowy → plane → ollama → open-webui → vikunja → trilium → silverbullet → outline → bookstack → excalidraw → karakeep → ntfy → n8n → crowdsec → wallabag → atuin → adguard-home → orangehrm → nocodb → listmonk → documenso → calcom → plausible → penpot → coolify → supabase → observability
-- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory), photoprism (redundant with immich, extra memory/maintenance cost)
+- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory)
 
 **`services.json`** (repo root) is the actual source of truth for the lists above — `homeserver.py` derives `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL` from its `tier` field, and `services/landing/index.html` fetches the same file at page load for its category/subcategory cards, so a service's tier and its landing metadata can never drift apart. Re-check `services.json` (not this file) if the summary above ever looks stale.
 

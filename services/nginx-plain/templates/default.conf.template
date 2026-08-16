@@ -514,20 +514,6 @@ server {
     }
 }
 
-# ── PhotoPrism (manual-only — redundant with Immich) ──────────────────────────
-server {
-    listen 80;
-    server_name photoprism.${DOMAIN};
-    location / {
-        set $upstream http://photoprism:2342;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-
 # ── OrangeHRM ─────────────────────────────────────────────────────────────────
 server {
     listen 80;

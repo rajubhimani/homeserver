@@ -8,7 +8,7 @@
 
 ## What's in the stack
 
-63 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
+62 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
 links — hover (or tap-and-hold on mobile) any name for what it does and what it replaces.
 
 ### Storage & Media
@@ -17,8 +17,7 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 [Immich](docs/services/immich.md "Self-hosted photo and video backup. Google Photos alternative with facial recognition and smart search.") ·
 [Jellyfin](docs/services/jellyfin.md "Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.") ·
 [Syncthing](docs/services/syncthing.md "Continuous P2P file sync between your devices. No cloud middleman — direct device-to-device. Replaces: Dropbox Sync.") ·
-[Audiobookshelf](docs/services/audiobookshelf.md "Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app. Replaces: Audible.") ·
-[PhotoPrism](docs/services/photoprism.md "AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately). Replaces: Google Photos (alt.).")
+[Audiobookshelf](docs/services/audiobookshelf.md "Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app. Replaces: Audible.")
 
 ### Productivity
 
@@ -240,7 +239,6 @@ uv run homeserver.py prod up all
     ├── wallabag/
     ├── atuin/
     ├── adguard-home/
-    ├── photoprism/
     ├── orangehrm/
     ├── nocodb/
     ├── listmonk/
@@ -307,7 +305,6 @@ service_data/
 ├── wallabag/         (postgres/, data/, images/)
 ├── atuin/            (postgres/, config/)
 ├── adguard-home/     (work/, conf/)
-├── photoprism/       (mariadb/, storage/) — photo library lives outside this tree, in service_data/media/photoprism/ (kept out of DATA_ROOT so backups don't sweep it)
 ├── orangehrm/        (mariadb/ only — app container has no data volume yet, see docs/services/orangehrm.md)
 ├── nocodb/           (postgres/, data/)
 ├── listmonk/         (postgres/, uploads/)
