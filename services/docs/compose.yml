@@ -1,0 +1,28 @@
+services:
+  docs:
+    image: nginx:1.28.0-alpine
+    container_name: docs
+    restart: unless-stopped
+    env_file: .env
+    entrypoint: ["/entrypoint.sh"]
+    volumes:
+      - ./index.html:/template/index.html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./vendor:/usr/share/nginx/html/vendor:ro
+      # Serves the repo's own docs/ tree + setup.md directly — no copy, no
+      # build step. Read-only so a container compromise can't touch source.
+      - ../../docs:/usr/share/nginx/html/docs:ro
+      - ../../setup.md:/usr/share/nginx/html/setup.md:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

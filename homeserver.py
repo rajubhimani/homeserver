@@ -21,7 +21,7 @@ Usage:
                                                 list/remove volumes not declared in a service's current compose.yml
 
 Service tiers:
-  min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, portainer)
+  min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, docs, portainer)
   core   — full default stack, includes min (starts with 'up core' or 'up all')
   all    — core + extra (everything); down all always stops everything
   extra  — optional services, started with 'up all' or individually
@@ -1699,7 +1699,7 @@ def show_help() -> None:
     print("    prod   ports on 127.0.0.1 only (nginx proxy handles external)")
     print()
     print(f"  {BOLD}Tiers:{RESET}")
-    print("    min     bare minimum — beszel, cloudflared, nginx-plain, landing, portainer")
+    print("    min     bare minimum — beszel, cloudflared, nginx-plain, landing, docs, portainer")
     print("    core    full default stack (includes min)")
     print("    all     core + extra — starts/stops everything")
     print("    running update only — currently running services")

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SITE_TITLE_PLACEHOLDER</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="/vendor/docsify-vue.css">
+  <link rel="stylesheet" href="/vendor/prism-tomorrow.min.css">
+  <style>
+    :root {
+      --theme-color: #3a5ba0;
+    }
+    .markdown-section { max-width: 900px; }
+    .markdown-section code { background-color: rgba(58,91,160,0.08); }
+    .search input { border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window.$docsify = {
+      name: 'SITE_TITLE_PLACEHOLDER',
+      homepage: 'setup.md',
+      loadSidebar: false,
+      loadNavbar: false,
+      auto2top: true,
+      relativePath: true,
+      maxLevel: 4,
+      subMaxLevel: 3,
+      search: {
+        maxAge: 0,
+        paths: 'auto',
+        placeholder: 'Search docs',
+        noData: 'No results',
+        depth: 4,
+      },
+      copyCode: {
+        buttonText: 'Copy',
+        errorText: 'Error',
+        successText: 'Copied',
+      },
+      formatUpdated: '{MM}/{DD}/{YYYY}',
+    };
+  </script>
+  <script src="/vendor/docsify.min.js"></script>
+  <script src="/vendor/docsify-search.min.js"></script>
+  <script src="/vendor/docsify-sidebar-collapse.min.js"></script>
+  <script src="/vendor/docsify-copy-code.min.js"></script>
+  <!-- mermaid must load before docsify-mermaid, which hooks docsify's
+       markdown renderer to turn ```mermaid fences into rendered SVG
+       instead of a plain highlighted code block. -->
+  <script src="/vendor/mermaid.min.js"></script>
+  <script src="/vendor/docsify-mermaid.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false });
+  </script>
+  <script src="/vendor/prism.min.js"></script>
+  <script src="/vendor/prism-bash.min.js"></script>
+  <script src="/vendor/prism-yaml.min.js"></script>
+  <script src="/vendor/prism-json.min.js"></script>
+  <script src="/vendor/prism-python.min.js"></script>
+  <script src="/vendor/prism-nginx.min.js"></script>
+  <script src="/vendor/prism-docker.min.js"></script>
+</body>
+</html>

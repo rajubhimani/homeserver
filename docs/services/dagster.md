@@ -27,6 +27,14 @@ Dagster's self-hosted webserver+daemon aren't published as ready-to-run images �
 
 5 containers total: `dagster-db`, `dagster-user-code`, `dagster-webserver`, `dagster-daemon` (plus two named volumes: Postgres data and `io_manager_storage`, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
 
+```mermaid
+flowchart LR
+    UI["dagster-webserver<br/>(web UI + GraphQL)"] -->|gRPC| UC["dagster-user-code<br/>(your definitions.py)"]
+    Daemon["dagster-daemon<br/>(schedules, sensors,<br/>run queue)"] -->|gRPC| UC
+    UI --> DB[("dagster-db<br/>Postgres")]
+    Daemon --> DB
+```
+
 ## Where your pipeline code actually lives
 
 `services/dagster/user-code/definitions.py` is a **git-tracked template**, not what actually runs — `user-code/Dockerfile` only installs dependencies now, it doesn't `COPY` the file in. The container reads `definitions.py` from a bind mount: `service_data/data/dagster/user-code/` (gitignored, your live copy). The Setup step above seeds it once from the template; after that the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own pipeline. Same relationship as `.env.example`/`.env`, just for a whole file instead of a few variables.
@@ -44,6 +52,18 @@ docker restart dagster-user-code
 ## Every run — and every step — launches as its own container, by default
 
 This isn't an optional executor choice bolted on afterward — it's Dagster's own official `docker-compose` example's default configuration, carried over here: `dagster.yaml`'s `run_launcher` is `DockerRunLauncher` (every **run** gets its own container, via `dagster-webserver`/`dagster-daemon`'s mounted `${DOCKER_SOCKET}`), and `definitions.py`'s `docker_executor` additionally runs every **step within** a run as its own container. Both have `container_kwargs`/config caps (`mem_limit: 512m`, `nano_cpus: 1_000_000_000` — 1 CPU) so a run's actual resource footprint is bounded and explicit, the same pattern as Airflow's `DockerOperator` and Temporal's worker (see their own docs). Raise `webserver-daemon/dagster.yaml`'s copy if a *run launch* needs more (rebuild `dagster-webserver`+`dagster-daemon`, since that file is baked into their shared image); raise `definitions.py`'s copy in `service_data/data/dagster/user-code/` if a *step* needs more (just restart `dagster-user-code`, no rebuild — see "Where your pipeline code actually lives" above).
+
+```mermaid
+flowchart TD
+    Click["Materialize clicked in UI<br/>(or GraphQL launchPipelineExecution)"] --> UI[dagster-webserver]
+    UI -->|"via ${DOCKER_SOCKET}"| RL["DockerRunLauncher creates<br/>a fresh run container<br/>(mem_limit: 512m, 1 CPU)"]
+    RL -->|"docker_executor,<br/>same socket"| Step1["step container 1<br/>(512m, 1 CPU)"]
+    RL --> Step2["step container 2<br/>(512m, 1 CPU)"]
+    Step1 -.->|io_manager_storage volume| Step2
+    Step1 & Step2 --> DB[("dagster-db")]
+```
+
+Every box on the right is short-lived — created for one run or one step, then removed — unlike the 5 long-running containers above.
 
 ## Try the starter examples
 

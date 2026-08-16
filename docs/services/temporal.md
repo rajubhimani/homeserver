@@ -27,6 +27,16 @@ Open `https://temporal.<domain>/` (or `http://<host>:8138` in dev) — no login/
 - `temporal-ui` — the web UI
 - `temporal-worker` — **not part of Temporal's own official compose set.** See below.
 
+```mermaid
+flowchart LR
+    Admin["temporal-admin-tools<br/>(CLI)"] -->|start/signal/query workflow| Srv
+    UI["temporal-ui<br/>(web)"] -->|read state| Srv
+    Srv["temporal<br/>(frontend/history/matching)"] --> DB[("temporal-db<br/>Postgres")]
+    W["temporal-worker<br/>(your workflow/activity code)"] -->|"long-poll task queue<br/>(worker dials out — nothing dials in)"| Srv
+```
+
+The Worker never receives inbound connections — it polls the server's task queue and reports results back on the same outbound connection, which is why a Worker can crash and restart without Temporal needing to know its address.
+
 ## `temporal-worker` — a placeholder, not an official Temporal component
 
 Unlike Airflow or Dagster, Temporal doesn't execute your workflow logic itself — a **Worker** is just a regular process (any language, official SDKs exist for Go/Java/Python/TypeScript/.NET/PHP/Ruby) that connects out to the Temporal frontend (`temporal:7233`) and runs whatever Workflow/Activity code you give it. There's no generic "Temporal worker" image to pull, because a worker with no code is meaningless — it's exactly as service-specific as Dagster's user-code container, and for the same reason gets the same one exception to this repo's image-only convention: `services/temporal/worker/Dockerfile` (`python:3.14-slim`, dependencies declared in `pyproject.toml` and installed via `uv sync --locked` against a committed `uv.lock`) installs dependencies only.

@@ -26,6 +26,18 @@ Five containers:
 - **`nats`** — Rocket.Chat's default `TRANSPORTER` is `monolith+nats://`, so this is required even for a single Rocket.Chat instance, not just multi-instance deployments.
 - **`rocketchat`** — the app itself.
 
+```mermaid
+flowchart TD
+    P["mongodb-fix-permission<br/>(one-shot: chown data volume)"] --> M["mongodb<br/>--replSet rs0"]
+    M --> I["mongodb-init<br/>(one-shot: rs.initiate)"]
+    I --> RC["rocketchat"]
+    N["nats<br/>(monolith+nats transporter)"] --> RC
+    RC -.->|MONGO_URL, writes/reads| M
+    RC -.->|MONGO_OPLOG_URL, tails oplog<br/>for real-time updates| M
+```
+
+The oplog tail is why this needs a replica set at all — a standalone MongoDB has no oplog to tail, even for a single Rocket.Chat instance.
+
 **Two named volumes, not one** — MongoDB's official image declares `VOLUME` at both `/data/db` *and* `/data/configdb`; mounting only the first leaks an anonymous volume for the second on every container recreation (confirmed via `docker inspect`, same class of bug this stack's `homeserver-postgres` skill warns about for mismatched Postgres `VOLUME` paths). Both are named volumes here (`rocketchat-mongodb`, `rocketchat-mongodb-configdb`).
 
 File uploads (`/app/uploads`, also a declared `VOLUME` on the Rocket.Chat image itself) are bind-mounted under `DATA_ROOT/uploads` instead, following this stack's normal app-data convention.

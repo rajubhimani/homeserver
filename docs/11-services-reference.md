@@ -14,7 +14,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, portainer |
+| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer |
 | `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
@@ -82,6 +82,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
 | Zulip | `zulip` | 8143 | 80 | extra |
+| Docs | `docs` | 8144 | 80 | min |
 | CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Wallabag | `wallabag` | 8121 | 80 | extra |
 | Atuin | `atuin` | 8122 | 8888 | extra |
@@ -104,7 +105,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
-**Next available ports:** web `8144`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8145`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 

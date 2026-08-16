@@ -43,6 +43,7 @@
 | [Mattermost](docs/services/mattermost.md) | Slack-style team chat — lightest of the chat playground trio | Slack |
 | [Rocket.Chat](docs/services/rocketchat.md) | Full-featured team chat — heaviest of the trio (MongoDB replica set + NATS) | Slack |
 | [Zulip](docs/services/zulip.md) | Topic-threaded team chat — Postgres + RabbitMQ + Redis + Memcached | Slack |
+| [Docs](docs/services/docs.md) | Searchable site over every doc in this repo, live off the source `.md` files | Read the Docs |
 | [CrowdSec](docs/services/crowdsec.md) | Collaborative intrusion detection (detection-only, see TODO.md) | fail2ban |
 | [Wallabag](docs/services/wallabag.md) | Read-it-later app | Pocket |
 | [Atuin](docs/services/atuin.md) | Shell history sync across machines | plain bash/zsh history file |
@@ -77,8 +78,23 @@
 
 ## How traffic flows
 
-```text
-Browser → Cloudflare Edge (TLS) → cloudflared → nginx-plain:80 → container
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant CF as Cloudflare Edge
+    participant CT as cloudflared
+    participant NX as nginx-plain:80
+    participant C as container (by name)
+
+    B->>CF: HTTPS request
+    Note over CF: TLS terminates here
+    CF->>CT: outbound tunnel connection<br/>(no inbound port ever opened)
+    CT->>NX: plain HTTP
+    NX->>C: proxy_pass, routed by server_name
+    C-->>NX: response
+    NX-->>CT: response
+    CT-->>CF: response
+    CF-->>B: HTTPS response
 ```
 
 Cloudflare handles TLS. Internal traffic is plain HTTP.
@@ -142,7 +158,7 @@ Quick links for day-to-day use once the stack is running.
 
 ```bash
 # Service tiers — MIN ⊂ CORE ⊂ ALL
-uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing, portainer)
+uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing, docs, portainer)
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything (core + all extra services)
 
@@ -221,6 +237,7 @@ uv run homeserver.py prod up all
     ├── mattermost/
     ├── rocketchat/
     ├── zulip/
+    ├── docs/
     ├── crowdsec/
     ├── wallabag/
     ├── atuin/

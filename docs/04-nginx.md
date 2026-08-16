@@ -11,6 +11,17 @@ Two reverse proxy options — **run only one at a time**, both bind to ports 80/
 | `nginx-plain` | Plain nginx with template config | **Default** — config-file based, domain-templated |
 | `nginx` (NPM) | Nginx Proxy Manager | UI-based config, Let's Encrypt via browser |
 
+```mermaid
+flowchart LR
+    CT[cloudflared / Tailscale] --> M{Which proxy<br/>is running?}
+    M -->|nginx-plain, default| A["nginx-plain:80<br/>server_name blocks in<br/>default.conf.template,<br/>DOMAIN substituted via envsubst"]
+    M -->|nginx, optional| B["NPM:80/443<br/>Proxy Hosts configured<br/>through the web UI"]
+    A --> C["container, by name<br/>on the homeserver network"]
+    B --> C
+```
+
+Both resolve a service the same way underneath (container name on the `homeserver` network) — they differ only in *how* that mapping gets configured: a text template vs. a web UI. Mutually exclusive because both claim ports 80/443.
+
 ---
 
 ## nginx-plain (default)

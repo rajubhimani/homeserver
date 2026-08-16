@@ -6,13 +6,24 @@
 
 Cloudflare Tunnel creates an outbound connection from your server to Cloudflare's edge. No inbound ports need to be open.
 
-**Traffic flow:**
+**Traffic flow — compared to traditional port forwarding:**
 
-```text
-Browser → Cloudflare Edge (TLS) → cloudflared → nginx-plain:80 → container
+```mermaid
+flowchart LR
+    subgraph Traditional["Traditional port forwarding"]
+        direction LR
+        B1[Browser] --> R1["Router<br/>port 443 opened, forwarded"]
+        R1 --> S1["nginx-plain:443<br/>holds the TLS cert"]
+    end
+    subgraph Tunnel["Cloudflare Tunnel (this stack)"]
+        direction LR
+        B2[Browser] --> CF["Cloudflare Edge<br/>TLS terminates here"]
+        CF -.->|outbound only,<br/>initiated by the server| CT[cloudflared]
+        CT --> S2["nginx-plain:80<br/>plain HTTP, no cert needed"]
+    end
 ```
 
-Cloudflare terminates TLS — no SSL certs needed inside the reverse proxy.
+The router never has an open inbound port in the Tunnel path — `cloudflared` dials out to Cloudflare and holds that connection open; Cloudflare routes matching requests back down it. Cloudflare terminates TLS — no SSL certs needed inside the reverse proxy.
 
 ---
 

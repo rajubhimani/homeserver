@@ -38,9 +38,38 @@ Defaults to **on** here (`SETTING_OPEN_REALM_CREATION` in `compose.yml`, sourced
 
 Five containers: `zulip-db` (Zulip's own `zulip/zulip-postgresql` image — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.4-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis`, and `zulip` itself.
 
+```mermaid
+flowchart LR
+    subgraph Backing["Backing services, one each"]
+        DB["zulip-db<br/>(zulip/zulip-postgresql)"]
+        MC[zulip-memcached]
+        RMQ[zulip-rabbitmq]
+        RD[zulip-redis]
+    end
+    Z["zulip<br/>(app + queue workers)"] --> DB
+    Z --> MC
+    Z --> RMQ
+    Z --> RD
+    Secrets["ZULIP__* vars in .env"] -.->|Compose secrets,<br/>environment: source| Files["/run/secrets/* files<br/>inside each container"]
+    Files -.-> Z
+    Files -.-> DB
+```
+
 **Secrets sourced from environment variables, not files** — `compose.yml`'s top-level `secrets:` block uses Compose's `environment:` source (`zulip__postgres_password: {environment: "ZULIP__POSTGRES_PASSWORD"}`), so credentials still live in this service's own `.env` like everywhere else in this stack, while the `zulip`/`zulip-db`/etc. containers each see them mounted as real files under `/run/secrets/` at runtime — no separate secrets directory, nothing extra to gitignore.
 
 **`LOADBALANCER_IPS`, not `TRUST_GATEWAY_IP`** — a real gotcha hit building this: Zulip needs to trust the IP of whatever proxies to it before it trusts `X-Forwarded-Proto`/`X-Forwarded-For`. `TRUST_GATEWAY_IP: True` only trusts connections from the Docker network's gateway address specifically — but `nginx-plain`/`landing` connect to `zulip` as sibling containers on the shared `homeserver` bridge network (their own container IP), not routed through the gateway, so every proxied request 500'd until this was `LOADBALANCER_IPS: 172.16.0.0/12` instead (Docker's entire default bridge-network range, deliberately broad for portability across different hosts rather than hardcoding this specific deployment's actual subnet).
+
+```mermaid
+flowchart LR
+    subgraph Broken["Broken: TRUST_GATEWAY_IP"]
+        NX1["nginx-plain<br/>172.18.0.5 (sibling container)"] -->|X-Forwarded-Proto: https| Z1[zulip]
+        Z1 -.->|"only trusts the gateway IP,<br/>172.18.0.1 — not .5"| X1["❌ 500"]
+    end
+    subgraph Fixed["Fixed: LOADBALANCER_IPS"]
+        NX2["nginx-plain<br/>172.18.0.5 (sibling container)"] -->|X-Forwarded-Proto: https| Z2[zulip]
+        Z2 -.->|"trusts the whole<br/>172.16.0.0/12 bridge range"| X2["✓ 200"]
+    end
+```
 
 **Health check needs a real `Host` header** — Zulip validates `Host` strictly against its configured `EXTERNAL_HOST`; a bare `proxy_pass` (which forwards the container name, `zulip`, as `Host`) gets a permanent 400. `services/landing/nginx.conf`'s `/health/zulip` location sets `proxy_set_header Host zulip.DOMAIN_PLACEHOLDER` — and since `landing`'s `nginx.conf` previously had no domain-templating mechanism (only `index.html` did), this required extending `entrypoint.sh` to template `nginx.conf` through the same `DOMAIN_PLACEHOLDER` substitution, so the real domain is never hardcoded into a git-tracked file.
 

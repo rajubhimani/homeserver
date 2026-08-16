@@ -31,6 +31,17 @@ This deployment uses `LocalExecutor` instead — tasks run directly inside the s
 
 `airflow-init` is one-shot (`restart: "no"`) — runs `airflow db migrate`, creates the admin user, and registers an `smtp_default` Connection pointing at `mailpit`, then exits successfully. The other four app containers wait on `service_completed_successfully` before starting.
 
+```mermaid
+flowchart TD
+    DB["airflow-db<br/>(Postgres)"] --> Init["airflow-init (one-shot)<br/>db migrate, create admin user,<br/>register smtp_default Connection"]
+    Init -->|service_completed_successfully| API["airflow-apiserver<br/>:8080, web UI"]
+    Init -->|service_completed_successfully| Sched["airflow-scheduler<br/>runs tasks directly — LocalExecutor,<br/>no separate worker/queue"]
+    Init -->|service_completed_successfully| DP["airflow-dag-processor<br/>parses DAG files"]
+    Init -->|service_completed_successfully| Trig["airflow-triggerer<br/>deferrable tasks"]
+```
+
+No `redis`/`airflow-worker`/`flower` — those only exist to support `CeleryExecutor`'s distributed task queue, which this deployment doesn't use.
+
 `AIRFLOW__EMAIL__*` alerting is pointed at [Mailpit](../services/mailpit.md), a shared SMTP catcher used by other services in this stack too (not scoped to Airflow) — nothing leaves this host. See `example_email_alert_on_failure.py` below.
 
 ## Required env vars

@@ -61,6 +61,18 @@ immich/
 
 `cloudflared` makes an outbound connection to Cloudflare — no inbound ports are needed from the internet. NPM only needs to be reachable on `localhost` (where cloudflared connects to it).
 
+```mermaid
+flowchart LR
+    Internet(("Public internet")) -.->|deny incoming, default| FW["UFW"]
+    LAN(("LAN<br/>192.168.0.0/16")) -->|allow, port 22 only| FW
+    FW --> SSH["SSH :22"]
+    subgraph Host["This host — everything else is loopback-only, not firewall-gated"]
+        CT[cloudflared] -->|127.0.0.1:80| NPM["NPM :80/:443/:81"]
+    end
+```
+
+Nothing but SSH is UFW-reachable from the LAN. Ports 80/443/81 are bound to `127.0.0.1` by the `compose.prod.yml` override itself — `cloudflared` reaches them because it runs on the same host, not because a firewall rule permits it.
+
 ### Start commands
 
 ```bash
@@ -112,6 +124,16 @@ ssh -L 8181:127.0.0.1:81 user@server-ip
 ### How traffic flows
 
 Services are accessed by Tailscale IP directly. Ports need to be reachable on that interface, so the dev overrides bind to `0.0.0.0`.
+
+```mermaid
+flowchart LR
+    Internet(("Public internet")) -.->|deny incoming, default| FW["UFW"]
+    LAN(("LAN<br/>192.168.0.0/16")) -->|allow: 22, 80, 81, 8081, 2283| FW
+    TS(("Tailscale<br/>100.64.0.0/10")) -->|allow: 22, 80, 81, 8081, 2283| FW
+    FW --> Ports["NPM :80/:81, Nextcloud :8081,<br/>Immich :2283 — each bound 0.0.0.0"]
+```
+
+Unlike the production path, these ports are genuinely bound to all interfaces (`0.0.0.0` via the dev override) — UFW is the only thing keeping them scoped to your LAN and tailnet instead of the public internet.
 
 ### Start commands
 

@@ -65,6 +65,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Mattermost | [docs/services/mattermost.md](services/mattermost.md) |
 | Rocket.Chat | [docs/services/rocketchat.md](services/rocketchat.md) |
 | Zulip | [docs/services/zulip.md](services/zulip.md) |
+| Docs | [docs/services/docs.md](services/docs.md) |
 | CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
 | Wallabag | [docs/services/wallabag.md](services/wallabag.md) |
 | Atuin | [docs/services/atuin.md](services/atuin.md) |
