@@ -24,7 +24,13 @@
       homepage: 'setup.md',
       loadSidebar: true,
       loadNavbar: false,
-      auto2top: true,
+      // auto2top:true (the old setting here) scrolled to the top on
+      // *every* navigation, including the browser's own Back button — so
+      // clicking into an example and hitting Back always dumped you at
+      // the top of the sidebar page instead of back where you were
+      // reading. The plugin below replaces it: scroll to top on a fresh
+      // link click (same as auto2top used to do), but restore the exact
+      // saved scroll position on Back/Forward instead.
       relativePath: true,
       maxLevel: 4,
       subMaxLevel: 3,
@@ -43,6 +49,45 @@
       },
       formatUpdated: '{MM}/{DD}/{YYYY}',
     };
+
+    // Scroll-position memory: track whether the current route change was
+    // a Back/Forward (popstate fires) vs. a fresh link click (no
+    // popstate). Scroll position is saved continuously per-hash in
+    // sessionStorage (survives the SPA content swap, cleared when the tab
+    // closes) so it's still there however long you spent on the other
+    // page. Restored only on Back/Forward; a fresh click still lands at
+    // the top of the new page, same as auto2top used to do.
+    (function () {
+      var isPopping = false;
+      window.addEventListener('popstate', function () {
+        isPopping = true;
+      });
+      window.addEventListener(
+        'scroll',
+        function () {
+          sessionStorage.setItem('docsify-scroll:' + location.hash, String(window.scrollY));
+        },
+        { passive: true }
+      );
+      window.$docsify.plugins = (window.$docsify.plugins || []).concat(function (hook) {
+        hook.doneEach(function () {
+          if (isPopping) {
+            isPopping = false;
+            var saved = sessionStorage.getItem('docsify-scroll:' + location.hash);
+            if (saved !== null) {
+              // rAF: wait one frame so the swapped-in content has actually
+              // been laid out before scrolling, or a shorter old page can
+              // clamp the scroll before the new page's real height applies.
+              requestAnimationFrame(function () {
+                window.scrollTo(0, parseInt(saved, 10));
+              });
+              return;
+            }
+          }
+          window.scrollTo(0, 0);
+        });
+      });
+    })();
   </script>
   <script src="/vendor/docsify.min.js"></script>
   <script src="/vendor/docsify-search.min.js"></script>
