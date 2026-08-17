@@ -79,17 +79,33 @@ def waiter_dag():
 
 @dag(
     dag_id="trigger_only_dag",
-    description="Cross-DAG example: TriggerDagRunOperator — actively starts (pushes) a fresh producer_dag run and waits for it",
+    description="Cross-DAG orchestrator: Pushes identical logical dates to both producer and waiter",
     **DAG_KWARGS,
 )
 def trigger_only_dag():
-    TriggerDagRunOperator(
+    
+    # 1. Fire the producer DAG immediately with our current logical date
+    trigger_producer = TriggerDagRunOperator(
         task_id="trigger_producer",
         trigger_dag_id="producer_dag",
-        wait_for_completion=True,
-        poke_interval=5,
-        deferrable=True,  # same zero-worker-slot wait while blocked on the triggered run
+        # Pass the exact logical date of this orchestrator run down
+        logical_date="{{ logical_date }}", 
+        wait_for_completion=False, # Do not block here; let it run in parallel
     )
+
+    # 2. Fire the waiter DAG with the same logical date and wait for the pipeline to finish
+    trigger_waiter = TriggerDagRunOperator(
+        task_id="trigger_waiter",
+        trigger_dag_id="waiter_dag",
+        # Pass the exact same logical date so ExternalTaskSensor matches perfectly
+        logical_date="{{ logical_date }}", 
+        wait_for_completion=True, # Block the orchestrator until waiter completes
+        poke_interval=5,
+        deferrable=True,
+    )
+
+    # Set the dependency execution chain
+    trigger_producer >> trigger_waiter
 
 
 producer_dag()
