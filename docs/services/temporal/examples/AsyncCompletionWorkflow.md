@@ -6,6 +6,8 @@
 
 Strength: handing an Activity off to a completely separate, external process — a ticketing system, a human's approval queue, a webhook callback — that finishes it later using a token, not by the workflow polling or waiting on a Signal. Contrast with [`ApprovalWorkflow`](ApprovalWorkflow.md)'s Signal-based human-in-the-loop: here it's the *Activity itself* that stays pending, completed by whoever holds the token, not the workflow. `start_async_completion_activity` writes its own token to a file and tells Temporal not to expect a result from this process — a file standing in for a real external system.
 
+**Real-world problem:** your process kicks off work in a system that has no way to call your code back directly — a support ticket that gets resolved whenever an agent gets to it, a fraud review queue, a partner's webhook that fires on their own schedule. You need to durably wait for "someone else, eventually" without polling in a loop or coupling your workflow to how that other system happens to notify you.
+
 📍 `services/temporal/worker/workflows.py:430` (workflow) / `services/temporal/worker/activities.py:212` (`start_async_completion_activity`)
 
 ```mermaid

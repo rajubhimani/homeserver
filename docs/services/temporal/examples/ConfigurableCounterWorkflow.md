@@ -6,6 +6,8 @@
 
 Update, the newer sibling of Signal for anything that needs a value back or needs the caller to know their change was actually accepted. A Signal is fire-and-forget; an Update blocks the caller until the handler returns, and a `@<name>.validator` can reject the change before it's even written to Event History — a negative `amount` never touches workflow state.
 
+**Real-world problem:** a shopping cart or inventory counter needs updates where the caller has to know the change actually landed (not just fired a message and hoped), and invalid changes — an order for -5 units — need to be rejected up front instead of silently corrupting the running total.
+
 📍 `services/temporal/worker/workflows.py:179`
 
 ```mermaid

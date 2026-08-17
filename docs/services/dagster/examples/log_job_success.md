@@ -6,6 +6,8 @@
 
 A `@success_hook`, Dagster's parallel to Airflow's `on_success_callback`/[custom `BaseNotifier`](../../airflow/examples/example_custom_notifier.md) — attached declaratively via `@job(hooks=...)` instead of passed as a callback argument. Fires once **per op**, not once per whole job — a real distinction worth knowing before assuming it behaves like a single job-level callback.
 
+**Real-world problem:** a nightly job finishes (or fails) and the only way anyone finds out is by opening the Dagster UI and checking — nobody actually does that every morning, so failures sit unnoticed for days until a downstream report is visibly wrong.
+
 📍 `services/dagster/user-code/definitions.py:394` (`log_job_success`) / `:403` (`@job(hooks={log_job_success})`)
 
 ```mermaid

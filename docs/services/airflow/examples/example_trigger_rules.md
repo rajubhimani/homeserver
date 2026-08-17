@@ -6,6 +6,8 @@
 
 `trigger_rule` controls whether a task runs after an upstream *failure*, not just success (every other example here uses the implicit `all_success` default). `risky_task` always fails; `cleanup` (`ALL_DONE`) and `alert_on_failure` (`ONE_FAILED`) run anyway.
 
+**Real-world problem:** cleanup — releasing a lock, closing a connection, deleting a temp file — needs to happen whether a step succeeded or failed. Airflow's default behavior is to skip every downstream task the moment anything upstream fails, which would skip your cleanup exactly when it's needed most.
+
 📍 `services/airflow/dags-examples/example_trigger_rules.py:31`
 
 ```mermaid

@@ -6,6 +6,8 @@
 
 The resource-limited-container pattern — see [`airflow.md`](../airflow.md)'s "DAGs can launch their own (resource-limited) containers" section for the full mechanism (`${DOCKER_SOCKET_GID}`, why `user: "0:0"` breaks this specific container, etc.).
 
+**Real-world problem:** one step needs a completely different runtime than everything else in the DAG — a specific CLI tool, a different language, a memory-hungry job you don't want crowding out other tasks — and installing it into the scheduler's own shared environment would affect every other DAG running there too.
+
 📍 `services/airflow/dags-examples/example_docker_operator.py:12`
 
 ```mermaid

@@ -6,6 +6,8 @@
 
 Dagster's actual answer to "backdated ingestion from a source system" — a `DailyPartitionsDefinition`-partitioned asset. Each calendar day is an independent partition; materializing an old one *is* the backfill, not a separate concept layered on top. Contrast with Airflow's [`example_backfill`](../../airflow/examples/example_backfill.md), which re-runs the whole DAG per missed day — see [`docs/12-orchestration.md`](../../../12-orchestration.md) for the real distinction.
 
+**Real-world problem:** finance flags that last Tuesday's sales numbers were wrong because of a bug that's since been fixed — they need that one day corrected, not a re-run of the whole month's pipeline (which would touch 29 other days that were already correct and risk introducing new problems).
+
 📍 `services/dagster/user-code/definitions.py:187` (`daily_partitions`) / `:190` (`daily_sales`)
 
 ```mermaid

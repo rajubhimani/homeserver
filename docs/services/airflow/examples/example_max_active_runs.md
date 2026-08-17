@@ -6,6 +6,8 @@
 
 `max_active_runs=1` caps how many runs of *this DAG* execute concurrently (scheduler default is 16). `schedule="* * * * *"` (every minute — no `@minute` preset exists) with a task that sleeps 90s means a second run is always due before the first finishes; watch it queue instead of overlapping. Contrast with `example_backfill`, which has no `max_active_runs` override and lets its 5 catchup runs execute in parallel.
 
+**Real-world problem:** a job that calls a rate-limited API is scheduled every minute, but some days it takes longer than a minute to finish — without a cap, the next scheduled run starts anyway, and now two processes are hammering the same rate limit at once instead of one finishing before the next begins.
+
 📍 `services/airflow/dags-examples/example_max_active_runs.py:28`
 
 ```mermaid

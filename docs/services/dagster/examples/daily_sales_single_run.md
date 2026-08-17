@@ -6,6 +6,8 @@
 
 Same shape as [`daily_sales`](daily_sales.md), one crucial difference: `backfill_policy=BackfillPolicy.single_run()` means backfilling a *range* of partitions launches exactly one run (one step container) processing the whole range via `context.partition_keys` — not one run per partition the way `daily_sales`'s default backfill policy does. Real fit: a source system where fetching 5 days in one query is cheaper than 5 separate queries, or a downstream system that only accepts bulk writes.
 
+**Real-world problem:** the source system for `daily_sales` is a paid API billed per call, or it rate-limits aggressively — backfilling a 30-day range as 30 separate calls (`daily_sales`'s default) either costs 30x as much or gets you throttled halfway through, when one bulk call for the whole range would have worked fine.
+
 Dagster itself flags `backfill_policy` as a **beta** parameter — stable enough to build on, same caveat as `docker_executor`/`DockerRunLauncher` (see `dagster.md`'s Notes).
 
 📍 `services/dagster/user-code/definitions.py:264`

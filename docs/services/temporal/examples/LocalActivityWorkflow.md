@@ -6,6 +6,8 @@
 
 Strength: cost. `execute_local_activity()` runs `fast_computation_activity` directly inside this Workflow Worker process — no Activity Task Queue round-trip, no separate Activity Worker slot consumed, far fewer Event History entries than the regular `execute_activity()` call right next to it. The tradeoff, not glossed over: a local activity is bound by the *Workflow Task* timeout (a few seconds by default) rather than its own independent timeout, and has weaker retry/cancellation guarantees — reach for it only for genuinely short, cheap calls, never for anything that might run long or that other workers need to be able to pick up.
 
+**Real-world problem:** a process needs to do thousands of tiny, cheap checks — is this field filled in, does this value match a short list of rules. Sending each one of those out and waiting for it to come back, the same way you'd handle a slow phone call to another department, wastes far more time than the check itself takes — sometimes it's faster to just glance at the paper on your own desk.
+
 📍 `services/temporal/worker/workflows.py:381`
 
 ```mermaid

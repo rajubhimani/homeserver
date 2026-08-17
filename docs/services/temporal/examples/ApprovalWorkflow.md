@@ -6,6 +6,8 @@
 
 Durable state across arbitrarily long waits, resumed by an external Signal, inspectable at any time via a Query (Signals push data *in*; Queries read state back *out* without affecting execution — the two are normally taught as a pair). The direct parallel to Airflow's built-in [`example_human_in_the_loop`](../../airflow/examples/example_human_in_the_loop.md) — same underlying idea, different mechanism: this is hand-written workflow code waiting on a Signal, Airflow's HITL is a single operator that does the same job with no Signal-handling code.
 
+**Real-world problem:** a purchase, a deploy, or a refund needs a human to actually click "approve" first — and that click might come back in 30 seconds or 3 weeks. Something has to hold the process's state durably for however long that takes, without tying up a thread, surviving a restart, or losing track of what was even being approved.
+
 📍 `services/temporal/worker/workflows.py:63`
 
 ```mermaid

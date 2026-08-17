@@ -6,6 +6,8 @@
 
 Dagster's parallel to Airflow's Sensor — reacts to an external signal instead of a fixed schedule, same self-contained marker-file pattern as [`example_sensor`](../../airflow/examples/example_sensor.md).
 
+**Real-world problem:** a partner system drops a file into a shared folder whenever it has new data ready — sometimes twice a day, sometimes not for a week. A fixed hourly schedule either wastes runs checking for nothing, or leaves data sitting unprocessed for up to an hour after it actually arrives.
+
 📍 `services/dagster/user-code/definitions.py:322`
 
 ```mermaid

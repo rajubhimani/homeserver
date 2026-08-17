@@ -8,6 +8,8 @@ The capstone: one task starts a Temporal workflow (`temporalio` is installed on 
 
 See [`MaterializeDagsterAssetWorkflow`](../../temporal/examples/MaterializeDagsterAssetWorkflow.md) for the other half.
 
+**Real-world problem:** a single business process genuinely needs a schedule, a durable multi-step workflow that survives crashes, and a data pipeline with lineage tracking — all three at once. Hand-wiring that yourself (retry logic, timeout handling, lineage bookkeeping) means reimplementing what each of these three tools already does well, and getting at least one of them subtly wrong.
+
 📍 `services/airflow/dags-examples/example_cross_service_pipeline.py:20`
 
 ```mermaid

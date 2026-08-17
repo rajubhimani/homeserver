@@ -6,6 +6,8 @@
 
 3 independent assets, no shared dependency between them, each in its own step container — proof (not just an assumption) that Dagster materializes independent assets concurrently. The direct analog of Airflow's [`example_parallel_tasks`](../../airflow/examples/example_parallel_tasks.md) and Temporal's [`BatchProcessingWorkflow`](../../temporal/examples/BatchProcessingWorkflow.md) — see the [feature-parity table](../../../12-orchestration.md).
 
+**Real-world problem:** three unrelated reports (sales, inventory, marketing) all need to be ready before an 8am stakeholder meeting, each taking ~10 minutes to build. Run them one after another and the last one isn't ready until 30 minutes in — with no dependency between them, there's no reason not to run all three at once.
+
 📍 `services/dagster/user-code/definitions.py:226` (`fan_out_a`) / `:231` (`fan_out_b`) / `:236` (`fan_out_c`)
 
 ```mermaid

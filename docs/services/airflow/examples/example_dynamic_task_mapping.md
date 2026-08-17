@@ -6,6 +6,8 @@
 
 `.partial()`/`.expand()`: the number of task instances is decided at runtime, not when the DAG file is parsed (a variable number of files/rows/sources, not a fixed set you wrote by hand).
 
+**Real-world problem:** the number of files/rows/sources to process changes every run — yesterday there were 3 CSVs to ingest, today there are 12. Hardcoding a fixed number of parallel tasks means either wasting slots most days or silently dropping work on the busy ones.
+
 📍 `services/airflow/dags-examples/example_dynamic_task_mapping.py:64`
 
 ```mermaid

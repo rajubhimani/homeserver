@@ -9,6 +9,8 @@ Three DAGs in one file — `producer_dag` / `waiter_dag` / `trigger_only_dag` �
 - **`ExternalTaskSensor`** (`waiter_dag`, the "pull" direction) — waits for a specific task in `producer_dag`'s run to reach a matching state, matched by `logical_date` by default.
 - **`TriggerDagRunOperator`** (`trigger_only_dag`, the "push" direction) — actively starts a fresh `producer_dag` run and, with `wait_for_completion=True`, blocks until it finishes; the closest built-in analog to Temporal's `execute_child_workflow` or Dagster's `RunRequest`, minus their independent Event History/asset lineage.
 
+**Real-world problem:** two teams' pipelines depend on each other's output, but neither wants to own a single merged mega-DAG — one team's DAG needs to know when the other's finished (or kick it off directly), without either team having to rewrite around the other's internals.
+
 📍 `services/airflow/dags-examples/example_cross_dag_dependencies.py:48` (`producer_dag`) / `:57` (`waiter_dag`) / `:80` (`trigger_only_dag`)
 
 ```mermaid

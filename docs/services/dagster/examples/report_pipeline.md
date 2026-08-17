@@ -6,6 +6,8 @@
 
 Dagster's actual differentiator, worth looking at closely: `cleaned_data`'s function signature is `def cleaned_data(raw_data: list[dict])` — that parameter name **is** the dependency declaration. Dagster inspects it and wires the lineage edge automatically; there's no `>>` operator or explicit DAG object anywhere, unlike the equivalent Airflow example ([`example_etl_pipeline`](../../airflow/examples/example_etl_pipeline.md)) which chains tasks explicitly.
 
+**Real-world problem:** over months of changes, nobody can say with confidence what actually depends on `raw_data` anymore — an engineer changes its shape for one report and silently breaks two other pipelines nobody remembered were reading from it, because the dependency lived only in someone's memory of the code, not anywhere queryable.
+
 📍 `services/dagster/user-code/definitions.py:119` (`raw_data`) / `:127` (`cleaned_data`) / `:135` (`report`) / `:158` (`report_job`, `report_daily_schedule`)
 
 ```mermaid

@@ -8,6 +8,8 @@
 
 Honest limitation, not glossed over: this rebuilds the venv **every run** unless `venv_cache_path` is set (not set here, for simplicity) — fine for a homelab's occasional task, a real production cost at high task-run volume. `system_site_packages=False` means the callable genuinely can't see Airflow's own installed packages either — only what's listed in `requirements`, plus the stdlib.
 
+**Real-world problem:** one task needs a package version that conflicts with what the rest of your DAGs already depend on — upgrading the scheduler's shared environment just for that one task's sake risks breaking every other DAG relying on the older version.
+
 📍 `services/airflow/dags-examples/example_python_virtualenv_operator.py:41`
 
 ```mermaid

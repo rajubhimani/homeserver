@@ -8,6 +8,8 @@ The more efficient sibling of [`example_sensor`](example_sensor.md): a hand-roll
 
 Same caveat as `example_sensor`: hand-rolled to show the mechanism, not because Airflow lacks it — `FileSensor(deferrable=True)` gets you the same suspend-into-`airflow-triggerer` behavior built in; see [`example_file_sensor`](example_file_sensor.md).
 
+**Real-world problem:** dozens of DAGs across a real deployment are all waiting on something — a file, an external job, an API result — at the same time. If each wait holds a worker slot for its whole duration, you either run out of slots for actual work or have to keep adding workers just to sit idle.
+
 📍 `services/airflow/dags-examples/example_deferrable_sensor.py:40` (`MarkerFileTrigger`) / `:68` (`WaitForMarkerFileOperator`)
 
 ```mermaid

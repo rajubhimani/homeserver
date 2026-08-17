@@ -6,6 +6,8 @@
 
 Composition via Child Workflows. `BatchProcessingWorkflow` starts 3 `GreetSourceWorkflow` children concurrently (`asyncio.gather` + `execute_child_workflow`), each with its own Workflow ID and Event History — one child's failure doesn't corrupt the parent's or another child's state. Compare against Airflow's [`example_parallel_tasks`](../../airflow/examples/example_parallel_tasks.md): similar fan-out shape at a glance, but each child here is independently durable and independently queryable, not just a step inside one shared DAG run.
 
+**Real-world problem:** you need to process a batch of independent items — send a welcome email to 500 new signups, resize 200 uploaded images — where one item failing or needing a retry shouldn't corrupt the others' progress, and you want to be able to check on (or retry) any single item without re-running the whole batch.
+
 📍 `services/temporal/worker/workflows.py:119` (`GreetSourceWorkflow`) / `:130` (`BatchProcessingWorkflow`)
 
 ```mermaid

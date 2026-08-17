@@ -8,6 +8,8 @@ A custom `BaseNotifier` subclass: a reusable, parameterized notification target 
 
 A plain function callback works fine for a one-off; a `BaseNotifier` subclass is worth it once the same notification target (a file, a webhook, a ticketing system) gets reused across several tasks/DAGs with different messages each time — `template_fields` makes the message itself Jinja-templatable per call, the same as any operator argument.
 
+**Real-world problem:** every team has its own place failures need to land — a specific Slack channel, an internal ticketing system, a status page. Copy-pasting the same callback function into every DAG that needs it means fixing the destination in a dozen places the day it changes.
+
 📍 `services/airflow/dags-examples/example_custom_notifier.py:28` (`LocalFileNotifier`) / `:52` (`on_failure_callback=`)
 
 ```mermaid

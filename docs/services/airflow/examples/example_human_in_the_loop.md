@@ -8,6 +8,8 @@ The built-in Human-in-the-Loop (HITL, new in 3.1) `ApprovalOperator`: pause a ta
 
 Shows its own `awaiting_input` state (distinct from `deferred` — on Airflow 3.3+ this holds no `airflow-triggerer` slot at all, tracked directly instead). It's a gate, not a branch router: Approve lets `proceed` run, Reject **skips** it (not a failure).
 
+**Real-world problem:** a pipeline step is destructive or expensive enough (a production deploy, a bulk delete, a large spend) that it shouldn't run unattended — someone needs to look at it and click "go" first, and that click might come 5 minutes or 5 hours later. Building that pause-and-wait yourself means a process sitting idle in memory the whole time, or a hand-rolled polling loop against some approval table.
+
 📍 `services/airflow/dags-examples/example_human_in_the_loop.py:54`
 
 ```mermaid

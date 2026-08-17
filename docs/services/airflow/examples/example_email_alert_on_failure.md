@@ -6,6 +6,8 @@
 
 `AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_FAILURE`/`ON_RETRY` (in `.env.example`) actually working, not just documented. The task always fails with `email_on_failure=True`; [Mailpit](../../mailpit.md) (shared SMTP catcher, `services/mailpit/`, web UI on `:8140`) receives it — nothing leaves this host.
 
+**Real-world problem:** a nightly job fails at 3am and nobody notices until a user complains the next day that their dashboard is showing stale data — by the time anyone knows something broke, the fix is already a day late.
+
 📍 `services/airflow/dags-examples/example_email_alert_on_failure.py:34`
 
 ```mermaid

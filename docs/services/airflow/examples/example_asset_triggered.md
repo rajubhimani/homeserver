@@ -8,6 +8,8 @@ Airflow's Asset feature (renamed from "Dataset" in 3.0): `example_asset_producer
 
 Not the same concept as a Dagster asset — see [`docs/12-orchestration.md`](../../../12-orchestration.md) ("Assets" means two different things here): Airflow's Asset is a *label* a task's output is tagged with, used only to trigger a different DAG — a scheduling trigger, not a data catalog.
 
+**Real-world problem:** a downstream report depends on an upstream extract finishing, but the extract doesn't run on a predictable schedule — polling every few minutes to check wastes runs on the days nothing changed, and hardcoding "run 20 minutes after the other DAG" breaks the moment either one's timing shifts.
+
 📍 `services/airflow/dags-examples/example_asset_triggered.py:21` (`example_asset_producer`) / `:38` (`example_asset_consumer`)
 
 ```mermaid

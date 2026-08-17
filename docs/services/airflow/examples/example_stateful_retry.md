@@ -6,6 +6,8 @@
 
 The Task State Store (AIP-103, new in Airflow 3.3): a task persists key-value state that survives across *retries* of that same task, not just between different tasks in a run like XCom does. The task always fails right after "submitting" a job on try 1.
 
+**Real-world problem:** a task submits a job to an external system, then fails before recording that the submission succeeded — a naive retry re-runs the same code and submits a *second*, duplicate job instead of checking whether one is already in flight and reattaching to it.
+
 📍 `services/airflow/dags-examples/example_stateful_retry.py:51`
 
 ```mermaid

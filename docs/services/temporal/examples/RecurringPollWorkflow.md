@@ -6,6 +6,8 @@
 
 Continue-As-New, Temporal's answer to "this workflow runs forever" (a recurring poll loop, a counter that never stops) without its Event History growing without bound. Every 3 iterations it closes the current Run and starts a fresh one under the *same* Workflow ID — the WorkflowId stays constant across every Run, only the RunId changes.
 
+**Real-world problem:** something needs to be checked on forever — is this queue backed up, is this server still healthy — with no end date. A process that keeps a running diary of every single check it's ever made, and never throws old pages away, eventually ends up dragging around a notebook too heavy to carry, even though only the most recent entry actually matters.
+
 📍 `services/temporal/worker/workflows.py:226`
 
 ```mermaid

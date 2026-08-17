@@ -6,6 +6,8 @@
 
 A durable timer. `asyncio.sleep()` inside a workflow *is* the durable timer (Temporal's deterministic asyncio event loop makes the same stdlib call replay-safe) — it costs nothing while waiting, no polling loop, no cron job to keep alive, and it survives the worker going away entirely.
 
+**Real-world problem:** "remind this user in 30 days," "retry this shipment status check in 6 hours" — a plain in-memory timer or a scheduled job dies silently if the process restarts, the host reboots, or a deploy happens to land in the middle of the wait, and nobody notices the reminder never fired.
+
 📍 `services/temporal/worker/workflows.py:159`
 
 ```mermaid

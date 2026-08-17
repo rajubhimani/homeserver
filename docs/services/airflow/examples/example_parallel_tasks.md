@@ -6,6 +6,8 @@
 
 Fan-out to 3 independent tasks that run concurrently under `LocalExecutor`, then fan-in to a task that waits for all of them before running, then one more downstream of that. Shows both dependency-declaration styles: the `>>` shorthand used everywhere else in these examples, and the explicit `.set_downstream()`/`.set_upstream()` method calls it's shorthand for.
 
+**Real-world problem:** three unrelated data sources need fetching before a report can be built — nothing about source A depends on source B, so fetching them one after another wastes wall-clock time for no reason.
+
 📍 `services/airflow/dags-examples/example_parallel_tasks.py:64`
 
 ```mermaid

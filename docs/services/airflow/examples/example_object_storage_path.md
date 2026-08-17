@@ -8,6 +8,8 @@
 
 This DAG uses the `file://` (local filesystem) backend — zero cloud credentials needed — but the exact same code, unchanged, would target `s3://`/`gs://`/`abfs://` by swapping the URI scheme and pointing at a Connection. That portability, not the local demo itself, is the point.
 
+**Real-world problem:** a DAG written against local files needs to move to S3 (or the reverse, for local testing without touching a real bucket) — rewriting every `open()`/`boto3` call for the new backend is exactly the kind of migration that's tedious and easy to get subtly wrong in just one spot.
+
 📍 `services/airflow/dags-examples/example_object_storage_path.py:26`
 
 ```mermaid

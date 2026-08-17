@@ -10,6 +10,8 @@ Three built-in flow-control operators, distinct from [`example_branching`](examp
 - **`ShortCircuitOperator`** — skip *every* downstream task on a falsy return, not route between named branches like `BranchPythonOperator`.
 - **`BranchDayOfWeekOperator`** — declarative day-of-week branching, no hand-written callable needed for this specific, common case.
 
+**Real-world problem:** backfilling missed days shouldn't also re-fire the "report is ready" notification that already went out for the current run; a feature flag being off shouldn't require adding the same skip-check to every downstream task by hand; and "only run this on weekends" shouldn't need a bespoke Python function written from scratch every time someone needs day-of-week logic.
+
 📍 `services/airflow/dags-examples/example_flow_control.py:47` (`latest_only`) / `:62` (`short_circuit`) / `:75` (`is_weekend`)
 
 ```mermaid

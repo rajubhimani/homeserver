@@ -6,6 +6,8 @@
 
 The Saga pattern, Temporal's actual flagship real-world use case: this exact shape (a distributed transaction across services, with compensation if a later step fails) is how Uber dispatches rides, Netflix handles billing retries, and Amazon does multi-warehouse fulfillment, at production scale. Reserve inventory → charge payment → create shipment, all plain sequential code — no separate saga-definition DSL, no hand-tracking of which steps already committed. Neither Airflow nor Dagster has a built-in equivalent — see the [feature-parity table](../../../12-orchestration.md).
 
+**Real-world problem:** an order touches three separate systems — inventory, payment, shipping. If the payment charge fails *after* inventory was already reserved, that inventory needs to be released automatically, or it sits locked forever against an order that never actually happened, quietly costing you real stock you could have sold.
+
 📍 `services/temporal/worker/workflows.py:260`
 
 ```mermaid

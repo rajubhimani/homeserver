@@ -6,6 +6,8 @@
 
 Airflow's answer to "process historical dates": `start_date` 5 days in the past + `schedule="@daily"` + `catchup=True` means unpausing creates 5 backfill runs automatically, one per missed day. Whole-DAG-run granularity — see [`docs/12-orchestration.md`](../../../12-orchestration.md) for how this differs from Dagster's per-partition backfill (`daily_sales`).
 
+**Real-world problem:** a source system was down for 3 days, or a bug in yesterday's transform logic just got fixed — you need the last few days of a daily pipeline re-run with today's corrected code, without hand-writing a script that loops over dates and re-triggers each one.
+
 📍 `services/airflow/dags-examples/example_backfill.py:28`
 
 ```mermaid

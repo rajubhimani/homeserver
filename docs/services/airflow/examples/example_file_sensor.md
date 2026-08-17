@@ -8,6 +8,8 @@ The built-in `FileSensor` (`apache-airflow-providers-standard`, already installe
 
 The point of this one: sensors — and the poke/reschedule/defer mechanisms behind them — are a built-in Airflow concept, not something exclusive to Dagster or requiring custom code; the other two examples hand-roll the *mechanism* for teaching, not because the feature is missing.
 
+**Real-world problem:** a downstream step can't start until a file lands from an external system (an export job, an upload, another team's pipeline) — you need to wait for it without writing your own polling loop, and without assuming you have to reach for a heavier tool because you think Airflow can't do this natively.
+
 📍 `services/airflow/dags-examples/example_file_sensor.py:54` (`poke_mode_task`) / `:63` (`deferred_mode_task`)
 
 ```mermaid

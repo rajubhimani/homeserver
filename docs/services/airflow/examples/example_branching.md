@@ -6,6 +6,8 @@
 
 `BashOperator` + `BranchPythonOperator`: run a shell command, then conditionally skip a downstream task based on a Python function's result.
 
+**Real-world problem:** a downstream step is expensive — it calls a paid API, spins up a large job — and only worth running when there's actually new data to process. Running it unconditionally every day wastes money and time on the days there's nothing new.
+
 📍 `services/airflow/dags-examples/example_branching.py:22`
 
 ```mermaid

@@ -6,6 +6,8 @@
 
 Extract → transform → load, TaskFlow (`@task`) with data passed via XCom. The "how do I chain tasks and pass data between them" starting point.
 
+**Real-world problem:** the most basic real pipeline shape there is — pull data from somewhere, clean/reshape it, load it somewhere else — and it's the first thing that breaks if you don't know how Airflow actually passes a result from one task into the next.
+
 📍 `services/airflow/dags-examples/example_etl_pipeline.py:19`
 
 ```mermaid

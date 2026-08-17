@@ -6,6 +6,8 @@
 
 Airflow's own lightweight, Fernet-encrypted secrets/config store (Variables + Connections), no external secrets manager needed at homelab scale.
 
+**Real-world problem:** every pipeline needs credentials somewhere — hardcoding an API key straight into DAG source that gets committed to git, or scattering plaintext values across `.env` files, is neither safe nor manageable once more than one person is touching the codebase.
+
 📍 `services/airflow/dags-examples/example_variables_and_connections.py:32`
 
 ```mermaid

@@ -6,6 +6,8 @@
 
 Durability. `flaky_activity` fails on its first two calls and succeeds on the third; the Workflow code has zero retry logic written — Temporal's `RetryPolicy` handles it. The same "fails twice, succeeds on the third attempt" shape as Airflow's [`example_scheduled_with_retries`](../../airflow/examples/example_scheduled_with_retries.md) and Dagster's [`flaky_retry_asset`](../../dagster/examples/flaky_retry_asset.md) — see the [feature-parity table](../../../12-orchestration.md) for all three side by side.
 
+**Real-world problem:** an external API call fails intermittently — a network blip, a momentary 500 — that has nothing to do with your code being wrong. Without built-in retries, every one of those transient hiccups becomes a permanent failure that pages someone at 3am for a problem that would have resolved itself on the next attempt.
+
 📍 `services/temporal/worker/workflows.py:42` (workflow) / `services/temporal/worker/activities.py:46` (`flaky_activity`)
 
 ```mermaid

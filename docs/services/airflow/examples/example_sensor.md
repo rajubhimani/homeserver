@@ -8,6 +8,8 @@
 
 Hand-rolled deliberately, to make the poke/reschedule mechanism itself visible — Airflow ships a real `FileSensor` that does this exact job in a couple lines; see [`example_file_sensor`](example_file_sensor.md) for the built-in version side by side.
 
+**Real-world problem:** a downstream step can't start until an external file/event shows up, and you don't control when that happens — you need to wait for it without blocking a worker the entire time or writing your own polling loop from scratch.
+
 📍 `services/airflow/dags-examples/example_sensor.py:32`
 
 ```mermaid

@@ -8,6 +8,8 @@ Demonstrates `Worker(max_concurrent_activities=20)` (see `worker.py`) actually c
 
 `max_concurrent_activities=20` isn't just a demo value — it's a real, permanent cap in `worker.py` now. The SDK default is unbounded (effectively however many the server hands out), which for this repo meant e.g. `RunContainerWorkflow` could launch an unbounded number of Docker containers at once if enough workflows started together.
 
+**Real-world problem:** a batch job or a traffic spike starts hundreds of workflows at once, each needing to call the same downstream system — a database, a rate-limited third-party API, the host's own CPU. Without a cap, they all hit it simultaneously and you get timeouts, throttling, or an outage instead of a queue that just takes a bit longer to drain.
+
 📍 `services/temporal/worker/workflows.py:451` (workflow) / `services/temporal/worker/worker.py:128` (`max_concurrent_activities=20`)
 
 ```mermaid

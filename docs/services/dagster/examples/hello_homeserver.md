@@ -6,6 +6,8 @@
 
 The simplest possible asset — one function, no dependencies, no config. Start here if you've never used Dagster before.
 
+**Real-world problem:** you just stood up a new orchestrator and before writing any real pipeline code, you need to know the deployment itself actually works — the code location loads, the daemon can launch a run, materialization succeeds end to end — without any of your own business logic in the way to confuse "the platform is broken" with "my code is broken."
+
 📍 `services/dagster/user-code/definitions.py:114`
 
 ```mermaid

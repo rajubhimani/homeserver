@@ -6,6 +6,8 @@
 
 A `DynamicPartitionsDefinition` — partitions created at **runtime**, by name, as files show up (tracked in Dagster's own metadata DB via `add_dynamic_partitions`), unlike [`daily_sales`](daily_sales.md)'s fixed `DailyPartitionsDefinition` where every partition (every calendar day) is known in advance. `new_file_sensor` watches a directory, and for each file not already a known partition, registers it as a brand-new partition key and requests a run for it — same self-contained marker-file pattern as [`marker_file_sensor`](marker_file_sensor.md), one level up (creating partitions, not just triggering a fixed job).
 
+**Real-world problem:** people upload files to a shared folder whenever they have something new — there's no way to know ahead of time what those files will even be named next week. Anything that requires a full list decided in advance (like [`daily_sales`](daily_sales.md)'s fixed calendar of dates) simply doesn't work here; the only honest list is "whatever has actually shown up so far."
+
 📍 `services/dagster/user-code/definitions.py:431` (`uploaded_files_partitions`) / `:435` (`process_uploaded_file`) / `:445` (`new_file_sensor`)
 
 ```mermaid
