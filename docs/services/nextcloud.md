@@ -80,6 +80,49 @@ Nextcloud validates the `Host` header against `trusted_domains` on **every** req
 
 **General lesson for any service's `/health/<service>` block:** if the app validates the `Host` header (trusted domains/allowed hosts/CSRF origin checks — Nextcloud, and potentially others), a bare `proxy_pass $upstream/;` health check will silently 400 forever; explicitly set `proxy_set_header Host localhost;` (or whatever the app trusts) on that specific location block.
 
+## Troubleshooting: stuck in maintenance mode / every request 503s after an update
+
+Symptom: `docker exec nextcloud php occ status` shows `maintenance: true` and `needsDbUpgrade: true`, every request (web UI, desktop/mobile clients, `status.php`) returns `503`, and this persists across container/host restarts instead of resolving itself.
+
+**Cause:** `compose.yml` pins the image to the floating tag `nextcloud:34`, not an exact point release. Any `dev update` (or a recreate that re-pulls that tag) can silently jump point releases — Docker Hub keeps moving `34` to whatever the newest `34.x.y` build is. On startup the official image's entrypoint auto-detects the version bump and runs `occ upgrade` itself, no confirmation, no staging. If that upgrade's DB migration fails partway, maintenance mode is left on and every subsequent container restart just retries (and re-fails) the same migration — it does not fix itself.
+
+**Check the actual failure** in the non-access-log lines of `docker logs nextcloud` (the access log dominates the tail, so grep it out):
+
+```bash
+docker logs nextcloud 2>&1 | grep -viE '^\S+ - \S+ \[.*"(GET|POST|PROPFIND|PUT|HEAD|OPTIONS|DELETE|MKCOL|REPORT|UNLOCK|LOCK)'
+```
+
+Look for `Exception: Database error when running migration ... Update failed`.
+
+**Root cause hit here:** `SQLSTATE[42501]: Insufficient privilege: must be owner of table oc_calendars_federated`. This is the `oc_admin` ownership split again (see "Migrated: `nextcloud-db`..." below) — `config.php`'s `dbuser` is `oc_admin`, but every table and sequence in the database (152 tables, 124 sequences at the time) was owned by role `nextcloud` instead. `oc_admin` had DML grants (SELECT/INSERT/UPDATE/DELETE) but not ownership, which is all normal app usage needs — so this sat latent until an upgrade's migration needed `ALTER TABLE`, which requires ownership.
+
+**Fix:** reassign ownership of every table and sequence to `oc_admin`, then restart so the upgrade hook retries:
+
+```bash
+# snapshot first — this runs a real schema migration
+docker exec nextcloud-db pg_dump -U nextcloud -d nextcloud > nextcloud_pre_upgrade_fix.sql
+
+docker exec nextcloud-db psql -U nextcloud -d nextcloud -t -c "
+SELECT 'ALTER TABLE ' || quote_ident(tablename) || ' OWNER TO oc_admin;' FROM pg_tables WHERE schemaname='public' AND tableowner='nextcloud'
+UNION ALL
+SELECT 'ALTER SEQUENCE ' || quote_ident(sequencename) || ' OWNER TO oc_admin;' FROM pg_sequences WHERE schemaname='public' AND sequenceowner='nextcloud';
+" > reassign.sql
+docker cp reassign.sql nextcloud-db:/tmp/reassign.sql
+docker exec nextcloud-db psql -U nextcloud -d nextcloud -f /tmp/reassign.sql
+
+docker restart nextcloud
+```
+
+Note plain `REASSIGN OWNED BY nextcloud TO oc_admin;` does **not** work here — it errors with `cannot reassign ownership of objects owned by role nextcloud because they are required by the database system`, because `nextcloud` also owns the database itself. Generating explicit `ALTER TABLE`/`ALTER SEQUENCE` statements sidesteps that. This is safe to run live: the `nextcloud` role is itself a Postgres superuser, so it keeps full access to everything regardless of object ownership (needed for `pg_dump`/backups) — reassigning objects to `oc_admin` doesn't take anything away from it.
+
+After the restart, `occ status` should show `needsDbUpgrade: false`, but the upgrade hook has been observed to print `Update successful` and then still leave `maintenance: true` — check and clear it explicitly:
+
+```bash
+docker exec -u www-data nextcloud php occ maintenance:mode --off
+```
+
+**To stop this from recurring:** `compose.yml` is now pinned to the exact tag `nextcloud:34.0.3` (was the floating `nextcloud:34`) — bump it deliberately rather than letting `dev update` silently jump point releases.
+
 ## Why `html`/`config`/`data`/`custom_apps` are named volumes, not bind mounts
 
 Nextcloud enforces two checks a Windows bind mount can't reliably satisfy — see the `homeserver-postgres` skill for the general Windows-`chown`-reliability caveat this is an instance of:
