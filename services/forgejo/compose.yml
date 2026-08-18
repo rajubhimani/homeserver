@@ -66,10 +66,37 @@ services:
     image: code.forgejo.org/forgejo/runner:12.13.2
     container_name: forgejo-runner
     restart: unless-stopped
+    # Image defaults to uid 1000, which can't reach the bind-mounted host docker.sock
+    # (owned by root:docker on the host) -- run as root like this repo's other
+    # socket-mounting services (dozzle/portainer/dockge) so `docker` exec actions work.
+    user: "0:0"
     profiles:
       - runner
     environment:
       FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
+      RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:-}
+      RUNNER_NAME: ${RUNNER_NAME:-forgejo-runner}
+      RUNNER_LABELS: ${RUNNER_LABELS:-docker:docker://node:20-bookworm}
+    # The image's default CMD is the bare binary with no subcommand, which just prints
+    # help text and exits 0 -- with restart:unless-stopped that loops forever and the
+    # container never stays up long enough to `docker exec` a manual `register` into it.
+    # Register once (writes /data/.runner) using RUNNER_REGISTRATION_TOKEN, then daemon.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /data/.runner ]; then
+          if [ -z "$$RUNNER_REGISTRATION_TOKEN" ]; then
+            echo "forgejo-runner: /data/.runner not found and RUNNER_REGISTRATION_TOKEN is unset -- set it in services/forgejo/.env (get a token from https://forgejo.${DOMAIN}/-/admin/actions/runners, 'Create new Runner')" >&2
+            exit 1
+          fi
+          forgejo-runner register --no-interactive \
+            --instance "$$FORGEJO_INSTANCE_URL" \
+            --token "$$RUNNER_REGISTRATION_TOKEN" \
+            --name "$$RUNNER_NAME" \
+            --labels "$$RUNNER_LABELS"
+        fi
+        exec forgejo-runner daemon
     volumes:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data

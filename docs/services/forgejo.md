@@ -68,10 +68,13 @@ Confirmed working: user count, table count, and a real `/api/v1/users/search` re
 
 ## Actions runner (optional)
 
-```bash
-uv run homeserver.py dev up forgejo --profile runner
-docker exec -it forgejo-runner forgejo-runner register
-```
+1. In Forgejo, go to **Site Administration → Actions → Runners → Create new Runner** and copy the token.
+2. Set `RUNNER_REGISTRATION_TOKEN` (and optionally `RUNNER_NAME`/`RUNNER_LABELS`) in `services/forgejo/.env`.
+3. `uv run homeserver.py dev up forgejo --profile runner`
+
+The container registers itself on first boot (writing `${DATA_ROOT}/runner-data/.runner`) and then runs `forgejo-runner daemon`; on later boots it finds `.runner` already there and skips straight to `daemon`. If `RUNNER_REGISTRATION_TOKEN` is unset and no `.runner` file exists yet, the container logs an error and exits instead of crash-looping silently — check `docker logs forgejo-runner`.
+
+The image's own default command (`forgejo-runner` with no subcommand) just prints help text and exits 0, which `restart: unless-stopped` loops forever without ever registering — this is why `compose.yml` overrides `command:` with the register-then-daemon script above instead of relying on the image default.
 
 ---
 
