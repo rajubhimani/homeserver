@@ -77,6 +77,14 @@ The container registers itself on first boot (writing `${DATA_ROOT}/runner-data/
 
 The image's own default command (`forgejo-runner` with no subcommand) just prints help text and exits 0, which `restart: unless-stopped` loops forever without ever registering — this is why `compose.yml` overrides `command:` with the register-then-daemon script above instead of relying on the image default.
 
+`RUNNER_LABELS` defaults to `docker`, `ubuntu-latest`, `ubuntu-24.04`, and `ubuntu-22.04`, all mapped to `catthehacker/ubuntu` images (`act-latest`/`act-24.04`/`act-22.04`) — the standard community image built to emulate GitHub's runner environment for act/Forgejo/Gitea. A workflow written for GitHub can be copied into `.forgejo/workflows/` unmodified and its `runs-on: ubuntu-latest` will already match, instead of everyone having to know to rewrite it as `runs-on: docker`. Plain `node:20-bookworm` (an earlier attempt at a lighter default) is not a safe substitute — its Node ABI is too old for `actions/checkout@v7`'s post-run cache step (`webidl.util.markAsUncloneable is not a function`), which fails the job.
+
+**Labels only take effect at registration time.** Changing `RUNNER_LABELS` in `.env` after the runner has already registered has no effect until you force it to re-register: `docker exec forgejo-runner rm -f /data/.runner` then `uv run homeserver.py dev up forgejo --profile runner`.
+
+**A workflow step running `docker build`/`docker push` needs `container.docker_host: automount`.** The `forgejo-runner` container itself has the host's `docker.sock` (via `${DOCKER_SOCKET}`), but each job runs in its own separate sibling container that does *not* inherit it by default — without this, `docker build` inside a job fails with `no such file or directory` on `/var/run/docker.sock`. The `command:` script writes `/data/config.yaml` with this setting on every boot (cheap to regenerate, unlike `.runner`) and passes it via `daemon --config`. This is an admin-controlled runner setting, not something a workflow itself can request — no sandbox-escape risk for untrusted workflow authors the way a per-job volume option would be.
+
+**Mirrored repos**: Forgejo Actions only triggers on `.forgejo/workflows/` (or `.gitea/workflows/` for compat) — never `.github/workflows/`. If the repo is a pull mirror (`is_mirror` in Forgejo's DB), you also can't add that file directly in Forgejo — mirror syncs force-reset tracked branches to match the upstream exactly (and prune anything else), so a locally-added file gets silently wiped at the next sync. Add `.forgejo/workflows/` to the *source* repo instead (e.g. on GitHub, if that's what's being mirrored) so it comes down with the next sync.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
