@@ -28,6 +28,7 @@ docker exec -it forgejo forgejo admin user create --username admin --password yo
 - Setup wizard is skipped via `FORGEJO__security__INSTALL_LOCK=true`
 - `FORGEJO__server__ROOT_URL` must be `https://forgejo.${DOMAIN}` (not `http`) since Cloudflare always terminates TLS
 - SSH clone port is `2223` on the host → `22` in the container
+- Forgejo bundles 776 SPDX license templates, covering GitHub's documented license chooser list. Apache License 2.0 (`Apache-2.0`), GNU GPL v3.0-only (`GPL-3.0-only`), and MIT (`MIT`) are pinned to the top of the picker via `PREFERRED_LICENSES`; change the comma-separated IDs in `.env` to reorder them. Use `GPL-3.0-or-later` instead if repositories should permit later GPL versions.
 
 ## Migrated: `forgejo-db` from `postgres:18.4` to `postgres:18.4-alpine`
 

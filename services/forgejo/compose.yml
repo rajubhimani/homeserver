@@ -47,6 +47,9 @@ services:
       # X-Forwarded-For/X-Real-IP are still honored correctly.
       FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES: 172.18.0.0/16
       FORGEJO__actions__ENABLED: "true"
+      # Put the requested common choices first in the repository license picker.
+      # These names match Forgejo's bundled SPDX template filenames.
+      FORGEJO__repository__PREFERRED_LICENSES: ${PREFERRED_LICENSES:-Apache-2.0,GPL-3.0-only,MIT}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
       interval: 60s
