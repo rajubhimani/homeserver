@@ -500,7 +500,13 @@
       // Only entries with a category get a card -- tier-only infra entries
       // (cloudflared, nginx-plain, landing itself, crowdsec, ollama) are
       // deliberately invisible here, same as before this was data-driven.
-      SERVICES = data.services.filter(s => s.category);
+      // Sorted alphabetically by name (case-insensitive) so each category/
+      // subgroup grid is easy to scan for a specific service instead of
+      // whatever order they happen to appear in services.json (historically
+      // insertion/tier order) -- placeCard() appends in this array's order,
+      // so sorting here is the single place that controls it.
+      SERVICES = data.services.filter(s => s.category)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       SUBCATEGORY_LABELS = data.subcategoryLabels || {};
     }
 
