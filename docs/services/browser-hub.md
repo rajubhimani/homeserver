@@ -13,6 +13,14 @@
 
 Five separate remote-browser containers ([firefox](firefox.md), [chromium](chromium.md), [ungoogled-chromium](ungoogled-chromium.md), [brave](brave.md), [mullvad-browser](mullvad-browser.md)) that deliberately do **not** get their own public subdomain. Instead, `nginx-plain` exposes exactly one hostname — `browser.${DOMAIN}` — gated by one shared HTTP Basic Auth login, serving a small static page listing all five. Picking one proxies you into that container at a subpath (`/firefox/`, `/chromium/`, etc.). There is no route to any of the five containers except through this one gated hostname — hitting an old-style `firefox.${DOMAIN}` returns a hard-closed connection (444) from nginx-plain's catch-all block, not even a login prompt, since no such route exists.
 
+| Browser | Subpath | Doc |
+| --- | --- | --- |
+| Firefox | `/firefox/` | [firefox.md](firefox.md) |
+| Chromium | `/chromium/` | [chromium.md](chromium.md) |
+| Ungoogled Chromium | `/ungoogled-chromium/` | [ungoogled-chromium.md](ungoogled-chromium.md) |
+| Brave | `/brave/` | [brave.md](brave.md) |
+| Mullvad Browser | `/mullvad-browser/` | [mullvad-browser.md](mullvad-browser.md) |
+
 ## Why subpaths instead of one-login-per-app
 
 Every other service in this stack gets `service.${DOMAIN}` with its own login. Doing that here would mean five separate credential prompts to remember and re-enter. Centralizing at one nginx server block also happens to make this design easy to upgrade later — see "Swapping to SSO" below.
