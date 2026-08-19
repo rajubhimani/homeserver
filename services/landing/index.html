@@ -560,7 +560,17 @@
 
     function renderCards() {
       const pool = document.getElementById('card-pool');
-      SERVICES.forEach(s => pool.appendChild(buildCard(s)));
+      // data-order = this card's rank in the already-alphabetized SERVICES
+      // array -- placeCard() below inserts by this rank rather than by
+      // arrival order, since health checks resolve concurrently/out of
+      // order (see placeCard's comment) and a plain appendChild there would
+      // place cards in whatever order their network request happened to
+      // finish, not alphabetically.
+      SERVICES.forEach((s, i) => {
+        const card = buildCard(s);
+        card.dataset.order = i;
+        pool.appendChild(card);
+      });
     }
 
     let activeTab = 'online';
@@ -616,7 +626,14 @@
           catDiv.appendChild(grid);
         }
       }
-      grid.appendChild(card);
+      // Insert by data-order (this card's rank in the alphabetized SERVICES
+      // array) rather than appendChild -- cards arrive here in whatever
+      // order their async health check happened to resolve (see
+      // checkService/recheckAll), not alphabetically, so a plain append
+      // would undo the sort every time cards get placed or re-placed.
+      const order = Number(card.dataset.order);
+      const next = Array.from(grid.children).find(c => Number(c.dataset.order) > order);
+      grid.insertBefore(card, next || null);
       updateVisibility();
     }
 
