@@ -85,16 +85,33 @@ The image's own default command (`forgejo-runner` with no subcommand) just print
 
 ```mermaid
 flowchart LR
-    subgraph unchanged["Unchanged"]
-        WS["Your workstation<br/>docker build / pull"] --> HD["Host Docker daemon"]
-        HD --> OSD[("OS drive<br/>/var/lib/docker")]
+    subgraph unchanged["① Unchanged — this host's own Docker"]
+        direction TB
+        WS["Your workstation<br/>docker build / docker pull"] -->|"local docker.sock"| HD["Host Docker daemon<br/>(what 'docker ps' shows you)"]
+        HD -->|"writes images, containers,<br/>volumes, build cache"| OSD[("OS drive<br/>/var/lib/docker")]
     end
-    subgraph isolated["New — isolated"]
-        CI["forgejo-runner<br/>CI jobs"] -->|"tcp://forgejo-docker:2375"| FD["forgejo-docker<br/>dind sidecar"]
-        FD --> SEC[("Secondary disk<br/>DATA_ROOT/docker-data")]
+
+    subgraph isolated["② New — Forgejo's own isolated daemon"]
+        direction TB
+        CI["forgejo-runner<br/>runs each CI job"] -->|"tcp://forgejo-docker:2375<br/>(internal homeserver network)"| FD["forgejo-docker<br/>dind sidecar, privileged: true"]
+        FD -->|"writes CI's images and<br/>build cache only"| SEC[("Secondary disk<br/>DATA_ROOT/docker-data")]
     end
-    CI -.->|"docker.sock — removed, no longer mounted"| HD
+
+    CI -.->|"✕ docker.sock — removed,<br/>no longer mounted here"| HD
+    DR["DATA_ROOT<br/>set in services/forgejo/.env"] -.->|resolves to| SEC
+
+    classDef unchangedStyle fill:#eef2f6,stroke:#7a94a8,color:#1c2b36,stroke-width:1px;
+    classDef isolatedStyle fill:#fdecdf,stroke:#c1571b,color:#5c2a0c,stroke-width:1.5px;
+    classDef diskStyle stroke-width:1.5px;
+    classDef noteStyle fill:none,stroke:#94a3b8,stroke-dasharray: 3 3,color:#475569;
+    class WS,HD unchangedStyle;
+    class CI,FD isolatedStyle;
+    class OSD unchangedStyle,diskStyle;
+    class SEC isolatedStyle,diskStyle;
+    class DR noteStyle;
 ```
+
+Solid arrows are what's active right now, unconditionally, the moment the `runner` profile is up. The dashed ✕ arrow is the connection that *used to* exist (`container.docker_host: automount`) and has been deliberately removed — a CI job today has no path to this host's real Docker at all, only to `forgejo-docker`.
 
 Consequences:
 
@@ -119,14 +136,34 @@ See `docker/README.md`'s "Two independent knobs" section for the full writeup of
 
 ```mermaid
 flowchart LR
-    OSD[("OS drive · SSD<br/>fast")]
-    SEC[("Secondary disk · HDD<br/>slower, mechanical")]
-    Other["Every other service +<br/>host docker build / pull"] --> OSD
-    CIJ["Forgejo CI — by default"] --> SEC
-    Whole["Opt-in: relocate-data-root<br/>(everything, only if you choose)"] -.-> SEC
+    subgraph disks[" "]
+        direction TB
+        OSD[("OS drive<br/>e.g. SSD/NVMe — fast<br/>(check: lsblk ROTA=0)")]
+        SEC[("Secondary disk<br/>e.g. spinning HDD — slower<br/>(check: lsblk ROTA=1)")]
+    end
+
+    Other["Every other service<br/>+ your local docker build/pull"] -->|"always, unaffected"| OSD
+    CIJ["Forgejo CI"] -->|"by default, always"| SEC
+    Whole["docker-limits.py<br/>relocate-data-root"] -.->|"only if you opt in —<br/>then everything moves here"| SEC
+
+    classDef fastDisk fill:#eef2f6,stroke:#7a94a8,color:#1c2b36,stroke-width:1.5px;
+    classDef slowDisk fill:#fdecdf,stroke:#c1571b,color:#5c2a0c,stroke-width:1.5px;
+    classDef client fill:none,stroke:#94a3b8,color:#334155;
+    classDef optIn fill:none,stroke:#94a3b8,stroke-dasharray: 3 3,color:#64748b;
+    class OSD fastDisk;
+    class SEC slowDisk;
+    class Other,CIJ client;
+    class Whole optIn;
 ```
 
-What's fixed regardless of which disk ends up where: CI can never fill the OS drive. What varies with the hardware: how fast CI builds actually run. Point `DATA_ROOT` at a faster disk later (e.g. add an SSD) and CI speed follows automatically — no mechanism change needed, only which physical disk sits behind the same bind mount.
+Read the arrows literally: solid = happens today, unconditionally. Dashed = happens only if you go out of your way to set `DOCKER_DATA_ROOT` and run `relocate-data-root` yourself — and notice it points at the *same* disk CI already uses, it doesn't add a third location.
+
+| | Stays on the OS drive | Moves to the secondary disk |
+| --- | --- | --- |
+| Always, no action needed | Every other service, your local `docker build`/`pull` | Forgejo CI's images + build cache |
+| Only if you opt in | — | Literally everything Docker stores, host-wide |
+
+What's fixed regardless of which physical disk ends up where: CI can never fill the OS drive. What varies with the hardware: how fast CI builds actually run — that's purely a property of whichever disk `DATA_ROOT` points at. Point it at a faster disk later (e.g. add an SSD, edit `DATA_ROOT` in `services/forgejo/.env`) and CI speed follows automatically; no mechanism here changes, only which physical disk sits behind the same bind mount.
 
 See `docs/services/forgejo-examples/` for a matching CI workflow template and registry usage guide.
 
