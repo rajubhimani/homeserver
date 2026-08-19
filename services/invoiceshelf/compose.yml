@@ -40,8 +40,22 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD}
       APP_URL: https://invoiceshelf.${DOMAIN}
       APP_KEY: ${APP_KEY}
+      # The image's own default .env ships a blank SANCTUM_STATEFUL_DOMAIN
+      # (singular — not a real Laravel Sanctum config key, so it's silently
+      # ignored). The real key is plural. Without it set to the actual public
+      # host, login succeeds (200 + session cookie) but the very next
+      # auth-check request gets rejected as untrusted — surfaces during the
+      # install wizard as "Domain verification failed. Please enter valid
+      # domain name." even though the domain itself was entered correctly.
+      # See docs/services/invoiceshelf.md.
+      SANCTUM_STATEFUL_DOMAINS: invoiceshelf.${DOMAIN}
+      SESSION_DOMAIN: invoiceshelf.${DOMAIN}
     volumes:
       - ${DATA_ROOT}/uploads:/var/www/html/storage
+      # Runs on every start (serversideup/php's own documented drop-in
+      # mechanism) — fixes .env's write permission for www-data. See
+      # docs/services/invoiceshelf.md and the script's own comment for why.
+      - ./entrypoint.d/99-fix-env-permissions.sh:/etc/entrypoint.d/99-fix-env-permissions.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
       interval: 30s

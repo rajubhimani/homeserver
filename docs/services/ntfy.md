@@ -23,7 +23,7 @@ curl -u youruser -d "test message" https://ntfy.<domain>/mytopic
 
 ## Registration / access model
 
-No public signup — `NTFY_AUTH_DEFAULT_ACCESS=deny-all` in `.env` means nobody can read or write any topic without an account created via `ntfy user add` (see Setup above). Set to `read-write` instead if you want it to behave like the open public `ntfy.sh` instance (no accounts, anyone can publish/subscribe to any topic name).
+Public self-signup is enabled (`NTFY_ENABLE_SIGNUP=true`) via the web UI, but `NTFY_AUTH_DEFAULT_ACCESS=deny-all` in `.env` means a freshly signed-up account still can't read or write any topic until an admin grants access with `docker exec -it ntfy ntfy access <user> <topic> <permission>`. Set `NTFY_AUTH_DEFAULT_ACCESS=read-write` instead if you want it to behave like the open public `ntfy.sh` instance (no accounts, anyone can publish/subscribe to any topic name). Set `NTFY_ENABLE_SIGNUP=false` to go back to admin-only account creation via `ntfy user add` (see Setup above).
 
 ## Notes
 

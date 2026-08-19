@@ -1,8 +1,42 @@
 services:
+  uptime-kuma-db:
+    image: mariadb:12.3.2
+    container_name: uptime-kuma-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: --innodb-buffer-pool-size=128M --max-connections=20
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - uptime-kuma-mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - homeserver
+
   uptime-kuma:
-    image: louislam/uptime-kuma:2.4.0
+    image: louislam/uptime-kuma:2.5.0
     container_name: uptime-kuma
     restart: unless-stopped
+    env_file: .env
+    environment:
+      UPTIME_KUMA_DB_TYPE: mariadb
+      UPTIME_KUMA_DB_HOSTNAME: uptime-kuma-db
+      UPTIME_KUMA_DB_PORT: 3306
+      UPTIME_KUMA_DB_NAME: ${MYSQL_DATABASE}
+      UPTIME_KUMA_DB_USERNAME: ${MYSQL_USER}
+      UPTIME_KUMA_DB_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ${DATA_ROOT}/data:/app/data
     healthcheck:
@@ -11,8 +45,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    depends_on:
+      uptime-kuma-db:
+        condition: service_healthy
     networks:
       - homeserver
+
+volumes:
+  uptime-kuma-mariadb:
 
 networks:
   homeserver:
