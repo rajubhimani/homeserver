@@ -22,12 +22,21 @@
   h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   p.sub { color: var(--text-secondary); margin: 0 0 1.75rem; font-size: 0.9rem; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+  li.row {
+    display: flex; align-items: stretch; gap: 0.5rem;
+  }
   a.browser-link {
-    display: flex; align-items: center; gap: 0.9rem; padding: 1rem 1.1rem;
+    flex: 1; display: flex; align-items: center; gap: 0.9rem; padding: 1rem 1.1rem;
     background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
     text-decoration: none; color: var(--text); transition: border-color 0.15s;
   }
   a.browser-link:hover { border-color: var(--accent); }
+  a.doc-link {
+    display: flex; align-items: center; padding: 0 1rem; white-space: nowrap;
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+    text-decoration: none; color: var(--text-secondary); font-size: 0.8rem; transition: border-color 0.15s, color 0.15s;
+  }
+  a.doc-link:hover { border-color: var(--accent); color: var(--text); }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: #999; flex-shrink: 0; transition: background 0.2s; }
   .dot.online { background: #2ecc71; }
   .dot.offline { background: #c0392b; }
@@ -40,29 +49,40 @@
   <h1>Browser Hub</h1>
   <p class="sub">Remote browsers running on this server. Pick one — all traffic goes out from here, not your device.</p>
   <ul>
-    <li><a class="browser-link" href="/firefox/">
+    <li class="row"><a class="browser-link" href="/firefox/">
       <span class="dot" data-status></span>
       <span><div class="name">Firefox</div><div class="desc">General-purpose default</div></span>
-    </a></li>
-    <li><a class="browser-link" href="/chromium/">
+    </a><a class="doc-link" data-doc-slug="firefox" href="#">Docs</a></li>
+    <li class="row"><a class="browser-link" href="/chromium/">
       <span class="dot" data-status></span>
       <span><div class="name">Chromium</div><div class="desc">For Chrome/Chromium-only sites and tools</div></span>
-    </a></li>
-    <li><a class="browser-link" href="/ungoogled-chromium/">
+    </a><a class="doc-link" data-doc-slug="chromium" href="#">Docs</a></li>
+    <li class="row"><a class="browser-link" href="/ungoogled-chromium/">
       <span class="dot" data-status></span>
       <span><div class="name">Ungoogled Chromium</div><div class="desc">Chromium compatibility, Google plumbing stripped</div></span>
-    </a></li>
-    <li><a class="browser-link" href="/brave/">
+    </a><a class="doc-link" data-doc-slug="ungoogled-chromium" href="#">Docs</a></li>
+    <li class="row"><a class="browser-link" href="/brave/">
       <span class="dot" data-status></span>
       <span><div class="name">Brave</div><div class="desc">Privacy-focused, ad-blocking by default</div></span>
-    </a></li>
-    <li><a class="browser-link" href="/mullvad-browser/">
+    </a><a class="doc-link" data-doc-slug="brave" href="#">Docs</a></li>
+    <li class="row"><a class="browser-link" href="/mullvad-browser/">
       <span class="dot" data-status></span>
       <span><div class="name">Mullvad Browser</div><div class="desc">Hardened, anti-fingerprinting Firefox fork</div></span>
-    </a></li>
+    </a><a class="doc-link" data-doc-slug="mullvad-browser" href="#">Docs</a></li>
   </ul>
+  <p class="sub" style="margin-top:1.25rem;"><a class="doc-link" style="display:inline-flex;" data-doc-slug="browser-hub" href="#">Browser Hub docs</a></p>
 </main>
 <script>
+  // docs.${DOMAIN} from whatever host this page is actually served on
+  // (browser.${DOMAIN}) -- this file is static, not envsubst-templated,
+  // so ${DOMAIN} isn't available server-side here the way it is in
+  // nginx-plain's *.conf.template files.
+  const docsHost = 'docs.' + location.hostname.split('.').slice(1).join('.');
+  document.querySelectorAll('[data-doc-slug]').forEach(link => {
+    link.href = `https://${docsHost}/#/docs/services/${link.dataset.docSlug}`;
+    link.target = '_blank';
+  });
+
   document.querySelectorAll('a.browser-link').forEach(async (link) => {
     const dot = link.querySelector('[data-status]');
     const slug = link.getAttribute('href').replace(/\//g, '');
