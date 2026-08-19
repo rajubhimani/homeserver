@@ -24,7 +24,7 @@ BACKUP_RETENTION=5                          # snapshots kept per service, -1 = u
 
 `homeserver.py` also injects `DATA_ROOT` per service (never hardcode the domain in individual service `.env` files — use `${DOMAIN}`). **Some services have a second, independent `service_data/`-pointing env var that is *not* auto-injected** (e.g. immich's `UPLOAD_LOCATION`, jellyfin's `MEDIA_ROOT`, dockge's `DOCKGE_STACKS_DIR`) — see the `homeserver-add-service` skill for the grep-everything rule this implies if `service_data/` paths are ever restructured.
 
-Services that mount the container socket (dozzle, portainer, dockge, forgejo, gitlab, authentik) use `${DOCKER_SOCKET}`.
+Services that mount the container socket (dozzle, portainer, dockge, gitlab, authentik) use `${DOCKER_SOCKET}`. Forgejo's CI runner deliberately does *not* — it uses an isolated Docker-in-Docker sidecar instead so CI jobs never touch this host's real Docker; see `docs/services/forgejo.md`.
 
 ## Managing services
 

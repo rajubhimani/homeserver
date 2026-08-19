@@ -65,14 +65,47 @@ services:
     networks:
       - homeserver
 
+  # Isolated Docker-in-Docker engine used ONLY by forgejo-runner's CI jobs --
+  # keeps CI's images/containers/build-cache on a completely separate daemon
+  # and storage location from this host's real Docker (which stays on the OS
+  # drive, untouched). Storage lands under ${DATA_ROOT}/docker-data, which is
+  # this repo's usual service_data/data/forgejo path -- i.e. wherever that
+  # disk actually is, same as every other service's data, not necessarily the
+  # OS drive. See docs/services/forgejo.md for the isolation rationale.
+  forgejo-docker:
+    image: docker:28-dind
+    container_name: forgejo-docker
+    restart: unless-stopped
+    privileged: true
+    profiles:
+      - runner
+    environment:
+      # Empty (not unset) disables TLS cert generation -- fine since this
+      # daemon is only reachable over the internal `homeserver` bridge
+      # network, never published to a host port.
+      DOCKER_TLS_CERTDIR: ""
+    # The dind entrypoint only auto-adds a -H flag when DOCKER_TLS_CERTDIR is
+    # set (for the TLS case); with it empty it just execs dockerd with
+    # whatever args follow, so the plaintext listener needs to be explicit.
+    command:
+      - dockerd
+      - --host=tcp://0.0.0.0:2375
+      - --host=unix:///var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ${DATA_ROOT}/docker-data:/var/lib/docker
+    networks:
+      - homeserver
+
   forgejo-runner:
     image: code.forgejo.org/forgejo/runner:12.13.2
     container_name: forgejo-runner
     restart: unless-stopped
-    # Image defaults to uid 1000, which can't reach the bind-mounted host docker.sock
-    # (owned by root:docker on the host) -- run as root like this repo's other
-    # socket-mounting services (dozzle/portainer/dockge) so `docker` exec actions work.
-    user: "0:0"
     profiles:
       - runner
     environment:
@@ -106,28 +139,26 @@ services:
             --name "$$RUNNER_NAME" \
             --labels "$$RUNNER_LABELS"
         fi
-        # forgejo-runner itself has the host docker.sock (below), but each job
-        # runs in its own separate sibling container that does NOT inherit it --
-        # a workflow step running `docker build`/`docker push` fails with
-        # "no such file or directory" on /var/run/docker.sock without this.
-        # docker_host: automount is the runner's own purpose-built setting for
-        # this (defaults to "-", meaning explicitly NOT mounted) -- it finds the
-        # runner's own docker host and mounts it into the job container at
-        # /var/run/docker.sock. Admin-controlled (this file), not something a
-        # workflow can request itself, so this isn't a sandbox-escape vector
-        # for untrusted workflow authors the way per-job volume options would be.
+        # A workflow step running `docker build`/`docker push` needs a docker
+        # daemon reachable inside its job container. Rather than automounting
+        # this host's real docker.sock (which would give every CI job root-
+        # equivalent access to the host engine and dump build layers on the OS
+        # drive), point at the dedicated forgejo-docker sidecar over TCP on
+        # the internal network instead -- fully isolated daemon and storage,
+        # host Docker is never touched by a CI job.
         cat > /data/config.yaml <<-CONFIG
         runner:
           file: .runner
         container:
-          docker_host: "automount"
+          docker_host: "tcp://forgejo-docker:2375"
         CONFIG
         exec forgejo-runner daemon --config /data/config.yaml
     volumes:
-      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data
     depends_on:
       forgejo:
+        condition: service_healthy
+      forgejo-docker:
         condition: service_healthy
     networks:
       - homeserver

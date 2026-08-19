@@ -81,7 +81,54 @@ The image's own default command (`forgejo-runner` with no subcommand) just print
 
 **Labels only take effect at registration time.** Changing `RUNNER_LABELS` in `.env` after the runner has already registered has no effect until you force it to re-register: `docker exec forgejo-runner rm -f /data/.runner` then `uv run homeserver.py dev up forgejo --profile runner`.
 
-**A workflow step running `docker build`/`docker push` needs `container.docker_host: automount`.** The `forgejo-runner` container itself has the host's `docker.sock` (via `${DOCKER_SOCKET}`), but each job runs in its own separate sibling container that does *not* inherit it by default — without this, `docker build` inside a job fails with `no such file or directory` on `/var/run/docker.sock`. The `command:` script writes `/data/config.yaml` with this setting on every boot (cheap to regenerate, unlike `.runner`) and passes it via `daemon --config`. This is an admin-controlled runner setting, not something a workflow itself can request — no sandbox-escape risk for untrusted workflow authors the way a per-job volume option would be.
+**A workflow step running `docker build`/`docker push` uses an isolated `forgejo-docker` sidecar, not this host's real Docker.** Each CI job runs in its own separate sibling container, which needs *some* Docker daemon reachable inside it for `docker build`/`push` to work. Rather than automounting this host's own `docker.sock` (`container.docker_host: automount` — the simpler option, but it hands every CI job root-equivalent access to the host engine, and every image layer it builds lands on the OS drive under `/var/lib/docker`), `compose.yml` instead runs a dedicated `docker:28-dind` container (`forgejo-docker`) and points the runner's generated `config.yaml` at it over the internal network: `docker_host: "tcp://forgejo-docker:2375"`. This is unconditional — active the moment the `runner` profile is up, no toggle, no config:
+
+```mermaid
+flowchart LR
+    subgraph unchanged["Unchanged"]
+        WS["Your workstation<br/>docker build / pull"] --> HD["Host Docker daemon"]
+        HD --> OSD[("OS drive<br/>/var/lib/docker")]
+    end
+    subgraph isolated["New — isolated"]
+        CI["forgejo-runner<br/>CI jobs"] -->|"tcp://forgejo-docker:2375"| FD["forgejo-docker<br/>dind sidecar"]
+        FD --> SEC[("Secondary disk<br/>DATA_ROOT/docker-data")]
+    end
+    CI -.->|"docker.sock — removed, no longer mounted"| HD
+```
+
+Consequences:
+
+- This host's own Docker (whatever runs `docker ps` when you SSH in) is never touched by a CI job — completely separate daemon, separate storage.
+- `forgejo-docker`'s storage lives at `${DATA_ROOT}/docker-data` — i.e. wherever `service_data/data/forgejo/` actually is on this machine (see the top of this doc), not necessarily the OS drive. CI image layers/build cache accumulate there, independent of anything the host's own Docker is doing.
+- `forgejo-docker` needs `privileged: true` (a dind requirement) and has no TLS (`DOCKER_TLS_CERTDIR: ""`) — safe here specifically because it's reachable only over the internal `homeserver` bridge network, never published to a host port.
+- Nothing about this is workflow-controllable — it's set once in `compose.yml`/the runner's generated `config.yaml`, not something a `.forgejo/workflows/*.yml` file can override.
+- `forgejo-docker`'s own storage isn't part of a normal Forgejo restore — if you ever need to reclaim disk from stale CI image layers, it's safe to stop the `runner` profile and delete `service_data/data/forgejo/docker-data/` entirely; it's pure build cache, nothing CI can't regenerate.
+
+**This is not the same thing as `docker/docker-limits.py relocate-data-root`, and the two are not equal choices:**
+
+| | Isolate Forgejo (this section) | Relocate everything (`docker/`) |
+| --- | --- | --- |
+| Runs automatically? | Yes — no toggle, no config | No — only if you invoke it |
+| Scope | Only Forgejo's CI jobs | Every container on this host |
+| Host Docker | Untouched — separate daemon | Repointed in place |
+| Disruption if used | Restarts only the `runner` profile | Restarts Docker — every running container |
+
+See `docker/README.md`'s "Two independent knobs" section for the full writeup of the opt-in tool — it's unrelated to Forgejo specifically and not needed unless the OS drive is tight for reasons beyond CI.
+
+**Isolation ≠ speed — it only guarantees the OS drive can't fill up.** Neither mechanism above makes Docker faster; both just choose which physical disk absorbs the I/O. `forgejo-docker` writes to whatever disk `DATA_ROOT` resolves to, which may or may not be the same speed class as the OS drive. Check with `lsblk -d -o NAME,ROTA,MODEL,TRAN` (`ROTA=0` = SSD/NVMe, `ROTA=1` = spinning HDD) before assuming either direction helps:
+
+```mermaid
+flowchart LR
+    OSD[("OS drive · SSD<br/>fast")]
+    SEC[("Secondary disk · HDD<br/>slower, mechanical")]
+    Other["Every other service +<br/>host docker build / pull"] --> OSD
+    CIJ["Forgejo CI — by default"] --> SEC
+    Whole["Opt-in: relocate-data-root<br/>(everything, only if you choose)"] -.-> SEC
+```
+
+What's fixed regardless of which disk ends up where: CI can never fill the OS drive. What varies with the hardware: how fast CI builds actually run. Point `DATA_ROOT` at a faster disk later (e.g. add an SSD) and CI speed follows automatically — no mechanism change needed, only which physical disk sits behind the same bind mount.
+
+See `docs/services/forgejo-examples/` for a matching CI workflow template and registry usage guide.
 
 **Mirrored repos**: Forgejo Actions only triggers on `.forgejo/workflows/` (or `.gitea/workflows/` for compat) — never `.github/workflows/`. If the repo is a pull mirror (`is_mirror` in Forgejo's DB), you also can't add that file directly in Forgejo — mirror syncs force-reset tracked branches to match the upstream exactly (and prune anything else), so a locally-added file gets silently wiped at the next sync. Add `.forgejo/workflows/` to the *source* repo instead (e.g. on GitHub, if that's what's being mirrored) so it comes down with the next sync.
 
