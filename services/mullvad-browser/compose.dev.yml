@@ -1,0 +1,4 @@
+services:
+  mullvad-browser:
+    ports:
+      - "0.0.0.0:8149:3000"

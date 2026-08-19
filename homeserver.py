@@ -120,6 +120,13 @@ def load_services_json(path: Path) -> dict:
 _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
+# Shared login for the Browser Hub (browser.${DOMAIN} — see
+# docs/services/browser-hub.md) — one credential, injected into nginx-plain's
+# auth gate AND each browser container's own CUSTOM_USER/PASSWORD below, so
+# there's exactly one place to change it and no way for the two layers to
+# drift out of sync with each other.
+BROWSER_HUB_USER = _ROOT_ENV.get("BROWSER_HUB_USER", "admin")
+BROWSER_HUB_PASSWORD = _ROOT_ENV.get("BROWSER_HUB_PASSWORD", "changeme")
 RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
 # Snapshots to keep per service before auto-pruning the oldest; -1 = unlimited
@@ -163,10 +170,16 @@ if os.path.exists(DOCKER_SOCKET):
 
 _SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
 
-SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min"]
-SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core"]
-SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra"]
-SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual"]
+# "virtual" entries (e.g. Browser Hub's own card — see the "bundle" schema
+# below) have a tier + landing-page card but no services/<slug>/compose.yml
+# of their own — they're a named grouping of OTHER real services, not a
+# startable thing in themselves. Excluded here so 'up all'/'down all'/etc.
+# never try to docker-compose a directory that doesn't exist; the bare-token
+# bundle expansion below is how a virtual entry's slug actually starts anything.
+SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and not s.get("virtual")]
+SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and not s.get("virtual")]
+SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and not s.get("virtual")]
+SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual" and not s.get("virtual")]
 
 # category/subcategory -> ordered list of slugs, e.g. SERVICE_GROUPS["notes"]
 # or SERVICE_GROUPS["productivity"] — powers 'up group:<name>' (and every
@@ -182,7 +195,11 @@ SERVICE_GROUPS: dict[str, list[str]] = {}
 # category/subcategory nesting instead of one flat list.
 CATEGORY_SUBGROUPS: dict[str, set[str]] = {}
 for _s in _SERVICES_DATA["services"]:
-    if not _s.get("tier"):
+    # Skip virtual entries here too (see SERVICES_EXTRA etc. above) — a
+    # bundle hub's own card belongs in the landing page's category grouping
+    # but not in 'up group:<name>'/'status' membership, which must stay a
+    # list of real, individually startable services.
+    if not _s.get("tier") or _s.get("virtual"):
         continue
     for _key in ("category", "subcategory"):
         _val = _s.get(_key)
@@ -192,6 +209,36 @@ for _s in _SERVICES_DATA["services"]:
     if _cat and _sub:
         CATEGORY_SUBGROUPS.setdefault(_cat, set()).add(_sub)
 del _s, _key, _val, _cat, _sub
+
+# "bundle" groups multiple independently-deployed service directories under
+# one startable name — a hub-of-containers (Browser Hub's five browser
+# containers behind one shared login, see docs/services/browser-hub.md) that
+# isn't a category/subcategory grouping. A member declares "bundle": "<hub
+# slug>"; the hub's own (virtual) entry can declare "requires": [...] for
+# extra infra it needs that isn't itself a member (nginx-plain, in that
+# example). Fully data-driven — a future bundle needs zero changes here, just
+# "bundle"/"requires" fields in services.json. BUNDLE_MEMBERS' keys double as
+# the set of bare tokens ('up <bundle>', not 'up group:<bundle>') the CLI
+# expands — see the bare-token handling below.
+#
+# "requires" is deliberately kept OUT of SERVICE_GROUPS/BUNDLE_MEMBERS and
+# only spliced in for up-family actions (see the action check below) — never
+# for down/restart/update/backup/restore/dump. nginx-plain is exactly why:
+# it's shared infra for the WHOLE stack, not something 'browser' owns, so
+# 'down browser' must never stop it just because 'up browser' needs it
+# running. (Confirmed real incident: this bug shipped once and 'down
+# browser' took nginx-plain down with it, before this split existed.)
+BUNDLE_MEMBERS: dict[str, list[str]] = {}
+BUNDLE_REQUIRES: dict[str, list[str]] = {}
+for _s in _SERVICES_DATA["services"]:
+    _bundle = _s.get("bundle")
+    if _bundle:
+        BUNDLE_MEMBERS.setdefault(_bundle, []).append(_s["slug"])
+for _s in _SERVICES_DATA["services"]:
+    if _s["slug"] in BUNDLE_MEMBERS:
+        BUNDLE_REQUIRES[_s["slug"]] = _s.get("requires", [])
+        SERVICE_GROUPS[_s["slug"]] = BUNDLE_MEMBERS[_s["slug"]]
+del _s, _bundle
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is
@@ -882,6 +929,8 @@ def compose_env(service: str) -> dict[str, str]:
     env = dict(os.environ)
     env["DATA_ROOT"] = str(SERVICE_DATA_ROOT / service)
     env["DOMAIN"] = DOMAIN
+    env["BROWSER_HUB_USER"] = BROWSER_HUB_USER
+    env["BROWSER_HUB_PASSWORD"] = BROWSER_HUB_PASSWORD
     return env
 
 
@@ -1951,6 +2000,20 @@ def main() -> int:
                 error(f"Unknown group '{group_name}' — valid groups: {', '.join(sorted(SERVICE_GROUPS))}")
                 return 1
             services_to_run.extend(SERVICE_GROUPS[group_name])
+            # Only splice in a bundle's "requires" (e.g. nginx-plain for
+            # 'browser') on actions that bring things up — never on
+            # down/restart/update/backup/restore/dump, which must only ever
+            # touch the bundle's own members. See BUNDLE_REQUIRES above.
+            if group_name in BUNDLE_REQUIRES and action in ("up", "-u", "precreate"):
+                services_to_run.extend(BUNDLE_REQUIRES[group_name])
+        elif tok in BUNDLE_MEMBERS:
+            # Bare bundle name (e.g. 'browser', not 'group:browser') — see
+            # the BUNDLE_MEMBERS/BUNDLE_REQUIRES derivation above for why
+            # this expands instead of targeting a single (nonexistent)
+            # service directory.
+            services_to_run.extend(BUNDLE_MEMBERS[tok])
+            if tok in BUNDLE_REQUIRES and action in ("up", "-u", "precreate"):
+                services_to_run.extend(BUNDLE_REQUIRES[tok])
         else:
             if is_valid_service(tok):
                 services_to_run.append(tok)

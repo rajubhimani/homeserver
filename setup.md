@@ -56,6 +56,12 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 [Dockge](docs/services/dockge.md "Fancy Docker Compose stack manager. Deploy and manage stacks via a clean web UI.") ·
 [Dozzle](docs/services/dozzle.md "Real-time Docker container log viewer in the browser. Quickly tail logs from any running container.") ·
 [Guacamole](docs/services/guacamole.md "Remote-control another computer from any web browser, no software to install — over VNC, RDP, or SSH, from your LAN or anywhere on the internet. Replaces: TeamViewer / AnyDesk.") ·
+[Browser Hub](docs/services/browser-hub.md "One login, then pick from five real browsers (Firefox, Chromium, Ungoogled Chromium, Brave, Mullvad Browser) running on the server and controlled from any device — the page loads and the traffic goes out from your server, so it reaches sites your local connection can't. Each browser only exists at its own /path/ here, not its own web address.") ·
+[Firefox](docs/services/firefox.md "General-purpose remote Firefox — part of the Browser Hub, one login for all five browsers here.") ·
+[Chromium](docs/services/chromium.md "Remote Chromium — for sites/tools that specifically need Chrome/Chromium. Part of the Browser Hub, one login for all five browsers here.") ·
+[Ungoogled Chromium](docs/services/ungoogled-chromium.md "Chromium with Google's tracking and telemetry stripped out. Part of the Browser Hub, one login for all five browsers here.") ·
+[Brave](docs/services/brave.md "Privacy-focused, ad-blocking-by-default remote browser. Part of the Browser Hub, one login for all five browsers here.") ·
+[Mullvad Browser](docs/services/mullvad-browser.md "Hardened, anti-fingerprinting Firefox fork built with the Tor Project — does not itself route traffic through the Tor network. Part of the Browser Hub, one login for all five browsers here.") ·
 [AdGuard Home](docs/services/adguard-home.md "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) — this links to the admin panel. Replaces: Pi-hole.") ·
 [ntfy](docs/services/ntfy.md "Self-hosted push notifications. Scripts and services curl a message straight to your phone. Replaces: Pushover / Pushbullet.") ·
 [Docs](docs/services/docs.md "Searchable site over every doc in this repo — setup guides, service reference, all per-service notes, live off the source files. Replaces: Read the Docs.")
@@ -203,6 +209,11 @@ uv run homeserver.py prod up all
     ├── jellyfin/
     ├── vaultwarden/
     ├── guacamole/
+    ├── firefox/
+    ├── chromium/
+    ├── ungoogled-chromium/
+    ├── brave/
+    ├── mullvad-browser/
     ├── portainer/
     ├── paperless/
     ├── stirling-pdf/
@@ -264,13 +275,18 @@ Service data (gitignored):
 
 ```text
 service_data/
-├── nginx-plain/      (certs/)
+├── nginx-plain/      (certs/) — browser hub login lives in services/nginx-plain/.env, not here, see docs/services/browser-hub.md
 ├── nginx/            (data/, letsencrypt/) — optional NPM proxy
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
 ├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
 ├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
 ├── vaultwarden/      (data/)
 ├── guacamole/        (empty — DB lives in a named volume, not this tree)
+├── firefox/          (config/) — browser profile/settings, served at browser.<domain>/firefox/, see docs/services/browser-hub.md
+├── chromium/         (config/) — same hub, browser.<domain>/chromium/
+├── ungoogled-chromium/ (config/) — same hub, browser.<domain>/ungoogled-chromium/
+├── brave/            (config/) — same hub, browser.<domain>/brave/
+├── mullvad-browser/  (config/) — same hub, browser.<domain>/mullvad-browser/
 ├── portainer/        (data/)
 ├── paperless/        (postgres/, app/)
 ├── stirling-pdf/     (configs/, logs/, customFiles/, pipeline/, tessdata/)

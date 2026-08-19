@@ -516,8 +516,13 @@
       if (s.subcategory) card.dataset.subcategory = s.subcategory;
 
       const sub = s.sub || s.slug;
-      const url = `https://${sub}.${DOMAIN}`;
-      const label = `${sub}.${DOMAIN}`;
+      // s.path is a subpath under THIS card's own subdomain (sub.${DOMAIN}),
+      // not the bare apex domain -- Browser Hub's individual browsers live
+      // at browser.${DOMAIN}/<path>/ (see docs/services/browser-hub.md),
+      // sharing the hub's "browser" subdomain via their own s.sub, not
+      // browsing off ${DOMAIN} directly.
+      const url = s.path ? `https://${sub}.${DOMAIN}/${s.path}` : `https://${sub}.${DOMAIN}`;
+      const label = s.path ? `${sub}.${DOMAIN}/${s.path}` : `${sub}.${DOMAIN}`;
       // Skip the "Replaces: X" suffix when desc already names X (e.g.
       // "Google Drive alternative...") — avoids saying it twice.
       const mentionsReplaces = s.replaces && s.replaces.split(' / ').some(

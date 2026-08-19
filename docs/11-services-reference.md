@@ -24,7 +24,8 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 dozzle, dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
 mealie, homebox, syncthing, authentik,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
-trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy,
+trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, browser,
+firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
 n8n, airflow, temporal, dagster, mailpit, mattermost, rocketchat, zulip,
 crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
 documenso, calcom, plausible, penpot, coolify, supabase, observability.
@@ -74,6 +75,11 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Excalidraw | `excalidraw` | 8116 | 80 | extra |
 | Karakeep | `karakeep` | 8117 | 3000 | extra |
 | ntfy | `ntfy` | 8118 | 80 | extra |
+| Firefox | `firefox` | 8145 | 3000 | extra |
+| Chromium | `chromium` | 8146 | 3000 | extra |
+| Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | extra |
+| Brave | `brave` | 8148 | 3000 | extra |
+| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | extra |
 | IT-Tools | `it-tools` | 8119 | 80 | core |
 | n8n | `n8n` | 8120 | 5678 | extra |
 | Airflow | `airflow-apiserver` | 8137 | 8080 | extra |
@@ -105,7 +111,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
-**Next available ports:** web `8145`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8150`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 ---
 
@@ -168,6 +174,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `excalidraw.yourdomain.com` | `excalidraw` | `80` | extra |
 | `karakeep.yourdomain.com` | `karakeep` | `3000` | extra |
 | `ntfy.yourdomain.com` | `ntfy` | `80` | extra |
+| `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 5 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | extra |
 | `it-tools.yourdomain.com` | `it-tools` | `80` | core |
 | `n8n.yourdomain.com` | `n8n` | `5678` | extra |
 | `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | extra |

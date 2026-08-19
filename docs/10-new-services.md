@@ -45,6 +45,12 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Firefly III (+ Data Importer) | [docs/services/firefly.md](services/firefly.md) |
 | Beszel | [docs/services/beszel.md](services/beszel.md) |
 | Guacamole | [docs/services/guacamole.md](services/guacamole.md) |
+| Browser Hub | [docs/services/browser-hub.md](services/browser-hub.md) |
+| Firefox | [docs/services/firefox.md](services/firefox.md) |
+| Chromium | [docs/services/chromium.md](services/chromium.md) |
+| Ungoogled Chromium | [docs/services/ungoogled-chromium.md](services/ungoogled-chromium.md) |
+| Brave | [docs/services/brave.md](services/brave.md) |
+| Mullvad Browser | [docs/services/mullvad-browser.md](services/mullvad-browser.md) |
 | Portainer CE | [docs/services/portainer.md](services/portainer.md) |
 | Dockge | [docs/services/dockge.md](services/dockge.md) |
 | Ollama + Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |

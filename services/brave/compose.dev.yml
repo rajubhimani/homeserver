@@ -1,0 +1,4 @@
+services:
+  brave:
+    ports:
+      - "0.0.0.0:8148:3000"

@@ -279,6 +279,131 @@ server {
     }
 }
 
+# ── Browser Hub (Firefox/Chromium/Ungoogled Chromium/Brave/Mullvad Browser) ───
+# One shared login gates every remote browser below — see docs/services/browser-hub.md
+# for the design and how to regenerate browser_htpasswd. Individual browsers are
+# deliberately NOT given their own server_name/subdomain — there is no route to
+# any of them except through this block, so there's nothing to reach directly.
+server {
+    listen 80;
+    server_name browser.${DOMAIN};
+
+    auth_basic "Browser Hub";
+    auth_basic_user_file /etc/nginx/browser_htpasswd;
+
+    root /usr/share/nginx/html/browser-hub;
+    location = / {
+        try_files /index.html =404;
+    }
+
+    # Liveness pings for the hub page's own JS (same-origin, so already-cached
+    # Basic Auth credentials cover these too — no separate auth wiring needed).
+    # Short timeouts since these are only for a UI dot, not real traffic.
+    location = /_status/firefox {
+        set $upstream http://firefox:3000;
+        proxy_pass $upstream/;
+        proxy_hide_header WWW-Authenticate;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/chromium {
+        set $upstream http://chromium:3000;
+        proxy_pass $upstream/;
+        proxy_hide_header WWW-Authenticate;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/ungoogled-chromium {
+        set $upstream http://ungoogled-chromium:3000;
+        proxy_pass $upstream/;
+        proxy_hide_header WWW-Authenticate;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/brave {
+        set $upstream http://brave:3000;
+        proxy_pass $upstream/;
+        proxy_hide_header WWW-Authenticate;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/mullvad-browser {
+        set $upstream http://mullvad-browser:3000;
+        proxy_pass $upstream/;
+        proxy_hide_header WWW-Authenticate;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+
+    location /firefox/ {
+        set $upstream http://firefox:3000;
+        # No URI component after the host — SUBFOLDER-aware apps expect the
+        # full /firefox/... path forwarded unchanged, not stripped, so their
+        # own generated asset/API/WebSocket URLs line up with what they receive.
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location /chromium/ {
+        set $upstream http://chromium:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location /ungoogled-chromium/ {
+        set $upstream http://ungoogled-chromium:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location /brave/ {
+        set $upstream http://brave:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location /mullvad-browser/ {
+        set $upstream http://mullvad-browser:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+}
+
 # ── Excalidraw ────────────────────────────────────────────────────────────────
 server {
     listen 80;

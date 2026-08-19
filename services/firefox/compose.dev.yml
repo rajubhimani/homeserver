@@ -1,0 +1,4 @@
+services:
+  firefox:
+    ports:
+      - "0.0.0.0:8145:3000"

@@ -4,7 +4,7 @@
 
 ---
 
-Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 57 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login.
+Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login.
 
 **Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`, `ollama`.
 
@@ -31,7 +31,7 @@ A and B are the ones worth acting on — nobody using them is individually ident
 | Dagster | Dev | Asset/pipeline UI. Same story — RBAC is Dagster+ (paid) only. |
 | Excalidraw | Productivity | Whiteboard — [its own doc](services/excalidraw.md) notes it's local-only by default, nothing persisted server-side. |
 
-## Bucket B — single shared credential (10)
+## Bucket B — single shared credential (11)
 
 | Service | Category | Notes |
 | --- | --- | --- |
@@ -45,6 +45,7 @@ A and B are the ones worth acting on — nobody using them is individually ident
 | SilverBullet | Productivity | Single-space markdown notes, pure browser PWA, no separate client protocol. |
 | Supabase | Dev | Studio dashboard behind Kong basic-auth (`DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD`) — see [supabase.md](services/supabase.md). |
 | Plausible | Dev | Dashboard is shared-login, but its `/api/event` tracking-beacon endpoint is *meant* to be public — anonymous visitor browsers POST to it. |
+| Browser Hub | System | HTTP basic-auth gate at the nginx-plain level protects all 5 remote-browser containers (Firefox/Chromium/Ungoogled Chromium/Brave/Mullvad Browser) behind one shared login — see [browser-hub.md](services/browser-hub.md). Each container also keeps its own basic-auth gate as defense-in-depth against direct dev-port access. |
 
 ## Reference — bucket C, multi-user but no roles (9)
 
