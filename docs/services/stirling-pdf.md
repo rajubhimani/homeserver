@@ -20,7 +20,7 @@ cp services/stirling-pdf-lite/.env.example services/stirling-pdf-lite/.env
 uv run homeserver.py dev up stirling-pdf-lite
 ```
 
-`STIRLING_ADMIN_USER` / `STIRLING_ADMIN_PASSWORD` in `.env` set the admin login at startup.
+**No login on Lite, by design of the image, not this config:** the `ultra-lite` tag is built without Stirling-PDF's security module — its startup logs never show a `security` Spring profile active, unlike Full. `STIRLING_ADMIN_USER` / `STIRLING_ADMIN_PASSWORD` in `.env` and `SECURITY_ENABLELOGIN=true` in `compose.yml` are set but have no effect on this image; `GET /` returns `200` straight into the app instead of the `401` Full gives unauthenticated. There's no "lite with login" tag upstream — only plain, `-fat`, and `-ultra-lite` exist. Left open deliberately (same posture as mailpit etc. — relies on the Cloudflare Tunnel being the only way in); switching to a login-capable image means dropping to the plain/`-fat` tag, which is functionally redundant with the Full variant already running below.
 
 ## Setup — Full (manual, OCR + LibreOffice conversion)
 
@@ -30,6 +30,8 @@ Not part of `all` — start manually when needed, stop when done to free RAM:
 uv run homeserver.py dev up stirling-pdf
 uv run homeserver.py dev down stirling-pdf
 ```
+
+`SECURITY_INITIALLOGIN_USERNAME` / `SECURITY_INITIALLOGIN_PASSWORD` in `.env` set the admin login at startup (same mechanism as Lite, just under the raw Stirling-PDF property names since Full's `.env` passes through unmapped).
 
 ---
 

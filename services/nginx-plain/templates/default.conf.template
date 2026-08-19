@@ -230,6 +230,9 @@ server {
     location / {
         set $upstream http://trilium:8080;
         proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -881,7 +884,7 @@ server {
 # ── Stirling PDF Lite ─────────────────────────────────────────────────────────
 server {
     listen 80;
-    server_name stirling-pdf.${DOMAIN};
+    server_name stirling-pdf-lite.${DOMAIN};
     location / {
         set $upstream http://stirling-pdf-lite:8080;
         proxy_pass $upstream;
@@ -896,7 +899,7 @@ server {
 # ── Stirling PDF Full ─────────────────────────────────────────────────────────
 server {
     listen 80;
-    server_name stirling-pdf-full.${DOMAIN};
+    server_name stirling-pdf.${DOMAIN};
     location / {
         set $upstream http://stirling-pdf:8080;
         proxy_pass $upstream;

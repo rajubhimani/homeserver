@@ -152,7 +152,8 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `dozzle.yourdomain.com` | `dozzle` | `8080` | extra |
 | `dockge.yourdomain.com` | `dockge` | `5001` | extra |
 | `paperless.yourdomain.com` | `paperless` | `8000` | extra |
-| `stirling-pdf.yourdomain.com` | `stirling-pdf-lite` | `8080` | extra |
+| `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | extra |
+| `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | extra (manual) |
 | `mealie.yourdomain.com` | `mealie` | `9000` | extra |
 | `homebox.yourdomain.com` | `homebox` | `7745` | extra |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | extra |

@@ -692,14 +692,14 @@
       placeCard(card, up);
     }
 
-    // On re-check, move cards back to pool first so they can be re-sorted
+    // Re-check every card in place -- placeCard() already inserts each card
+    // at its correct sorted position (data-order is a fixed alphabetical
+    // rank) and moves it between the online/offline grids if its status
+    // changed, so there's no need to clear categories out first. Doing that
+    // used to make every section/tab-count flash empty for the duration of
+    // each health check, which read as the whole page "refreshing".
     function recheckAll() {
-      const pool = document.getElementById('card-pool');
-      document.querySelectorAll('.card[data-service]').forEach(card => {
-        pool.appendChild(card);
-      });
-      updateVisibility();
-      document.querySelectorAll('#card-pool .card[data-service]').forEach(checkService);
+      document.querySelectorAll('.card[data-service]').forEach(checkService);
     }
 
     (async () => {
