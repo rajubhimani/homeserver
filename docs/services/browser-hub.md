@@ -78,10 +78,6 @@ All six cards (the hub itself plus its five members) live under System → **Bro
 
 The hub's own card (`services.json` slug `browser`) is marked `"virtual": true` — it has a landing-page presence but no `services/browser/compose.yml`; `homeserver.py` excludes `virtual` entries from `SERVICES_MIN`/`CORE`/`EXTRA`/`MANUAL` and from automatic category/subcategory `SERVICE_GROUPS` derivation, so `up all`/`up group:browsers`/etc. never try to docker-compose a directory that doesn't exist.
 
-## Hub page doc links
-
-Each tile on the hub page itself (`services/nginx-plain/html/browser-hub/index.html`) carries a small "Docs" link alongside the launch link, opening that browser's `docs/services/<slug>.md` on the `docs` service in a new tab. Since this file is a static asset (not envsubst-templated the way `nginx-plain`'s `*.conf.template` files are), `${DOMAIN}` isn't available server-side here — the docs host is derived client-side instead, from `location.hostname` (stripping the `browser.` prefix and substituting `docs.`), then built into a Docsify hash link: `https://docs.${DOMAIN}/#/docs/services/<slug>` (matching `_sidebar.md`'s own link paths, confirmed against the live `docs` service rather than assumed).
-
 ## Gotchas
 
 - **`RESTART_APP=true` is set on every browser** — compensates for `HARDEN_DESKTOP` above disabling the terminal and xdg-open. Without it, accidentally closing the browser *application itself* inside the remote desktop (not just your own viewing tab — that's harmless, see "Access" above) would strand the session with no in-desktop way to relaunch it, short of restarting the whole container. This watchdog auto-relaunches the main app whenever it exits.
