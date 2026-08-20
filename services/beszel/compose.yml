@@ -1,6 +1,6 @@
 services:
   beszel:
-    image: henrygd/beszel:0.18.7
+    image: henrygd/beszel:0.18.8
     container_name: beszel
     restart: unless-stopped
     environment:
@@ -28,7 +28,7 @@ services:
   # own virtual interface. It reaches the hub over the shared local socket
   # below, not TCP, so it has no need to resolve other containers by name.
   beszel-agent:
-    image: henrygd/beszel-agent:0.18.7
+    image: henrygd/beszel-agent:0.18.8
     container_name: beszel-agent
     restart: unless-stopped
     network_mode: host
