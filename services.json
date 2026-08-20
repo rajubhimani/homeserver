@@ -589,7 +589,7 @@
     },
     {
       "slug": "atuin",
-      "tier": "extra",
+      "tier": "core",
       "name": "Atuin",
       "category": "dev",
       "subcategory": "tools",
