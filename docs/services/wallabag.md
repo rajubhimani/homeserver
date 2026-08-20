@@ -21,7 +21,25 @@ uv run homeserver.py dev up wallabag
 docker exec -it wallabag php bin/console wallabag:install --env=prod -n
 ```
 
-This creates the schema, prompts for (and creates) the admin account, and sets up config defaults. Default credentials if you accept the prompts as-is: `wallabag` / `wallabag` — change immediately after first login.
+This creates the schema, prompts for (and creates) the admin account, and sets up config defaults. Default credentials if you accept the prompts as-is: `wallabag` / `wallabag` — **change immediately after first login**:
+
+1. Log in at `https://wallabag.<domain>/` with `wallabag` / `wallabag`.
+2. Go to **Settings → Password** tab.
+3. Set a strong password there and save.
+
+There is no CLI or env-var way to set this directly during install — this
+version's console only ships `wallabag:user:list`/`wallabag:user:show`, no
+`user:create` or password-reset command (checked via `php bin/console list
+wallabag --env=prod` inside the container) — so the web UI's Settings page
+is the only supported way to change it, and it should be the first thing
+you do after the install step above, before leaving the instance
+reachable with the default credentials.
+
+**Running the installer leaves `/api/info` still 500ing afterward**: `docker exec` runs as `root` by default, but the actual request-handling process is `php-fpm`'s `www` pool running as `nobody` (`nginx` serves static assets as its own `nginx` user, unrelated). The installer writes fresh cache files under `var/cache/prod/` as `root`, which `nobody` then can't write to on the next request — surfaces as `The directory ".../jms_serializer_default" is not writable` in `var/logs/prod.log`. Fix once, after running the installer:
+
+```bash
+docker exec wallabag chown -R nobody:nobody /var/www/wallabag/var
+```
 
 ## Registration
 
