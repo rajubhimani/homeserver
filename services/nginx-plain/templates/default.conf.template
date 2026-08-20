@@ -755,6 +755,43 @@ server {
 server {
     listen 80;
     server_name coolify.${DOMAIN};
+
+    # coolify-realtime (Soketi/Pusher-protocol WS server) — the app's own
+    # frontend JS connects here directly for live deploy logs,
+    # notifications, etc. (see PUSHER_HOST/PUSHER_PORT in compose.yml).
+    # Without this route the browser has nowhere reachable to open that
+    # WebSocket to, since coolify-realtime is otherwise only Docker-
+    # network-internal (or loopback-only in prod mode).
+    location /app/ {
+        set $upstream http://coolify-realtime:6001;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # The terminal (server + container) is a *separate* WS process from
+    # the Soketi one above — a second listener inside the coolify-realtime
+    # container, on port 6002 not 6001. Coolify's frontend JS defaults to
+    # wss://<this host>/terminal/ws when TERMINAL_HOST/PORT/PROTOCOL are
+    # unset (auto-derived from the page's own URL — see terminalConfig in
+    # app-*.js), so no compose.yml env vars are needed, only this route.
+    location /terminal/ws {
+        set $upstream http://coolify-realtime:6002;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
     location / {
         set $upstream http://coolify:8080;
         proxy_pass $upstream;

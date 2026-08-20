@@ -48,64 +48,104 @@ confirmed compatible — Coolify's own upgrade-path check treats
 `4.3.0 → 4.3.9` as a valid forward upgrade, not a downgrade, and this
 image previously ran as `edge` self-reporting version `4.3.0`).
 
-## Setup
+## Setup — full checklist, in order
+
+This is the complete, verified sequence — including the fresh-install
+gotchas documented in detail further down this page. Every step matters;
+skipping the SSH-volume init step in particular will make the very first
+boot fail (see "Persistent storage" below for why).
+
+**1. Configure secrets:**
 
 ```bash
 cp services/coolify/.env.example services/coolify/.env
 # generate ALL secrets before first start (see comments in .env.example) —
 # changing any of them later can break the installation
+```
+
+Optionally also fill in the commented `ROOT_USERNAME`/`ROOT_USER_EMAIL`/
+`ROOT_USER_PASSWORD` block in the same file to seed your real admin
+account directly (fresh install only) instead of registering through the
+UI afterward.
+
+**2. Initialize the SSH-keys volume — before the first boot:**
+
+```bash
+sh services/coolify/init-ssh-volume.sh
+```
+
+Required every time `coolify-ssh-keys` is freshly created (a genuine
+first install, or after wiping it) — a brand-new Docker volume is owned
+by `root:root`, and Coolify's own image can't write into it and doesn't
+self-heal that itself the way official database images do. See
+"Persistent storage" below for the full explanation.
+
+**3. Start it:**
+
+```bash
 uv run homeserver.py dev up coolify
 ```
 
-Open `https://coolify.<domain>/` (or `http://<host>:8132` in dev) and complete the first-run setup wizard.
-
-## Connecting the "localhost" server — required before deploying anything
-
-Coolify auto-registers a `localhost` server pointing at the mounted Docker socket, but — non-obviously — Coolify manages **every** server, including its own host, over **SSH**, not just the Docker socket. Without that, the server shows as unavailable in the UI, and `docker logs coolify` shows:
-
-```text
-No SSH key found for the Coolify host machine (localhost).
-Please read the following documentation (point 3) to fix it: https://coolify.io/docs/knowledge-base/server/openssh/
-Your localhost connection won't work until then.
-```
-
-with `App\Jobs\CoolifyTask`, `App\Actions\Proxy\StartProxy`, and `App\Jobs\CheckAndStartSentinelJob` all failing in the logs as a result. Fix, once, before first use:
-
-**1. Enable sshd on the host** (not in any container — this is the actual machine Docker runs on):
+**4. Enable sshd on the host** (not in any container — this is the
+actual machine Docker runs on; Coolify manages every server, including
+its own host, over SSH, not just the Docker socket):
 
 ```bash
 sudo systemctl enable --now sshd
 ```
 
-This opens port 22 on the host to your LAN — not the internet, since this stack has no port-forwarding, only the outbound-only `cloudflared` tunnel for HTTP(S). Acceptable for a trusted home network; scope it further with a firewall rule if you want to restrict it to just the Docker bridge subnet.
+This opens port 22 on the host to your LAN — not the internet, since
+this stack has no port-forwarding, only the outbound-only `cloudflared`
+tunnel for HTTP(S). Acceptable for a trusted home network; scope it
+further with a firewall rule if you want to restrict it to just the
+Docker bridge subnet.
 
-**2. Generate a dedicated keypair** for Coolify — this can be done from anywhere, no host `sudo` needed, since `service_data/data/coolify/ssh/` is already bind-mounted into the container at `/data/coolify/ssh/`:
+**5. Open `https://coolify.<domain>/` (or `http://<host>:8132` in dev)**
+and log in with the `ROOT_USER_*` credentials from step 1, or complete
+the first-run registration if you skipped that.
+
+**6. Go through Coolify's own onboarding wizard.** It offers to
+generate an SSH key for the `localhost` server — **pick ED25519, not
+RSA** (smaller, faster, and what this stack's own scripts use
+elsewhere): Ed25519 is a modern elliptic-curve algorithm with better
+performance and much smaller keys than RSA for equivalent security; RSA
+is the older, more universally-compatible standard but needs 3072–4096
+bit keys to match it. This is the real official flow — confirmed against
+`app/Livewire/Boarding/Index.php`, which calls the same
+`generateSSHKey()`/`PrivateKey::createAndStore()` functions either way.
+
+**7. Copy the public key the wizard shows you, and authorize it on the
+host:**
 
 ```bash
-mkdir -p service_data/data/coolify/ssh/keys
-ssh-keygen -t ed25519 -a 100 \
-  -f "service_data/data/coolify/ssh/keys/id.root@localhost" \
-  -q -N "" -C root@coolify
-```
-
-**3. Authorize that key for root login on the host**:
-
-```bash
-sudo mkdir -p /root/.ssh
-sudo sh -c 'cat "service_data/data/coolify/ssh/keys/id.root@localhost.pub" >> /root/.ssh/authorized_keys'
-sudo chmod 700 /root/.ssh
+sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh
+echo "PASTE_THE_PUBLIC_KEY_HERE" | sudo tee -a /root/.ssh/authorized_keys
 sudo chmod 600 /root/.ssh/authorized_keys
 ```
 
-**4. In the Coolify dashboard**: Settings → Private Keys → Add, paste the contents of `service_data/data/coolify/ssh/keys/id.root@localhost` (the private key, not `.pub`). Then Servers → `localhost` → Private Key tab, select the key you just added, and click **Validate Server & Install Docker Engine** — a green "Proxy Running" status confirms it worked.
+**8. Back in the wizard, click Validate/Continue.** A green "Proxy
+Running" status confirms the SSH connection worked.
 
-Verify the SSH path itself works before touching the UI, if something still seems off:
+Verify the SSH path itself works directly, if something still seems off:
 
 ```bash
-docker exec coolify sh -c 'ssh -o StrictHostKeyChecking=no -i /data/coolify/ssh/keys/id.root@localhost root@host.docker.internal echo SSH_OK'
+docker exec coolify sh -c 'ssh -o StrictHostKeyChecking=no -i /var/www/html/storage/app/ssh/keys/<key-file-name> root@host.docker.internal echo SSH_OK'
 ```
 
-(`host.docker.internal` resolves via the `extra_hosts: host-gateway` entry already in `compose.yml` — this is how the container reaches back out to the real host, not `localhost` inside its own network namespace.)
+(`host.docker.internal` resolves via the `extra_hosts: host-gateway`
+entry in `compose.yml`, present on both `coolify` and `coolify-realtime`
+— this is how each container reaches back out to the real host, not
+`localhost` inside its own network namespace.)
+
+**9. Once the server shows connected, run the fix script** — needed
+after every fresh install, since it fixes two things that live in
+Coolify's own database, not this repo's `compose.yml`:
+
+```bash
+sh services/coolify/fix-proxy-sentinel.sh
+```
+
+See "run `fix-proxy-sentinel.sh`" below for what it actually fixes.
 
 ## After connecting the server: run `fix-proxy-sentinel.sh`
 
@@ -152,16 +192,119 @@ correct in both dev and prod). Both applied through Coolify's own
 model — the same code paths the UI itself uses — so they persist across
 restarts. Safe to re-run any time either symptom reappears.
 
+## Terminal / live deploy logs — "websocket connection lost, reconnecting"
+
+Coolify's terminal, live deploy logs, and other real-time UI features
+connect over a WebSocket using config baked directly into every page
+(`resources/views/layouts/base.blade.php`):
+
+```js
+wsHost: "{{ config('constants.pusher.host') }}",  // PUSHER_HOST
+wsPort: "{{ getRealtime() }}",                     // PUSHER_PORT
+```
+
+By default `PUSHER_HOST` is the Docker-internal container name
+`coolify-realtime` — rendered straight into the page your browser loads,
+which has no way to resolve it, so every connection attempt fails
+immediately.
+
+Unlike the proxy/Sentinel issues above, this **is** fixed permanently
+via `compose.yml` — Coolify already splits frontend vs. backend config
+(`config/broadcasting.php` uses separate `PUSHER_BACKEND_HOST`/
+`PUSHER_BACKEND_PORT` for the Laravel-to-`coolify-realtime` server-side
+connection, defaulting to the same internal values). `PUSHER_HOST`/
+`PUSHER_PORT` are set to `coolify.${DOMAIN}`/`443` — routed through a
+`/app/` location added to `nginx-plain`'s `coolify.${DOMAIN}` vhost
+(`default.conf.template`, WebSocket-upgrade headers, proxying to
+`coolify-realtime:6001`) — so the browser connects back through the same
+public domain everything else uses, working identically on LAN and via
+`cloudflared`, instead of needing `coolify-realtime` exposed on its own
+port.
+
+**The terminal specifically needs three more fixes on top of the above**
+(same symptom, different cause — it's a *separate* WebSocket process,
+not the Pusher/Soketi one):
+
+1. **A second nginx-plain route.** The terminal connects to a different
+   listener inside `coolify-realtime` — port `6002` (a plain Node
+   process), not `6001` (Soketi). Frontend JS default (from the compiled
+   bundle, when `TERMINAL_HOST`/`PORT`/`PROTOCOL` are unset): connect to
+   `wss://<current host>/terminal/ws`, auto-derived from the page's own
+   URL — no env vars needed, just a `location /terminal/ws` route in
+   `nginx-plain` proxying to `coolify-realtime:6002` (added alongside
+   `/app/`).
+2. **`extra_hosts` on `coolify-realtime`.** It SSHes into whatever
+   host/IP the target server is configured with (`host.docker.internal`
+   in this stack's setup) to actually spawn the shell. Only `coolify`
+   itself had the `host.docker.internal:host-gateway` entry — missing it
+   on `coolify-realtime` caused `Could not resolve hostname
+   host.docker.internal` *inside* terminal sessions, even once the
+   WebSocket connection itself was working.
+3. **The SSH private key needs to be a named volume, not a
+   `service_data/` bind mount.** `coolify-realtime` also needs the same
+   ssh-keys directory `coolify` uses (confirmed against upstream's own
+   `docker-compose.prod.yml`) to read the private key file directly. But
+   OpenSSH refuses to load a key unless its file mode is exactly `0600`
+   — and `service_data/` on this host sits on an NTFS drive
+   (`fuseblk`/`ntfs-3g`, confirmed with `df -T`), which **cannot store
+   Unix permissions or ownership at all**: `chmod`/`chown` against it
+   silently succeed and do nothing, forever, no matter how many times
+   you retry. So the key stayed stuck at whatever permissive mode got
+   written (`0777`), and SSH rejected it every time with `Permissions
+   ... are too open`. Fixed by mounting a **named volume**
+   (`coolify-ssh-keys`, lives in Docker's own storage — `btrfs` on this
+   host, confirmed with `df -T /var/lib/docker`) instead — same
+   reasoning as this stack's database-data-as-named-volume rule, see the
+   `homeserver-postgres` skill. A fresh named volume is owned by
+   `root:root` by default, which the container's `www-data` (uid `9999`)
+   can't write into either — fix once with:
+   ```bash
+   docker run --rm -v coolify_coolify-ssh-keys:/data alpine chown -R 9999:9999 /data
+   ```
+
+## Persistent storage was silently broken — fixed, but know the history
+
+Every bind mount in `compose.yml` (`ssh`/`applications`/`databases`/
+`services`/`backups`) used to point at `/data/coolify/...` inside the
+container — a path this image doesn't use for anything (verified: it
+exists on disk but nothing reads or writes it). The real Laravel storage
+root is `/var/www/html/storage/app/...` (confirmed against upstream's
+own `docker-compose.prod.yml`), and an `images` mount (avatars/project
+icons) was missing entirely. Practical effect: every SSH private key,
+deployed-application config, one-click database, backup, and one-click
+service was **silently ephemeral** — wiped on every container
+recreation, not persisted at all, for as long as this compose file
+existed. All six are fixed now (five real `service_data/` bind mounts +
+`ssh` as a named volume, per the terminal section above) — nothing
+further to do, just worth knowing why a `coolify` container recreation
+used to lose things that looked like they should have survived it.
+
 ## Registration — a real action item, not just informational
 
-Coolify has no env var for this — public self-registration is **on by default** and stays on until manually disabled in the UI (Settings → Configuration) after your first login. Do this immediately: anyone who finds the URL can otherwise create their own account. Everything else about Coolify's behavior is likewise UI/database-managed, not env-var-driven — there's nothing further to add to `.env` beyond the one-time bootstrap secrets.
+Coolify has no env var for the registration toggle itself — public self-registration is **on by default** and stays on until manually disabled in the UI (Settings → Configuration) after your first login. Do this immediately: anyone who finds the URL can otherwise create their own account.
 
-## Architecture — 4 containers
+There **is** an env-var path for the root user account itself (fresh installs only, same caveat as everywhere else on this page — skipped if a user with id 0 already exists): `ROOT_USERNAME`/`ROOT_USER_EMAIL`/`ROOT_USER_PASSWORD` in `.env.example` (commented). Login is by email, not a fixed username; password needs 8+ chars, mixed case, a number, and a symbol, and is checked against HaveIBeenPwned.
+
+## Architecture — 6 containers, 2 of them self-managed by Coolify itself
+
+Four are defined in `compose.yml` like any other service:
 
 - `coolify-db` (Postgres) — app metadata.
 - `coolify-redis` — caching/queues.
-- `coolify-realtime` (`coollabsio/coolify-realtime`, a maintained Soketi fork) — websocket server for live deploy logs/status in the UI. Listens on `6001` (WS + HTTP API) and `9601` (metrics/`/usage`, used for its own healthcheck — there's no dedicated `/health` path documented).
-- `coolify` — the main app; needs the Docker socket mounted (`${DOCKER_SOCKET}`) since its entire job is creating/managing containers on this host for deployed projects, plus several bind-mounted subdirectories (`data`, `ssh`, `applications`, `databases`, `backups`, `services`) that Coolify itself populates.
+- `coolify-realtime` (`coollabsio/coolify-realtime`, a maintained Soketi fork) — websocket server for live deploy logs/status (port `6001`) *and* the terminal (port `6002`, a separate Node process), plus `9601` (metrics/`/usage`, used for its own healthcheck — there's no dedicated `/health` path documented).
+- `coolify` — the main app; needs the Docker socket mounted (`${DOCKER_SOCKET}`) since its entire job is creating/managing containers on this host for deployed projects, plus five bind-mounted `service_data/` subdirectories and the `coolify-ssh-keys` named volume (see "Persistent storage" above) that Coolify itself populates.
+
+The other two **aren't in `compose.yml` at all** — `coolify` creates and
+manages them itself via the mounted Docker socket, once the `localhost`
+server is connected:
+
+- `coolify-proxy` — Coolify's own Traefik reverse-proxy, for apps
+  deployed *through* Coolify (separate from this stack's `nginx-plain`).
+  See "run `fix-proxy-sentinel.sh`" above.
+- `coolify-sentinel` — the monitoring agent behind the CPU/RAM/disk
+  graphs on the server dashboard. Same section above.
+
+Both regenerate from Coolify's own database on every `up`/restart — `docker ps -a` showing neither of them existing yet, right after starting `coolify`, is expected while the server connects, not broken.
 
 ## Notes
 
