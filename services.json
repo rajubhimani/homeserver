@@ -57,6 +57,28 @@
       "desc": "Docker container management UI. Inspect, start/stop, and manage all containers from the browser."
     },
     {
+      "slug": "plausible",
+      "tier": "min",
+      "name": "Plausible",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "green",
+      "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.",
+      "replaces": "Google Analytics"
+    },
+    {
+      "slug": "mailpit",
+      "tier": "min",
+      "name": "Mailpit",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "yellow",
+      "svg": "<path d=\"M2.5 4.5 h13 a1 1 0 0 1 1 1 v7 a1 1 0 0 1 -1 1 h-13 a1 1 0 0 1 -1 -1 v-7 a1 1 0 0 1 1 -1 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M2 5 l7 5.5 L16 5\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered.",
+      "replaces": "Mailtrap"
+    },
+    {
       "slug": "nextcloud",
       "tier": "core",
       "name": "Nextcloud",
@@ -551,17 +573,6 @@
       "desc": "Data orchestrator built around software-defined assets — track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline."
     },
     {
-      "slug": "mailpit",
-      "tier": "extra",
-      "name": "Mailpit",
-      "category": "dev",
-      "subcategory": "tools",
-      "icon": "yellow",
-      "svg": "<path d=\"M2.5 4.5 h13 a1 1 0 0 1 1 1 v7 a1 1 0 0 1 -1 1 h-13 a1 1 0 0 1 -1 -1 v-7 a1 1 0 0 1 1 -1 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M2 5 l7 5.5 L16 5\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/>",
-      "desc": "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered.",
-      "replaces": "Mailtrap"
-    },
-    {
       "slug": "crowdsec",
       "tier": "extra"
     },
@@ -651,17 +662,6 @@
       "svg": "<rect x=\"2.5\" y=\"3.5\" width=\"13\" height=\"11\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7 h13 M6 2 v3 M12 2 v3\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
       "desc": "Share a booking page so people can schedule meetings with you automatically — a self-hosted alternative to Calendly.",
       "replaces": "Calendly"
-    },
-    {
-      "slug": "plausible",
-      "tier": "extra",
-      "name": "Plausible",
-      "category": "dev",
-      "subcategory": "tools",
-      "icon": "green",
-      "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.",
-      "replaces": "Google Analytics"
     },
     {
       "slug": "penpot",
