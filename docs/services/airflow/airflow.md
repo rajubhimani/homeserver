@@ -14,12 +14,10 @@ cp services/airflow/.env.example services/airflow/.env
 # generate real values for FERNET_KEY, JWT_SECRET, API_SECRET_KEY, POSTGRES_PASSWORD, _AIRFLOW_WWW_USER_PASSWORD
 # set DOCKER_SOCKET_GID (needed for DockerOperator, see "DAGs can launch their own containers" below):
 #   stat -c '%g' /var/run/docker.sock
-mkdir -p service_data/data/airflow/dags
-cp services/airflow/dags-examples/*.py service_data/data/airflow/dags/   # optional — the starter examples below
 uv run homeserver.py dev up airflow
 ```
 
-`services/airflow/dags-examples/` is a **git-tracked template** — `service_data/data/airflow/dags/` (bind-mounted, gitignored) is where Airflow actually reads from and where your own DAGs go. The copy step seeds your live folder with the starter examples once; after that the two are independent — edit/delete freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own DAGs. This is the same relationship `.env.example`/`.env` already has, just for a whole directory instead of one file.
+`services/airflow/dags-examples/` is a **git-tracked template** — `service_data/data/airflow/dags/` (bind-mounted, gitignored) is where Airflow actually reads from and where your own DAGs go. The one-shot `airflow-init` container seeds your live folder with the starter examples automatically, but only the first time — it bind-mounts `dags-examples/` read-only and copies from it **only when `dags/` has zero `.py` files in it**, so it's checked by directory contents, not per-file. After that first seed the two are independent: edit or delete individual examples freely in `service_data/` and they stay gone even though `airflow-init` re-runs on every `up airflow` (it's `restart: "no"`, so compose reruns it each time, same as its idempotent `db migrate`/user-create steps) — it only re-copies if you clear `dags/` back down to zero files. A `git pull` on this repo never touches `service_data/` either way. Same relationship `.env.example`/`.env` already has, just for a whole directory instead of one file.
 
 ## First login
 

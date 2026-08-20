@@ -12,10 +12,13 @@
 ```bash
 cp services/temporal/.env.example services/temporal/.env
 # set POSTGRES_PASSWORD
-mkdir -p service_data/data/temporal/worker
-cp services/temporal/worker/*.py service_data/data/temporal/worker/   # optional — the starter workflows below
 uv run homeserver.py dev up temporal
 ```
+
+`temporal-worker` seeds its own live code directory
+(`service_data/data/temporal/worker/`) with the starter workflows below on
+its first-ever start — no manual copy needed. See "Where your workflow
+code actually lives" below for the mechanism and how to opt out.
 
 Open `https://temporal.<domain>/` (or `http://<host>:8138` in dev) — no login/setup wizard, the UI is open to anyone who can reach it (see Notes).
 
@@ -45,7 +48,17 @@ Unlike Airflow or Dagster, Temporal doesn't execute your workflow logic itself �
 
 ## Where your workflow code actually lives
 
-`services/temporal/worker/*.py` is a **git-tracked template**, not what actually runs — the Dockerfile doesn't `COPY` them in. The container reads them from a bind mount: `service_data/data/temporal/worker/` (gitignored, your live copy). The Setup step above seeds it once from the template; after that the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own workflow code. Same relationship as `.env.example`/`.env`, just for a whole directory instead of a few variables.
+`services/temporal/worker/*.py` is a **git-tracked template**, not what actually runs — the container reads live code from a bind mount: `service_data/data/temporal/worker/` (gitignored, your live copy). The template is also baked into the built image at `/template` purely as a seed source; `temporal-worker`'s entrypoint copies it into the bind mount **only when `worker.py` is missing there** (fresh clone, restored backup — nothing has run yet), then execs `python worker.py`. After that first copy, the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own workflow code. Same relationship as `.env.example`/`.env`, just for a whole directory instead of a few variables.
+
+That "only when missing" check means deleting an individual file you don't want (e.g. trimming down which starter workflows are present) stays deleted — but `worker.py` itself is the container's actual entrypoint, not decoration, so deleting *that* one specifically just gets it re-seeded from the template on the next restart rather than leaving the container permanently unable to start.
+
+The check and copy both live in `worker/Dockerfile`'s `CMD`, not in `compose.yml` or `homeserver.py` — it runs fresh on every container start, not just the first:
+
+```dockerfile
+CMD ["/bin/sh", "-c", "[ -f worker.py ] || cp /template/*.py .; exec python worker.py"]
+```
+
+Read left to right: `[ -f worker.py ]` tests whether that file already exists in `/app` (the bind mount, set as `WORKDIR` earlier in the Dockerfile); `||` runs the `cp` only when that test fails (file missing); the `;` then unconditionally moves on to actually starting the worker. `exec` matters there specifically — without it, `python` would run as a child of the wrapping shell, and the shell (not `python`) would stay PID 1 inside the container; Docker sends `SIGTERM` to PID 1 on stop/restart, and a plain shell doesn't reliably forward that to a child, so restarts would hang until Docker's timeout forces a `SIGKILL`. `exec` replaces the shell process in place with `python`, so the worker itself receives shutdown signals directly.
 
 Changing the code only needs a restart, not a rebuild:
 

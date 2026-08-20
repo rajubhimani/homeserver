@@ -12,10 +12,15 @@
 ```bash
 cp services/dagster/.env.example services/dagster/.env
 # set DAGSTER_POSTGRES_PASSWORD
-mkdir -p service_data/data/dagster/user-code
-cp services/dagster/user-code/definitions.py service_data/data/dagster/user-code/   # optional — the starter examples below
 uv run homeserver.py dev up dagster
 ```
+
+`dagster-user-code` seeds its own live code directory
+(`service_data/data/dagster/user-code/`) with `definitions.py` on its
+first-ever start — no manual copy needed, and Docker auto-creates the
+directory itself if `service_data/data/dagster/user-code/` doesn't exist
+yet. See "Where your pipeline code actually lives" below for the
+mechanism.
 
 Open `https://dagster.<domain>/` (or `http://<host>:8139` in dev) — no login/setup wizard, the UI is open to anyone who can reach it (see Notes).
 
@@ -37,7 +42,17 @@ flowchart LR
 
 ## Where your pipeline code actually lives
 
-`services/dagster/user-code/definitions.py` is a **git-tracked template**, not what actually runs — `user-code/Dockerfile` only installs dependencies now, it doesn't `COPY` the file in. The container reads `definitions.py` from a bind mount: `service_data/data/dagster/user-code/` (gitignored, your live copy). The Setup step above seeds it once from the template; after that the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own pipeline. Same relationship as `.env.example`/`.env`, just for a whole file instead of a few variables.
+`services/dagster/user-code/definitions.py` is a **git-tracked template**, not what actually runs — the container reads live code from a bind mount: `service_data/data/dagster/user-code/` (gitignored, your live copy). The template is also baked into the built image at `/template`, purely as a seed source; `dagster-user-code`'s entrypoint copies it into the bind mount **only when `definitions.py` is missing there** (fresh clone, restored backup), then execs the gRPC server. After that first copy, the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own pipeline. Same relationship as `.env.example`/`.env`, just for a whole file instead of a few variables.
+
+`definitions.py` is the container's actual entrypoint argument, not decoration — deleting it entirely just gets it re-seeded from the template on the next restart rather than leaving the container permanently unable to start a code location at all.
+
+The check and copy both live in `user-code/Dockerfile`'s `CMD`, not in `compose.yml` or `homeserver.py` — it runs fresh on every container start, not just the first:
+
+```dockerfile
+CMD ["/bin/sh", "-c", "[ -f definitions.py ] || cp /template/definitions.py .; exec dagster api grpc -h 0.0.0.0 -p 4000 -f definitions.py"]
+```
+
+Same shape as Temporal's worker (see its own doc for the full breakdown): `[ -f definitions.py ]` tests whether the file already exists in `/opt/dagster/app` (the bind mount, set as `WORKDIR`); `||` runs the `cp` only when that test fails; `;` then unconditionally starts the code server either way. `exec` hands off the process in place so `dagster` itself becomes PID 1 and receives Docker's shutdown signal directly, instead of a wrapping shell swallowing it.
 
 Changing `definitions.py` only needs a restart, not a rebuild:
 
