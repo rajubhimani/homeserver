@@ -12,7 +12,7 @@
 ```bash
 cp services/bookstack/.env.example services/bookstack/.env
 # generate APP_KEY:
-docker run --rm --entrypoint /bin/bash lscr.io/linuxserver/bookstack:v26.05.3-ls277 \
+docker run --rm --entrypoint /bin/bash lscr.io/linuxserver/bookstack:v26.05.3-ls280 \
   -c "php /app/www/artisan key:generate --show"
 # paste the output (including "base64:") into services/bookstack/.env as APP_KEY, set the MYSQL_* passwords
 uv run homeserver.py dev up bookstack
@@ -25,6 +25,19 @@ Default credentials on first start: `admin@admin.com` / `password` — change th
 ## Registration
 
 No env var toggle — BookStack's self-registration is controlled entirely through the admin UI (Settings → Registration) after first login, default off until an admin enables it there.
+
+To enable it:
+
+1. Log in as an admin.
+2. Click the gear icon (top-right) → **Settings**.
+3. Left sidebar → **Registration**.
+4. Toggle **Allow Registration** on.
+5. Optional on the same page: require email confirmation before a new
+   account can log in, restrict signup to specific email domains, and set
+   the default role assigned to self-registered users.
+6. Save.
+
+New users can then sign up from the login page's "Register" link.
 
 ## Notes
 
