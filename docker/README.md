@@ -100,14 +100,6 @@ Needs `sudo` — every privileged step shells out to `sudo` itself (`tee`,
 root. A coding assistant without an interactive terminal can prepare
 these files but can't run the privileged steps itself.
 
-**Also check `fs.inotify.max_user_instances` if containers crash-loop or
-come up unhealthy right after a reboot or a mass `docker restart`.**
-Separate axis from CPU/memory/disk, not something this tool sets — a
-host running many containers at once can exhaust the default 128-instance
-inotify ceiling well before memory/CPU are the actual problem. See
-["Host inotify limits" in `docs/08-maintenance.md`](../docs/08-maintenance.md#host-inotify-limits-hit-when-running-many-containers-at-once)
-for the symptom and the one-line permanent fix.
-
 ## Platform dispatch
 
 `docker-limits.py` detects what it's running on and picks the matching

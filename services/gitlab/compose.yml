@@ -1,6 +1,6 @@
 services:
   gitlab:
-    image: gitlab/gitlab-ce:19.2.4-ce.0
+    image: gitlab/gitlab-ce:19.2.1-ce.0
     container_name: gitlab
     restart: unless-stopped
     hostname: gitlab.${DOMAIN}
@@ -18,17 +18,6 @@ services:
           "X-Forwarded-Proto" => "https",
           "X-Forwarded-Ssl" => "on"
         }
-        # Outgoing email — points at Mailpit (services/mailpit/, container
-        # "mailpit") for testing; no real mail delivery. No auth needed.
-        gitlab_rails['smtp_enable'] = true
-        gitlab_rails['smtp_address'] = 'mailpit'
-        gitlab_rails['smtp_port'] = 1025
-        gitlab_rails['smtp_domain'] = 'mailpit'
-        gitlab_rails['smtp_authentication'] = false
-        gitlab_rails['smtp_enable_starttls_auto'] = false
-        gitlab_rails['smtp_tls'] = false
-        gitlab_rails['gitlab_email_from'] = 'gitlab@example.com'
-        gitlab_rails['gitlab_email_reply_to'] = 'gitlab@example.com'
     volumes:
       - ${DATA_ROOT}/config:/etc/gitlab
       - ${DATA_ROOT}/logs:/var/log/gitlab
