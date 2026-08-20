@@ -79,7 +79,6 @@ Pure browser UI, single vhost, nothing else depends on hitting it directly.
 | AdGuard Home | Admin UI is browser-only; DNS port 53 is separate and unaffected. |
 | Syncthing | GUI is browser-only; sync protocol runs on its own port, untouched. |
 | SilverBullet | Browser-only PWA, no competing client protocol. |
-| Supabase | Studio dashboard is browser-only — a clean upgrade from the shared Kong credential. |
 
 ### Needs path-scoping — don't blanket-protect the whole vhost
 
@@ -92,6 +91,7 @@ The service has one path that must stay reachable *without* Authentik's login, a
 | Mailpit | Its REST API, *if* anything scripts/CI reads captured mail programmatically | Fine to fully gate if only ever used interactively in a browser — check first. |
 | Stirling PDF Lite / Full | The conversion API, *if* anything calls it programmatically | Same caveat as Mailpit — audit actual usage before gating the whole vhost. |
 | Trilium | N/A for the web UI, but check before gating if you use Trilium's desktop/mobile sync clients against this server | Those speak Trilium's own sync protocol, not a browser session — forward-auth wouldn't cover them. |
+| **Supabase** | `/auth/v1/*`, `/rest/v1/*`, `/storage/v1/*`, `/realtime/v1/*`, `/functions/v1/*`, `/pg/*` | Kong already scopes basic-auth this way — its `dashboard` route in `volumes/api/kong.yml` only catches `/` (everything not matched by the API routes above), which is where Studio's `basic-auth` plugin is attached. A blanket vhost-level `auth_request` would need to replicate that same split, or any app using `ANON_KEY`/`SERVICE_ROLE_KEY` against the live API breaks. |
 
 ---
 
