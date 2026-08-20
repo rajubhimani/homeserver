@@ -14,7 +14,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer |
+| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer, plausible, mailpit |
 | `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools, authentik, atuin, observability |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
@@ -26,9 +26,9 @@ mealie, homebox, syncthing,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
 trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, browser,
 firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
-n8n, airflow, temporal, dagster, mailpit, mattermost, rocketchat, zulip,
+n8n, airflow, temporal, dagster, mattermost, rocketchat, zulip,
 crowdsec, wallabag, adguard-home, orangehrm, nocodb, listmonk,
-documenso, calcom, plausible, penpot, coolify, supabase.
+documenso, calcom, penpot, coolify, supabase.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
@@ -85,14 +85,14 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Airflow | `airflow-apiserver` | 8137 | 8080 | extra |
 | Temporal | `temporal-ui` | 8138 | 8080 | extra |
 | Dagster | `dagster-webserver` | 8139 | 3000 | extra |
-| Mailpit | `mailpit` | 8140 | 8025 | extra |
+| Mailpit | `mailpit` | 8140 | 8025 | min |
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
 | Zulip | `zulip` | 8143 | 80 | extra |
 | Docs | `docs` | 8144 | 80 | min |
 | CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Wallabag | `wallabag` | 8121 | 80 | extra |
-| Atuin | `atuin` | 8122 | 8888 | extra |
+| Atuin | `atuin` | 8122 | 8888 | core |
 | AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | extra (manual) |
 | OrangeHRM | `orangehrm` | 8125 | 80 | extra |
@@ -100,7 +100,7 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Listmonk | `listmonk` | 8127 | 9000 | extra |
 | Documenso | `documenso` | 8128 | 3000 | extra |
 | Cal.com | `calcom` | 8129 | 3000 | extra |
-| Plausible | `plausible` | 8130 | 8000 | extra |
+| Plausible | `plausible` | 8130 | 8000 | min |
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
 | Coolify | `coolify` | 8132 | 8080 | extra |
 | Supabase | `supabase-kong` | 8133 | 8000 | extra |
@@ -181,12 +181,12 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | extra |
 | `temporal.yourdomain.com` | `temporal-ui` | `8080` | extra |
 | `dagster.yourdomain.com` | `dagster-webserver` | `3000` | extra |
-| `mailpit.yourdomain.com` | `mailpit` | `8025` | extra |
+| `mailpit.yourdomain.com` | `mailpit` | `8025` | min |
 | `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |
 | `rocketchat.yourdomain.com` | `rocketchat` | `3000` | extra |
 | `zulip.yourdomain.com` | `zulip` | `80` | extra |
 | `wallabag.yourdomain.com` | `wallabag` | `80` | extra |
-| `atuin.yourdomain.com` | `atuin` | `8888` | extra |
+| `atuin.yourdomain.com` | `atuin` | `8888` | core |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | extra |
 | `gitlab.yourdomain.com` | `gitlab` | `80` | extra (manual) |
 | `orangehrm.yourdomain.com` | `orangehrm` | `80` | extra |
@@ -194,7 +194,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `listmonk.yourdomain.com` | `listmonk` | `9000` | extra |
 | `documenso.yourdomain.com` | `documenso` | `3000` | extra |
 | `calcom.yourdomain.com` | `calcom` | `3000` | extra |
-| `plausible.yourdomain.com` | `plausible` | `8000` | extra |
+| `plausible.yourdomain.com` | `plausible` | `8000` | min |
 | `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
 | `coolify.yourdomain.com` | `coolify` | `8080` | extra |
 | `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
