@@ -25,7 +25,7 @@ Open `https://karakeep.<domain>/` (or `http://<host>:8117` in dev) and register 
 
 - `karakeep` — the app itself (web UI + background workers combined), SQLite database and uploaded assets under `service_data/data/karakeep/data/`.
 - `karakeep-meilisearch` — full-text search index. Data lives in a named Docker volume (`karakeep-meilisearch`), not under `service_data/data/` — it's a rebuildable index, not source data.
-- `karakeep-chrome` — headless Chrome (`alpine-chrome`), used for fetching/rendering pages so bookmarks get proper screenshots and content extraction.
+- `karakeep-chrome` — headless Chrome, used for fetching/rendering pages so bookmarks get proper screenshots and content extraction. Uses `ghcr.io/karakeep-app/karakeep-chrome:release` — Karakeep's own maintained chrome image, matching their current upstream `docker-compose.yml`. (Previously `gcr.io/zenika-hub/alpine-chrome:124`; switched after that image started failing to pull with a Google Cloud "billing must be enabled on this project" error — an upstream GCR change, not anything specific to this stack.)
 
 ## Notes
 
