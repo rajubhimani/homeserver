@@ -15,20 +15,20 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer |
-| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools |
+| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools, authentik, atuin, observability |
 | `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
 
 `down all` always stops everything in reverse order — no list to maintain.
 
 **Extra services** (started with `up all` or individually):
 dozzle, dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
-mealie, homebox, syncthing, authentik,
+mealie, homebox, syncthing,
 miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
 trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, browser,
 firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
 n8n, airflow, temporal, dagster, mailpit, mattermost, rocketchat, zulip,
-crowdsec, wallabag, atuin, adguard-home, orangehrm, nocodb, listmonk,
-documenso, calcom, plausible, penpot, coolify, supabase, observability.
+crowdsec, wallabag, adguard-home, orangehrm, nocodb, listmonk,
+documenso, calcom, plausible, penpot, coolify, supabase.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
@@ -104,8 +104,8 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
 | Coolify | `coolify` | 8132 | 8080 | extra |
 | Supabase | `supabase-kong` | 8133 | 8000 | extra |
-| Observability (Grafana) | `grafana` | 8134 | 3000 | extra |
-| Observability (Prometheus) | `prometheus` | 8135 | 9090 | extra |
+| Observability (Grafana) | `grafana` | 8134 | 3000 | core |
+| Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
 | Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 8180 / 8443 / 8181 (admin) | same | manual (optional) |
 
@@ -198,7 +198,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
 | `coolify.yourdomain.com` | `coolify` | `8080` | extra |
 | `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
-| `grafana.yourdomain.com` | `grafana` | `3000` | extra |
+| `grafana.yourdomain.com` | `grafana` | `3000` | core |
 
 ---
 

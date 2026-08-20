@@ -711,7 +711,7 @@
     },
     {
       "slug": "observability",
-      "tier": "extra",
+      "tier": "core",
       "name": "Grafana",
       "category": "system",
       "icon": "orange",
