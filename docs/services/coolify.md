@@ -11,9 +11,42 @@
 
 Coolify's whole purpose is deploying and managing *other* Docker projects on this machine — conceptually it overlaps with what `homeserver.py` already does by hand for this stack. It's included here anyway because it's genuinely useful for deploying separate, unrelated projects (not this repo's own services) through a proper UI/git-push workflow — not to replace `homeserver.py` for managing this stack.
 
-## ⚠ Pinned to an unstable tag — no stable release currently published
+## ⚠ Never use Coolify's own in-app "Upgrade" button
 
-As of this writing, `coollabsio/coolify` has **no semver-tagged releases on Docker Hub** (`v4.2.0` etc. return "not found") — only `edge`, `next`, and feature-branch/sha tags exist, an apparent gap in Coolify's release pipeline. This deliberately breaks this stack's usual "always pin a real stable release" rule: `compose.yml` is pinned to `coollabsio/coolify:edge` for now. **Check Docker Hub for a real version tag periodically and switch to it once one exists** — see the corresponding `TODO.md` entry.
+Coolify's dashboard shows an "Upgrade available" banner and a one-click
+upgrade action once a newer release exists. **Don't click it in this
+stack.** It runs `https://cdn.coollabs.io/coolify/upgrade.sh`, which:
+
+1. Downloads a **fresh `docker-compose.yml`, `docker-compose.prod.yml`,
+   and `.env.production` from Coolify's own CDN** into `/data/coolify/`
+   — a completely separate file set from this repo's
+   `services/coolify/compose.yml`.
+2. Stops and removes `coolify`, `coolify-db`, `coolify-redis`,
+   `coolify-realtime`.
+3. Recreates them from that downloaded compose file, with whatever image
+   versions *it* pins — not this repo's.
+
+Running it would fork Coolify out of this stack's "one
+`services/<name>/compose.yml` per service, managed via `homeserver.py`"
+model: future `homeserver.py dev update coolify` runs would no longer
+reflect what's actually running, and any version bumps made here (e.g.
+`coolify-db`'s Postgres tag) would likely get silently overwritten.
+
+**To upgrade Coolify in this stack instead:** bump the pinned tag in
+`services/coolify/compose.yml` yourself (check
+[Docker Hub](https://hub.docker.com/r/coollabsio/coolify/tags) — search
+by tag *name*, e.g. `?name=.`, not by "most recently updated"; the
+default recency sort buries numbered releases behind constantly-rebuilt
+`edge`/`next`/sha tags and made this repo wrongly conclude for a while
+that no stable tag existed at all), then
+`uv run homeserver.py dev update coolify`. The banner itself may keep
+appearing between bumps — that's just Coolify comparing its own
+baked-in version string against the latest tagged release, harmless.
+
+Currently pinned to `coollabsio/coolify:4.3.9` (real semver tag,
+confirmed compatible — Coolify's own upgrade-path check treats
+`4.3.0 → 4.3.9` as a valid forward upgrade, not a downgrade, and this
+image previously ran as `edge` self-reporting version `4.3.0`).
 
 ## Setup
 
@@ -25,6 +58,76 @@ uv run homeserver.py dev up coolify
 ```
 
 Open `https://coolify.<domain>/` (or `http://<host>:8132` in dev) and complete the first-run setup wizard.
+
+## Connecting the "localhost" server — required before deploying anything
+
+Coolify auto-registers a `localhost` server pointing at the mounted Docker socket, but — non-obviously — Coolify manages **every** server, including its own host, over **SSH**, not just the Docker socket. Without that, the server shows as unavailable in the UI, and `docker logs coolify` shows:
+
+```text
+No SSH key found for the Coolify host machine (localhost).
+Please read the following documentation (point 3) to fix it: https://coolify.io/docs/knowledge-base/server/openssh/
+Your localhost connection won't work until then.
+```
+
+with `App\Jobs\CoolifyTask`, `App\Actions\Proxy\StartProxy`, and `App\Jobs\CheckAndStartSentinelJob` all failing in the logs as a result. Fix, once, before first use:
+
+**1. Enable sshd on the host** (not in any container — this is the actual machine Docker runs on):
+
+```bash
+sudo systemctl enable --now sshd
+```
+
+This opens port 22 on the host to your LAN — not the internet, since this stack has no port-forwarding, only the outbound-only `cloudflared` tunnel for HTTP(S). Acceptable for a trusted home network; scope it further with a firewall rule if you want to restrict it to just the Docker bridge subnet.
+
+**2. Generate a dedicated keypair** for Coolify — this can be done from anywhere, no host `sudo` needed, since `service_data/data/coolify/ssh/` is already bind-mounted into the container at `/data/coolify/ssh/`:
+
+```bash
+mkdir -p service_data/data/coolify/ssh/keys
+ssh-keygen -t ed25519 -a 100 \
+  -f "service_data/data/coolify/ssh/keys/id.root@localhost" \
+  -q -N "" -C root@coolify
+```
+
+**3. Authorize that key for root login on the host**:
+
+```bash
+sudo mkdir -p /root/.ssh
+sudo sh -c 'cat "service_data/data/coolify/ssh/keys/id.root@localhost.pub" >> /root/.ssh/authorized_keys'
+sudo chmod 700 /root/.ssh
+sudo chmod 600 /root/.ssh/authorized_keys
+```
+
+**4. In the Coolify dashboard**: Settings → Private Keys → Add, paste the contents of `service_data/data/coolify/ssh/keys/id.root@localhost` (the private key, not `.pub`). Then Servers → `localhost` → Private Key tab, select the key you just added, and click **Validate Server & Install Docker Engine** — a green "Proxy Running" status confirms it worked.
+
+Verify the SSH path itself works before touching the UI, if something still seems off:
+
+```bash
+docker exec coolify sh -c 'ssh -o StrictHostKeyChecking=no -i /data/coolify/ssh/keys/id.root@localhost root@host.docker.internal echo SSH_OK'
+```
+
+(`host.docker.internal` resolves via the `extra_hosts: host-gateway` entry already in `compose.yml` — this is how the container reaches back out to the real host, not `localhost` inside its own network namespace.)
+
+## Coolify's own proxy (`coolify-proxy`) needs port 8080 freed up
+
+Once the `localhost` server is connected, Coolify tries to start its own
+Traefik reverse-proxy (`coolify-proxy`) — separate from this stack's
+`nginx-plain`, used only for apps you deploy *through* Coolify. Its
+default generated config binds host ports `80`, `443`, and `8080`
+(Traefik's dashboard). Port `8080` is already used by `landing` in this
+stack, so the proxy fails silently and the server's status sits on
+"starting" indefinitely — `docker ps` shows no `coolify-proxy` container
+at all, and nothing useful lands in `docker logs coolify` about it.
+
+Fix: drop the Traefik dashboard — it's optional (Coolify's own
+[firewall docs](https://coolify.io/docs/knowledge-base/server/firewall)
+never list port 8080 as required; only `80`/`443` for the proxy and
+`8000`/`6001`/`6002` for the dashboard/realtime/terminal). Remove
+`--api.dashboard=true`, the `'8080:8080'` port mapping, and the
+`traefik.http.routers.traefik.*`/`traefik.http.services.traefik.*`
+labels from the proxy's compose config, saved and applied through
+Coolify's own `SaveProxyConfiguration`/`StartProxy` actions (same code
+path its UI's "Start Proxy" button runs) so it persists across restarts
+instead of being a one-off container patch. 80/443 stay untouched.
 
 ## Registration — a real action item, not just informational
 
