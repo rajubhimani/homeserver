@@ -30,9 +30,36 @@ cp services/orangehrm/.env.example services/orangehrm/.env
 uv run homeserver.py dev up orangehrm
 ```
 
-Open `https://orangehrm.<domain>/` (or `http://<host>:8125` in dev) and complete the web installer:
-- Database host: `orangehrm-db`, port `3306`
-- Database name/user/password: from `services/orangehrm/.env`
+Open `https://orangehrm.<domain>/` (or `http://<host>:8125` in dev) and complete the web installer's database step. `services/orangehrm/.env`'s `MYSQL_DATABASE`/`MYSQL_USER` already exist and are pre-granted full privileges on that database by the time you reach this screen (the official MariaDB image creates both automatically from those env vars on first boot) — so pick **"Existing Empty Database"**, not "New Database":
+
+### Select Database to Use → Existing Empty Database
+
+| Field | Value |
+| --- | --- |
+| Database Host Name | `orangehrm-db` |
+| Database Host Port | `3306` |
+| Database Name | `MYSQL_DATABASE` from `.env` |
+| OrangeHRM Database Username | `MYSQL_USER` from `.env` |
+| OrangeHRM Database User Password | `MYSQL_PASSWORD` from `.env` |
+| Enable Data Encryption | Recommended if this will ever hold real employee PII — not otherwise verified against this stack's backup/restore tooling, so treat encrypted DB dumps as something to test-restore once before relying on it |
+
+Click Next to continue.
+
+### If you ever use "New Database" instead (not this stack's default path)
+
+Only relevant if the database doesn't already exist yet — e.g. you're pointing the installer at a fresh MariaDB instance that hasn't run the container's own `MYSQL_DATABASE` auto-create. The installer creates the database and (optionally) the app user itself, so it needs root, not the scoped app user:
+
+| Field | Value |
+| --- | --- |
+| Database Host Name | `orangehrm-db` |
+| Database Host Port | `3306` |
+| Database Name | `MYSQL_DATABASE` from `.env` (or any new name) |
+| Use the same Database User for OrangeHRM | Leave unchecked — don't run the app as `root` day-to-day |
+| Privileged Database Username | `root` |
+| Privileged Database User Password | `MYSQL_ROOT_PASSWORD` from `.env` |
+| OrangeHRM Database Username | `MYSQL_USER` from `.env` |
+| OrangeHRM Database User Password | `MYSQL_PASSWORD` from `.env` |
+| Enable Data Encryption | Same recommendation as above |
 
 ## Registration
 
@@ -40,7 +67,7 @@ None — HR admin creates employee accounts from inside the app after setup. No 
 
 ## Notes
 
-- `orangehrm-db` uses `mariadb:12.3.2` — the same stack-wide MariaDB default every other MariaDB-backed service uses (was `mariadb:10.4`, the version OrangeHRM's own install docs test against, until the stack-wide DB-engine standardization bump). Not separately verified against OrangeHRM's own compatibility notes; keep an eye out for DB-related issues since this diverges from OrangeHRM's tested version.
+- `orangehrm-db` uses `mariadb:11.4`, **not** the stack-wide `mariadb:12.3.2` default every other MariaDB-backed service uses — confirmed via the web installer's own compatibility check, OrangeHRM requires MariaDB `>5` and `<12`. Don't bump this one to match the stack-wide default without re-checking that requirement first.
 - No confirmed health/status endpoint — both the compose healthcheck and the landing-page health route just check that `/` responds.
 
 ---

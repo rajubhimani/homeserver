@@ -1,6 +1,10 @@
 services:
   orangehrm-db:
-    image: mariadb:12.3.2
+    # Pinned below the stack-wide mariadb:12.3.2 default deliberately —
+    # OrangeHRM's own compatibility matrix requires MariaDB >5 and <12, so
+    # 12.x fails its installer's DB-version check. 11.4 is the current
+    # MariaDB LTS and satisfies that range.
+    image: mariadb:11.4
     container_name: orangehrm-db
     restart: unless-stopped
     env_file: .env
