@@ -306,6 +306,46 @@ server is connected:
 
 Both regenerate from Coolify's own database on every `up`/restart — `docker ps -a` showing neither of them existing yet, right after starting `coolify`, is expected while the server connects, not broken.
 
+**Stopping them:** `uv run homeserver.py dev down coolify` doesn't touch
+either one, since neither is declared in `compose.yml`. Stop them
+afterward with:
+
+```bash
+uv run homeserver.py dev down coolify
+sh services/coolify/stop-self-managed.sh
+```
+
+Run it only *after* `coolify` itself is stopped, not before — while the
+main app is running, its `ServerManagerJob` reconciles server state
+every minute and will just recreate them if it sees them missing while
+the database still says they should exist.
+
+## Migrating to a different machine
+
+Standard flow applies (see the `homeserver-backups` skill: `backup all`
+→ copy `service_data/backup/` → clone repo → `restore all`) — no
+Coolify-specific extra steps needed for data:
+
+- The three named volumes (`coolify-postgres-alpine`,
+  `coolify-redis-alpine`, `coolify-ssh-keys`) are captured via real
+  `docker volume` tar/untar, so there's no NTFS-related risk even if
+  the new machine's filesystem differs from this one.
+- Today's proxy/Sentinel fixes carry over automatically — both live
+  inside the Postgres database itself (`servers.proxy`,
+  `server_settings.sentinel_custom_url`), captured in the
+  `coolify-postgres-alpine` backup. No need to rerun
+  `fix-proxy-sentinel.sh` on the new machine, provided it uses the same
+  port scheme (it will, if it's this same repo).
+
+As with every service in this stack, `services/coolify/.env` isn't part
+of `backup`/`restore` (gitignored, lives outside `service_data/`) — copy
+it to the new machine yourself. This matters more for Coolify than most
+services: `APP_KEY` *encrypts* sensitive database columns (SSH private
+keys, OAuth secrets). Restoring the database with a different `.env`
+means those columns are permanently undecryptable, not just
+"needs reconfiguring" — see the "generate ALL secrets before first
+start" note in Setup above.
+
 ## Notes
 
 - `APP_ID`/`APP_KEY`/`DB_PASSWORD`/`REDIS_PASSWORD`/`PUSHER_*` are all one-time secrets — generate them once, keep them, never rotate casually (documented upstream behavior: changing them later can break the installation).
