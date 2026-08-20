@@ -107,27 +107,50 @@ docker exec coolify sh -c 'ssh -o StrictHostKeyChecking=no -i /data/coolify/ssh/
 
 (`host.docker.internal` resolves via the `extra_hosts: host-gateway` entry already in `compose.yml` — this is how the container reaches back out to the real host, not `localhost` inside its own network namespace.)
 
-## Coolify's own proxy (`coolify-proxy`) needs port 8080 freed up
+## After connecting the server: run `fix-proxy-sentinel.sh`
 
-Once the `localhost` server is connected, Coolify tries to start its own
-Traefik reverse-proxy (`coolify-proxy`) — separate from this stack's
-`nginx-plain`, used only for apps you deploy *through* Coolify. Its
-default generated config binds host ports `80`, `443`, and `8080`
-(Traefik's dashboard). Port `8080` is already used by `landing` in this
-stack, so the proxy fails silently and the server's status sits on
-"starting" indefinitely — `docker ps` shows no `coolify-proxy` container
-at all, and nothing useful lands in `docker logs coolify` about it.
+Coolify's database hardcodes two host-networking assumptions that don't
+match this stack, and — because they live in Coolify's own database, not
+this repo's `compose.yml` — they come back every time that database
+starts fresh (a new install, or after wiping `coolify-postgres-alpine`):
 
-Fix: drop the Traefik dashboard — it's optional (Coolify's own
+1. **`coolify-proxy` gets stuck on "starting" forever.** Once the
+   `localhost` server is connected, Coolify tries to start its own
+   Traefik reverse-proxy (`coolify-proxy` — separate from this stack's
+   `nginx-plain`, used only for apps deployed *through* Coolify). Its
+   default generated config binds host ports `80`, `443`, and `8080`
+   (Traefik's dashboard). Port `8080` is already used by `landing` in
+   this stack, so the proxy fails silently — `docker ps` shows no
+   `coolify-proxy` container at all, and nothing useful lands in
+   `docker logs coolify` about it.
+2. **Sentinel never reports metrics ("Sentinel is out of sync").**
+   Coolify hardcodes `http://host.docker.internal:8000` as the URL
+   Sentinel pushes metrics to for the `localhost` server — its own
+   standard install publishes the app on host port `8000`. This stack
+   publishes `coolify` on a different host port instead (`8132` in dev,
+   same in prod — see the top of this doc), so every push gets
+   `connection refused`, `sentinel_updated_at` never advances, and the
+   UI shows a permanent "out of sync" warning.
+
+Neither has a config/env-var fix — both are hardcoded in Coolify's own
+PHP (`bootstrap/helpers/proxy.php`'s `generateDefaultProxyConfiguration()`
+and `ServerSetting::generateSentinelUrl()`). Run this once the
+`localhost` server shows connected (after the SSH steps above):
+
+```bash
+sh services/coolify/fix-proxy-sentinel.sh
+```
+
+It drops Traefik's optional dashboard (not required — Coolify's own
 [firewall docs](https://coolify.io/docs/knowledge-base/server/firewall)
-never list port 8080 as required; only `80`/`443` for the proxy and
-`8000`/`6001`/`6002` for the dashboard/realtime/terminal). Remove
-`--api.dashboard=true`, the `'8080:8080'` port mapping, and the
-`traefik.http.routers.traefik.*`/`traefik.http.services.traefik.*`
-labels from the proxy's compose config, saved and applied through
-Coolify's own `SaveProxyConfiguration`/`StartProxy` actions (same code
-path its UI's "Start Proxy" button runs) so it persists across restarts
-instead of being a one-off container patch. 80/443 stay untouched.
+never list port 8080, only `80`/`443` for the proxy and
+`8000`/`6001`/`6002` for the dashboard/realtime/terminal) and points
+Sentinel at whatever host port `coolify` is actually published on
+(read live from the running container via `docker port`, so it's
+correct in both dev and prod). Both applied through Coolify's own
+`SaveProxyConfiguration`/`StartProxy` actions and the `ServerSetting`
+model — the same code paths the UI itself uses — so they persist across
+restarts. Safe to re-run any time either symptom reappears.
 
 ## Registration — a real action item, not just informational
 
