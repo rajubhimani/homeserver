@@ -2,7 +2,6 @@ services:
   ollama:
     image: ollama/ollama:0.32.15
     container_name: ollama
-    profiles: ["docker-ollama"]
     restart: unless-stopped
     env_file: .env
     volumes:

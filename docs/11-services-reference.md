@@ -78,7 +78,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Miniflux | `miniflux` | 8093 | 8080 | daily |
 | AppFlowy | `appflowy-nginx` | 8103 | 80 | daily |
 | Plane | `plane-proxy` | 8100 | 80 | daily |
-| Ollama | `ollama` | 8110 | 11434 | daily (`--profile docker-ollama`) |
+| Ollama | `ollama` | 8110 | 11434 | daily |
 | Open WebUI | `open-webui` | 8109 | 8080 | daily |
 | Vikunja | `vikunja` | 8111 | 3456 | daily |
 | Trilium Notes | `trilium` | 8112 | 8080 | daily |

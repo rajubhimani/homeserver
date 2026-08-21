@@ -2,7 +2,7 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>] [--yes]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
 
   Any command targeting a tier keyword (min/core/daily/all/running),
   'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
@@ -1175,11 +1175,27 @@ def do_snapshots(service: str) -> None:
 # ── Actions ──────────────────────────────────────────────────────────
 
 
-def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None) -> bool:
+def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None, fresh: bool = False) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
+
+    if not fresh:
+        service_data_dir = SERVICE_DATA_ROOT / service
+        # Cheap dir check first — only pay for the docker-volume-ls call when
+        # the dir is already missing ('and' short-circuits), so a routine up
+        # on an already-live service skips the subprocess call entirely.
+        # do_restore is defined later in the file but that's fine — resolved
+        # at call time, not def time. Its own was_running branch may call
+        # back into do_up once if a live container's volume was deleted out
+        # from under it — safe, terminates because restored state is no
+        # longer "fresh" on that second pass.
+        if not service_data_dir.is_dir() and not BACKEND.volumes_for_project(service):
+            snaps = list_snapshots(service)
+            if snaps:
+                info(f"{service} has no live volumes or data on disk — restoring latest snapshot ({snaps[-1].name}) before starting (pass --fresh to start blank instead)...")
+                do_restore(service, env, profile)
 
     stop_proxy_conflict(service, env)
     # Landing bakes env vars into HTML at startup; nginx-plain runs envsubst
@@ -1244,7 +1260,7 @@ def do_precreate(service: str, env: str, profile: str | None) -> bool:
     files = compose_files(service, env)
     cenv = compose_env(service)
     # Precreate everything a service defines, including profile-gated
-    # containers (e.g. ollama's docker-ollama profile) — the point is
+    # containers (e.g. forgejo's runner profile) — the point is
     # making the whole thing visible/startable in Portainer, not
     # replicating 'up's normal profile-gating.
     cenv.setdefault("COMPOSE_PROFILES", "*")
@@ -1852,6 +1868,8 @@ def show_help() -> None:
     print("    python homeserver.py dev update jellyfin             update a single service")
     print("    python homeserver.py dev down mealie                 stop AND auto-snapshot (default)")
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
+    print("    python homeserver.py dev up mealie                   auto-restores the latest snapshot if data/volumes are missing")
+    print("    python homeserver.py dev up mealie --fresh           start blank even if a snapshot exists")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
@@ -1928,10 +1946,10 @@ def confirm_expansion(services: list[str], assume_yes: bool) -> bool:
     return True
 
 
-def run_list(action_fn, services: list[str], env: str, profile: str | None, label: str, extra=None) -> None:
+def run_list(action_fn, services: list[str], env: str, profile: str | None, label: str, **kwargs) -> None:
     failed: list[str] = []
     for service in services:
-        ok = action_fn(service, env, profile, extra) if extra is not None else action_fn(service, env, profile)
+        ok = action_fn(service, env, profile, **kwargs)
         if not ok:
             error(f"{service} FAILED")
             failed.append(service)
@@ -2013,6 +2031,7 @@ def main() -> int:
     profile: str | None = None
     no_backup = False
     no_ml = False
+    fresh = False
     assume_yes = False
     used_group_or_bundle = False
     snapshot: str | None = None
@@ -2032,6 +2051,8 @@ def main() -> int:
             no_backup = True
         elif tok == "--no-ml":
             no_ml = True
+        elif tok == "--fresh":
+            fresh = True
         elif tok in ("--yes", "-y"):
             assume_yes = True
         elif tok == "--snapshot":
@@ -2102,6 +2123,10 @@ def main() -> int:
             error("--no-ml is only valid with 'up immich' on its own (excludes immich-ml)")
             return 1
 
+    if fresh and action not in ("up", "-u"):
+        error("--fresh is only valid with the up action")
+        return 1
+
     if action == "migrate" and (run_all or run_core or run_daily or run_min or run_running):
         error("migrate only works against explicitly named services, e.g. 'dev migrate forgejo' — no tier-wide migration")
         return 1
@@ -2121,7 +2146,7 @@ def main() -> int:
             header(f"Starting all services (min + core + daily + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_up, services, env, profile, "All services")
+            run_list(do_up, services, env, profile, "All services", fresh=fresh)
         elif run_core:
             running = set(get_running_services())
             missing = [s for s in SERVICES_MIN if s not in running]
@@ -2132,7 +2157,7 @@ def main() -> int:
             services = missing + SERVICES_CORE + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_up, services, env, profile, "Core services")
+            run_list(do_up, services, env, profile, "Core services", fresh=fresh)
         elif run_daily:
             running = set(get_running_services())
             missing = [s for s in SERVICES_MIN + SERVICES_CORE if s not in running]
@@ -2143,18 +2168,18 @@ def main() -> int:
             services = missing + SERVICES_DAILY + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_up, services, env, profile, "Daily services")
+            run_list(do_up, services, env, profile, "Daily services", fresh=fresh)
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header(f"Starting min services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_up, services, env, profile, "Min services")
+            run_list(do_up, services, env, profile, "Min services", fresh=fresh)
         else:
             header(f"Starting services in {env} mode...")
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
-            run_list(do_up, services_to_run, env, profile, "Services", extra=exclude)
+            run_list(do_up, services_to_run, env, profile, "Services", exclude=exclude, fresh=fresh)
 
     elif action == "precreate":
         ensure_network()
@@ -2355,7 +2380,7 @@ def main() -> int:
             header("Restoring services...")
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
-            run_list(do_restore, services_to_run, env, profile, "Services", extra=snapshot)
+            run_list(do_restore, services_to_run, env, profile, "Services", snapshot=snapshot)
 
     elif action == "snapshots":
         if not services_to_run:
@@ -2398,7 +2423,7 @@ def main() -> int:
     elif action == "migrate":
         ensure_network()
         header(f"Migrating database{' to ' + image_flag if image_flag else ' to postgres-alpine'}...")
-        run_list(do_migrate, services_to_run, env, profile, "Services", extra=image_flag)
+        run_list(do_migrate, services_to_run, env, profile, "Services", image_override=image_flag)
 
     return 0
 

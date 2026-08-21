@@ -45,7 +45,7 @@ uv run homeserver.py dev up immich --profile ml
 uv run homeserver.py prod up all         # prod = ports on 127.0.0.1 only
 ```
 
-Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `down` auto-snapshots every time, `--no-backup` to skip).
+Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `down` auto-snapshots every time, `--no-backup` to skip; `up` auto-restores the latest snapshot if a service's volumes/data are both missing, `--fresh` to skip).
 
 **Service tiers (additive):**
 
