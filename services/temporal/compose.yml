@@ -181,7 +181,10 @@ services:
         limits:
           memory: 256M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      # curl isn't in this image (confirmed live: "curl: not found", container
+      # always unhealthy regardless of actual status) — wget is, same fix
+      # shape as the 'temporal' server container's own healthcheck above.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
