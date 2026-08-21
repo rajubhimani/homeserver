@@ -33,11 +33,11 @@ uptime-kuma, stirling-pdf-lite, stirling-pdf, syncthing, miniflux, plane, vikunj
 trilium, silverbullet, excalidraw, karakeep, browser,
 firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
 n8n, airflow, temporal, dagster, wallabag, adguard-home,
-calcom, coolify, homebox, listmonk, ollama, open-webui.
+calcom, coolify, homebox, listmonk, ollama, open-webui, appflowy.
 
 **Extra services** (started with `up all` or individually):
 dozzle, dockge, openproject, paperless,
-mealie, audiobookshelf, invoiceshelf, appflowy,
+mealie, audiobookshelf, invoiceshelf,
 outline, bookstack, ntfy,
 mattermost, rocketchat, zulip,
 orangehrm, nocodb,
@@ -76,7 +76,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Miniflux | `miniflux` | 8093 | 8080 | daily |
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
 | InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
-| AppFlowy | `appflowy-nginx` | 8103 | 80 | extra |
+| AppFlowy | `appflowy-nginx` | 8103 | 80 | daily |
 | Plane | `plane-proxy` | 8100 | 80 | daily |
 | Ollama | `ollama` | 8110 | 11434 | daily (`--profile docker-ollama`) |
 | Open WebUI | `open-webui` | 8109 | 8080 | daily |
@@ -178,7 +178,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `openproject.yourdomain.com` | `openproject` | `80` | extra |
 | `plane.yourdomain.com` | `plane-proxy` | `80` | daily |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
-| `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | extra |
+| `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | daily |
 | `open-webui.yourdomain.com` | `open-webui` | `8080` | daily |
 | `vikunja.yourdomain.com` | `vikunja` | `3456` | daily |
 | `trilium.yourdomain.com` | `trilium` | `8080` | daily |

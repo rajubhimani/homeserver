@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Open-source Notion alternative — docs, databases, kanban, and AI writing tools.
-**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** Postgres (pgvector) + Redis + MinIO | **Memory:** no hard limit set in compose.yml; measured idle ~382MB across all 8 containers (appflowy-cloud is the largest single piece at ~121MB). No official RAM figure exists upstream — AppFlowy's own `docker-compose.yml` uses unpinned `latest` tags with no published resource spec, so treat any number here (including this one) as observed, not guaranteed
+**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** Postgres (pgvector) + Redis + MinIO | **Memory:** no hard limit set in compose.yml; measured idle ~509MB across all 8 containers (appflowy-cloud is the largest single piece at ~218MB). No official RAM figure exists upstream — AppFlowy's own `docker-compose.yml` uses unpinned `latest` tags with no published resource spec, so treat any number here (including this one) as observed, not guaranteed
 
 ## Setup
 
