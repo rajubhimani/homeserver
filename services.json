@@ -203,7 +203,7 @@
     },
     {
       "slug": "uptime-kuma",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Uptime Kuma",
       "category": "system",
       "icon": "yellow",
@@ -235,7 +235,7 @@
     },
     {
       "slug": "stirling-pdf-lite",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Stirling PDF",
       "category": "productivity",
       "subcategory": "documents",
@@ -246,7 +246,7 @@
     },
     {
       "slug": "stirling-pdf",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Stirling PDF (Full)",
       "category": "productivity",
       "subcategory": "documents",
@@ -268,7 +268,7 @@
     },
     {
       "slug": "syncthing",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Syncthing",
       "category": "storage",
       "icon": "teal",
@@ -278,7 +278,7 @@
     },
     {
       "slug": "miniflux",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Miniflux",
       "category": "productivity",
       "subcategory": "reading",
@@ -321,7 +321,7 @@
     },
     {
       "slug": "plane",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Plane",
       "category": "productivity",
       "subcategory": "projects",
@@ -347,7 +347,7 @@
     },
     {
       "slug": "vikunja",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Vikunja",
       "category": "productivity",
       "subcategory": "projects",
@@ -358,7 +358,7 @@
     },
     {
       "slug": "trilium",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Trilium Notes",
       "category": "productivity",
       "subcategory": "notes",
@@ -369,7 +369,7 @@
     },
     {
       "slug": "silverbullet",
-      "tier": "extra",
+      "tier": "daily",
       "name": "SilverBullet",
       "category": "productivity",
       "subcategory": "notes",
@@ -402,7 +402,7 @@
     },
     {
       "slug": "excalidraw",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Excalidraw",
       "category": "productivity",
       "subcategory": "notes",
@@ -413,7 +413,7 @@
     },
     {
       "slug": "karakeep",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Karakeep",
       "category": "productivity",
       "subcategory": "notes",
@@ -467,7 +467,7 @@
     },
     {
       "slug": "browser",
-      "tier": "extra",
+      "tier": "daily",
       "virtual": true,
       "requires": [
         "nginx-plain"
@@ -481,7 +481,7 @@
     },
     {
       "slug": "firefox",
-      "tier": "extra",
+      "tier": "daily",
       "bundle": "browser",
       "name": "Firefox",
       "category": "system",
@@ -494,7 +494,7 @@
     },
     {
       "slug": "chromium",
-      "tier": "extra",
+      "tier": "daily",
       "bundle": "browser",
       "name": "Chromium",
       "category": "system",
@@ -507,7 +507,7 @@
     },
     {
       "slug": "ungoogled-chromium",
-      "tier": "extra",
+      "tier": "daily",
       "bundle": "browser",
       "name": "Ungoogled Chromium",
       "category": "system",
@@ -520,7 +520,7 @@
     },
     {
       "slug": "brave",
-      "tier": "extra",
+      "tier": "daily",
       "bundle": "browser",
       "name": "Brave",
       "category": "system",
@@ -533,7 +533,7 @@
     },
     {
       "slug": "mullvad-browser",
-      "tier": "extra",
+      "tier": "daily",
       "bundle": "browser",
       "name": "Mullvad Browser",
       "category": "system",
@@ -546,7 +546,7 @@
     },
     {
       "slug": "n8n",
-      "tier": "extra",
+      "tier": "daily",
       "name": "n8n",
       "category": "dev",
       "subcategory": "automation",
@@ -557,7 +557,7 @@
     },
     {
       "slug": "airflow",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Airflow",
       "category": "dev",
       "subcategory": "automation",
@@ -567,7 +567,7 @@
     },
     {
       "slug": "temporal",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Temporal",
       "category": "dev",
       "subcategory": "automation",
@@ -577,7 +577,7 @@
     },
     {
       "slug": "dagster",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Dagster",
       "category": "dev",
       "subcategory": "automation",
@@ -587,11 +587,11 @@
     },
     {
       "slug": "crowdsec",
-      "tier": "extra"
+      "tier": "daily"
     },
     {
       "slug": "wallabag",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Wallabag",
       "category": "productivity",
       "subcategory": "reading",
@@ -613,7 +613,7 @@
     },
     {
       "slug": "adguard-home",
-      "tier": "extra",
+      "tier": "daily",
       "name": "AdGuard Home",
       "category": "system",
       "icon": "green",
@@ -645,7 +645,7 @@
     },
     {
       "slug": "listmonk",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Listmonk",
       "category": "productivity",
       "subcategory": "reading",
@@ -667,7 +667,7 @@
     },
     {
       "slug": "calcom",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Cal.com",
       "category": "productivity",
       "subcategory": "finance",
@@ -689,7 +689,7 @@
     },
     {
       "slug": "coolify",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Coolify",
       "category": "dev",
       "subcategory": "tools",
@@ -722,7 +722,7 @@
     },
     {
       "slug": "homebox",
-      "tier": "extra",
+      "tier": "daily",
       "name": "HomeBox",
       "category": "productivity",
       "subcategory": "home",

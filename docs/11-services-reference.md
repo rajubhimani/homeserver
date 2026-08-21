@@ -4,7 +4,7 @@
 
 ---
 
-Quick reference for all services — ports and proxy config. For setup steps, credentials, architecture, and troubleshooting per service, see [docs/services/](services/) — linked per-service below and from [10 — New Services](10-new-services.md). For which services have real per-person accounts vs. a single shared password vs. no login at all, see [13 — Auth Posture](13-auth-posture.md).
+Quick reference for all services — ports and proxy config. For setup steps, credentials, architecture, and troubleshooting per service, see [docs/services/](services/) — linked per-service below and from [10 — New Services](10-new-services.md). For which services have real per-person accounts vs. a single shared password vs. no login at all, see [13 — Auth Posture](13-auth-posture.md). For services that overlap in function (multiple chat apps, wikis, project trackers, etc.), memory cost side by side, and which is behind on updates, see [14 — Service Comparison](14-service-comparison.md).
 
 ---
 
@@ -16,22 +16,35 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer, plausible, mailpit |
 | `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools, authentik, atuin, observability |
-| `all` | `uv run homeserver.py dev up all` | core + every extra service (manual-only services excluded) |
+| `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
+| `all` | `uv run homeserver.py dev up all` | core + daily + every extra service (manual-only services excluded) |
 
-`down all` always stops everything in reverse order — no list to maintain.
+**`up core`/`up daily` bootstrap, they don't restart**: each checks which of
+its lower tier(s) are already running and only starts what's missing — an
+already-running `min` (or `min`+`core`) is left untouched, not force-recreated.
+
+**`down` is tier-scoped, not cascading**: `down core` stops only core (`min`
+stays up), `down daily` stops only daily (`min`/`core` stay up). `down all`
+is the one command that always stops the entire stack, in reverse order — no
+list to maintain.
+
+**Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
+uptime-kuma, stirling-pdf-lite, stirling-pdf, syncthing, miniflux, plane, vikunja,
+trilium, silverbullet, excalidraw, karakeep, browser,
+firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
+n8n, airflow, temporal, dagster, crowdsec, wallabag, adguard-home,
+calcom, coolify, homebox, listmonk.
 
 **Extra services** (started with `up all` or individually):
-dozzle, dockge, uptime-kuma, openproject, paperless, stirling-pdf-lite,
-mealie, homebox, syncthing,
-miniflux, audiobookshelf, invoiceshelf, appflowy, plane, ollama, open-webui, vikunja,
-trilium, silverbullet, outline, bookstack, excalidraw, karakeep, ntfy, browser,
-firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
-n8n, airflow, temporal, dagster, mattermost, rocketchat, zulip,
-crowdsec, wallabag, adguard-home, orangehrm, nocodb, listmonk,
-documenso, calcom, penpot, coolify, supabase.
+dozzle, dockge, openproject, paperless,
+mealie, audiobookshelf, invoiceshelf, appflowy, ollama, open-webui,
+outline, bookstack, ntfy,
+mattermost, rocketchat, zulip,
+orangehrm, nocodb,
+documenso, penpot, supabase.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
-gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (redundant with stirling-pdf-lite at ~2x the memory).
+gitlab (redundant with forgejo at far higher memory cost).
 
 ---
 
@@ -52,61 +65,61 @@ gitlab (redundant with forgejo at far higher memory cost), stirling-pdf full (re
 | Guacamole | `guacamole` | 8107 | 8080 | core |
 | Dozzle | `dozzle` | 9999 | 8080 | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
-| Uptime Kuma | `uptime-kuma` | 3001 | 3001 | extra |
+| Uptime Kuma | `uptime-kuma` | 3001 | 3001 | daily |
 | OpenProject | `openproject` | 8099 | 80 | extra |
 | Paperless-ngx | `paperless` | 8010 | 8000 | extra |
-| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | extra |
+| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | daily |
 | Mealie | `mealie` | 9925 | 9000 | extra |
-| HomeBox | `homebox` | 8136 | 7745 | extra |
-| Syncthing | `syncthing` | 8087 | 8384 | extra |
-| Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | extra |
-| Miniflux | `miniflux` | 8093 | 8080 | extra |
+| HomeBox | `homebox` | 8136 | 7745 | daily |
+| Syncthing | `syncthing` | 8087 | 8384 | daily |
+| Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | core |
+| Miniflux | `miniflux` | 8093 | 8080 | daily |
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
 | InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
 | AppFlowy | `appflowy-nginx` | 8103 | 80 | extra |
-| Plane | `plane-proxy` | 8100 | 80 | extra |
+| Plane | `plane-proxy` | 8100 | 80 | daily |
 | Ollama | `ollama` | 8110 | 11434 | extra (`--profile docker-ollama`) |
 | Open WebUI | `open-webui` | 8109 | 8080 | extra |
-| Vikunja | `vikunja` | 8111 | 3456 | extra |
-| Trilium Notes | `trilium` | 8112 | 8080 | extra |
-| SilverBullet | `silverbullet` | 8113 | 3000 | extra |
+| Vikunja | `vikunja` | 8111 | 3456 | daily |
+| Trilium Notes | `trilium` | 8112 | 8080 | daily |
+| SilverBullet | `silverbullet` | 8113 | 3000 | daily |
 | Outline | `outline` | 8114 | 3000 | extra |
 | BookStack | `bookstack` | 8115 | 80 | extra |
-| Excalidraw | `excalidraw` | 8116 | 80 | extra |
-| Karakeep | `karakeep` | 8117 | 3000 | extra |
+| Excalidraw | `excalidraw` | 8116 | 80 | daily |
+| Karakeep | `karakeep` | 8117 | 3000 | daily |
 | ntfy | `ntfy` | 8118 | 80 | extra |
-| Firefox | `firefox` | 8145 | 3000 | extra |
-| Chromium | `chromium` | 8146 | 3000 | extra |
-| Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | extra |
-| Brave | `brave` | 8148 | 3000 | extra |
-| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | extra |
+| Firefox | `firefox` | 8145 | 3000 | daily |
+| Chromium | `chromium` | 8146 | 3000 | daily |
+| Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | daily |
+| Brave | `brave` | 8148 | 3000 | daily |
+| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | daily |
 | IT-Tools | `it-tools` | 8119 | 80 | core |
-| n8n | `n8n` | 8120 | 5678 | extra |
-| Airflow | `airflow-apiserver` | 8137 | 8080 | extra |
-| Temporal | `temporal-ui` | 8138 | 8080 | extra |
-| Dagster | `dagster-webserver` | 8139 | 3000 | extra |
+| n8n | `n8n` | 8120 | 5678 | daily |
+| Airflow | `airflow-apiserver` | 8137 | 8080 | daily |
+| Temporal | `temporal-ui` | 8138 | 8080 | daily |
+| Dagster | `dagster-webserver` | 8139 | 3000 | daily |
 | Mailpit | `mailpit` | 8140 | 8025 | min |
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
 | Zulip | `zulip` | 8143 | 80 | extra |
 | Docs | `docs` | 8144 | 80 | min |
-| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
-| Wallabag | `wallabag` | 8121 | 80 | extra |
+| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | daily |
+| Wallabag | `wallabag` | 8121 | 80 | daily |
 | Atuin | `atuin` | 8122 | 8888 | core |
-| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | extra |
-| GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | extra (manual) |
+| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | daily |
+| GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | manual |
 | OrangeHRM | `orangehrm` | 8125 | 80 | extra |
 | NocoDB | `nocodb` | 8126 | 8080 | extra |
-| Listmonk | `listmonk` | 8127 | 9000 | extra |
+| Listmonk | `listmonk` | 8127 | 9000 | daily |
 | Documenso | `documenso` | 8128 | 3000 | extra |
-| Cal.com | `calcom` | 8129 | 3000 | extra |
+| Cal.com | `calcom` | 8129 | 3000 | daily |
 | Plausible | `plausible` | 8130 | 8000 | min |
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
-| Coolify | `coolify` | 8132 | 8080 | extra |
+| Coolify | `coolify` | 8132 | 8080 | daily |
 | Supabase | `supabase-kong` | 8133 | 8000 | extra |
 | Observability (Grafana) | `grafana` | 8134 | 3000 | core |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
-| Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | extra (manual) |
+| Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | daily |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 8180 / 8443 / 8181 (admin) | same | manual (optional) |
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
@@ -152,51 +165,51 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `dozzle.yourdomain.com` | `dozzle` | `8080` | extra |
 | `dockge.yourdomain.com` | `dockge` | `5001` | extra |
 | `paperless.yourdomain.com` | `paperless` | `8000` | extra |
-| `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | extra |
-| `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | extra (manual) |
+| `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | daily |
+| `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | daily |
 | `mealie.yourdomain.com` | `mealie` | `9000` | extra |
-| `homebox.yourdomain.com` | `homebox` | `7745` | extra |
-| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | extra |
-| `status.yourdomain.com` | `uptime-kuma` | `3001` | extra |
-| `syncthing.yourdomain.com` | `syncthing` | `8384` | extra |
-| `authentik.yourdomain.com` | `authentik-server` | `9000` | extra |
-| `miniflux.yourdomain.com` | `miniflux` | `8080` | extra |
+| `homebox.yourdomain.com` | `homebox` | `7745` | daily |
+| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | daily |
+| `status.yourdomain.com` | `uptime-kuma` | `3001` | daily |
+| `syncthing.yourdomain.com` | `syncthing` | `8384` | daily |
+| `authentik.yourdomain.com` | `authentik-server` | `9000` | core |
+| `miniflux.yourdomain.com` | `miniflux` | `8080` | daily |
 | `audiobookshelf.yourdomain.com` | `audiobookshelf` | `80` | extra |
 | `openproject.yourdomain.com` | `openproject` | `80` | extra |
-| `plane.yourdomain.com` | `plane-proxy` | `80` | extra |
+| `plane.yourdomain.com` | `plane-proxy` | `80` | daily |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
 | `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | extra |
 | `open-webui.yourdomain.com` | `open-webui` | `8080` | extra |
-| `vikunja.yourdomain.com` | `vikunja` | `3456` | extra |
-| `trilium.yourdomain.com` | `trilium` | `8080` | extra |
-| `silverbullet.yourdomain.com` | `silverbullet` | `3000` | extra |
+| `vikunja.yourdomain.com` | `vikunja` | `3456` | daily |
+| `trilium.yourdomain.com` | `trilium` | `8080` | daily |
+| `silverbullet.yourdomain.com` | `silverbullet` | `3000` | daily |
 | `outline.yourdomain.com` | `outline` | `3000` | extra |
 | `bookstack.yourdomain.com` | `bookstack` | `80` | extra |
-| `excalidraw.yourdomain.com` | `excalidraw` | `80` | extra |
-| `karakeep.yourdomain.com` | `karakeep` | `3000` | extra |
+| `excalidraw.yourdomain.com` | `excalidraw` | `80` | daily |
+| `karakeep.yourdomain.com` | `karakeep` | `3000` | daily |
 | `ntfy.yourdomain.com` | `ntfy` | `80` | extra |
-| `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 5 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | extra |
+| `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 5 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | daily |
 | `it-tools.yourdomain.com` | `it-tools` | `80` | core |
-| `n8n.yourdomain.com` | `n8n` | `5678` | extra |
-| `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | extra |
-| `temporal.yourdomain.com` | `temporal-ui` | `8080` | extra |
-| `dagster.yourdomain.com` | `dagster-webserver` | `3000` | extra |
+| `n8n.yourdomain.com` | `n8n` | `5678` | daily |
+| `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | daily |
+| `temporal.yourdomain.com` | `temporal-ui` | `8080` | daily |
+| `dagster.yourdomain.com` | `dagster-webserver` | `3000` | daily |
 | `mailpit.yourdomain.com` | `mailpit` | `8025` | min |
 | `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |
 | `rocketchat.yourdomain.com` | `rocketchat` | `3000` | extra |
 | `zulip.yourdomain.com` | `zulip` | `80` | extra |
-| `wallabag.yourdomain.com` | `wallabag` | `80` | extra |
+| `wallabag.yourdomain.com` | `wallabag` | `80` | daily |
 | `atuin.yourdomain.com` | `atuin` | `8888` | core |
-| `adguard-home.yourdomain.com` | `adguard-home` | `3000` | extra |
-| `gitlab.yourdomain.com` | `gitlab` | `80` | extra (manual) |
+| `adguard-home.yourdomain.com` | `adguard-home` | `3000` | daily |
+| `gitlab.yourdomain.com` | `gitlab` | `80` | manual |
 | `orangehrm.yourdomain.com` | `orangehrm` | `80` | extra |
 | `nocodb.yourdomain.com` | `nocodb` | `8080` | extra |
-| `listmonk.yourdomain.com` | `listmonk` | `9000` | extra |
+| `listmonk.yourdomain.com` | `listmonk` | `9000` | daily |
 | `documenso.yourdomain.com` | `documenso` | `3000` | extra |
-| `calcom.yourdomain.com` | `calcom` | `3000` | extra |
+| `calcom.yourdomain.com` | `calcom` | `3000` | daily |
 | `plausible.yourdomain.com` | `plausible` | `8000` | min |
 | `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
-| `coolify.yourdomain.com` | `coolify` | `8080` | extra |
+| `coolify.yourdomain.com` | `coolify` | `8080` | daily |
 | `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
 | `grafana.yourdomain.com` | `grafana` | `3000` | core |
 
