@@ -76,9 +76,21 @@ services:
     privileged: true
     # Only track actual container cgroups, not the whole host cgroup tree
     # (systemd slices, root) — cuts tracked cgroups roughly in half and
-    # keeps memory usage proportional to container count.
+    # keeps memory usage proportional to container count. That's still
+    # proportional, though: at 100+ running containers this host measured
+    # ~3.5GB RSS. This cAdvisor build's --disable_metrics default already
+    # skips the heavy collectors this stack doesn't use (tcp/udp, process,
+    # cpu_topology, hugetlb, etc — see `docker logs cadvisor` usage text),
+    # so that flag isn't the lever. The actual lever: --housekeeping_interval
+    # defaults to 1s *per container* (a full stats + disk-usage-walk pass
+    # every second, times 116 containers), while Prometheus only scrapes
+    # this endpoint every 15s (prometheus.yml global scrape_interval) — so
+    # cAdvisor was recomputing/caching stats ~15x more often than anything
+    # ever reads them. Matching it to the scrape interval cuts that waste
+    # without losing any resolution Prometheus actually captures.
     command:
       - --docker_only=true
+      - --housekeeping_interval=15s
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
