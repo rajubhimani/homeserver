@@ -131,8 +131,8 @@ Single-purpose services with nothing else in this stack doing the same job. List
 | Authentik | Okta / Auth0 | ● up | core | ~244MB |
 | Atuin | plain bash/zsh history file | ● up | core | ~27MB (live) |
 | Beszel | Netdata / Datadog | ● up | min | ~42MB |
-| Plausible | Google Analytics | ● up | min | ~265MB (live, this session, 3 containers) |
-| Mailpit | Mailtrap | ● up | min | ~35MB (live) |
+| Plausible | Google Analytics | ● up | core | ~265MB (live, this session, 3 containers) |
+| Mailpit | Mailtrap | ● up | core | ~35MB (live) |
 | Dozzle | — (log viewer) | ○ down | extra | ~50MB |
 | Uptime Kuma | Pingdom | ● up | extra | ~56MB |
 | Paperless | Scansnap cloud | ○ down | extra | ~582MB (spikes 1.5-2GB during OCR) |

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository. Keep this file **small** — it's an index of core facts and where to look, not a place to inline procedures. Detailed how-tos live in skills (`.Codex/skills/`) that get pulled in only when the matching task is actually in progress; per-service detail lives in `docs/services/<service>.md`.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository. Keep this file **small** — it's an index of core facts and where to look, not a place to inline procedures. Detailed how-tos live in skills (`.agents/skills/`) that get pulled in only when the matching task is actually in progress; per-service detail lives in `docs/services/<service>.md`.
 
 ## What this repo is
 
@@ -24,16 +24,19 @@ BACKUP_RETENTION=5                          # snapshots kept per service, -1 = u
 
 `homeserver.py` also injects `DATA_ROOT` per service (never hardcode the domain in individual service `.env` files — use `${DOMAIN}`). **Some services have a second, independent `service_data/`-pointing env var that is *not* auto-injected** (e.g. immich's `UPLOAD_LOCATION`, jellyfin's `MEDIA_ROOT`, dockge's `DOCKGE_STACKS_DIR`) — see the `homeserver-add-service` skill for the grep-everything rule this implies if `service_data/` paths are ever restructured.
 
-Services that mount the container socket (dozzle, portainer, dockge, forgejo, gitlab, authentik) use `${DOCKER_SOCKET}`.
+Services that mount the container socket (dozzle, portainer, dockge, gitlab, authentik) use `${DOCKER_SOCKET}`. Forgejo's CI runner deliberately does *not* — it uses an isolated Docker-in-Docker sidecar instead so CI jobs never touch this host's real Docker; see `docs/services/forgejo.md`.
 
 ## Managing services
 
 ```bash
-# Tiers — MIN ⊂ CORE ⊂ ALL
+# Tiers — MIN ⊂ CORE ⊂ DAILY ⊂ ALL
 uv run homeserver.py dev up min          # up/down/restart/update all take the same targets
-uv run homeserver.py dev up core
+uv run homeserver.py dev up core         # bootstraps min if not already running
+uv run homeserver.py dev up daily        # opt-in — bootstraps min/core if needed, NOT implied by 'up core'
 uv run homeserver.py dev up all
-uv run homeserver.py dev down all        # reverse order, always complete — no list to maintain
+uv run homeserver.py dev down core       # stops ONLY core — min stays running
+uv run homeserver.py dev down daily      # stops ONLY daily — min/core stay running
+uv run homeserver.py dev down all        # reverse order, always complete — the one command that stops everything
 
 uv run homeserver.py dev up <service>    # single or multiple services
 uv run homeserver.py dev logs <service>
@@ -47,11 +50,12 @@ Backups/restore/snapshots: see the `homeserver-backups` skill (short version: `d
 **Service tiers (additive):**
 
 - **SERVICES_MIN** (infrastructure): beszel → cloudflared → nginx-plain → landing → docs → portainer
-- **SERVICES_CORE** (always-on apps, on top of MIN): nextcloud → vaultwarden → forgejo → firefly → immich → jellyfin → guacamole → it-tools
-- **SERVICES_EXTRA** (`up all` or individually): dozzle → dockge → uptime-kuma → openproject → paperless → stirling-pdf-lite → mealie → syncthing → authentik → miniflux → audiobookshelf → invoiceshelf → appflowy → plane → ollama → open-webui → vikunja → trilium → silverbullet → outline → bookstack → excalidraw → karakeep → ntfy → n8n → crowdsec → wallabag → atuin → adguard-home → orangehrm → nocodb → listmonk → documenso → calcom → plausible → penpot → coolify → supabase → observability
-- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory), stirling-pdf full (redundant with stirling-pdf-lite, ~2x memory)
+- **SERVICES_CORE** (always-on apps, on top of MIN): nextcloud → vaultwarden → forgejo → firefly → immich → jellyfin → guacamole → it-tools → authentik → atuin → observability → plausible → mailpit
+- **SERVICES_DAILY** (regular-use apps, opt-in — `up daily` or `up all`, never implied by `up core`): uptime-kuma → stirling-pdf-lite → stirling-pdf → syncthing → miniflux → plane → vikunja → trilium → silverbullet → excalidraw → karakeep → firefox → chromium → ungoogled-chromium → brave → mullvad-browser → n8n → airflow → temporal → dagster → wallabag → adguard-home → calcom → coolify → homebox → listmonk → ollama → open-webui → appflowy
+- **SERVICES_EXTRA** (`up all` or individually): dozzle → dockge → openproject → paperless → mealie → audiobookshelf → invoiceshelf → outline → bookstack → mattermost → rocketchat → zulip → ntfy → orangehrm → nocodb → documenso → penpot → supabase → crowdsec
+- **SERVICES_MANUAL** (never auto-started by any tier — `up <service>` only): gitlab (redundant with forgejo, far higher memory)
 
-**`services.json`** (repo root) is the actual source of truth for the lists above — `homeserver.py` derives `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL` from its `tier` field, and `services/landing/index.html` fetches the same file at page load for its category/subcategory cards, so a service's tier and its landing metadata can never drift apart. Re-check `services.json` (not this file) if the summary above ever looks stale.
+**`services.json`** (repo root) is the actual source of truth for the lists above — `homeserver.py` derives `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_DAILY`/`SERVICES_EXTRA`/`SERVICES_MANUAL` from its `tier` field, and `services/landing/index.html` fetches the same file at page load for its category/subcategory cards, so a service's tier and its landing metadata can never drift apart. Re-check `services.json` (not this file) if the summary above ever looks stale.
 
 Every `category`/`subcategory` value in `services.json` is also a startable group: `up group:<name>` (works with every action — `down`/`restart`/`update`/etc.) starts every service sharing that category or subcategory, e.g. `up group:notes` or `up group:productivity`.
 

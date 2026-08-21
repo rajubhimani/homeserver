@@ -58,7 +58,7 @@
     },
     {
       "slug": "plausible",
-      "tier": "min",
+      "tier": "core",
       "name": "Plausible",
       "category": "dev",
       "subcategory": "tools",
@@ -69,7 +69,7 @@
     },
     {
       "slug": "mailpit",
-      "tier": "min",
+      "tier": "core",
       "name": "Mailpit",
       "category": "dev",
       "subcategory": "tools",
