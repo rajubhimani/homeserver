@@ -70,6 +70,25 @@ The Forward Hostname is the Docker **container name** — NPM resolves via the `
 
 ---
 
+## Real client IP (not cloudflared's own IP)
+
+`services/nginx-plain/templates/default.conf.template` derives a `$real_client_ip` variable and uses it everywhere instead of `$remote_addr`:
+
+```nginx
+map $http_cf_connecting_ip $real_client_ip {
+    default $http_cf_connecting_ip;
+    ''      $remote_addr;
+}
+```
+
+**Why this exists — confirmed live, not theoretical.** For traffic arriving via Cloudflare Tunnel, `$remote_addr` at nginx-plain is *always* `cloudflared`'s own container IP — nginx only sees the tunnel hop, never the real visitor. Left unfixed, every backend app's `X-Real-IP`/`X-Forwarded-For` headers, and nginx's own access log (which CrowdSec reads for IP-based ban decisions — `crowdsec.enable: "true"` in this compose.yml), all show the same internal Docker IP for every single visitor, regardless of where they actually are. `CF-Connecting-IP` is the header Cloudflare's edge always sets accurately to the real visitor IP, and `cloudflared` preserves it end to end — falls back to `$remote_addr` for direct dev-port access that bypasses Cloudflare entirely (nothing sets `CF-Connecting-IP` in that path).
+
+Every vhost's `proxy_set_header X-Real-IP`/`X-Forwarded-For` uses `$real_client_ip`, and every `server {}` block sets its own `access_log ... cf_combined;` using a log format that's the same field shape as nginx's built-in `combined` format (just `$real_client_ip` instead of `$remote_addr`) — so CrowdSec's bundled nginx parser keeps working unchanged, just with the correct IP.
+
+**Gotcha, confirmed live: this can't be a single http-level `access_log` directive.** Multiple `access_log` directives at the *same* context level accumulate in nginx (each is a separate log destination — documented behavior, not a bug) rather than the later one replacing the earlier one, so adding one at http-level produced *two* log lines per request (the base image's own `main` format, still showing the wrong IP, plus this one). Preceding it with `access_log off;` at http-level didn't fix that either — empirically, that suppressed logging entirely, zero lines. The reliable fix is context **inheritance**, not same-level override: setting `access_log` inside each `server {}` block cleanly replaces what it would otherwise inherit from `http`, with no ambiguity.
+
+Companion fix on the Authentik side (its own `trusted_proxy_cidrs` setting, unrelated to this nginx change but needed for the same underlying problem) is in [`docs/services/authentik.md`](services/authentik.md).
+
 ## Switching between proxies
 
 To switch from `nginx-plain` to NPM (or back), just start the one you want:

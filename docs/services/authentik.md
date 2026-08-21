@@ -22,6 +22,12 @@ uv run homeserver.py dev up authentik
 
 Browse to `http://<ip>:8088/if/admin/` — set the password for the default admin account `akadmin`.
 
+## Real client IP in user/event logs
+
+By default Authentik logs the wrong IP for every user session and event — confirmed live, not theoretical: its `trusted_proxy_cidrs` default is `127.0.0.0/8` and `10.0.0.0/8` only, which doesn't cover this stack's `homeserver` Docker network (`172.18.0.0/16`, inside the `172.16.0.0/12` block Docker actually uses). Since nginx-plain isn't a trusted proxy from Authentik's point of view, it ignores the `X-Forwarded-For`/`X-Real-IP` headers nginx sends and just uses the raw TCP connection IP — nginx-plain's own container IP — for everything. `AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12` in `services/authentik/.env` fixes this (already set — see `.env.example`'s comment for why the `/12` rather than the exact `/16`, which could change if the network gets recreated).
+
+This is one half of the fix — the other half (nginx-plain not forwarding the real client IP at all, always showing `cloudflared`'s own container IP) is a stack-wide issue documented in [`docs/04-nginx.md`](../04-nginx.md#real-client-ip-not-cloudflareds-own-ip), not specific to Authentik. Both were needed together.
+
 ## Forward-auth for other services (nginx `auth_request`)
 
 Some services in this stack have no login of their own at all (Dozzle, Mailpit, Excalidraw, Dagster, Temporal — see [13 — Auth Posture](../13-auth-posture.md)'s bucket A). Rather than giving each one its own OIDC integration (the [Outline](outline.md) pattern — real work, and most of these apps don't even support OIDC natively), Authentik can front the whole vhost at the nginx layer instead: nginx asks Authentik "is this request authenticated?" before it ever reaches the container, and redirects to a login page if not.
@@ -101,6 +107,47 @@ The `auth_request` subrequest talks to `authentik-server` directly over the inte
 **Currently applied to:** Dozzle, Mailpit, Excalidraw, Dagster, Temporal — see each service's own doc for any app-specific caveats (Dozzle's SSE headers, in particular, needed care not to conflict with the added blocks).
 
 **Known tradeoff — fail-closed on Authentik itself.** If `authentik-server` isn't running, the `auth_request` subrequest fails and every protected vhost 502s, even though the protected container itself is perfectly healthy. This is why Mailpit and Plausible were moved from `min` into `core` alongside this change — `min` is meant to work standalone without `core`, and Authentik is core-tier.
+
+## Creating team member accounts (invitation-based enrollment)
+
+For a team/firm, always prefer inviting people over creating their accounts yourself — you never see or handle anyone's password, they self-serve their own signup via a one-time link, and revoking an unused invitation is cleaner than resetting a password you handed out. Manually creating a user (**Directory → Users → Create**, leave **"Is superuser" off**, then set a password yourself) should only be a fallback for one-off edge cases.
+
+There's no ready-made "invite someone, they set a password" flow out of the box — the only enrollment flow present by default (`default-source-enrollment`) is for post-OAuth-login enrollment, not standalone invitations. Authentik ships an official example blueprint for exactly this case instead of hand-building flow/stage objects:
+
+### 1. Import the blueprint
+
+Sidebar **Customization → Blueprints → Create**:
+
+- Name: `Team Enrollment` (or anything memorable)
+- Path: **Local path** → `example/flows-invitation-enrollment-minimal.yaml`
+- Context (JSON field):
+
+  ```json
+  {"flow_name": "Team Enrollment", "user_type": "internal"}
+  ```
+
+- Enabled: on → Create
+
+This creates one enrollment flow with the full stage chain already wired together (invitation check → username/password prompts → name/email prompts → user-write → auto-login) — no manual flow-building needed.
+
+**Gotcha, confirmed live: creating the blueprint instance does not apply it.** It's saved with `status: unknown` and zero apply tasks recorded — the underlying flow/stage objects are never actually created until something explicitly triggers an apply. The periodic discovery/sync task doesn't pick up a just-created instance immediately. Fix: back in the Blueprints list, find the row, open its **⋮** (kebab) menu → **Apply**. Confirm the status icon turns green ("successful") before moving on — if there's no direct Apply action visible, toggling **Enabled** off then back on (Update each time) also re-triggers it. Only after this will the new flow actually show up in the Invitations flow dropdown.
+
+### 2. Create the invitation
+
+Sidebar **Directory → Invitations → Create**:
+
+- Name: whatever identifies this batch (e.g. `team-aug-2026`)
+- Flow: **Team Enrollment** (the one from step 1)
+- Expires: set a reasonable window if you want it to auto-expire
+- Save
+
+Open the invitation you just created — it shows the enrollment link with a token baked in. **Send that link directly to the person yourself** (Slack/WhatsApp/etc.) rather than relying on Authentik to email it — outgoing email is wired to Mailpit for testing only (see `services/authentik/.env`), so nothing it sends actually leaves this server.
+
+They open the link, pick their own username, set their own password, fill in name/email, and land in Authentik as a real `internal` user (not superuser).
+
+### Access is open by default
+
+None of the five forward-auth apps above, nor Outline's OIDC application, have any group/policy restrictions configured — every application has zero bindings, which in Authentik means *any* authenticated user can reach it. A freshly-enrolled account gets access to everything immediately, no per-app step needed. The flip side: those five apps have no internal user/role system of their own, so anyone you invite gets full access to all of them (e.g. can read every captured email in Mailpit, see all Docker logs in Dozzle). Restricting *which* people can reach *which* app would need group-based policy bindings added per-application — not set up today.
 
 ---
 
