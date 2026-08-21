@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Metrics and log dashboards covering every container in the stack — Prometheus for metrics, Loki for logs, Grafana as the single UI over both.
-**Port:** `8134` (Grafana) / `8135` (Prometheus) (host) → `3000` / `9090` (container) | **Data:** `service_data/data/observability/{grafana,prometheus,loki}/` | **Requires:** nothing (all six containers are self-contained, no shared Postgres) | **Memory:** untuned, expect roughly Grafana ~150MB, Prometheus ~200MB+ (grows with retention/cardinality), Loki ~150MB, Alloy ~80MB, cAdvisor ~80MB, node-exporter ~20MB
+**Port:** `8134` (Grafana) / `8135` (Prometheus) (host) → `3000` / `9090` (container) | **Data:** `service_data/data/observability/{grafana,prometheus,loki}/` | **Requires:** nothing (all six containers are self-contained, no shared Postgres) | **Memory:** untuned, expect roughly Grafana ~254MB, Prometheus ~877MB+ (grows with retention/cardinality), Loki ~299MB, Alloy ~437MB, cAdvisor scales with container count (see below), node-exporter ~11MB
 
 ---
 
@@ -16,7 +16,7 @@ Six containers, one directory, no other service needs to change to be monitored:
 - **`prometheus`** — scrapes metrics (from `cadvisor` and `node-exporter` only, today — see "What's actually monitored" below) and stores them
 - **`loki`** — stores logs, single-binary/filesystem mode (no object storage backend needed at this scale)
 - **`alloy`** — ships every container's stdout/stderr to Loki. Replaces Promtail, which went **EOL 2026-03-02** — Alloy is Grafana Labs' supported successor. Discovers containers via the Docker socket (`discovery.docker`), so nothing needs to be configured per-service — new containers are picked up automatically. FastAPI services in this stack already emit Loki-compatible JSON to stdout; that's queryable in Grafana with `| json` in LogQL, no special pipeline stage needed.
-- **`cadvisor`** — per-container CPU/memory/network/disk metrics, scraped by Prometheus. Needs `privileged: true` and broad read-only host mounts (`/rootfs`, `/sys`, `/var/lib/docker`, the Docker socket) — standard requirement for cAdvisor, not specific to this stack.
+- **`cadvisor`** — per-container CPU/memory/network/disk metrics, scraped by Prometheus. Needs `privileged: true` and broad read-only host mounts (`/rootfs`, `/sys`, `/var/lib/docker`, the Docker socket) — standard requirement for cAdvisor, not specific to this stack. Runs with `--docker_only=true` so it only tracks actual container cgroups instead of walking the whole host cgroup tree (systemd slices, root) — without it, memory scales with cgroup count rather than container count, which on a host running 100+ containers meant tracking 250+ cgroups and several GB of RSS.
 - **`node-exporter`** — host-level CPU/memory/disk/network metrics, scraped by Prometheus. Runs on the `homeserver` bridge network (not `network_mode: host`, unlike most node-exporter recipes) to match this stack's one-network convention — trades away a few network-interface-level stats for consistency with every other service here.
 - **`grafana`** — the dashboard UI. Prometheus and Loki datasources are auto-provisioned via `grafana/provisioning/datasources/datasources.yml`; no manual datasource setup needed after first boot.
 

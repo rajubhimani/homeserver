@@ -74,6 +74,11 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
+    # Only track actual container cgroups, not the whole host cgroup tree
+    # (systemd slices, root) — cuts tracked cgroups roughly in half and
+    # keeps memory usage proportional to container count.
+    command:
+      - --docker_only=true
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
