@@ -139,6 +139,13 @@ Verified: this completed normally in `staging` (`"Order test-1 fulfilled: ..."`)
 
 Every container here has a `deploy.resources.limits.memory` cap (`temporal-db` 512M, `temporal` 768M, `temporal-ui` 256M, `temporal-admin-tools` 128M, `temporal-worker` 256M) — small enough that this doesn't crowd out the rest of the stack on a shared host, at the cost of being tight under real production workflow volume. If `temporal` (the server) gets OOM-killed under load (`docker inspect temporal --format '{{.State.OOMKilled}}'`), raise its cap first — it's the one actually doing frontend/history/matching work; the others are much less likely to need it.
 
+## Upgrade gotchas hit going 1.29.1 → 1.30.4
+
+Two things broke on this bump, both fixed live and reflected in `compose.yml` already — worth knowing before bumping versions again:
+
+- **`temporal-db`'s `max_connections=50` was too low** — Temporal's bundled frontend/history/matching/worker roles plus `temporal-schema-setup`/`temporal-admin-tools`/`temporal-create-namespace` all dial in around the same time on a cold start, and 50 wasn't enough headroom: `temporal-db` started refusing connections with `sorry, too many clients already`, which kept `temporal` permanently unhealthy. Raised to 100 (matches what a stock `postgres` image ships with by default) — the extra memory cost is connection-slot bookkeeping only, not per-connection buffers, so it stays well inside the existing 512M cap.
+- **The bundled `temporal` CLI is gone from `temporalio/server`** — somewhere after 1.29.1 the image stopped shipping a separate `temporal` binary (only `temporal-server` remains), so the old healthcheck (`CMD temporal operator cluster health ...`) failed with `exec: "temporal": executable file not found` and the container could never report healthy, independent of the Postgres issue above. Replaced with `nc -z temporal 7233` — verified `nc`/`wget` are present in this image, `temporal`/`temporal-server`/CLI tools are not. Also had to target the container's own name (`temporal`), not `localhost`: the frontend gRPC port binds only the container's actual network IP, not `127.0.0.1` — `nc -z localhost 7233` connection-refused every time even once the server was actually listening.
+
 ## Notes
 
 - **No built-in auth on the UI or the `temporal-worker`/`temporal-admin-tools` connection to the server** — anyone who can reach `temporal.<domain>` can see and operate on every workflow. Fine for a single-user homelab behind Cloudflare Tunnel; if this ever needs to be shared, put it behind Authentik (this stack already has it) rather than relying on Temporal's own (enterprise-only) auth.
