@@ -4,7 +4,7 @@
 
 ---
 
-Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login — 5 of them have had this actually applied; see the bucket right after A.
+Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login — 5 bucket-A services have had this actually applied (see the bucket right after A), plus Browser Hub separately out of bucket B (see the note right after that bucket's table).
 
 **Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`, `ollama`.
 
@@ -38,7 +38,9 @@ These had no login of their own at all and are the same class of risk as bucket 
 | Dagster | Dev | Asset/pipeline UI. Same story — RBAC is Dagster+ (paid) only. |
 | Excalidraw | Productivity | Whiteboard — [its own doc](services/excalidraw.md) notes it's local-only by default, nothing persisted server-side; gated mainly for consistency with the other four. |
 
-## Bucket B — single shared credential (11)
+**Browser Hub also moved to Authentik forward-auth, separately from the 5 above** — it started in Bucket B (a shared Basic Auth login), not Bucket A (no login at all), so it isn't part of that batch or its count. See [browser-hub.md](services/browser-hub.md)'s "Auth history" section for the full before/after: the hub-level gate is now Authentik SSO, and each browser container's own Basic Auth (previously kept as defense-in-depth) was retired at the same time rather than kept — see that doc for the real consequence (dev-port access is now fully unauthenticated) and the LAN-isolation mitigation added instead.
+
+## Bucket B — single shared credential (10)
 
 | Service | Category | Notes |
 | --- | --- | --- |
@@ -52,7 +54,6 @@ These had no login of their own at all and are the same class of risk as bucket 
 | SilverBullet | Productivity | Single-space markdown notes, pure browser PWA, no separate client protocol. |
 | Supabase | Dev | Studio dashboard behind Kong basic-auth (`DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD`) — see [supabase.md](services/supabase.md). |
 | Plausible | Dev | Dashboard is shared-login, but its `/api/event` tracking-beacon endpoint is *meant* to be public — anonymous visitor browsers POST to it. |
-| Browser Hub | System | HTTP basic-auth gate at the nginx-plain level protects all 5 remote-browser containers (Firefox/Chromium/Ungoogled Chromium/Brave/Mullvad Browser) behind one shared login — see [browser-hub.md](services/browser-hub.md). Each container also keeps its own basic-auth gate as defense-in-depth against direct dev-port access. |
 
 ## Reference — bucket C, multi-user but no roles (9)
 

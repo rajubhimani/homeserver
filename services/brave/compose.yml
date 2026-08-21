@@ -11,11 +11,11 @@ services:
     environment:
       PUID: 1000
       PGID: 1000
-      # Sourced from the repo ROOT .env (homeserver.py injects it) — same
-      # credential nginx-plain's browser-hub gate uses, kept in sync by
-      # design. See docs/services/browser-hub.md.
-      CUSTOM_USER: ${BROWSER_HUB_USER}
-      PASSWORD: ${BROWSER_HUB_PASSWORD}
+      # No CUSTOM_USER/PASSWORD — Authentik forward-auth gates the whole hub
+      # at browser.${DOMAIN} now (see docs/services/browser-hub.md); this
+      # container's own Basic Auth was dropped deliberately rather than kept
+      # as defense-in-depth, since it no longer shares a credential with the
+      # hub gate and was producing a separate popup on every browser.
       # Public-facing container: reduce blast radius if the browser itself is
       # ever compromised — disables sudo, terminal emulators, and xdg/exo-open.
       HARDEN_DESKTOP: "true"
@@ -39,13 +39,19 @@ services:
     security_opt:
       - seccomp:unconfined
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -u \"$$CUSTOM_USER:$$PASSWORD\" http://127.0.0.1:3000/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     networks:
-      - homeserver
+      homeserver:
+        # Static IP, not dynamically assigned — the LAN-isolation firewall
+        # rule in docs/services/browser-hub.md targets these 5 fixed
+        # addresses specifically, and a rule pinned to a dynamic IP would
+        # silently stop matching (or start matching some other container)
+        # after any recreation.
+        ipv4_address: 172.18.255.243
 
 networks:
   homeserver:

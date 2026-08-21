@@ -333,8 +333,8 @@ server {
 }
 
 # ── Browser Hub (Firefox/Chromium/Ungoogled Chromium/Brave/Mullvad Browser) ───
-# One shared login gates every remote browser below — see docs/services/browser-hub.md
-# for the design and how to regenerate browser_htpasswd. Individual browsers are
+# Authentik forward-auth gates every remote browser below — see
+# docs/services/browser-hub.md for the design. Individual browsers are
 # deliberately NOT given their own server_name/subdomain — there is no route to
 # any of them except through this block, so there's nothing to reach directly.
 server {
@@ -342,49 +342,54 @@ server {
     access_log /var/log/nginx/access.log cf_combined;
     server_name browser.${DOMAIN};
 
-    auth_basic "Browser Hub";
-    auth_basic_user_file /etc/nginx/browser_htpasswd;
+    # Authentik forward-auth — see docs/services/authentik.md. Server-level,
+    # same scope the old auth_basic had — applies to every location below
+    # except the two internal outpost locations, which explicitly turn it
+    # off (required — without that, the auth-check endpoint would need to
+    # check its own auth first, an infinite loop).
+    auth_request /outpost.goauthentik.io/auth/nginx;
+    error_page 401 = @goauthentik_proxy_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie;
 
     root /usr/share/nginx/html/browser-hub;
     location = / {
         try_files /index.html =404;
     }
 
-    # Liveness pings for the hub page's own JS (same-origin, so already-cached
-    # Basic Auth credentials cover these too — no separate auth wiring needed).
+    # Liveness pings for the hub page's own JS (same-origin, so the session
+    # cookie set by the auth check above already covers these too — no
+    # separate auth wiring needed. No WWW-Authenticate header to hide from
+    # them either, unlike Basic Auth — an unauthenticated request here gets
+    # a 302 redirect, not a 401 Basic challenge).
     # Short timeouts since these are only for a UI dot, not real traffic.
     location = /_status/firefox {
         set $upstream http://firefox:3000;
         proxy_pass $upstream/;
-        proxy_hide_header WWW-Authenticate;
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
     }
     location = /_status/chromium {
         set $upstream http://chromium:3000;
         proxy_pass $upstream/;
-        proxy_hide_header WWW-Authenticate;
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
     }
     location = /_status/ungoogled-chromium {
         set $upstream http://ungoogled-chromium:3000;
         proxy_pass $upstream/;
-        proxy_hide_header WWW-Authenticate;
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
     }
     location = /_status/brave {
         set $upstream http://brave:3000;
         proxy_pass $upstream/;
-        proxy_hide_header WWW-Authenticate;
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
     }
     location = /_status/mullvad-browser {
         set $upstream http://mullvad-browser:3000;
         proxy_pass $upstream/;
-        proxy_hide_header WWW-Authenticate;
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
     }
@@ -455,6 +460,27 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 3600s;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        auth_request off;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        auth_request off;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
     }
 }
 

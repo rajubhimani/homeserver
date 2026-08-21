@@ -6,26 +6,12 @@ services:
     env_file: .env
     environment:
       DOMAIN: ${DOMAIN}
-      # ${BROWSER_HUB_USER}/${BROWSER_HUB_PASSWORD} come from the ROOT .env
-      # (homeserver.py injects them, same as ${DOMAIN} above) — this is the
-      # single source of truth shared with every browser container's own
-      # CUSTOM_USER/PASSWORD below, so the two auth layers can't drift apart.
-      # See docs/services/browser-hub.md.
-      BROWSER_HUB_USER: ${BROWSER_HUB_USER}
-      BROWSER_HUB_PASSWORD: ${BROWSER_HUB_PASSWORD}
     # nginx:alpine automatically processes templates/*.conf.template via envsubst
-    # AND auto-runs every /docker-entrypoint.d/*.sh script, both on startup —
-    # the latter regenerates browser_htpasswd from BROWSER_HUB_USER/PASSWORD
-    # above on every start, so that credential lives in .env like every other
-    # secret in this stack instead of a separately hand-run htpasswd command.
+    # AND auto-runs every /docker-entrypoint.d/*.sh script, both on startup.
     volumes:
       - ./templates:/etc/nginx/templates:ro
       - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
       - ./html/browser-hub:/usr/share/nginx/html/browser-hub:ro
-      # File-to-file, NOT a directory mount — mounting the whole
-      # /docker-entrypoint.d/ directory would replace the image's own 4
-      # built-in scripts (envsubst templating included) rather than add to them.
-      - ./docker-entrypoint.d/25-generate-browser-htpasswd.sh:/docker-entrypoint.d/25-generate-browser-htpasswd.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/_health || exit 1"]
       interval: 60s

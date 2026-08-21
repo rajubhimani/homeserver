@@ -1,0 +1,18 @@
+[Unit]
+Description=Block remote-browser containers (browser-hub) from reaching the LAN
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# NOT the repo copy under /mnt/mydata — that's a fuseblk (NTFS) mount that
+# can't hold real Unix execute permissions (same root cause as the Coolify
+# SSH-keys incident, see SERVICE_ROLLOUT.md), so systemd can't exec a script
+# there (confirmed live: "Failed at step EXEC ... Permission denied").
+# Install the repo copy to /usr/local/bin/ instead — see the install
+# instructions in docs/services/browser-hub.md.
+ExecStart=/usr/local/bin/browser-lan-block.sh apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -136,13 +136,6 @@ def load_services_json(path: Path) -> dict:
 _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
-# Shared login for the Browser Hub (browser.${DOMAIN} — see
-# docs/services/browser-hub.md) — one credential, injected into nginx-plain's
-# auth gate AND each browser container's own CUSTOM_USER/PASSWORD below, so
-# there's exactly one place to change it and no way for the two layers to
-# drift out of sync with each other.
-BROWSER_HUB_USER = _ROOT_ENV.get("BROWSER_HUB_USER", "admin")
-BROWSER_HUB_PASSWORD = _ROOT_ENV.get("BROWSER_HUB_PASSWORD", "changeme")
 RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
 # Snapshots to keep per service before auto-pruning the oldest; -1 = unlimited
@@ -959,8 +952,6 @@ def compose_env(service: str) -> dict[str, str]:
     env = dict(os.environ)
     env["DATA_ROOT"] = str(SERVICE_DATA_ROOT / service)
     env["DOMAIN"] = DOMAIN
-    env["BROWSER_HUB_USER"] = BROWSER_HUB_USER
-    env["BROWSER_HUB_PASSWORD"] = BROWSER_HUB_PASSWORD
     return env
 
 

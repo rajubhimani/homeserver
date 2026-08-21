@@ -28,12 +28,10 @@ Practical effect: `uv run homeserver.py dev update firefox` alone is enough to s
 
 ```bash
 cp services/firefox/.env.example services/firefox/.env
-# set FIREFOX_USER / FIREFOX_PASSWORD — the image's own defaults are the
-# literal string "abc" for both, and this container is public-facing
 uv run homeserver.py dev up firefox
 ```
 
-Open `https://browser.${DOMAIN}/` (prod, once DNS/the tunnel picks it up), log in with the [Browser Hub](browser-hub.md)'s shared credentials, and click Firefox — or `http://<host>:8145` for direct dev-only access (own `FIREFOX_USER`/`FIREFOX_PASSWORD` login, bypasses the hub entirely).
+Open `https://browser.${DOMAIN}/` (prod, once DNS/the tunnel picks it up), log in via Authentik, and click Firefox — or `http://<host>:8145` for direct dev-only access (no login at all, bypasses both the hub and Authentik entirely — see "Auth model" below).
 
 **`HARDEN_DESKTOP=true`** is set on the container — this is a public-facing container running a full desktop, so sudo, terminal emulators, and xdg/exo-open (which can launch other applications from a clicked link/file) are disabled to reduce what a compromised or malicious page inside the session could reach. See the image's env var docs for the individual `DISABLE_SUDO`/`DISABLE_TERMINALS`/`DISABLE_OPEN_TOOLS` flags this bundles if finer control is ever needed.
 
@@ -43,7 +41,7 @@ Open `https://browser.${DOMAIN}/` (prod, once DNS/the tunnel picks it up), log i
 
 ## Auth model
 
-Public access goes through the [Browser Hub](browser-hub.md)'s one shared login first — see that doc for the full two-layer model. This container's own HTTP basic-auth (`CUSTOM_USER`/`PASSWORD` env vars, set from `FIREFOX_USER`/`FIREFOX_PASSWORD`) stays active as defense-in-depth for anyone who reaches it directly via the dev port. See [13-auth-posture.md](../13-auth-posture.md) Bucket B. Anyone with the credentials shares the *same* browser session simultaneously (like a screen-share) — this image has no concept of separate concurrent sessions per user. If multiple people each need their own isolated browser, the pattern is to run additional instances of this same service (own subpath/port/profile per person), not to share one.
+Public access goes through the [Browser Hub](browser-hub.md)'s Authentik login (SSO) first — see that doc's "Auth history" section for how this design changed over time. This container has **no login of its own anymore** — no `CUSTOM_USER`/`PASSWORD`, no Basic Auth. The dev port (`8145`) therefore bypasses all authentication entirely, not just the hub, when reached directly — see browser-hub.md's "LAN isolation" section for the network-level containment that applies instead. Anyone who reaches the container (via Authentik or the dev port) shares the *same* browser session simultaneously (like a screen-share) — this image has no concept of separate concurrent sessions per user. If multiple people each need their own isolated browser, the pattern is to run additional instances of this same service (own subpath/port/profile per person), not to share one.
 
 ## Data
 
@@ -53,7 +51,7 @@ Public access goes through the [Browser Hub](browser-hub.md)'s one shared login 
 
 - **`shm_size: "1gb"`** is required — without it, modern JS-heavy sites (including video sites) can crash or fail to render, per upstream's own docs.
 - Upstream's generic image description warns of "privileged access to the host system" — this refers to the container's own internal root/desktop-session model, not the Docker `--privileged` flag or host device access. This compose file does not set `privileged: true` or add extra `cap_add`/`security_opt`.
-- The landing page's `/health/browser` route (representing the whole hub, since the hub itself is a static page not a container) probes this container directly — a 401 from its basic-auth gate still counts as "up" (any HTTP status under 500). The container's own Docker healthcheck *does* need credentials (curl with `CUSTOM_USER`/`PASSWORD`), since it must actually reach page content to confirm health, not just confirm the port is listening.
+- The landing page's `/health/browser` route (representing the whole hub, since the hub itself is a static page not a container) probes this container directly and expects a plain 200 — there's no auth gate on this container anymore to produce a 401 through. The container's own Docker healthcheck is a plain unauthenticated `curl` against the root path.
 
 ---
 
