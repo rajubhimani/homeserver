@@ -36,3 +36,18 @@ Apply this in every reverse proxy config that sits in front of a container: `ngi
 ## Health check routes must set `Host`
 
 If an app validates the `Host` header (trusted domains/allowed hosts/CSRF origin checks), a bare `proxy_pass $upstream/;` health check will silently 400 forever. Explicitly set `proxy_set_header Host localhost;` (or whatever the app trusts) on that specific location block. See `docs/services/nextcloud.md` for the incident this caused.
+
+## Never hardcode `Connection: upgrade` for WebSocket proxying
+
+A location that mixes regular HTTP and WebSocket traffic on the same path (e.g. Guacamole's app + tunnel) needs the `Connection` header sent conditionally — only on an actual WebSocket handshake. A hardcoded `proxy_set_header Connection "upgrade";` sends `upgrade` on every proxied request, including plain HTTP ones, which breaks connection reuse/keepalive for those and caused intermittent guacd tunnel timeouts/closures (falling back to slow HTTP long-polling) — confirmed live on this stack, fixed across the whole template.
+
+Use the standard map-based conditional instead, once near the top of `default.conf.template`:
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+```
+
+Then in every `location` block that proxies a WS-capable upstream: `proxy_set_header Connection $connection_upgrade;` instead of the literal string. Applies to any location with `proxy_set_header Upgrade $http_upgrade;` — that pairing is a signal WS traffic passes through it and the header must be conditional.
