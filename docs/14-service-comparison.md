@@ -139,8 +139,8 @@ Single-purpose services with nothing else in this stack doing the same job. List
 | Mealie | recipe apps | ○ down | extra | ~329MB |
 | Audiobookshelf | Audible | ○ down | extra | ~36MB |
 | Invoiceshelf | FreshBooks | ○ down | extra | ~172MB |
-| Open WebUI | ChatGPT | ○ down | extra | not measured |
-| Ollama | — (AI backend, pairs with Open WebUI) | ● up | extra | ~15MB idle, no model loaded (live) |
+| Open WebUI | ChatGPT | ● up | daily | ~662MB (live, this session — includes the downloaded embedding model) |
+| Ollama | — (AI backend, pairs with Open WebUI) | ● up | daily | ~18MB idle, one small model pulled (`qwen2.5:0.5b`, live) |
 | Excalidraw | draw.io / Miro | ● up | extra | ~10MB (live) |
 | ntfy | Pushover / Pushbullet | ○ down | extra | not measured |
 | Firefox / Chromium / Ungoogled Chromium / Brave / Mullvad Browser | — (isolated remote browsers via Browser Hub) | ● up | extra | 207-442MB each (live, this session) — still well under docs' "~1GB each" estimate, though noticeably higher than a prior session's 91-252MB range; real session-to-session variance, worth eventually settling the individual browser docs to a real range instead of the old ~1GB placeholder |

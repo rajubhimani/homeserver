@@ -332,11 +332,11 @@
     },
     {
       "slug": "ollama",
-      "tier": "extra"
+      "tier": "daily"
     },
     {
       "slug": "open-webui",
-      "tier": "extra",
+      "tier": "daily",
       "name": "Open WebUI",
       "category": "productivity",
       "subcategory": "ai",
@@ -587,7 +587,7 @@
     },
     {
       "slug": "crowdsec",
-      "tier": "daily"
+      "tier": "extra"
     },
     {
       "slug": "wallabag",

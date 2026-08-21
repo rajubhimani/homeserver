@@ -32,16 +32,16 @@ list to maintain.
 uptime-kuma, stirling-pdf-lite, stirling-pdf, syncthing, miniflux, plane, vikunja,
 trilium, silverbullet, excalidraw, karakeep, browser,
 firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
-n8n, airflow, temporal, dagster, crowdsec, wallabag, adguard-home,
-calcom, coolify, homebox, listmonk.
+n8n, airflow, temporal, dagster, wallabag, adguard-home,
+calcom, coolify, homebox, listmonk, ollama, open-webui.
 
 **Extra services** (started with `up all` or individually):
 dozzle, dockge, openproject, paperless,
-mealie, audiobookshelf, invoiceshelf, appflowy, ollama, open-webui,
+mealie, audiobookshelf, invoiceshelf, appflowy,
 outline, bookstack, ntfy,
 mattermost, rocketchat, zulip,
 orangehrm, nocodb,
-documenso, penpot, supabase.
+documenso, penpot, supabase, crowdsec.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost).
@@ -78,8 +78,8 @@ gitlab (redundant with forgejo at far higher memory cost).
 | InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
 | AppFlowy | `appflowy-nginx` | 8103 | 80 | extra |
 | Plane | `plane-proxy` | 8100 | 80 | daily |
-| Ollama | `ollama` | 8110 | 11434 | extra (`--profile docker-ollama`) |
-| Open WebUI | `open-webui` | 8109 | 8080 | extra |
+| Ollama | `ollama` | 8110 | 11434 | daily (`--profile docker-ollama`) |
+| Open WebUI | `open-webui` | 8109 | 8080 | daily |
 | Vikunja | `vikunja` | 8111 | 3456 | daily |
 | Trilium Notes | `trilium` | 8112 | 8080 | daily |
 | SilverBullet | `silverbullet` | 8113 | 3000 | daily |
@@ -103,7 +103,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
 | Zulip | `zulip` | 8143 | 80 | extra |
 | Docs | `docs` | 8144 | 80 | min |
-| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | daily |
+| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Wallabag | `wallabag` | 8121 | 80 | daily |
 | Atuin | `atuin` | 8122 | 8888 | core |
 | AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | daily |
@@ -179,7 +179,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `plane.yourdomain.com` | `plane-proxy` | `80` | daily |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
 | `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | extra |
-| `open-webui.yourdomain.com` | `open-webui` | `8080` | extra |
+| `open-webui.yourdomain.com` | `open-webui` | `8080` | daily |
 | `vikunja.yourdomain.com` | `vikunja` | `3456` | daily |
 | `trilium.yourdomain.com` | `trilium` | `8080` | daily |
 | `silverbullet.yourdomain.com` | `silverbullet` | `3000` | daily |
