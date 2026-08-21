@@ -4,7 +4,7 @@
 
 ---
 
-Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login.
+Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login — 5 of them have had this actually applied; see the bucket right after A.
 
 **Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`, `ollama`.
 
@@ -19,17 +19,24 @@ Every service in this stack has *some* barrier at its own login screen, but "has
 
 A and B are the ones worth acting on — nobody using them is individually identifiable, and in B's case a single leaked password (or a former housemate/collaborator who should've been removed) grants full access to everyone who ever had it.
 
-## Bucket A — no authentication at all (7)
+## Bucket A — no authentication at all (2)
 
 | Service | Category | Notes |
 | --- | --- | --- |
 | Docs | System | Static Docsify site — setup guides, this doc included. Low sensitivity (no secrets, but does map out internal topology). |
-| Dozzle | System | Live container log viewer — logs can leak env vars, tokens, stack traces. **Higher sensitivity than it looks.** |
 | IT-Tools | Dev | Client-side-only browser utilities (JWT decode, hash/UUID gen). Nothing server-side to protect. |
-| Mailpit | Dev | SMTP catcher — shows every captured email body (password resets, invite links) sent by any service in the stack. |
-| Temporal | Dev | Workflow UI. RBAC is a Temporal Cloud / paid-tier feature, not available in the OSS build running here. |
+
+## Bucket A+ — was bucket A, now behind Authentik forward-auth (5)
+
+These had no login of their own at all and are the same class of risk as bucket A above, but now sit behind a shared Authentik login at the nginx layer instead — see [Forward-auth for other services](services/authentik.md#forward-auth-for-other-services-nginx-auth_request) for the mechanism. One shared login (domain-level SSO cookie) covers all five; log into any one and the others don't prompt again.
+
+| Service | Category | Notes |
+| --- | --- | --- |
+| Dozzle | System | Live container log viewer — logs can leak env vars, tokens, stack traces. Was flagged **"higher sensitivity than it looks"**; this closes that gap. |
+| Mailpit | Dev | SMTP catcher — shows every captured email body (password resets, invite links) sent by any service in the stack. Moved from `min` to `core` alongside this change, since Authentik (the thing now gating it) is core-tier — see the tradeoff note in [authentik.md](services/authentik.md). |
+| Temporal | Dev | Workflow UI. RBAC is a Temporal Cloud / paid-tier feature, not available in the OSS build running here — forward-auth is the only gate it has. |
 | Dagster | Dev | Asset/pipeline UI. Same story — RBAC is Dagster+ (paid) only. |
-| Excalidraw | Productivity | Whiteboard — [its own doc](services/excalidraw.md) notes it's local-only by default, nothing persisted server-side. |
+| Excalidraw | Productivity | Whiteboard — [its own doc](services/excalidraw.md) notes it's local-only by default, nothing persisted server-side; gated mainly for consistency with the other four. |
 
 ## Bucket B — single shared credential (11)
 
@@ -59,26 +66,24 @@ Nextcloud, Vaultwarden, Forgejo, Immich, Jellyfin, Guacamole, Portainer, OpenPro
 
 ## Putting bucket A/B behind Authentik forward-auth — feasibility
 
-**Not implemented yet** — this stack doesn't have an nginx `auth_request` → Authentik outpost pattern wired up anywhere; Authentik itself is only documented as a standalone IdP today, per [authentik.md](services/authentik.md). This section is a feasibility read, not a setup guide — treat it as the input to a future "add forward-auth" pass, one service at a time.
+**Implemented for 5 services** (bucket A+ above: Dozzle, Mailpit, Excalidraw, Dagster, Temporal) — see [Forward-auth for other services](services/authentik.md#forward-auth-for-other-services-nginx-auth_request) in `authentik.md` for the actual `auth_request` → Authentik embedded-outpost pattern and setup walkthrough. The rest of this section is still a feasibility read for everything not yet done — one service at a time, same as before.
 
 Forward-auth puts a cookie/redirect-based login screen in front of the *whole vhost* at the nginx layer, before the request ever reaches the container. That's a clean fit for a pure browser UI reached by one person at a time. It breaks down wherever something other than "a human in a browser" needs to reach the service directly.
 
-### Clean candidates — no nuance
+### Clean candidates — no nuance, not yet done
 
 Pure browser UI, single vhost, nothing else depends on hitting it directly.
 
 | Service | Why it's clean |
 | --- | --- |
 | Docs | Static site, browser-only. |
-| Dozzle | Browser-only log viewer — this closes its biggest current gap. |
 | IT-Tools | Browser-only, low stakes either way. |
-| Temporal | Browser UI; the gRPC/worker ports it needs aren't proxied publicly. |
-| Dagster | Same — webserver UI only, not the internal gRPC ports. |
-| Excalidraw | Browser-only, nothing server-side at stake regardless. |
 | Dockge | Browser-only stack manager. |
 | AdGuard Home | Admin UI is browser-only; DNS port 53 is separate and unaffected. |
 | Syncthing | GUI is browser-only; sync protocol runs on its own port, untouched. |
 | SilverBullet | Browser-only PWA, no competing client protocol. |
+
+Adding any of these needs no new Authentik-side config — the provider is already domain-level (covers all of `${DOMAIN}`) — just the nginx `auth_request` snippet on that service's vhost, per the walkthrough in `authentik.md`.
 
 ### Needs path-scoping — don't blanket-protect the whole vhost
 
@@ -88,10 +93,11 @@ The service has one path that must stay reachable *without* Authentik's login, a
 | --- | --- | --- |
 | **Plausible** | `/api/event` (and any other tracking-beacon path) | Anonymous visitor browsers on *your other sites* POST here directly — this is the one where blanket-protecting the vhost breaks analytics collection entirely, not just your own access. |
 | **Uptime Kuma** | `/status/*` public status pages | Those are meant to be shared with people who have no login at all; only `/dashboard` and admin paths should be gated. |
-| Mailpit | Its REST API, *if* anything scripts/CI reads captured mail programmatically | Fine to fully gate if only ever used interactively in a browser — check first. |
-| Stirling PDF Lite / Full | The conversion API, *if* anything calls it programmatically | Same caveat as Mailpit — audit actual usage before gating the whole vhost. |
+| Stirling PDF Lite / Full | The conversion API, *if* anything calls it programmatically | Audit actual usage before gating the whole vhost. |
 | Trilium | N/A for the web UI, but check before gating if you use Trilium's desktop/mobile sync clients against this server | Those speak Trilium's own sync protocol, not a browser session — forward-auth wouldn't cover them. |
 | **Supabase** | `/auth/v1/*`, `/rest/v1/*`, `/storage/v1/*`, `/realtime/v1/*`, `/functions/v1/*`, `/pg/*` | Kong already scopes basic-auth this way — its `dashboard` route in `volumes/api/kong.yml` only catches `/` (everything not matched by the API routes above), which is where Studio's `basic-auth` plugin is attached. A blanket vhost-level `auth_request` would need to replicate that same split, or any app using `ANON_KEY`/`SERVICE_ROLE_KEY` against the live API breaks. |
+
+**Mailpit was in this table too** (its REST API, if anything scripts/CI reads captured mail programmatically) but got gated anyway in the bucket A+ pass above — nothing in this stack was found to read it programmatically, so the blanket vhost gate was accepted as-is.
 
 ---
 

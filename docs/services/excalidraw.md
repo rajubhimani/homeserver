@@ -27,6 +27,7 @@ The official `excalidraw/excalidraw` image is **just the static frontend** — a
 
 - No health/status endpoint beyond `/` itself (static file serving) — the compose healthcheck just checks the page loads.
 - No env vars, no registration, no accounts — nothing to configure beyond starting the container.
+- **Gated behind Authentik forward-auth** — since Excalidraw has no login of its own, `excalidraw.${DOMAIN}` requires an Authentik login at the nginx layer before any request reaches the container. See [Forward-auth for other services](authentik.md#forward-auth-for-other-services-nginx-auth_request) in `authentik.md`.
 
 ---
 
