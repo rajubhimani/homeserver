@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted password manager (Bitwarden-compatible).
-**Port:** `8200` (host) → `80` (container) | **Data:** `service_data/data/vaultwarden/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~50MB
+**Port:** `8200` (host) → `80` (container) | **Data:** `service_data/data/vaultwarden/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~14MB
 
 ## Setup
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Clientless remote desktop gateway — access VNC/RDP/SSH machines from any browser, no client app required.
-**Port:** `8107` (host) → `8080` (container) | **Data:** `service_data/data/guacamole/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; webapp/guacd: no hard limit set; measured idle ~254MB total (webapp 206 + guacd 10 + db 38 — the Tomcat webapp is the heavy part)
+**Port:** `8107` (host) → `8080` (container) | **Data:** `service_data/data/guacamole/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; webapp/guacd: no hard limit set; measured idle ~217MB total (webapp 124 + guacd 77 + db 15 — the Tomcat webapp is the heavy part)
 
 ---
 

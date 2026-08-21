@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted shell history sync server — searchable history across your machines (Mac/Windows/Fedora), with context (directory, exit code, duration), replacing per-machine `.bash_history`/`.zsh_history`.
-**Port:** `8122` (host) → `8888` (container) | **Data:** `service_data/data/atuin/` | **Requires:** Postgres
+**Port:** `8122` (host) → `8888` (container) | **Data:** `service_data/data/atuin/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~27MB total (app 8 + db 19)
 
 ## Setup
 

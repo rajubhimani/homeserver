@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~685MB total (app 612 + db 35 + redis 16 + cron 22) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
 
 ## Setup
 

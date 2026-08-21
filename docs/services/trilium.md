@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Hierarchical, scriptable notes app with a proper attribute/relation system — a personal wiki + database hybrid, not a pile of markdown files.
-**Port:** `8112` (host) → `8080` (container) | **Data:** `service_data/data/trilium/` | **Requires:** nothing (bundled SQLite, no external DB)
+**Port:** `8112` (host) → `8080` (container) | **Data:** `service_data/data/trilium/` | **Requires:** nothing (bundled SQLite, no external DB) | **Memory:** no hard limit set; measured idle ~118MB
 
 ## Setup
 

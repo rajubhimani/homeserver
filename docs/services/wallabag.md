@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Read-it-later app — saves a clean, readable copy of articles for offline reading (self-hosted Pocket alternative).
-**Port:** `8121` (host) → `80` (container) | **Data:** `service_data/data/wallabag/` | **Requires:** Postgres
+**Port:** `8121` (host) → `80` (container) | **Data:** `service_data/data/wallabag/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~50MB total (app 32 + db 18)
 
 ## Setup
 

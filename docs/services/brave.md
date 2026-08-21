@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** A real Brave browser running on the server, controlled remotely — part of the [Browser Hub](browser-hub.md). Brave's own ad-blocking/tracker-blocking is on by default, on top of everything else remote-browsing already gets you.
-**Port:** `8148` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/brave/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/brave/config/` | **Requires:** nothing (single container, no DB) | **Memory:** ~1GB idle
+**Port:** `8148` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/brave/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/brave/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; measured idle ~442MB
 
 ---
 

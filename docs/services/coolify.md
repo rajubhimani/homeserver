@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted PaaS — deploy and manage *other* projects/services with a Vercel/Heroku-style workflow (git push to deploy, one-click databases, etc.).
-**Port:** `8132` (host) → `8080` (container); realtime websocket on `6001`/`6002` | **Data:** `service_data/data/coolify/` | **Requires:** Postgres, Redis
+**Port:** `8132` (host) → `8080` (container); realtime websocket on `6001`/`6002` | **Data:** `service_data/data/coolify/` | **Requires:** Postgres, Redis | **Memory:** DB capped 384M in compose.yml; other 5 containers: no hard limit set; measured idle ~470MB total across all 6 containers (coolify 324 + realtime 56 + proxy 28 + sentinel 27 + redis 8 + db 26)
 
 ## Conceptual overlap worth naming
 

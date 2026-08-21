@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Photo management, replaces Google Photos.
-**Port:** `2283` (host) → `2283` (container, `immich-server`) | **Requires:** Postgres (custom pgvector build) + Redis | **Memory:** DB capped 2G in compose.yml (raised from 512M — see incident below); app/ml/redis: no hard limit set; measured idle ~1.4GB total across all 5 containers. Immich's own docs state 6GB minimum / 8GB recommended for the full stack with ML enabled, and explicitly recommend **at least 2GB for Postgres** if a Docker memory limit is set on it at all
+**Port:** `2283` (host) → `2283` (container, `immich-server`) | **Requires:** Postgres (custom pgvector build) + Redis | **Memory:** DB capped 2G in compose.yml (raised from 512M — see incident below); app/ml/redis: no hard limit set; measured idle ~531MB total across all 5 containers (server 501 + ml 12 + redis 4 + db 14 + offline-remover <1). Immich's own docs state 6GB minimum / 8GB recommended for the full stack with ML enabled, and explicitly recommend **at least 2GB for Postgres** if a Docker memory limit is set on it at all
 
 ## Setup
 

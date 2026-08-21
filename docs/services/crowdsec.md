@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Collaborative fail2ban replacement — parses logs for attack patterns and builds ban decisions from a shared community threat feed.
-**Port:** none exposed (see below) | **Data:** `service_data/data/crowdsec/config/` | **Requires:** Docker socket read access (to read nginx-plain's logs via the Docker log API)
+**Port:** none exposed (see below) | **Data:** `service_data/data/crowdsec/config/` | **Requires:** Docker socket read access (to read nginx-plain's logs via the Docker log API) | **Memory:** no hard limit set; measured idle ~80MB
 
 ## ⚠ Detection-only in this setup — nothing is actually blocked yet
 

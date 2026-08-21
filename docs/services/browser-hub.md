@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** One public entry point, one shared login, five real browsers (Firefox, Chromium, Ungoogled Chromium, Brave, Mullvad Browser) running on the server and controlled remotely — for reaching sites blocked on your own device or local network.
-**Port:** n/a — subpath-routed through `nginx-plain`, not a container of its own | **Login:** `BROWSER_HUB_USER`/`BROWSER_HUB_PASSWORD` in the repo **root** `.env` (like `DOMAIN`) | **Requires:** the five browser containers (see their own docs) | **Memory:** ~1GB per browser container idle, ~5GB if all five are running at once
+**Port:** n/a — subpath-routed through `nginx-plain`, not a container of its own | **Login:** `BROWSER_HUB_USER`/`BROWSER_HUB_PASSWORD` in the repo **root** `.env` (like `DOMAIN`) | **Requires:** the five browser containers (see their own docs) | **Memory:** no hard limit set on any browser container; measured idle varies notably by browser (see individual docs) — roughly 207-442MB each, ~1.64GB total if all five are running at once
 
 ---
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted bookmark manager with AI auto-tagging and full-text search of saved pages.
-**Port:** `8117` (host) → `3000` (container) | **Data:** `service_data/data/karakeep/` | **Requires:** bundled SQLite (no external DB), plus Meilisearch and a headless Chrome container
+**Port:** `8117` (host) → `3000` (container) | **Data:** `service_data/data/karakeep/` | **Requires:** bundled SQLite (no external DB), plus Meilisearch and a headless Chrome container | **Memory:** no hard limit set; measured idle ~263MB total across all 3 containers (app 236 + meilisearch 8 + chrome 19)
 
 ## Setup
 

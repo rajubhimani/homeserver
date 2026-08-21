@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Hand-drawn-style whiteboard for diagrams and sketches — doesn't look like a corporate slide.
-**Port:** `8116` (host) → `80` (container) | **Data:** none | **Requires:** nothing
+**Port:** `8116` (host) → `80` (container) | **Data:** none | **Requires:** nothing | **Memory:** no hard limit set; measured idle ~10MB
 
 ## Setup
 

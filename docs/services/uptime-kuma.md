@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Monitor services and alert when something goes down.
-**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** MariaDB (bundled `uptime-kuma-db` container) | **Memory:** no hard limit set on the app; measured idle ~104MB — `uptime-kuma-db` capped at 384M
+**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** MariaDB (bundled `uptime-kuma-db` container) | **Memory:** no hard limit set on the app; measured idle ~56MB — `uptime-kuma-db` capped at 384M
 
 ## Setup
 

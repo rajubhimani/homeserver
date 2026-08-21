@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted to-do list and task management app — projects, due dates, labels, Kanban/Gantt views.
-**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres
+**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~52MB total (app 31 + db 21)
 
 ## Setup
 

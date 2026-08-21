@@ -20,6 +20,9 @@ service_data-test/
 # them: confirmed on this repo, cadvisor.json/node-exporter-full.json were
 # on disk but had never actually been committed.
 !services/observability/grafana/provisioning/dashboards/json/*.json
+# scratch research notes (WebSearch findings, version/memory audits) —
+# working notes for building a doc, not the doc itself
+research/
 *.pem
 ._*
 *.sqlite

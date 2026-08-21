@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted workflow automation — webhook → transform → notify style glue for homelab scripts and integrations.
-**Port:** `8120` (host) → `5678` (container) | **Data:** `service_data/data/n8n/` | **Requires:** Postgres
+**Port:** `8120` (host) → `5678` (container) | **Data:** `service_data/data/n8n/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~321MB total (app 297 + db 24)
 
 ## Setup
 

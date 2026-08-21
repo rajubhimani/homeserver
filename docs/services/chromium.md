@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** A real Chromium browser running on the server, controlled remotely — part of the [Browser Hub](browser-hub.md), for reaching sites that specifically need Chrome/Chromium (DevTools, Chrome-only extensions or web apps) that Firefox can't cover.
-**Port:** `8146` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/chromium/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/chromium/config/` | **Requires:** nothing (single container, no DB) | **Memory:** ~1GB idle
+**Port:** `8146` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/chromium/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/chromium/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; measured idle ~263MB
 
 ---
 

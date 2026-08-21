@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** ~80 browser-only dev utilities in one place — JWT decoder, cron parser, hash/UUID/base64 generators, regex tester, and more. Replaces a dozen sketchy websites with one self-hosted page.
-**Port:** `8119` (host) → `80` (container) | **Data:** none | **Requires:** nothing
+**Port:** `8119` (host) → `80` (container) | **Data:** none | **Requires:** nothing | **Memory:** no hard limit set; measured idle ~5MB
 
 ## Setup
 

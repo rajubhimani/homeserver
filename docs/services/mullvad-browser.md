@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** A hardened, anti-fingerprinting Firefox fork (built jointly by Mullvad and the Tor Project) running remotely — part of the [Browser Hub](browser-hub.md), for browsing that resists tracking/fingerprinting specifically.
-**Port:** `8149` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/mullvad-browser/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/mullvad-browser/config/` | **Requires:** nothing (single container, no DB) | **Memory:** ~1GB idle
+**Port:** `8149` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/mullvad-browser/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/mullvad-browser/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; measured idle ~418MB
 
 ---
 

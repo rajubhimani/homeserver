@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Chromium with Google's tracking/telemetry stripped out, running remotely — part of the [Browser Hub](browser-hub.md), for Chromium compatibility without the Google plumbing.
-**Port:** `8147` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/ungoogled-chromium/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/ungoogled-chromium/config/` | **Requires:** nothing (single container, no DB) | **Memory:** ~1GB idle
+**Port:** `8147` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/ungoogled-chromium/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/ungoogled-chromium/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; measured idle ~310MB
 
 ---
 

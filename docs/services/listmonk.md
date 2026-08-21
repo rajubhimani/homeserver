@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted newsletter and mailing list manager — single Go binary, Postgres-backed.
-**Port:** `8127` (host) → `9000` (container) | **Data:** `service_data/data/listmonk/` | **Requires:** Postgres
+**Port:** `8127` (host) → `9000` (container) | **Data:** `service_data/data/listmonk/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~53MB total (app 33 + db 19)
 
 ## Setup
 

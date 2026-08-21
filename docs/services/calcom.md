@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted scheduling and booking pages (Calendly alternative).
-**Port:** `8129` (host) → `3000` (container) | **Data:** none beyond Postgres — the app itself is stateless | **Requires:** Postgres
+**Port:** `8129` (host) → `3000` (container) | **Data:** none beyond Postgres — the app itself is stateless | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~852MB total (app 830 + db 22)
 
 ## Setup
 

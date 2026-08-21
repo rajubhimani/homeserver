@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Network-wide DNS-level ad/tracker blocking for every device on the LAN.
-**Port:** `8123` (web UI, host) → `3000` (container); `53` (DNS, LAN-wide, both tcp+udp) | **Data:** `service_data/data/adguard-home/` | **Requires:** nothing
+**Port:** `8123` (web UI, host) → `3000` (container); `53` (DNS, LAN-wide, both tcp+udp) | **Data:** `service_data/data/adguard-home/` | **Requires:** nothing | **Memory:** no hard limit set; measured idle ~57MB
 
 ## Different from every other service in this stack: DNS is LAN-only, can't go through the tunnel
 

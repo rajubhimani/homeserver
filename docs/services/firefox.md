@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** A real Firefox browser running on the server, controlled remotely from any device's own browser — for reaching sites that are blocked on your local device or network.
-**Port:** `8145` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/firefox/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/firefox/config/` | **Requires:** nothing (single container, no DB) | **Memory:** ~1GB idle
+**Port:** `8145` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/firefox/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/firefox/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; measured idle ~207MB
 
 ---
 
