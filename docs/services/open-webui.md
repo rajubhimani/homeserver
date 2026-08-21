@@ -68,6 +68,25 @@ set up on the host:
 Don't run a host Ollama and the `ollama` container at the same time pointed at the same
 `OLLAMA_BASE_URL` — pick one per `services/open-webui/.env`.
 
+## Pulling models from the UI (no terminal needed)
+
+Once Open WebUI is connected to an Ollama backend (host or containerized, doesn't matter —
+this goes through Open WebUI's own proxy either way), models can be pulled entirely from the
+browser instead of `ollama pull`/`docker exec`:
+
+1. **Admin Panel → Settings → Models** (or **Workspace → Models**, depending on version —
+   look for a **+**/download icon next to a text field).
+2. Type a model name exactly as it appears on the [Ollama library](https://ollama.com/library)
+   (e.g. `llama3.2`, `qwen2.5:0.5b`) and confirm the pull.
+3. Open WebUI proxies the request straight to Ollama (`POST /ollama/api/pull` under the hood,
+   confirmed live on this stack) and shows download progress in the UI. No CLI access to the
+   `ollama` container or host install is needed at any point.
+4. Once it finishes, the model shows up immediately in the model picker for a new chat.
+
+This is the same underlying Ollama pull either way — the CLI commands in the two setup paths
+above (`ollama pull ...` / `docker exec -it ollama ollama pull ...`) are just a terminal
+alternative to this, not a separate mechanism.
+
 ## GPU passthrough (future, for the containerized path)
 
 `services/ollama/compose.yml` has no `deploy.resources` block yet — CPU-only. When a GPU is available:
@@ -116,6 +135,14 @@ once and collide. The env var avoids that entirely.
 - First inference on a freshly pulled model is slow (model load into RAM) — subsequent
   requests are faster since Ollama keeps it warm in memory for a few minutes.
 - CPU inference is usable for small models (up to ~7B) but slow for anything larger.
+- **Changing `OLLAMA_BASE_URL` in `.env` after Open WebUI has already booted once does nothing
+  by itself.** The env var only seeds `ollama.base_urls` in `webui.db` on first boot against an
+  empty database — every boot after that reads the DB value, not the env var, so a `down`/`up`
+  recreate (which never touches `service_data/data/`) keeps the old URL forever. Confirmed live
+  on this stack: switching an install from host-native to `docker-ollama` by editing `.env` alone
+  left Open WebUI still pointed at `http://host.docker.internal:11434` and unable to reach the
+  `ollama` container. Fix in the UI too — Admin Panel → Settings → Connections → edit the Ollama
+  URL directly — the env var edit alone is not enough once a database already exists.
 
 ---
 
