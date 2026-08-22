@@ -77,8 +77,6 @@ services:
     container_name: forgejo-docker
     restart: unless-stopped
     privileged: true
-    profiles:
-      - runner
     environment:
       # Empty (not unset) disables TLS cert generation -- fine since this
       # daemon is only reachable over the internal `homeserver` bridge
@@ -106,8 +104,6 @@ services:
     image: code.forgejo.org/forgejo/runner:12.13.2
     container_name: forgejo-runner
     restart: unless-stopped
-    profiles:
-      - runner
     environment:
       FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:-}

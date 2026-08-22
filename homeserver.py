@@ -206,19 +206,22 @@ if os.path.exists(DOCKER_SOCKET):
 
 _SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
 
-# "virtual" entries (e.g. Browser Hub's own card — see the "bundle" schema
-# below) have a tier + landing-page card but no services/<slug>/compose.yml
-# of their own — they're a named grouping of OTHER real services, not a
-# startable thing in themselves. Excluded here so 'up all'/'down all'/etc.
-# never try to docker-compose a directory that doesn't exist; the bare-token
-# bundle expansion below is how a virtual entry's slug actually starts anything.
-SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and not s.get("virtual")]
-SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and not s.get("virtual")]
-SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "daily" and not s.get("virtual")]
-SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "office" and not s.get("virtual")]
-SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "automation-ai" and not s.get("virtual")]
-SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and not s.get("virtual")]
-SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual" and not s.get("virtual")]
+# Landing-page entries can have a tier without being independently managed
+# Compose stacks. For example, Firefly Importer is a card and container in
+# Firefly's compose.yml, while Browser Hub is a virtual card for a bundle.
+# Only entries with their own services/<slug>/ directory belong in lifecycle
+# commands; the landing page still renders every entry from services.json.
+def is_managed_service(entry: dict) -> bool:
+    return bool(entry.get("tier")) and not entry.get("virtual") and (SERVICES_DIR / entry["slug"]).is_dir()
+
+
+SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and is_managed_service(s)]
+SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and is_managed_service(s)]
+SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "daily" and is_managed_service(s)]
+SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "office" and is_managed_service(s)]
+SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "automation-ai" and is_managed_service(s)]
+SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and is_managed_service(s)]
+SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual" and is_managed_service(s)]
 
 # category/subcategory -> ordered list of slugs, e.g. SERVICE_GROUPS["notes"]
 # or SERVICE_GROUPS["productivity"] — powers 'up group:<name>' (and every
@@ -234,11 +237,9 @@ SERVICE_GROUPS: dict[str, list[str]] = {}
 # category/subcategory nesting instead of one flat list.
 CATEGORY_SUBGROUPS: dict[str, set[str]] = {}
 for _s in _SERVICES_DATA["services"]:
-    # Skip virtual entries here too (see SERVICES_EXTRA etc. above) — a
-    # bundle hub's own card belongs in the landing page's category grouping
-    # but not in 'up group:<name>'/'status' membership, which must stay a
-    # list of real, individually startable services.
-    if not _s.get("tier") or _s.get("virtual"):
+    # Exclude landing-only cards too: group/status membership must contain
+    # only independently startable services.
+    if not is_managed_service(_s):
         continue
     for _key in ("category", "subcategory"):
         _val = _s.get(_key)
@@ -1301,7 +1302,7 @@ def do_precreate(service: str, env: str, profile: str | None) -> bool:
     files = compose_files(service, env)
     cenv = compose_env(service)
     # Precreate everything a service defines, including profile-gated
-    # containers (e.g. forgejo's runner profile) — the point is
+    # containers (e.g. GitLab's runner profile) — the point is
     # making the whole thing visible/startable in Portainer, not
     # replicating 'up's normal profile-gating.
     cenv.setdefault("COMPOSE_PROFILES", "*")
@@ -1913,7 +1914,7 @@ def show_help() -> None:
     print("    python homeserver.py dev up all --yes                start everything, skip the confirmation prompt")
     print("    python homeserver.py dev up landing mealie           start specific services")
     print("    python homeserver.py dev down landing mealie         stop specific services")
-    print("    python homeserver.py dev up forgejo --profile runner  add CI runner to forgejo")
+    print("    python homeserver.py dev up forgejo                   start Forgejo and its CI runner")
     print("    python homeserver.py dev down forgejo                 stop Forgejo and every optional profile")
     print("    python homeserver.py dev restart nginx-plain         restart a service (re-runs entrypoint)")
     print("    python homeserver.py dev -r nginx-plain              same, shorthand")
@@ -2338,7 +2339,7 @@ def main() -> int:
             return 1
         # A Compose profile is opt-in by default, so a plain `compose down`
         # misses profile-only containers that were previously started (for
-        # example Forgejo's CI runner). Always select every profile for any
+        # example GitLab's CI runner). Always select every profile for any
         # down target: stopping a service must release all of its resources,
         # whether it was selected by name, group, tier, or `all`.
         down_profile = "*"

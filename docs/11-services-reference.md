@@ -31,7 +31,7 @@ stays up), `down daily` stops only daily (`min`/`core` stay up), `down
 office` stops only office (`min`/`core`/`daily` stay up), `down
 automation-ai` stops only automation-ai (`min`/`core`/`daily`/`office` stay
 up). Every `down` command stops every optional Compose-profile container for
-the selected service(s), too (such as Forgejo's CI runner). `down all` is the
+the selected service(s), too (such as GitLab's CI runner). `down all` is the
 one command that stops the entire stack, in reverse order — no list to
 maintain.
 
