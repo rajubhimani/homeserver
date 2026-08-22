@@ -20,6 +20,16 @@ uv run homeserver.py dev up plane
 
 Browse to `http://<ip>:8100` — create a workspace and admin account.
 
+## Mobile app: not usable against this deployment
+
+Plane's official iOS/Android app requires the self-hosted **Commercial Edition, v1.12.0+** — it explicitly does not support the Community Edition, which is what this stack runs (`makeplane/plane-backend:v1.4.1`, per `compose.yml`). Don't install the mobile app expecting it to work here; the web UI (`https://plane.${DOMAIN}/`) is the only supported client for this deployment. Desktop apps (Mac/Windows/Linux) may have the same CE restriction — check [Plane's current download page](https://plane.so/download) before assuming one works, rather than trusting this note indefinitely as CE/Commercial parity can change release to release.
+
+## Using it day to day
+
+- **Workspace → Project → Issues** is the core hierarchy — a workspace holds multiple projects, each project has its own issue tracker, cycles (sprints), and modules (epics/feature groupings).
+- **Cycles** are time-boxed sprints; **Modules** group related issues across cycles (a feature or epic) — use Cycles for "when," Modules for "what."
+- Issues support sub-issues, relations (blocks/blocked-by/duplicate), custom states per project, and assignees/labels/priority — configured per-project under project Settings.
+
 ## Architecture — needs 5 frontend/backend images, not 3
 
 Multi-container: postgres, valkey, rabbitmq, minio, api, worker, beat, web, admin, space, proxy.

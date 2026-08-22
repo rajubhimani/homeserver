@@ -72,6 +72,16 @@ below), or if you'd rather not run Ollama in a container at all:
 Don't run a host Ollama and the `ollama` container at the same time pointed at the same
 `OLLAMA_BASE_URL` — pick one per `services/open-webui/.env`.
 
+## Installing it as a phone/desktop app (PWA)
+
+There's no separate native mobile app — Open WebUI is a Progressive Web App instead, installable straight from the browser:
+
+- **iPhone/iPad:** must use Safari (Chrome/Firefox on iOS can't install PWAs) — Share button → scroll down → **Add to Home Screen**.
+- **Android:** Chrome menu → **Add to Home Screen** / **Install app**.
+- **Desktop (Chrome/Edge):** click the install icon (⊕) in the address bar, or Menu → **Install Open WebUI**.
+
+Installed this way, it gets its own home-screen/app-launcher icon, opens in its own window (no browser chrome), and appears in the phone's share sheet — so a link or file from another app can be shared directly into a chat.
+
 ## Pulling models from the UI (no terminal needed)
 
 Once Open WebUI is connected to an Ollama backend (host or containerized, doesn't matter —

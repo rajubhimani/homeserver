@@ -24,7 +24,7 @@ Open `https://homebox.<domain>/`, register the first (and only) account, then se
 
 - Create a **Location** (e.g. "Closet", "Garage Shelf") and, if useful, nested sub-locations (e.g. "Closet → Drawer 2").
 - Add **Items** under a location — name, quantity, photo, purchase info, warranty. Attach **Labels** (e.g. "cables", "electronics") to cut across the location tree when searching.
-- Print a QR code per location or item (Inventory → Label Maker) and stick it on the physical box/drawer. Scanning it with a phone camera opens that location/item directly — no native app needed, works from any mobile browser.
+- Print a QR code per location or item (Inventory → Label Maker) and stick it on the physical box/drawer. Scanning it with a phone camera opens that location/item directly — no native app exists (nor an official PWA manifest to install one), it's just a normal responsive web page that works fine in any mobile browser. Bookmarking `https://homebox.${DOMAIN}/` (or your phone's "Add to Home Screen" from the browser's own share/menu, which works on any site, not something HomeBox-specific) is the closest thing to an app icon.
 - Barcode lookups (BarcodeSpider / Open Food Facts / Open Beauty Facts / Open Products Facts) can auto-fill an item's name/photo from a scanned product barcode if `HBOX_BARCODE_TOKEN_BARCODESPIDER` or `HBOX_BARCODE_OPEN_FOOD_FACTS_CONTACT` are set in `.env` — optional, unset by default.
 
 ## Registration / access model

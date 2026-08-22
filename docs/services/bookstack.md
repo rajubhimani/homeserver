@@ -39,6 +39,12 @@ To enable it:
 
 New users can then sign up from the login page's "Register" link.
 
+## Using it day to day
+
+- **Shelves → Books → Chapters → Pages** is the hierarchy — a Shelf groups related Books, a Book contains Chapters and/or Pages directly, Chapters group Pages within a Book.
+- **Page editor** supports both WYSIWYG and Markdown modes (toggle per-page) — pick once per page, not a global setting.
+- **No usable Android app as of this check:** the only official Android app ("BookStack Mobile") was unpublished from Google Play back in 2022 and never replaced. An iOS-only third-party client ("BookStax") exists but has no Android counterpart. For Android, the browser at `https://bookstack.${DOMAIN}` is the only practical option — watch for "Bookstack" (a different, unrelated reading-tracker app) showing up in Play Store search instead of what you're looking for.
+
 ## Notes
 
 - Uses the `linuxserver/bookstack` image, which follows the `PUID`/`PGID`/`/config` convention (same pattern as `syncthing` in this stack) rather than this repo's usual `DATA_ROOT` bind-mount-only shape — config, uploads, and BookStack's own `.env` all live under `service_data/data/bookstack/config/`.

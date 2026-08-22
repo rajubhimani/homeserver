@@ -10,6 +10,9 @@ services:
       CHECK_UPDATES: "false"
       CONTAINER_DETAILS: "true"
       SHARE_ALL_SYSTEMS: "false"
+      # External uptime check (e.g. point uptime-kuma's Push monitor at this) —
+      # blank disables it, same as not setting it at all
+      HEARTBEAT_URL: ""
     volumes:
       - ${DATA_ROOT}/data:/beszel_data
       - ${DATA_ROOT}/socket:/beszel_socket
@@ -55,6 +58,15 @@ services:
       SENSORS_TIMEOUT: 2s
       SKIP_GPU: "false"
       SKIP_SYSTEMD: "false"
+      # Blank = auto-detect root filesystem device for disk usage/IO stats;
+      # set explicitly if auto-detection ever picks the wrong device
+      FILESYSTEM: ""
+      # Comma-separated extra mountpoints/devices to track alongside the root
+      # filesystem (e.g. a second data disk) — blank tracks root only
+      EXTRA_FILESYSTEMS: ""
+      # Comma-separated container name/ID patterns to hide from per-container
+      # stats — blank reports every container
+      EXCLUDE_CONTAINERS: ""
     healthcheck:
       test: ["CMD", "/agent", "health"]
       interval: 60s

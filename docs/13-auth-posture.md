@@ -4,9 +4,9 @@
 
 ---
 
-Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login — 5 bucket-A services have had this actually applied (see the bucket right after A), plus Browser Hub separately out of bucket B (see the note right after that bucket's table).
+Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login — 5 bucket-A services have had this actually applied (see the bucket right after A), plus Browser Hub separately out of bucket B and Ollama separately as a bare API with no UI to audit at all (see the notes right after that bucket's table).
 
-**Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`, `ollama`.
+**Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`. (`ollama` also has no UI, but now has a public route gated by Authentik — see the note after the Bucket A+ table below.)
 
 ## The four buckets
 
@@ -39,6 +39,8 @@ These had no login of their own at all and are the same class of risk as bucket 
 | Excalidraw | Productivity | Whiteboard — [its own doc](services/excalidraw.md) notes it's local-only by default, nothing persisted server-side; gated mainly for consistency with the other four. |
 
 **Browser Hub also moved to Authentik forward-auth, separately from the 5 above** — it started in Bucket B (a shared Basic Auth login), not Bucket A (no login at all), so it isn't part of that batch or its count. See [browser-hub.md](services/browser-hub.md)'s "Auth history" section for the full before/after: the hub-level gate is now Authentik SSO, and each browser container's own Basic Auth (previously kept as defense-in-depth) was retired at the same time rather than kept — see that doc for the real consequence (dev-port access is now fully unauthenticated) and the LAN-isolation mitigation added instead.
+
+**Ollama also sits behind Authentik forward-auth, but it's a different case from all of the above** — it isn't a promotion out of bucket A, because it was never audited as bucket A: it has no login-facing UI at all (still true, it's a bare API, see the excluded list above), so it was never a candidate the four-bucket audit could classify. It's gated purely because giving it a landing-page card also gave it a public subdomain (`ollama.${DOMAIN}`), and an ungated bare API would otherwise have been the one truly open door into the stack. See the [Ollama note in authentik.md](services/authentik.md#forward-auth-for-other-services-nginx-auth_request) for the practical consequence: a non-browser/API client hitting it from outside needs a valid Authentik session cookie first (there's no login screen of its own to redirect to), while `open-webui` and every other in-stack caller are unaffected — they reach `ollama:11434` directly over the internal Docker network, never through this route.
 
 ## Bucket B — single shared credential (10)
 

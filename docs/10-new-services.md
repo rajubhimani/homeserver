@@ -51,7 +51,8 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Ungoogled Chromium | [docs/services/ungoogled-chromium.md](services/ungoogled-chromium.md) |
 | Brave | [docs/services/brave.md](services/brave.md) |
 | Mullvad Browser | [docs/services/mullvad-browser.md](services/mullvad-browser.md) |
-| Ollama + Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
+| Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
+| Ollama | [docs/services/ollama.md](services/ollama.md) |
 | Vikunja | [docs/services/vikunja.md](services/vikunja.md) |
 | Trilium Notes | [docs/services/trilium.md](services/trilium.md) |
 | SilverBullet | [docs/services/silverbullet.md](services/silverbullet.md) |

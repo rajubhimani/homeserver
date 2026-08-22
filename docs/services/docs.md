@@ -15,6 +15,14 @@ uv run homeserver.py dev up docs
 
 Open `https://docs.<domain>/` (or `http://<host>:8144` in dev).
 
+## Using it day to day
+
+- **Editing a page:** edit any `.md` file under `docs/` (or `setup.md`) on the host, then just refresh the browser — no rebuild, no restart. Docsify's client-side router re-fetches `.md` files live (see the Cache-Control note below for why `vendor/` doesn't work this way).
+- **Adding a brand-new page:** create the `.md` file, then link it from both `setup.md`'s relevant table and `_sidebar.md` (same category → subcategory nesting used everywhere else — root-absolute links only, see Notes). An unlinked page is still reachable by direct URL but won't show up in the sidebar or be found by browsing.
+- **Search** (vendored full-text search box at the top of the sidebar) is usually faster than clicking down the tree when you already know roughly what you're looking for but not which page it's on.
+- **Diagrams:** fence a block with ` ```mermaid ` instead of a plain code block to get a rendered diagram — see `setup.md`'s traffic-flow diagram for an example already in this repo.
+- If a page you just edited doesn't show the change after a refresh, that's the known single-file bind-mount/inode issue below — recreate the container (`dev restart docs`), a browser hard-refresh alone won't fix it.
+
 ## Architecture
 
 One container: `nginx:1.28.0-alpine` with a custom `entrypoint.sh` (same `DOMAIN_PLACEHOLDER`-style templating pattern as [landing](../07-landing.md), here just templating `SITE_TITLE` into `index.html`) serving:

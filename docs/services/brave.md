@@ -19,6 +19,17 @@ Tracks `:latest`, same deliberate exception to this repo's pinned-version conven
 
 Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). Login credentials, `SUBFOLDER=/brave/` subpath routing, `HARDEN_DESKTOP=true`, and `RESTART_APP=true` all follow the same shared model documented there.
 
+## Using it day to day
+
+Open `https://browser.${DOMAIN}/brave/` (via the [Browser Hub](browser-hub.md) page, or directly once logged in) and use it like any remote desktop — the whole browser window is a video stream, not a native embed, so mouse/keyboard/clipboard all go through Selkies.
+
+Two Brave-specific features worth knowing don't do anything useful in this setup:
+
+- **Brave Rewards / Brave Wallet** — both are tied to a Brave account and persistent identity that's meaningless in a container you might snapshot, reset, or discard; there's nothing to earn or hold onto here. Leave them alone.
+- **Sync** — works the same as anywhere (Settings → Sync), but only has something to sync *to* if you deliberately pair another Brave install with this container's sync chain — nothing is joined by default.
+
+Shields (per-site ad/tracker blocking) and Brave's own **Private Window with Tor** (routes just that window's traffic through Tor as an HTTP proxy — not the same as the actual [Mullvad Browser](mullvad-browser.md) container, and Brave Rewards doesn't activate inside it either) both work normally, same as a local install.
+
 ## Gotchas
 
 - Same `seccomp:unconfined`/`shm_size: "1gb"` requirements as Chromium (Brave is Chromium-based).

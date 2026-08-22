@@ -34,6 +34,10 @@ Rather than mounting nginx's log files (which the standard official `nginx` imag
 
 This requires read access to the Docker socket (`${DOCKER_SOCKET}` mounted read-only) — the same socket-access pattern already used by `dozzle`, `portainer`, `dockge`, `forgejo`, and `guacamole` in this stack.
 
+## Health endpoint
+
+`services/crowdsec/compose.yml`'s healthcheck runs `cscli lapi status` (a CLI subcommand against the local API, not an HTTP path) — confirms the engine itself is up and its local API is reachable.
+
 ## Notes
 
 - No landing-page card and no public reverse-proxy route — there's no user-facing web UI to link to (unlike every other service in this stack), and the LAPI isn't meant to be publicly exposed.

@@ -196,6 +196,19 @@ sudo ufw status verbose
 
 ---
 
+## SSH hardening — key-only auth
+
+`PasswordAuthentication` is disabled in `/etc/ssh/sshd_config` (`PasswordAuthentication no`) — SSH accepts key-based auth only, for every user including `root`. This applies regardless of which network mode above is active; UFW controls *where* port 22 is reachable from, this controls *how* anyone at those addresses can authenticate once they reach it.
+
+```bash
+sudo grep -i '^PasswordAuthentication' /etc/ssh/sshd_config   # should read: PasswordAuthentication no
+sudo systemctl reload sshd                                    # after editing
+```
+
+**Root logging in over SSH from a `172.18.0.0/16` address is expected, not a compromise** — that's [Coolify](services/coolify.md) (`coolify` container), which by design SSHes into the Docker host as root (key-only, same key every time) to orchestrate deployments outside the Docker socket. See `docs/services/coolify.md`'s SSH setup steps for why. Any root SSH session from an address *outside* the Docker bridge subnet, or any password-based root auth attempt, is not this and is worth investigating (`journalctl -u sshd`, `last -a`).
+
+---
+
 ## Verify
 
 ```bash

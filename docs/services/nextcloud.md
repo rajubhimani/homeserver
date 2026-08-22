@@ -5,7 +5,8 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres-alpine` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
+**Pinned versions (as of this pass):** `nextcloud:34.0.3` (app + cron), `postgres:18.4-alpine` (db), `redis:8.10-alpine` (cache/locking). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
 
 ## Setup
 
@@ -59,6 +60,31 @@ Top right avatar → Administration → Users → New User
 ```
 
 One account per family member. They log in via the same URL you use.
+
+## Making devices actually use it
+
+Every family member's account (above) needs to actually be connected from their own devices — the web UI alone doesn't sync anything locally. Confirmed live against [nextcloud.com/install](https://nextcloud.com/install/#install-clients) and Nextcloud 34's own [Desktop Client user manual](https://docs.nextcloud.com/server/34/user_manual/en/desktop/installation.html) — not assumed from memory. Could not actually install any of these apps myself (no phone/desktop to test against this instance); the steps below are transcribed from Nextcloud's own current docs, not independently confirmed end-to-end.
+
+- **Desktop sync client (Windows/macOS/Linux):** download from [nextcloud.com/install](https://nextcloud.com/install/#install-clients) — current build at time of writing is **34.0.2** (Windows `.msi`, macOS `.pkg` for macOS 13+, Linux AppImage; distro packages also listed on that page). Windows/macOS: run the installer and follow its wizard. Linux: add the distro repo listed on that same page, install the signing key, then install via your package manager (or just use the AppImage) — and make sure a keyring (GNOME Keyring or KWallet) is running, or the client can't store the login. First run of the setup wizard asks for the **server address** — enter the same URL used in a browser, e.g. `https://nextcloud.yourdomain.com` — then opens a browser tab to log in and grant access, then a local-folder screen to sync everything or pick individual folders before clicking **Connect**. Runs in the background afterward, syncing both directions. Each client release supports the latest three stable server major versions at the time it was built, so client `34.0.2` against this stack's pinned server `34.0.3` is squarely inside that window (matching major version) — keep the client reasonably current rather than assuming forward compatibility indefinitely.
+- **Mobile app (Android/iOS):** install "Nextcloud" (package `com.nextcloud.client`) — Android via [Google Play](https://play.google.com/store/apps/details?id=com.nextcloud.client) or [F-Droid](https://f-droid.org/packages/com.nextcloud.client/), iOS via the [App Store](https://apps.apple.com/us/app/nextcloud/id1125420102). Same pattern as the desktop client: enter the server address (`https://nextcloud.yourdomain.com`), it opens a browser to log in and grant access, then you land in the app. Turn on auto-upload for photos/videos in the app's own settings if you want camera-roll backup this way — Immich is this stack's dedicated photo tool, but Nextcloud's auto-upload works too if you'd rather keep everything in one place.
+- **WebDAV (any third-party file manager/client that isn't the official app):** point it at `https://nextcloud.yourdomain.com/remote.php/dav/files/<username>/` (that exact path — not just the bare domain, which is only what the *official* clients auto-discover). Use an **app password** for this rather than the real account password: avatar menu → **Settings** → **Security** (left sidebar) → **Devices & sessions** → generate a new app password at the bottom, and give it a name so it's identifiable later if you need to revoke it. Nextcloud's own docs note this is both more secure (revocable without changing the main password) and noticeably faster for WebDAV specifically than the primary password.
+
+## Using it day to day
+
+Confirmed against Nextcloud's own current user manual, not assumed from memory.
+
+- **Sharing links:** in **Files**, hover a file/folder → the **Share** icon → **Create link**. This generates a public URL (`https://nextcloud.yourdomain.com/s/<token>`). Folder links can be set to **Read only**, **Allow upload and editing**, **File drop** (others can upload without seeing existing contents), **Hide download**, password-protected, and given an expiration date after which the link auto-disables. Sharing directly with another user/group on this instance (instead of a public link) uses the same Share panel — pick their name instead of "create link" — and their access level is adjustable there too.
+- **Installing apps (Calendar, Contacts, etc.):** top-right avatar menu → **Apps** → browse or search by name → **Enable**. Nextcloud pulls the app from its app store and installs it if it isn't bundled already. Enabled apps then show up in the top app-switcher bar next to Files — this is the same mechanism used for "External storage support" above.
+
+## Health endpoint
+
+`compose.yml`'s healthcheck runs `curl -f http://localhost/status.php` inside the `nextcloud` container every 30s (10s timeout, 5 retries, 60s start period). Confirmed live on this instance (`docker exec nextcloud curl -s http://localhost/status.php`):
+
+```json
+{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"34.0.3.2","versionstring":"34.0.3","edition":"","productname":"Nextcloud","extendedSupport":false}
+```
+
+`installed`/`maintenance`/`needsDbUpgrade` are the fields that actually matter for health — `curl -f` just checks for a non-error HTTP status, so a `200` with `"maintenance":true` still reports "healthy" to Docker even though the app is refusing normal requests (see the maintenance-mode troubleshooting section below, which checks this endpoint's near-neighbor `occ status` for exactly that reason). `versionstring` matches the pinned image tag (`34.0.3`) as expected.
 
 ## Architecture notes
 

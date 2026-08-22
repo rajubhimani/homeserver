@@ -62,6 +62,8 @@ docker exec airflow-scheduler airflow dags trigger example_etl_pipeline
 docker exec airflow-scheduler airflow dags list-runs example_etl_pipeline
 ```
 
+**Viewing a task's logs:** in the Grid view, click the colored square for the run/task you care about — this opens the Task Instance panel, where **Logs** is the default tab (stdout/stderr and traceback for that one attempt; retries show as separate tabs within the same panel). The Graph view's task nodes link to the same panel. There's no `airflow tasks logs` CLI subcommand (the `tasks` group only has `clear`/`failed-deps`/`list`/`render`/`state`/`states-for-dag-run`/`test`) — to skip the UI, read the files directly instead, under `service_data/data/airflow/logs/dag_id=<dag>/run_id=<run>/task_id=<task>/attempt=N.log`.
+
 Each has its own page — description, a diagram of the actual task graph, and a `file:line` pointer into the real source:
 
 - [`example_hello_world`](examples/example_hello_world.md) — a single task, nothing else. Start here.

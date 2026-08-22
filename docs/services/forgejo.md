@@ -21,6 +21,30 @@ uv run homeserver.py dev up forgejo
 docker exec -it forgejo forgejo admin user create --username admin --password yourpassword --email admin@example.com --admin
 ```
 
+## Connecting your git client
+
+The web UI alone doesn't let you actually push code — a real git client needs to be pointed at this server first, over SSH or HTTPS. Confirmed against Forgejo's own current user documentation, not assumed from memory.
+
+- **SSH (recommended for regular use):** generate a key locally if you don't already have one — `ssh-keygen -t ed25519 -C "you@example.com"` — then in Forgejo go to your avatar → **Settings → SSH / GPG Keys → Add Key** and paste the public key (`~/.ssh/id_ed25519.pub`). Because this stack publishes SSH on the non-standard port `2223` (not `22`), either clone with the full `ssh://` form that embeds the port — `ssh://git@forgejo.${DOMAIN}:2223/<owner>/<repo>.git` — or add an entry to `~/.ssh/config` once so plain `git@forgejo.${DOMAIN}:<owner>/<repo>.git` URLs work too:
+
+  ```text
+  Host forgejo.yourdomain.com
+    Port 2223
+  ```
+
+- **HTTPS:** clone/push at `https://forgejo.${DOMAIN}/<owner>/<repo>.git` — git prompts for username/password on the first push (or a **personal access token** instead of a password, generated under Settings → Applications → Generate New Token, needed anyway if the account has 2FA enabled).
+- **Verify the connection works** before relying on it: `ssh -T -p 2223 git@forgejo.${DOMAIN}` should return a Forgejo greeting (not a connection error) if the SSH key was added correctly.
+
+## Using it day to day
+
+Confirmed against Forgejo's own current user documentation, not assumed from memory.
+
+- **Creating a repo:** top-right **+** → **New Repository** — pick owner, name, visibility, optionally a README/`.gitignore`/license (the license picker surfaces the `PREFERRED_LICENSES` IDs from `.env` first — see Notes below). Clone/push it using whichever connection method was set up above.
+- **Issues:** each repo's **Issues** tab — title/description, labels, assignees, milestones. Reference or auto-close one from a commit message or PR description with `Fixes #12` / `Closes #12` (closes on merge).
+- **Pull requests:** push a branch (or fork the repo) then **Pull Requests → New Pull Request** against the target branch. Reviewers can approve, request changes, or leave inline comments; merge strategy (merge commit / rebase / squash) is configurable per-repo under repo **Settings → Merge Options**.
+- **Actions/CI:** once the optional runner (below) is up, any workflow committed to `.forgejo/workflows/*.yml` runs automatically on push/PR/etc. — same syntax as GitHub Actions, so an existing `runs-on: ubuntu-latest` workflow usually just works unmodified (see the `RUNNER_LABELS` note below for why). Runs and logs show up under the repo's own **Actions** tab.
+- **Webhooks:** repo **Settings → Webhooks → Add Webhook** — pick a target type (Forgejo/Gitea, Slack, Discord, generic JSON, etc.), set the payload URL and optional secret, and choose which events fire it (push, PR, issue, release, ...). Useful for notifying something external without needing Actions/CI at all.
+
 ## Notes
 
 - Image: `codeberg.org/forgejo/forgejo:16.0.2`
@@ -62,6 +86,7 @@ docker volume rm forgejo_forgejo-postgres
 Confirmed working: user count, table count, and a real `/api/v1/users/search` response all matched pre-migration state exactly; no migration/collation errors in `forgejo` app logs on first boot against the restored DB.
 
 **Two gotchas found migrating other services this same way** (both now handled automatically by `dump`/`migrate`, not manual steps):
+
 - **`pg_restore` erroring on `CREATE TYPE`/`CREATE TABLE` colliding with objects that already exist** — e.g. an image whose `docker-entrypoint-initdb.d/` script bootstraps its own schema (guacamole's `01-schema.sql`) before the restore ever runs. Fixed with `--clean --if-exists --no-owner` on the restore (safe here specifically because the target is always a container created fresh for this migration).
 - **An app authenticating as a DB role other than `POSTGRES_USER`** — Nextcloud creates its own `oc_admin` role during initial setup and points `config.php` at it; a per-database `pg_dump` never captures that (roles are cluster-wide, not database-scoped), so the role silently didn't exist after restore and Nextcloud crash-looped on auth failure. Fixed by also running `pg_dumpall --roles-only` at dump time and applying it *before* the main restore — and deliberately keeping (not stripping) the restore's `GRANT` statements, since those are exactly what a secondary role like `oc_admin` needs on the restored tables. An earlier attempt added `--no-privileges` to sidestep the ordering problem instead of fixing the ordering — that broke `oc_admin`'s actual table access (login worked, every query returned `permission denied`) and has since been removed; see `docs/services/nextcloud.md` for the full incident.
 

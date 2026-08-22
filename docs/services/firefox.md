@@ -43,6 +43,10 @@ Open `https://browser.${DOMAIN}/` (prod, once DNS/the tunnel picks it up), log i
 
 Public access goes through the [Browser Hub](browser-hub.md)'s Authentik login (SSO) first — see that doc's "Auth history" section for how this design changed over time. This container has **no login of its own anymore** — no `CUSTOM_USER`/`PASSWORD`, no Basic Auth. The dev port (`8145`) therefore bypasses all authentication entirely, not just the hub, when reached directly — see browser-hub.md's "LAN isolation" section for the network-level containment that applies instead. Anyone who reaches the container (via Authentik or the dev port) shares the *same* browser session simultaneously (like a screen-share) — this image has no concept of separate concurrent sessions per user. If multiple people each need their own isolated browser, the pattern is to run additional instances of this same service (own subpath/port/profile per person), not to share one.
 
+## Using it day to day
+
+There's no separate "client" to connect — the browser tab you open *is* the whole interface, and the remote desktop session persists between visits (same `/config` profile) as long as the container keeps running, so bookmarks/logins/extensions saved inside it stay put across sessions like a normal browser, not reset each time. Useful patterns: leave a long-running download or video call open and check back later from any device; sign into a site once and it stays signed in for future visits without re-authenticating.
+
 ## Data
 
 `${DATA_ROOT}/config` holds the full browser profile (`/config` in the container: bookmarks, extensions, history, cookies) — small enough to stay in the default `service_data/data/firefox/` bucket rather than needing a separate media/cache root.

@@ -108,6 +108,25 @@ just edit the file live.
 folder — no config changes needed, the provider scans the whole
 directory.
 
+## Monitoring another host (not currently wired up)
+
+This stack ships **fully self-contained**: `cadvisor` and `node-exporter` only scrape containers/host stats *on this same Docker host*, and Alloy only ships logs from containers on this same Docker network (`discovery.docker` against the local socket). There's no separate agent/client concept for an end user to install elsewhere, unlike Beszel — but if you do want a second machine's containers/logs in this same Grafana, here's concretely what's missing today:
+
+- **Metrics:** run `cadvisor`/`node-exporter` on the other host, then add a `static_configs` target for each to `services/observability/prometheus/prometheus.yml` pointing at that host's reachable IP:port and `dev restart observability`. Since Prometheus currently only gets a **loopback-only** dev port (`8135`) and no prod port at all (see "What's public vs. internal-only" above), scraping a genuinely remote host means either exposing that port more broadly (with auth in front of it) or putting both hosts on a shared private network first — neither is set up here.
+- **Logs:** run Alloy (or Promtail) on the other host configured to push to this Loki's `/loki/api/v1/push` — same caveat: Loki has no published port at all right now, internal-only on the `homeserver` bridge network, so this needs a network/exposure decision made first.
+
+In short: adding a remote host is a real (if currently unconfigured) Prometheus/Loki feature, not something this repo's compose file does out of the box — treat it as a follow-up task, not a one-line change.
+
+## Using it day to day
+
+Confirmed against Grafana's own current docs (Explore).
+
+- **Dashboards** (left nav → Dashboards): open **Stack Overview** first for a whole-stack view (total container memory, host memory/%, total CPU cores, per-container memory breakdown over time), or **Node Exporter Full** / **cadvisor dashboard** for deeper host- or container-level detail — all three are pre-provisioned, nothing to import.
+- **Explore** (left nav → Explore): the tool for ad hoc digging outside a dashboard — pick a datasource (`Prometheus` or `Loki`) from the dropdown, write a query, click **Run query**. For logs, start from a container-name filter, e.g. `{container="jellyfin"} | json` to pull out structured fields on services that log JSON (most FastAPI services in this stack do). For metrics, any PromQL expression works, e.g. `container_memory_usage_bytes{name="immich_server"}`.
+- **Split view** in Explore (the split button) puts two queries side by side with linked time pickers — useful for comparing two containers, or a metric next to its logs for the same window, without building a dashboard first.
+- **Tracking down high memory/CPU:** Stack Overview's per-container time series is usually the fastest way to find the offending container; drop into Explore afterward for that container's logs around the same time window.
+- **No alerting is pre-configured** (see Known limitations below) — set up rules under Alerting → Alert rules if you want to be paged for something specific; SMTP is already wired to Mailpit for testing.
+
 ## Retention
 
 `PROMETHEUS_RETENTION` (default `15d`) and `LOKI_RETENTION` (default `336h` = 14d) bound how much metrics/log history accumulates — this data isn't regenerable if lost, but unlike a photo library it's not irreplaceable either, so it's kept under `service_data/data/observability/` (backed up on every snapshot) rather than moved to a `cache/` bucket. Lower the retention values if snapshot size becomes a problem; Loki's format must be in hours, Prometheus accepts `Nd`/`Nh` directly.

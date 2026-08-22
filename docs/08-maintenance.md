@@ -9,7 +9,7 @@
 All services are managed via `homeserver.py` in the repo root.
 
 ```bash
-# Tiers — MIN ⊂ CORE ⊂ ALL
+# Tiers — MIN ⊂ CORE ⊂ DAILY ⊂ OFFICE ⊂ AUTOMATION-AI ⊂ ALL
 uv run homeserver.py dev up min          # infrastructure only
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything
@@ -165,7 +165,7 @@ docker stats --no-stream   # per-container CPU/memory
 
 A container reporting "unhealthy" right after a restart batch is often just the healthcheck probe itself failing to get CPU-scheduled in time under load — not a real failure. Check `docker logs <container>` for the app's own "ready" message before assuming the config is wrong.
 
-**1. Run fewer services at once.** This is the first and biggest lever — see the `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_DAILY`/`SERVICES_EXTRA` tiers in `CLAUDE.md`. Use `up core` day-to-day and bring up `SERVICES_DAILY`/`SERVICES_EXTRA` services individually only when actively using them, instead of `up all`.
+**1. Run fewer services at once.** This is the first and biggest lever — see the `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_DAILY`/`SERVICES_OFFICE`/`SERVICES_AUTOMATION_AI`/`SERVICES_EXTRA` tiers in `CLAUDE.md`. Use `up core` day-to-day and bring up `SERVICES_DAILY`/`SERVICES_OFFICE`/`SERVICES_AUTOMATION_AI`/`SERVICES_EXTRA` services individually only when actively using them, instead of `up all`.
 
 **2. Tune every Postgres container's own memory settings, plus a hard cap as a backstop.** A memory cap alone (`deploy.resources.limits.memory`) isn't enough — Postgres doesn't know the cap exists and will try to use its defaults, getting OOM-killed under load (migrations, vacuum, big queries). Tune the internal settings too so it paces itself:
 

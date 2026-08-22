@@ -41,6 +41,25 @@ reachable with the default credentials.
 docker exec wallabag chown -R nobody:nobody /var/www/wallabag/var
 ```
 
+## Connecting the mobile app and browser extension
+
+The web UI alone only gets you the toolbar "+" save box (top nav → **+** icon → paste a URL → Enter). The apps that make wallabag actually useful day to day — saving from your phone or browser without switching tabs — each need to be pointed at `https://wallabag.<domain>` explicitly; installing them does nothing on its own.
+
+**Official mobile apps** — [Android on Google Play](https://play.google.com/store/apps/details?id=fr.gaulupeau.apps.InThePoche) or [F-Droid](https://f-droid.org/en/packages/fr.gaulupeau.apps.InThePoche/); iOS app is on the App Store (search "wallabag"). On first launch, enter:
+
+- **Wallabag address** — `https://wallabag.<domain>` (no trailing slash — the app doc calls this out explicitly)
+- **Username** / **Password** — the account created by the installer above
+
+No client ID/secret needed for the official apps — after the connection test passes, they fetch an RSS feed token automatically. Two things that trip this up: the app doesn't support 2FA (disable it on the account first if enabled), and it doesn't always follow HTTPS redirects cleanly, so use the direct `https://` URL rather than anything that redirects.
+
+**Browser extension (Wallabagger)** — [Chrome Web Store](https://chromewebstore.google.com/detail/wallabagger/gbmgphmejlcoihgedabhgjdkcahacjlj) or [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/wallabagger/). Unlike the mobile apps, this one authenticates via OAuth and does need a client ID/secret:
+
+1. In the web UI, go to `https://wallabag.<domain>/developer` (or user menu → **Developer**) → **Create a new client**. Give it any name and redirect URL (not used for this flow) and save — this returns a **Client ID** and **Client secret**, also listed afterward under **Existing clients** on the same page.
+2. Right-click the Wallabagger icon → **Options** (or its own settings page). Enter the instance URL, verify it, then paste in the Client ID and secret. The extension refreshes its token automatically after that — no need to touch it again.
+3. Click the icon on any page to save it; the popup also lets you tag, star, or archive right from the browser.
+
+**Bookmarklet, for browsers without an extension** — user menu (top right) → **How-to** page → **Add Link** tab → drag the **bag it!** link to your bookmarks bar. Click it on any page to save that URL.
+
 ## Registration
 
 `SYMFONY__ENV__FOSUSER_REGISTRATION` in `.env`, default `true`. Set to `false` once accounts exist to close the instance to new signups.

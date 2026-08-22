@@ -29,6 +29,15 @@ chmod 644 service_data/data/firefly/storage/oauth-private.key service_data/data/
 
 Browse to `http://<ip>:8102` — the **first registration becomes admin**. Disable further signups at Administration → `/settings/configuration`.
 
+## Using it day to day
+
+Confirmed against Firefly III's own current documentation, not assumed from memory.
+
+- **Accounts:** **Accounts** menu splits into **Asset accounts** (your actual checking/savings/cash — the accounts money lives in), **Expense accounts** (who you paid), **Revenue accounts** (who paid you), and **Liabilities** (debts, loans, credit cards with a balance). Create each from that same Accounts page — asset accounts are the ones you'll pick from when entering a transaction.
+- **Budgets:** the `/budgets` page — set a maximum amount for each budget, which applies to the current period (a month, for most users). Every transaction can optionally be assigned to a budget so you can track spend-vs-budget per category of spending; **Categories** are a separate, unrelated grouping used mainly for reporting rather than a spending cap.
+- **Recurring transactions:** **Recurring** → create one for any withdrawal, deposit, or transfer that repeats — give it a title/description and a repetition rule (every week on day X, every month on a fixed day, every month on the nth weekday, or yearly on a date) plus a first-fire date in the future. This stack's `firefly-cron` container checks daily at 03:00 and creates the actual transaction whenever one is due — nothing to trigger manually.
+- **Rules:** **Automation → Rules** — a rule group holds ordered rules, each with triggers (e.g. description contains X, amount over Y, from a specific account) and actions (set category, set budget, add a tag, etc.). Rules can auto-apply to new transactions as they're entered/imported, or be run in bulk over existing transactions from the rule's own page — useful for auto-categorizing imports from the Data Importer below.
+
 ## Notes
 
 - `APP_KEY` and `STATIC_CRON_TOKEN` must each be **exactly 32 characters**

@@ -15,25 +15,34 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer |
-| `core` | `uv run homeserver.py dev up core` | min + nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools, authentik, atuin, observability, plausible, mailpit |
+| `core` | `uv run homeserver.py dev up core` | min + observability, plausible, mailpit, nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools, authentik, atuin, adguard-home |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
-| `all` | `uv run homeserver.py dev up all` | core + daily + every extra service (manual-only services excluded) |
+| `office` | `uv run homeserver.py dev up office` | min + core + daily + every office service below — **opt-in, never implied by `up daily`** |
+| `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + office + every automation/AI service below — **opt-in, never implied by `up office`** |
+| `all` | `uv run homeserver.py dev up all` | core + daily + office + automation-ai + every extra service (manual-only services excluded) |
 
-**`up core`/`up daily` bootstrap, they don't restart**: each checks which of
-its lower tier(s) are already running and only starts what's missing — an
-already-running `min` (or `min`+`core`) is left untouched, not force-recreated.
+**`up core`/`up daily`/`up office`/`up automation-ai` bootstrap, they don't
+restart**: each checks which of its lower tier(s) are already running and
+only starts what's missing — an already-running lower tier is left
+untouched, not force-recreated.
 
 **`down` is tier-scoped, not cascading**: `down core` stops only core (`min`
-stays up), `down daily` stops only daily (`min`/`core` stay up). `down all`
-is the one command that always stops the entire stack, in reverse order — no
-list to maintain.
+stays up), `down daily` stops only daily (`min`/`core` stay up), `down
+office` stops only office (`min`/`core`/`daily` stay up), `down
+automation-ai` stops only automation-ai (`min`/`core`/`daily`/`office` stay
+up). `down all` is the one command that always stops the entire stack, in
+reverse order — no list to maintain.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
-uptime-kuma, stirling-pdf-lite, stirling-pdf, syncthing, miniflux, plane, vikunja,
-trilium, silverbullet, excalidraw, karakeep, browser,
-firefox, chromium, ungoogled-chromium, brave, mullvad-browser,
-n8n, airflow, temporal, dagster, wallabag, adguard-home,
-calcom, coolify, homebox, listmonk, ollama, open-webui, appflowy.
+firefox, chromium, ungoogled-chromium, brave, mullvad-browser, browser,
+uptime-kuma, syncthing, trilium, silverbullet, excalidraw, karakeep,
+wallabag, coolify, homebox.
+
+**Office services** (firm/business apps — started with `up office`/`up all` or individually):
+stirling-pdf-lite, stirling-pdf, miniflux, appflowy, plane, vikunja, listmonk, calcom.
+
+**Automation & AI services** (workflow/automation/AI apps — started with `up automation-ai`/`up all` or individually):
+ollama, open-webui, n8n, airflow, temporal, dagster.
 
 **Extra services** (started with `up all` or individually):
 dozzle, dockge, openproject, paperless,
@@ -71,16 +80,17 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Plausible | `plausible` | 8130 | 8000 | core |
 | Observability (Grafana) | `grafana` | 8134 | 3000 | core |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
+| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | core |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | daily |
-| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | daily |
+| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | office |
 | HomeBox | `homebox` | 8136 | 7745 | daily |
 | Syncthing | `syncthing` | 8087 | 8384 | daily |
-| Miniflux | `miniflux` | 8093 | 8080 | daily |
-| AppFlowy | `appflowy-nginx` | 8103 | 80 | daily |
-| Plane | `plane-proxy` | 8100 | 80 | daily |
-| Ollama | `ollama` | 8110 | 11434 | daily |
-| Open WebUI | `open-webui` | 8109 | 8080 | daily |
-| Vikunja | `vikunja` | 8111 | 3456 | daily |
+| Miniflux | `miniflux` | 8093 | 8080 | office |
+| AppFlowy | `appflowy-nginx` | 8103 | 80 | office |
+| Plane | `plane-proxy` | 8100 | 80 | office |
+| Ollama | `ollama` | 8110 | 11434 | automation-ai |
+| Open WebUI | `open-webui` | 8109 | 8080 | automation-ai |
+| Vikunja | `vikunja` | 8111 | 3456 | office |
 | Trilium Notes | `trilium` | 8112 | 8080 | daily |
 | SilverBullet | `silverbullet` | 8113 | 3000 | daily |
 | Excalidraw | `excalidraw` | 8116 | 80 | daily |
@@ -90,16 +100,15 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | daily |
 | Brave | `brave` | 8148 | 3000 | daily |
 | Mullvad Browser | `mullvad-browser` | 8149 | 3000 | daily |
-| n8n | `n8n` | 8120 | 5678 | daily |
-| Airflow | `airflow-apiserver` | 8137 | 8080 | daily |
-| Temporal | `temporal-ui` | 8138 | 8080 | daily |
-| Dagster | `dagster-webserver` | 8139 | 3000 | daily |
+| n8n | `n8n` | 8120 | 5678 | automation-ai |
+| Airflow | `airflow-apiserver` | 8137 | 8080 | automation-ai |
+| Temporal | `temporal-ui` | 8138 | 8080 | automation-ai |
+| Dagster | `dagster-webserver` | 8139 | 3000 | automation-ai |
 | Wallabag | `wallabag` | 8121 | 80 | daily |
-| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | daily |
-| Listmonk | `listmonk` | 8127 | 9000 | daily |
-| Cal.com | `calcom` | 8129 | 3000 | daily |
+| Listmonk | `listmonk` | 8127 | 9000 | office |
+| Cal.com | `calcom` | 8129 | 3000 | office |
 | Coolify | `coolify` | 8132 | 8080 | daily |
-| Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | daily |
+| Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | office |
 | Dozzle | `dozzle` | 9999 | 8080 | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |
@@ -168,30 +177,31 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `atuin.yourdomain.com` | `atuin` | `8888` | core |
 | `plausible.yourdomain.com` | `plausible` | `8000` | core |
 | `grafana.yourdomain.com` | `grafana` | `3000` | core |
-| `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | daily |
-| `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | daily |
+| `adguard-home.yourdomain.com` | `adguard-home` | `3000` | core |
+| `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | office |
+| `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | office |
 | `homebox.yourdomain.com` | `homebox` | `7745` | daily |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | daily |
 | `status.yourdomain.com` | `uptime-kuma` | `3001` | daily |
 | `syncthing.yourdomain.com` | `syncthing` | `8384` | daily |
-| `miniflux.yourdomain.com` | `miniflux` | `8080` | daily |
-| `plane.yourdomain.com` | `plane-proxy` | `80` | daily |
-| `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | daily |
-| `open-webui.yourdomain.com` | `open-webui` | `8080` | daily |
-| `vikunja.yourdomain.com` | `vikunja` | `3456` | daily |
+| `miniflux.yourdomain.com` | `miniflux` | `8080` | office |
+| `plane.yourdomain.com` | `plane-proxy` | `80` | office |
+| `appflowy.yourdomain.com` | `appflowy-nginx` | `80` | office |
+| `open-webui.yourdomain.com` | `open-webui` | `8080` | automation-ai |
+| `ollama.yourdomain.com` | `ollama` | `11434` | automation-ai |
+| `vikunja.yourdomain.com` | `vikunja` | `3456` | office |
 | `trilium.yourdomain.com` | `trilium` | `8080` | daily |
 | `silverbullet.yourdomain.com` | `silverbullet` | `3000` | daily |
 | `excalidraw.yourdomain.com` | `excalidraw` | `80` | daily |
 | `karakeep.yourdomain.com` | `karakeep` | `3000` | daily |
 | `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 5 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | daily |
-| `n8n.yourdomain.com` | `n8n` | `5678` | daily |
-| `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | daily |
-| `temporal.yourdomain.com` | `temporal-ui` | `8080` | daily |
-| `dagster.yourdomain.com` | `dagster-webserver` | `3000` | daily |
+| `n8n.yourdomain.com` | `n8n` | `5678` | automation-ai |
+| `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | automation-ai |
+| `temporal.yourdomain.com` | `temporal-ui` | `8080` | automation-ai |
+| `dagster.yourdomain.com` | `dagster-webserver` | `3000` | automation-ai |
 | `wallabag.yourdomain.com` | `wallabag` | `80` | daily |
-| `adguard-home.yourdomain.com` | `adguard-home` | `3000` | daily |
-| `listmonk.yourdomain.com` | `listmonk` | `9000` | daily |
-| `calcom.yourdomain.com` | `calcom` | `3000` | daily |
+| `listmonk.yourdomain.com` | `listmonk` | `9000` | office |
+| `calcom.yourdomain.com` | `calcom` | `3000` | office |
 | `coolify.yourdomain.com` | `coolify` | `8080` | daily |
 | `dozzle.yourdomain.com` | `dozzle` | `8080` | extra |
 | `dockge.yourdomain.com` | `dockge` | `5001` | extra |

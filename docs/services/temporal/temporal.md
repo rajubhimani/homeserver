@@ -147,6 +147,18 @@ Two things broke on this bump, both fixed live and reflected in `compose.yml` al
 - **The bundled `temporal` CLI is gone from `temporalio/server`** — somewhere after 1.29.1 the image stopped shipping a separate `temporal` binary (only `temporal-server` remains), so the old healthcheck (`CMD temporal operator cluster health ...`) failed with `exec: "temporal": executable file not found` and the container could never report healthy, independent of the Postgres issue above. Replaced with `nc -z temporal 7233` — verified `nc`/`wget` are present in this image, `temporal`/`temporal-server`/CLI tools are not. Also had to target the container's own name (`temporal`), not `localhost`: the frontend gRPC port binds only the container's actual network IP, not `127.0.0.1` — `nc -z localhost 7233` connection-refused every time even once the server was actually listening.
 - **`temporal-ui`'s own healthcheck had the same class of bug, separately** — `temporalio/ui:2.53.3` doesn't have `curl` either (`curl: not found`), so its `CMD-SHELL curl -f http://localhost:8080/ ...` healthcheck always failed and the container was permanently reported unhealthy even while serving requests fine. Unlike the server container above, `wget` alone was enough here (`wget -qO- http://localhost:8080/ || exit 1`) — no need for the `nc`/container-name workaround since this is a plain HTTP UI, not a gRPC port.
 
+## Watching a workflow run in the Web UI
+
+Every CLI example above shows the start command and the final `workflow result`, but not how to actually watch one execute:
+
+1. Open `https://temporal.${DOMAIN}/` (or `http://<host>:8138` locally) — Authentik forward-auth gates this (see Notes below), so you'll hit a login first.
+2. The left sidebar lists **Namespaces** — pick `default` (or `staging`/`production`) to land on that namespace's Workflows list.
+3. Filter by Workflow ID or Workflow Type (e.g. paste in `reference-demo-1` from the [ReferenceWorkflow](examples/ReferenceWorkflow.md) example) and click the execution.
+4. The detail page's **History** tab (Timeline / Compact / JSON views) shows every event as it happens — Activity started/completed/failed, timers, signals; **Input and Results** shows the arguments and return value; **Pending Activities** shows anything currently retrying; **Workers** shows which `temporal-worker` process picked it up.
+5. For a still-`Running` workflow, the same page has actions to Signal/Update/Cancel/Terminate/Reset it by hand instead of via CLI.
+
+No separate "enable UI visibility" step — this works for anything already started elsewhere in this doc (the Schedule/Batch/Namespace examples above, or any of `temporal-worker`'s own [example workflows](examples/)).
+
 ## Notes
 
 - **No built-in auth on the UI** — Temporal's own auth is enterprise-only. **Gated behind Authentik forward-auth instead** — `temporal.${DOMAIN}` requires an Authentik login at the nginx layer before any request reaches the container. See [Forward-auth for other services](../authentik.md#forward-auth-for-other-services-nginx-auth_request) in `authentik.md`. Note this only covers the UI vhost — the `temporal-worker`/`temporal-admin-tools` connection to the server (`temporal:7233`, internal gRPC) isn't proxied publicly at all, so it was never reachable from outside regardless.

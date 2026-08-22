@@ -18,11 +18,15 @@ uv run homeserver.py dev up audiobookshelf
 
 ## First login
 
-Browse to `http://<ip>:8094` — create the admin account on first launch. Connect the Audiobookshelf mobile app to `https://audiobookshelf.yourdomain.com`.
+Browse to `http://<ip>:8094` — create the admin account on first launch.
+
+## Connecting the Android app
+
+Official **Audiobookshelf** app ([Google Play](https://play.google.com/store/apps/details?id=com.audiobookshelf.app)) — on first launch it shows "server not connected"; tap **Connect**, enter `https://audiobookshelf.${DOMAIN}`, then log in with the account created above. Streams audiobooks/podcasts directly, supports offline downloads.
 
 ## Notes
 
-- Health endpoint: `/ping`
+- Health endpoint: `/ping` (confirmed via `services/audiobookshelf/compose.yml`'s healthcheck — `wget --spider http://localhost:80/ping`, plain 200 on success)
 
 ---
 

@@ -27,6 +27,10 @@ Two containers: `mattermost-db` (Postgres, named volume per this stack's Postgre
 curl http://localhost:8141/api/v4/system/ping
 ```
 
+## Connecting the Android app
+
+Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.10.0` (`.env.example`), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
+
 ## Registration
 
 `MM_TEAMSETTINGS_ENABLEOPENSERVER`/`MM_TEAMSETTINGS_ENABLEUSERCREATION` (both `true` by default) — anyone who can reach the server can self-register. Set to `false` in `.env` for admin-provisioned accounts only.

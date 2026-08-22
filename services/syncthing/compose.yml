@@ -18,6 +18,11 @@ services:
       PUID: 1000
       PGID: 1000
       TZ: ${TZ:-Asia/Kolkata}
+      # This repo pins the image tag deliberately (see CLAUDE.md) — Syncthing's
+      # own built-in auto-upgrade checks every 12h by default and would try to
+      # self-replace its binary inside the container, silently drifting from
+      # the pinned version. Disabled here, not left as a .env knob.
+      STNOUPGRADE: 1
     volumes:
       - syncthing-config:/config
       - ${DATA_ROOT}/data:/data

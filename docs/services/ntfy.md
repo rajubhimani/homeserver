@@ -15,7 +15,7 @@ uv run homeserver.py dev up ntfy
 docker exec -it ntfy ntfy user add --role=admin youruser
 ```
 
-Install the ntfy app (iOS/Android) or use the web UI at `https://ntfy.<domain>/`, point it at your server, and subscribe to a topic. Send a test message:
+Install the official **ntfy** Android app ([Google Play](https://play.google.com/store/apps/details?id=io.heckel.ntfy) or F-Droid) — tap **+** → enter the server `https://ntfy.<domain>` and a topic name (any string, acts like a password if kept private) → **Subscribe**. Or use the web UI at `https://ntfy.<domain>/` the same way, no app needed. Send a test message:
 
 ```bash
 curl -u youruser -d "test message" https://ntfy.<domain>/mytopic

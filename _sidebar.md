@@ -60,7 +60,8 @@
       - [Rocket.Chat](/docs/services/rocketchat.md "Full-featured team chat with channels, apps, and webhooks. Heaviest of the chat playground trio (MongoDB replica set + NATS). Replaces: Slack.")
       - [Zulip](/docs/services/zulip.md "Topic-threaded team chat, good for organized async discussion. Postgres + RabbitMQ + Redis + Memcached backing services. Replaces: Slack.")
     - AI
-      - [Open WebUI + Ollama](/docs/services/open-webui.md "Chat interface for AI models running entirely on your own hardware, served by Ollama — like ChatGPT, but private, offline, and free to use.")
+      - [Open WebUI](/docs/services/open-webui.md "Chat interface for AI models running entirely on your own hardware, served by Ollama — like ChatGPT, but private, offline, and free to use.")
+      - [Ollama](/docs/services/ollama.md "Runs large language models locally and serves them to Open WebUI over the internal network — the actual AI engine behind the chat interface. Also reachable directly (behind login) for other tools that speak the Ollama API.")
     - Home
       - [Mealie](/docs/services/mealie.md "Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists. Replaces: Recipe apps.")
       - [HomeBox](/docs/services/homebox.md "Home inventory tracker with QR labels. Log what's in every box, drawer, and closet, then scan to find it. Replaces: Sortly.")

@@ -258,6 +258,7 @@ not the Pusher/Soketi one):
    `homeserver-postgres` skill. A fresh named volume is owned by
    `root:root` by default, which the container's `www-data` (uid `9999`)
    can't write into either — fix once with:
+
    ```bash
    docker run --rm -v coolify_coolify-ssh-keys:/data alpine chown -R 9999:9999 /data
    ```
@@ -278,6 +279,16 @@ existed. All six are fixed now (five real `service_data/` bind mounts +
 `ssh` as a named volume, per the terminal section above) — nothing
 further to do, just worth knowing why a `coolify` container recreation
 used to lose things that looked like they should have survived it.
+
+## Deploying your first app
+
+The whole point of this service — everything above is just getting Coolify itself running. Once logged in: create/open a **Project**, then **+ New Resource**, and pick one of:
+
+- **Public/private Git repository** (GitHub, GitLab, Bitbucket) — for a private repo, connect via a GitHub App or a deploy key. Coolify auto-detects a buildpack (Dockerfile, or its own Nixpacks-style detection for common frameworks) unless you pin one explicitly.
+- **Docker Compose repo** — Coolify runs a helper container that pulls the repo and calls `docker compose` itself to build/start the services, closest to what this stack's own `homeserver.py` does by hand.
+- **Docker image** — point it straight at a registry image (`registry.example.com/user/repo:tag`), no repo needed at all.
+
+Set a public domain for the resource (under its own Settings, separate from `nginx-plain`'s config in this repo — see "Architecture" above for why Coolify runs its own reverse proxy), then **Deploy**. Push-to-deploy (a webhook that redeploys automatically on every `git push`) is a toggle in the resource's Git source settings once connected.
 
 ## Registration — a real action item, not just informational
 

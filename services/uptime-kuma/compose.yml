@@ -31,6 +31,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      TZ: ${TZ:-Asia/Kolkata}
       UPTIME_KUMA_DB_TYPE: mariadb
       UPTIME_KUMA_DB_HOSTNAME: uptime-kuma-db
       UPTIME_KUMA_DB_PORT: 3306

@@ -21,11 +21,15 @@
 
 Tracks `:latest`, same deliberate exception to this repo's pinned-version convention as the other browsers here — see [firefox.md](firefox.md#image-tag--deliberate-exception-to-this-repos-pinned-version-convention) for the full reasoning.
 
-Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). Login credentials, `SUBFOLDER=/ungoogled-chromium/` subpath routing, `HARDEN_DESKTOP=true`, and `RESTART_APP=true` all follow the same shared model documented there.
+Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). `SUBFOLDER=/ungoogled-chromium/` subpath routing, `HARDEN_DESKTOP=true`, and `RESTART_APP=true` follow the same shared model documented there. Auth is Authentik SSO at the hub level, not a per-container credential — see [firefox.md](firefox.md#auth-model)'s "Auth model" section, which applies identically here.
+
+## Using it day to day
+
+No separate client — the browser tab is the interface, session persists in `/config` across visits, same as [Firefox](firefox.md#using-it-day-to-day). Reach for this one when Chromium compatibility is needed but you'd rather not have Google's telemetry/API hooks active, even inside a throwaway remote session.
 
 ## Gotchas
 
-Same as [Chromium](chromium.md)'s — `seccomp:unconfined` needed for the sandbox, `shm_size: "1gb"` needed for modern sites, `CHROME_CLI` (not a `UNGOOGLED_CHROMIUM_CLI`) is the app-specific CLI-flags var name.
+Same as [Chromium](chromium.md)'s — `seccomp:unconfined` needed for the sandbox, `shm_size: "1gb"` needed for modern sites, `CHROME_CLI` (not a `UNGOOGLED_CHROMIUM_CLI`) is the app-specific CLI-flags var name. Health endpoint: same plain `curl -f http://127.0.0.1:3000/` root check as [Firefox](firefox.md#gotchas), verified returning `200`.
 
 ---
 

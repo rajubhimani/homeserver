@@ -21,12 +21,17 @@ Unlike Firefox, this container needs `security_opt: - seccomp:unconfined` in `co
 
 Tracks `:latest`, same deliberate exception to this repo's pinned-version convention as Firefox, same rationale (public-facing, benefits from current security patches, stateless — profile lives in `/config`, not the image). See [firefox.md](firefox.md#image-tag--deliberate-exception-to-this-repos-pinned-version-convention) for the full reasoning.
 
-Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). Login credentials, `SUBFOLDER=/chromium/` subpath routing, and `RESTART_APP=true` all follow the same shared model documented there.
+Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). `SUBFOLDER=/chromium/` subpath routing and `RESTART_APP=true` follow the same shared model documented there. Auth is Authentik SSO at the hub level, not a per-container credential — see [firefox.md](firefox.md#auth-model)'s "Auth model" section, which applies identically here.
+
+## Using it day to day
+
+No separate client — the browser tab is the interface, and the session (bookmarks, extensions, logins) persists in `/config` across visits, same as [Firefox](firefox.md#using-it-day-to-day). Reach for this one specifically when a site needs Chrome/Chromium's DevTools or a Chrome-only extension/web app that Firefox can't run.
 
 ## Gotchas
 
 - Same `shm_size: "1gb"` requirement as Firefox — modern JS-heavy sites need it.
 - `CHROME_CLI` is the app-specific CLI-flags env var (not `CHROMIUM_CLI`) — matches upstream's own naming, left empty by default in `.env.example`'s "remaining env vars" block.
+- Health endpoint: the compose healthcheck is a plain unauthenticated `curl -f http://127.0.0.1:3000/` against container root — same as [Firefox](firefox.md#gotchas), verified returning `200`.
 
 ---
 

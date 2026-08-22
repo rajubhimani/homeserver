@@ -66,6 +66,16 @@ Swap these for real SMTP credentials in `services/invoiceshelf/.env` later if ac
 
 **Stuck on a spinner after login, or F5 bounces straight back to `/login`**: before chasing `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS`/cookie config server-side, first clear cookies and cached assets for `invoiceshelf.${DOMAIN}` (or just try a fresh incognito window) and log in again. Multiple failed installs/logins during development (wrong DB host, non-empty database, etc.) leave behind stale session cookies from earlier attempts that the browser keeps resending alongside the new one, confusing the SPA's auth check even though the server-side session/cookie config is correct. This has been the actual cause every time this symptom came up here — the server-side config below was already right.
 
+## Using it day to day
+
+- **Clients → Invoices/Estimates** is the core flow: create a client first, then an invoice or estimate against them. Estimates can be converted directly into an invoice once accepted, rather than re-entering line items.
+- **Company settings** (logo, currency, tax rates, invoice number format) apply per-company if multiple companies are set up — InvoiceShelf supports more than one business under one login.
+- **Mobile app:** InvoiceShelf publishes mobile app source (React Native/Expo, [GitHub](https://github.com/InvoiceShelf/mobile)) but this wasn't confirmed to be published as a ready-to-install app on Google Play/App Store — treat this deployment as web-only (`https://invoiceshelf.${DOMAIN}`) unless you independently confirm a current store listing.
+
+## Health endpoint
+
+`services/invoiceshelf/compose.yml`'s healthcheck on the app container hits `http://localhost:8080/` (root path, plain `curl -f`) — a 200 there is enough to be marked healthy, no dedicated `/health` route.
+
 ## Notes
 
 - Image: `invoiceshelf/invoiceshelf`

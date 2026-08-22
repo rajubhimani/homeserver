@@ -34,6 +34,14 @@ docker exec -it gitlab gitlab-rake "gitlab:password:reset[root]"
 - **Memory cap:** `deploy.resources.limits.memory: 6G` — **this is below GitLab's own stated 8GB minimum** (see top of doc, docs.gitlab.com/install/requirements/), set here as a pragmatic tradeoff for a personal/small-scale homelab rather than GitLab's own recommended sizing, since omnibus bundles many components (Postgres, Redis, Puma, Sidekiq, Gitaly, Workhorse, its own nginx) that aren't individually tuned down the way a standalone Postgres container's `command:` flags would be — this is a backstop cap, not app-level tuning. **Measured idle usage is already 4.22GB (70% of the 6G cap) with zero users** — there is real risk of OOM-kill under actual CI/multi-user load. Raise the cap toward 8G if that happens; recreate just this container after changing it: `docker compose -f compose.yml -f compose.prod.yml up -d --no-deps gitlab`.
 - **Outgoing email is wired to Mailpit** (`gitlab_rails['smtp_*']` block in `GITLAB_OMNIBUS_CONFIG`) for testing (e.g. password reset emails, notifications) — container `mailpit`, port `1025`, no auth/TLS. This is test-only mail capture, not real delivery — see [mailpit.md](mailpit.md) to view captured messages. `gitlab_email_from`/`gitlab_email_reply_to` are set to the placeholder `gitlab@example.com`; change them in `compose.yml` if you want a different sender identity to show up in captured mail.
 
+## Connecting the Android app
+
+The official **GitLab** app ([Google Play](https://play.google.com/store/apps/details?id=com.gitlab.gitlab)) supports pointing at a self-managed instance URL rather than gitlab.com — on first launch enter `https://gitlab.${DOMAIN}` and log in. Exact self-managed sign-in flow wasn't independently confirmed step-by-step in this pass; verify against the app's own current onboarding if it doesn't offer a self-managed option up front.
+
+## Health endpoint
+
+No `healthcheck:` is defined in `services/gitlab/compose.yml`. GitLab exposes its own `/-/readiness` and `/-/liveness` endpoints (JSON, 200 on healthy / 503 on failure) — both require either a token (`?token=...`, an instance-wide monitoring token set in the admin area) or the request coming from an IP on GitLab's monitoring allowlist (localhost by default), so they're not curl-from-outside-able without that setup.
+
 ## Runner (optional)
 
 ```bash

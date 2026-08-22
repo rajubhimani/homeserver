@@ -60,6 +60,14 @@ uv run homeserver.py dev up outline
 
 Open `https://outline.<domain>/` (or `http://<host>:8114` in dev) and log in via the "Authentik" OIDC option.
 
+## Using it day to day
+
+Browser-only for this deployment, by design of the app rather than a limitation here — Outline's official desktop app has no way to point at a self-hosted server domain (confirmed via Outline's own community reports, not just this stack), and there's no native mobile app, only a PWA. Use `https://outline.${DOMAIN}` directly in a browser; on mobile, the browser's own "Add to Home Screen" gives a PWA-style icon.
+
+- **Collections → Documents** is the hierarchy — a Collection is a top-level space (e.g. "Engineering"), Documents nest inside it arbitrarily deep.
+- **Search** is fast full-text across every document you have access to, including inside nested/collapsed documents.
+- **Real-time collaborative editing** — multiple people editing the same document see each other's cursors/changes live, no separate "save" step.
+
 ## Notes
 
 - `SECRET_KEY` / `UTILS_SECRET` must each be a random 32-byte hex string (`openssl rand -hex 32`) — Outline refuses to start without them set to non-default values.

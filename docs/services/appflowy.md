@@ -24,6 +24,10 @@ uv run homeserver.py dev up appflowy
 - GoTrue auth: `https://appflowy.yourdomain.com/gotrue/`
 - Desktop/mobile clients connect directly to `https://appflowy.yourdomain.com`
 
+## Connecting the desktop/mobile apps
+
+Install the official [AppFlowy app](https://appflowy.io/download) (desktop: Mac/Windows/Linux; mobile: iOS/Android), then in-app: **Settings → Cloud Settings → Custom Cloud Server** → enter `https://appflowy.${DOMAIN}` exactly, including the `https://` prefix (a mismatch here — e.g. missing protocol or a trailing slash — is a common cause of login failing against a self-hosted instance). Log in with the same account created via the web UI in "First login" above. Workspaces/docs sync the same whether accessed through the app or the web UI at `http://<ip>:8103`.
+
 > The `appflowy-minio-setup` container runs once to create the `appflowy` S3 bucket, then exits — this is normal, not a crash.
 
 ## Architecture

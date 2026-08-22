@@ -24,6 +24,10 @@ uv run homeserver.py dev up supabase
 
 Open `https://supabase.<domain>/` (or `http://<host>:8133` in dev). The root path is Studio's dashboard, gated by `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` (HTTP basic auth, enforced by Kong) — not open self-registration like most services here. API access (REST/GraphQL/Auth/Storage/Realtime) uses the `ANON_KEY`/`SERVICE_ROLE_KEY` JWTs instead.
 
+## Using it day to day
+
+This is a backend platform for building *your own* apps against, not an end-user app itself — there's no device/client to "connect" beyond whatever app you write using a Supabase client SDK (`ANON_KEY`/`SERVICE_ROLE_KEY` from `.env`, endpoint `https://supabase.${DOMAIN}`). Day-to-day interaction with the platform itself happens in **Studio** (the dashboard at the root path): browse/edit table data directly, write and save SQL in the SQL Editor, manage Auth users, inspect Storage buckets, and view API logs — all without touching a client library.
+
 ## Registration
 
 There's no end-user "registration" concept at the platform level — `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` gate the Studio dashboard (effectively single-admin), while `DISABLE_SIGNUP` in `.env` controls whether **your own app's end users** can sign up through Supabase Auth (default `false` — open, since that's normal for a backend platform whose whole job is serving your application's users).

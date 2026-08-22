@@ -24,7 +24,15 @@ Browsing to `https://atuin.<domain>/` (or the health check hitting `/`) returns 
 
 That's expected, not an error — the project is named after Discworld's Great A'Tuin, and that homage string doubles as its `/` health response. There's no web UI beyond this; Atuin is entirely CLI-driven, so this JSON is as far as a browser gets you. The actual functionality only shows up once a client is registered:
 
-Client (on each machine you want synced — install the [atuin CLI](https://docs.atuin.sh/) first):
+Client (on each machine you want synced — install the atuin CLI first):
+
+```bash
+# Mac/Fedora/Linux — official install script
+curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh
+# or, on Mac: brew install atuin
+```
+
+Windows: no native install script — use WSL and follow the Linux steps above, or check [Atuin's current install docs](https://docs.atuin.sh/guide/installation/) for any native Windows support that's landed since.
 
 Recent atuin CLI versions (this server reports `18.19.0`) dropped the `--server-url` flag on `register`/`login` — it errors with `unexpected argument '--server-url' found`. Set the server address in the client's own config instead. **Don't just `echo ... >> config.toml`** — running any atuin command once auto-generates a fully-commented default `config.toml`, and appending lands your line *after* the `[ui]` section header, which silently scopes it to `ui.sync_address` instead of the real top-level key — Atuin then falls back to its default cloud server with no error at all. Replace the existing commented default line in place instead, which is already correctly positioned at the top level:
 
@@ -49,7 +57,14 @@ atuin sync
 uv run homeserver.py dev logs atuin   # or: docker logs nginx-plain | grep atuin — look for /register, /api/v0/record hits
 ```
 
-Once confirmed, Atuin replaces your shell's normal `Ctrl+R` history search with a fuzzy-searchable one backed by this server, and history stays synced across every machine you log in on.
+**One more step before `Ctrl+R` actually changes** — `register`/`login`/`sync` only get history onto the server; the shell itself still needs wiring to actually use Atuin instead of its own history. Add to your shell's rc file (per-machine, once):
+
+```bash
+echo 'eval "$(atuin init zsh)"' >> ~/.zshrc    # zsh
+echo 'eval "$(atuin init bash)"' >> ~/.bashrc  # bash — needs ble.sh >= 0.4 installed for full functionality
+```
+
+(fish/nu/xonsh/PowerShell are also supported — see [Atuin's shell integration docs](https://docs.atuin.sh/guide/shell-integration/) for the exact line on those.) Restart the shell (or `source` the rc file) and `Ctrl+R` now opens Atuin's fuzzy search instead of the shell's built-in one, backed by this server, staying synced across every machine you've logged in on.
 
 ## Viewing your synced history
 

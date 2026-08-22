@@ -73,6 +73,10 @@ flowchart LR
 
 **Health check needs a real `Host` header** — Zulip validates `Host` strictly against its configured `EXTERNAL_HOST`; a bare `proxy_pass` (which forwards the container name, `zulip`, as `Host`) gets a permanent 400. `services/landing/nginx.conf`'s `/health/zulip` location sets `proxy_set_header Host zulip.DOMAIN_PLACEHOLDER` — and since `landing`'s `nginx.conf` previously had no domain-templating mechanism (only `index.html` did), this required extending `entrypoint.sh` to template `nginx.conf` through the same `DOMAIN_PLACEHOLDER` substitution, so the real domain is never hardcoded into a git-tracked file.
 
+## Connecting the Android app
+
+Official **Zulip** app ([Google Play](https://play.google.com/store/apps/details?id=com.zulipmobile)) — on first launch (or via profile picture → **Switch account** → **Add new account** if adding a second organization), enter the organization's URL — `https://zulip.${DOMAIN}` if the realm was created at the root domain, or `https://<realm-subdomain>.${DOMAIN}` if a named realm/organization was created (see the "No organization found" note below) — then log in normally.
+
 ## Notes
 
 - **Resource usage**: heaviest bring-up procedure of the three chat apps (5 containers + a one-time migration step) — bring it up when you want it, down when you don't (`uv run homeserver.py dev down zulip`) rather than leaving it running idle. `down` snapshots all 4 named volumes automatically first.

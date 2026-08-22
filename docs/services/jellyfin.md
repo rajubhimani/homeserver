@@ -19,6 +19,44 @@ uv run homeserver.py dev up jellyfin
 
 Open `http://<ip>:8096` — the setup wizard creates the admin account and lets you add library paths.
 
+## Health endpoint
+
+`compose.yml` has no `healthcheck:` block of its own — the `jellyfin/jellyfin:10.11.11` image bakes one into the Dockerfile (`docker inspect jellyfin --format '{{json .Config.Healthcheck}}'` confirms it: `curl ... "${HEALTHCHECK_URL}"`, `HEALTHCHECK_URL` defaulting to `http://localhost:8096/health`). Confirmed live in this deployment:
+
+```bash
+docker exec jellyfin curl -s http://localhost:8096/health
+# → Healthy   (HTTP 200, plain text — no JSON)
+docker ps --filter name=jellyfin   # shows "(healthy)" driven by this same check
+```
+
+`/System/Ping` also responds (`"Jellyfin Server"`, HTTP 200, JSON string) if a lighter-weight unauthenticated liveness probe is ever needed outside the built-in check, but `/health` is what this deployment's actual container health status is derived from.
+
+## Connecting a client
+
+Every official client (see the **Client apps** entry below) asks for a server address the first time it runs, then a normal Jellyfin login (username/password created in the setup wizard). Server address, by access path:
+
+- Public/off-LAN: `https://jellyfin.${DOMAIN}` — works from anywhere through the Cloudflare tunnel, same as the web UI.
+- On the LAN: `http://<host-lan-ip>:8096` also works directly, bypassing the tunnel.
+
+**Not independently confirmed live** — no phone/TV/Roku/Kodi device was actually used to install and sign into a client for this pass; the steps below are Jellyfin's own current client documentation, not training-memory guesswork.
+
+- **Android / iOS:** install "Jellyfin" from Play Store / App Store → on first launch, either let it auto-discover servers on the local network or tap **Connect Manually** and paste the server address above → sign in with the admin (or a per-user) account.
+- **Android TV (also covers Fire TV, Nvidia Shield):** install "Jellyfin" from the Play Store / Amazon Appstore (sideload the F-Droid build if neither store is available on the device) → same connect flow as mobile, navigated with a remote instead of touch.
+- **Roku:** install "Jellyfin" from the Roku Channel Store (ignore any "requires a TV/cable subscription" wording on the listing — that's a Roku Store category quirk Jellyfin's own docs call out, not a real requirement) → enter the server address on first run.
+- **webOS (LG) / Tizen (Samsung):** install "Jellyfin" from the TV's own Content Store / Smart TV App Store → same connect flow.
+- **Xbox:** install "Jellyfin" from the Microsoft Store → same connect flow, navigated with a controller.
+- **Desktop (Windows/Mac/Linux):** Jellyfin doesn't ship an app-store desktop build — download **Jellyfin Media Player** from its GitHub releases page instead, then connect the same way.
+- **Kodi:** install the **JellyCon** add-on (Kodi add-on repository or manually), then add this server's address inside JellyCon's settings — lets Kodi browse/play this library using Kodi's own interface instead of Jellyfin's.
+
+## Using it day to day
+
+Confirmed against Jellyfin's own current documentation, not assumed from memory.
+
+- **Adding a library later** (past the initial setup wizard): admin **Dashboard → Libraries → Add Media Library** → pick a content type (Movies, Shows, Music get the best client/metadata support; Books/Photos exist too, but a "Mixed content" library is discouraged — metadata matching gets unreliable) → add one or more folder paths under `/media` (mapped from `MEDIA_ROOT` in `.env`) — multiple paths can feed the same library.
+- **Client apps** (checked against [jellyfin.org/downloads/clients](https://jellyfin.org/downloads/clients/) directly, not memory — see **Connecting a client** above for per-platform setup steps): the web UI works anywhere; official, Jellyfin-maintained apps also exist for Android, iOS/iPadOS, Android TV (also covers Fire TV/Nvidia Shield), Roku, webOS (LG), Tizen (Samsung), Xbox, a desktop app (Jellyfin Media Player), and a Kodi add-on (JellyCon). There is **no official tvOS app** — Infuse is a popular third-party (proprietary) client that supports tvOS, but it isn't a Jellyfin project.
+- **Transcoding settings:** admin **Dashboard → Playback → Transcoding** tab — confirmed current for 10.11.x against [Jellyfin's own hardware acceleration docs](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/). Hardware acceleration is off by default in this deployment (see the Memory note at the top of this doc) — enabling it means picking the matching option from the dropdown for the host's GPU (Intel QSV, NVIDIA NVENC/NVDEC, AMD AMF, VAAPI, etc.), indicating the device if prompted, and checking **Enable hardware encoding** to also offload encoding, not just decoding. The same tab sets encoder thread count, a temp-transcode-path override, and an encoder preset slider (lower = faster/lower quality, higher = slower/better quality). During actual playback, the Dashboard's active-sessions view shows whether a stream is **Direct Play**, **Direct Stream**/remux, or **Transcode** — the thing to check first when playback looks worse than expected.
+  **Not usable as-is in this deployment, and not verified live:** `compose.yml` doesn't pass through any GPU device (no `/dev/dri` bind, no NVIDIA runtime/`devices:` reservation) — picking a hardware-acceleration option in the UI won't actually engage hardware without adding that device passthrough to `compose.yml` first (and, for Intel/AMD VAAPI, making sure the container's user can read `/dev/dri`). This hasn't been done or tested on this host; treat the above as what the *setting* does, not a claim that hardware transcoding works here.
+
 ## Apply performance/reliability tuning (fresh install or any time)
 
 `database.xml`/`system.xml` don't exist until the first-run setup wizard above has completed — run this **after** that, not instead of it:

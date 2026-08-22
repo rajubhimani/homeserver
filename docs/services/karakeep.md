@@ -17,6 +17,19 @@ uv run homeserver.py dev up karakeep
 
 Open `https://karakeep.<domain>/` (or `http://<host>:8117` in dev) and register the first account.
 
+## Connecting the mobile apps and browser extensions
+
+The web UI alone only covers browsing what's already saved — actually capturing bookmarks day to day happens through the official clients, all of which point at this server the same way:
+
+1. In the web UI: **Settings → API Keys** → create a new key, copy it.
+2. Install the client:
+   - **Android:** official Karakeep app (Google Play).
+   - **Chrome/Firefox:** official browser extension (Chrome Web Store / Firefox Add-ons) — works the same way on Ubuntu, Fedora, Windows, and Mac.
+   - **Safari (Mac only):** official Safari extension, also available.
+3. In the client's own settings, set the **Server Address** to `https://karakeep.<domain>/` and paste the API key from step 1.
+
+Once connected, the mobile app's share-sheet ("Share → Karakeep" from any other app) and the browser extension's toolbar button are the actual day-to-day capture path — save first, let the background workers (screenshot, full-text extraction, AI tagging if enabled) fill in the rest asynchronously.
+
 ## Registration
 
 `DISABLE_SIGNUPS` in `.env`, default `false`. Set to `true` once your account exists to close the instance to new signups.

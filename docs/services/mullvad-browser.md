@@ -17,6 +17,14 @@
 
 Mullvad Browser is a hardened, anti-fingerprinting Firefox fork sharing Tor Browser's privacy-hardening patches — **it does not itself route traffic through the Tor network.** It reduces how trackable/fingerprintable your browser is; it does not anonymize your IP or traffic path the way actually using Tor does. This distinction is why Mullvad Browser was chosen here instead of an actual Tor Browser image: no well-maintained, official Tor Browser container exists for this stack (see [browser-hub.md](browser-hub.md)'s history — the only alternative found was a single-maintainer image on an older base, not the trusted `linuxserver.io` family the rest of this bundle uses).
 
+## No VPN routing — this is the browser app only
+
+**This container does not route traffic through Mullvad's VPN network.** `compose.yml` has no VPN sidecar, no WireGuard config, no `gluetun`/VPN network mode — it's a plain container on the normal `homeserver` bridge network, same as every other browser in this bundle. What you get is only the Mullvad Browser *application*: its anti-fingerprinting patches and hardened default settings (see "Not the same thing as Tor Browser" above for the related Tor distinction). Traffic still egresses from this server's own IP, unencrypted by any VPN layer, exactly like Firefox/Chromium/Brave here. If you want actual VPN-routed traffic, that's a separate concern from this container entirely (e.g. a VPN client on the host or its own sidecar) — nothing here provides it.
+
+## Using it day to day
+
+Open `https://browser.${DOMAIN}/mullvad-browser/` (via the [Browser Hub](browser-hub.md) page) and use it like any remote desktop — the whole window is a video stream (Selkies), not a native embed. Reach for this one specifically when you want to look like a generic, hard-to-fingerprint browser (e.g. avoiding tracking-based paywalls or cross-site profiling) — for actually hiding *which* server the traffic comes from, see the caveat above, and for stronger anonymity, an actual Tor Browser or Tor-routed session (not provided by this stack — see "Not the same thing as Tor Browser" above) is the closer fit.
+
 ## Image tag and setup
 
 Tracks `:latest`, same deliberate exception to this repo's pinned-version convention as the other browsers here — see [firefox.md](firefox.md#image-tag--deliberate-exception-to-this-repos-pinned-version-convention) for the full reasoning. Confirmed actively maintained at the time this was added (new releases roughly every 1-2 days).

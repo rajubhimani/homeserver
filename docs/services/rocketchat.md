@@ -42,11 +42,20 @@ The oplog tail is why this needs a replica set at all — a standalone MongoDB h
 
 File uploads (`/app/uploads`, also a declared `VOLUME` on the Rocket.Chat image itself) are bind-mounted under `DATA_ROOT/uploads` instead, following this stack's normal app-data convention.
 
+## Connecting the Android app
+
+Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/details?id=chat.rocket.android)) — on first launch, tap **Join a workspace**, enter `https://rocketchat.${DOMAIN}` as the workspace address, **Connect**, then log in. This stack pins `ROCKETCHAT_VERSION=8.7.0`. A known category of complaint in Rocket.Chat's own community forums is the app failing to reach a self-hosted server *from inside the same LAN* over HTTPS while working fine from outside — if that's hit, it's a known issue to search for, not necessarily a config mistake on this stack's side.
+
+## Health endpoint
+
+`services/rocketchat/compose.yml`'s healthcheck hits `http://localhost:3000/api/info` (a Node one-liner, not `curl`/`wget` — the image has neither) — 200 means healthy. `mongodb`'s own healthcheck is a `mongosh` ping instead.
+
 ## Notes
 
 - **Resource usage**: part of a "try it and see" playground — bring it up when you want it, down when you don't (`uv run homeserver.py dev down rocketchat`) rather than leaving 5 containers running idle. `down` snapshots both named MongoDB volumes automatically first.
 - **Two real crashes hit and fixed during setup, both from live usage, not theoretical**: (1) with no `MAIL_URL` configured, an unhandled promise rejection from the missing-mail-config error trips Node's `EXIT_UNHANDLEDPROMISEREJECTION` policy and kills the process outright — fixed by routing `MAIL_URL=smtp://mailpit:1025` through the shared [Mailpit](mailpit.md) catcher, same pattern as Airflow. (2) the initial `1024M` memory cap was too tight — hit a real `FATAL ERROR: Reached heap limit ... JavaScript heap out of memory` crash just from loading the app's own home page; raised to `2048M` (observed ~630MB steady-state afterward, so this has real headroom, not just barely enough).
 - **Rocket.Chat's mandatory (6.x+) setup wizard silently registers a "Cloud" workspace and can send real external email from Rocket.Chat's own SaaS infrastructure** (`cloud@rocket.chat`) to whatever admin address is entered during setup — this is separate from, and unrelated to, this stack's local `MAIL_URL`/Mailpit config; it's Rocket.Chat's own hosted service, not anything routed through the container. Confirmed via a direct query against the running instance:
+
   ```bash
   docker exec rocketchat-mongodb mongosh --quiet --eval '
     db = db.getSiblingDB("rocketchat");
@@ -54,7 +63,9 @@ File uploads (`/app/uploads`, also a declared `VOLUME` on the Rocket.Chat image 
     printjson(db.rocketchat_settings.findOne({_id: "Cloud_Workspace_Id"}));
   '
   ```
+
   showed `Register_Server: true` and a real populated `Cloud_Workspace_Id`/`Client_Id`/`Client_Secret` — set by the setup wizard, not anything in this stack's own config. There's no documented public REST API to disconnect an already-registered workspace (only `POST /api/v1/cloud.manualRegister` to register one), so fixing an already-registered instance requires resetting it directly in MongoDB:
+
   ```bash
   docker exec rocketchat-mongodb mongosh --quiet --eval '
     db = db.getSiblingDB("rocketchat");
@@ -63,6 +74,7 @@ File uploads (`/app/uploads`, also a declared `VOLUME` on the Rocket.Chat image 
   '
   docker restart rocketchat
   ```
+
   Prevented on any *future* fresh install by `OVERWRITE_SETTING_Show_Setup_Wizard: completed` in `compose.yml`, which skips the wizard (and its cloud-registration step) entirely — the admin account then needs to be created via `INITIAL_USER`/`ADMIN_*` in `.env.example`'s "Remaining Rocket.Chat env vars" block instead of the browser wizard.
 - **No auth on `nats`'s monitoring port** — internal-only (`expose`, not `ports`), never reachable from outside the `homeserver` network, so this doesn't matter in practice.
 - Prometheus exporters for MongoDB/NATS metrics exist in Rocket.Chat's own official compose reference but were deliberately left out here — this is a playground instance, not a production deployment needing metrics scraping.
