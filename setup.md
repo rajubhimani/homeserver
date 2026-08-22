@@ -167,7 +167,7 @@ uv run homeserver.py dev up all          # everything (core + all extra services
 
 uv run homeserver.py dev down min        # stop min (reverse order)
 uv run homeserver.py dev down core       # stop core (reverse order)
-uv run homeserver.py dev down all        # stop everything
+uv run homeserver.py dev down all        # stop everything, including optional profiles
 
 # Start / stop one service
 uv run homeserver.py dev up jellyfin

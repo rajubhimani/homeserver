@@ -30,8 +30,10 @@ untouched, not force-recreated.
 stays up), `down daily` stops only daily (`min`/`core` stay up), `down
 office` stops only office (`min`/`core`/`daily` stay up), `down
 automation-ai` stops only automation-ai (`min`/`core`/`daily`/`office` stay
-up). `down all` is the one command that always stops the entire stack, in
-reverse order — no list to maintain.
+up). Every `down` command stops every optional Compose-profile container for
+the selected service(s), too (such as Forgejo's CI runner). `down all` is the
+one command that stops the entire stack, in reverse order — no list to
+maintain.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
 firefox, chromium, ungoogled-chromium, brave, mullvad-browser, browser,

@@ -45,8 +45,10 @@ Service tiers:
   automation-ai — workflow/automation/AI apps (ollama, open-webui, n8n,
            airflow, temporal, dagster); opt-in, bootstraps
            min/core/daily/office first.
-  all    — core + daily + office + automation-ai + extra (everything);
-           down all always stops everything
+  all    — core + daily + office + automation-ai + extra (everything)
+
+  Every `down` target (a service, group, tier, or all) also stops containers
+  from every optional Compose profile declared by the selected service.
   extra  — optional services, started with 'up all' or individually
   manual — never auto-started by any tier (VPN services, gitlab, stirling-pdf
            full) — start individually with 'up <service>'
@@ -179,13 +181,8 @@ if os.path.exists(DOCKER_SOCKET):
 #   up all           = MIN + CORE + DAILY + OFFICE + AUTOMATION_AI + EXTRA,
 #                      always (full cascade)
 #
-#   down min           = MIN, reversed
-#   down core          = CORE only, reversed — never stops MIN
-#   down daily         = DAILY only, reversed — never stops MIN/CORE
-#   down office        = OFFICE only, reversed — never stops MIN/CORE/DAILY
-#   down automation-ai = AUTOMATION_AI only, reversed — never stops lower tiers
-#   down all           = everything, reversed — the one command that always
-#                        stops the whole stack
+#   every down target  = selected services, reversed when tier/group/all;
+#                        includes every Compose profile in each service
 #
 # 'up core'/'up daily' rely on do_up's own idempotency (plain `compose up -d`,
 # no force_recreate) plus an explicit running-check (get_running_services())
@@ -1912,12 +1909,12 @@ def show_help() -> None:
     print("    python homeserver.py dev down min                    stop minimum (reverse order)")
     print("    python homeserver.py dev down core                   stop core only, reverse order (min stays up)")
     print("    python homeserver.py dev down daily                  stop daily only, reverse order (min/core stay up)")
-    print("    python homeserver.py dev down all                    stop everything (reverse order)")
+    print("    python homeserver.py dev down all                    stop everything, including optional profiles (reverse order)")
     print("    python homeserver.py dev up all --yes                start everything, skip the confirmation prompt")
     print("    python homeserver.py dev up landing mealie           start specific services")
     print("    python homeserver.py dev down landing mealie         stop specific services")
     print("    python homeserver.py dev up forgejo --profile runner  add CI runner to forgejo")
-    print("    python homeserver.py dev down forgejo --profile runner remove CI runner")
+    print("    python homeserver.py dev down forgejo                 stop Forgejo and every optional profile")
     print("    python homeserver.py dev restart nginx-plain         restart a service (re-runs entrypoint)")
     print("    python homeserver.py dev -r nginx-plain              same, shorthand")
     print("    python homeserver.py dev logs immich                 follow logs")
@@ -2317,7 +2314,7 @@ def main() -> int:
 
     elif action in ("down", "-d"):
         if run_all:
-            header("Stopping all services (reverse order)...")
+            header("Stopping all services and profile containers (reverse order)...")
             lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
         elif run_core:
             header("Stopping core services (reverse order) — min stays running...")
@@ -2339,8 +2336,14 @@ def main() -> int:
             lst = services_to_run
         if (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or used_group_or_bundle) and not confirm_expansion(lst, assume_yes):
             return 1
+        # A Compose profile is opt-in by default, so a plain `compose down`
+        # misses profile-only containers that were previously started (for
+        # example Forgejo's CI runner). Always select every profile for any
+        # down target: stopping a service must release all of its resources,
+        # whether it was selected by name, group, tier, or `all`.
+        down_profile = "*"
         for service in lst:
-            do_down(service, env, profile, no_backup=no_backup)
+            do_down(service, env, down_profile, no_backup=no_backup)
         print()
         success("Done")
 
