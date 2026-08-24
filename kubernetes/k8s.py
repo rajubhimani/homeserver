@@ -320,7 +320,14 @@ def get_all_workload_names() -> dict[str, list[str]]:
     an error) if the cluster isn't reachable — callers already know from
     check_context() whether that's expected."""
     result: dict[str, list[str]] = {kind: [] for kind in WORKLOAD_KINDS}
-    names = kubectl_json(["get", *WORKLOAD_KINDS, "-n", NAMESPACE])
+    # Comma-joined into ONE argument, not spread as separate positional
+    # args: `kubectl get deployment statefulset cronjob` (space-separated)
+    # is interpreted as "get Deployments named 'statefulset' and
+    # 'cronjob'" — a resource type followed by names, not three types —
+    # which 404s and makes this whole function silently return empty on
+    # every call. `kubectl get deployment,statefulset,cronjob` (comma-
+    # joined) is the actual multi-kind syntax.
+    names = kubectl_json(["get", ",".join(WORKLOAD_KINDS), "-n", NAMESPACE])
     if names is None or "items" not in names:
         return result
     for item in names["items"]:
