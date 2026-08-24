@@ -1,0 +1,92 @@
+# Mirrors services/homebox/compose.yml. Points its mailer at the mailpit
+# port above for testing, same as the Compose version.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homebox-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homebox
+  namespace: apps
+  labels:
+    app: homebox
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: homebox
+  template:
+    metadata:
+      labels:
+        app: homebox
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: homebox
+          image: ghcr.io/sysadminsmedia/homebox:0.26.2
+          env:
+            - name: HBOX_LOG_LEVEL
+              value: info
+            - name: HBOX_LOG_FORMAT
+              value: text
+            - name: HBOX_WEB_MAX_UPLOAD_SIZE
+              value: "10"
+            - name: HBOX_OPTIONS_ALLOW_ANALYTICS
+              value: "false"
+            - name: HBOX_OPTIONS_ALLOW_REGISTRATION
+              value: "true"
+            - name: HBOX_OPTIONS_TRUST_PROXY
+              value: "true"
+            - name: HBOX_AUTH_API_KEY_PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: homebox-credentials
+                  key: api-key-pepper
+            - name: HBOX_MAILER_HOST
+              value: mailpit
+            - name: HBOX_MAILER_PORT
+              value: "1025"
+            - name: HBOX_MAILER_FROM
+              value: homebox@example.com
+          ports:
+            - containerPort: 7745
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /api/v1/status
+              port: 7745
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/v1/status
+              port: 7745
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: homebox-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: homebox
+  namespace: apps
+spec:
+  selector:
+    app: homebox
+  ports:
+    - port: 7745

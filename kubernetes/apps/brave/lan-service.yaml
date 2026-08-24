@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8148 matches brave/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down brave) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: brave-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: brave
+  ports:
+    - port: 8148
+      targetPort: 3000

@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ungoogled-chromium
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "ungoogled-chromium.k8s.local"
+  rules:
+    - backendRefs:
+        - name: ungoogled-chromium
+          port: 3000

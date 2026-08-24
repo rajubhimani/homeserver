@@ -1,0 +1,110 @@
+# Mirrors services/ungoogled-chromium/compose.yml (a LinuxServer selkies-streaming
+# desktop browser image). Two things from Compose deliberately not
+# replicated here, both documented gaps rather than oversights:
+#
+# - Compose gates the whole "browser hub" behind Authentik forward-auth at
+#   a shared browser.${DOMAIN} host, serving each browser at a subpath
+#   (SUBFOLDER=/ungoogled-chromium/) via services/nginx-plain. This pilot has no
+#   Traefik ForwardAuth middleware wired to Authentik yet for any service,
+#   so ungoogled-chromium gets its own HTTPRoute/hostname instead (ungoogled-chromium.k8s.local,
+#   root path) — same pattern as every other single-container service
+#   here, but without the hub's auth gate. Don't expose this HTTPRoute
+#   publicly without adding that middleware first.
+# - Compose pins a static Docker-bridge IP (172.18.255.242) so a LAN
+#   firewall rule can target these 5 browser containers specifically. k8s
+#   has no direct equivalent (pod IPs aren't stable) — a NetworkPolicy
+#   would be the real fix, not yet written.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ungoogled-chromium-config
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ungoogled-chromium
+  namespace: apps
+  labels:
+    app: ungoogled-chromium
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ungoogled-chromium
+  template:
+    metadata:
+      labels:
+        app: ungoogled-chromium
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: ungoogled-chromium
+          image: lscr.io/linuxserver/ungoogled-chromium:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: Etc/UTC
+            # Public-facing container: reduce blast radius if the browser
+            # itself is ever compromised — disables sudo, terminal
+            # emulators, and xdg/exo-open.
+            - name: HARDEN_DESKTOP
+              value: "true"
+            # Compensates for HARDEN_DESKTOP: with no terminal/xdg-open to
+            # relaunch it, closing the browser itself (not just a viewing
+            # tab) would strand the session. Auto-relaunches on exit.
+            - name: RESTART_APP
+              value: "true"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: dshm
+              mountPath: /dev/shm
+          securityContext:
+            seccompProfile:
+              type: Unconfined
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: ungoogled-chromium-config
+        # Matches compose.yml's shm_size: "1gb" — browser rendering needs
+        # more /dev/shm than k8s's tiny emptyDir tmpfs default.
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ungoogled-chromium
+  namespace: apps
+spec:
+  selector:
+    app: ungoogled-chromium
+  ports:
+    - port: 3000

@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8147 matches ungoogled-chromium/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down ungoogled-chromium) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ungoogled-chromium-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: ungoogled-chromium
+  ports:
+    - port: 8147
+      targetPort: 3000

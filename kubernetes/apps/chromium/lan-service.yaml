@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8146 matches chromium/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down chromium) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromium-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: chromium
+  ports:
+    - port: 8146
+      targetPort: 3000

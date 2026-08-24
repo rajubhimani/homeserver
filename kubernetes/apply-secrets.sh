@@ -377,6 +377,12 @@ kubectl create secret generic supabase-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "supabase-db-credentials + supabase-credentials applied"
 
+# ── HomeBox's API key HMAC pepper ─────────────────────────────────────
+kubectl create secret generic homebox-credentials -n apps \
+  --from-literal=api-key-pepper="$HOMEBOX_AUTH_API_KEY_PEPPER" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "homebox-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

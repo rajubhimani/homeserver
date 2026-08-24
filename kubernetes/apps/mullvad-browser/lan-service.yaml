@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8149 matches mullvad-browser/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down mullvad-browser) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mullvad-browser-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: mullvad-browser
+  ports:
+    - port: 8149
+      targetPort: 3000

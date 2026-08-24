@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8140 matches mailpit/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down mailpit) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: mailpit
+  ports:
+    - port: 8140
+      targetPort: 8025

@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8145 matches firefox/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down firefox) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefox-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: firefox
+  ports:
+    - port: 8145
+      targetPort: 3000
