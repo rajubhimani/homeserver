@@ -7,6 +7,15 @@
 # Port 8138 matches temporal/compose.dev.yml exactly (temporal-ui's
 # "8138:8080" mapping) — same number you already know, no new one to
 # learn. Not running in Compose (k8s pilot only), so no port conflict.
+#
+# SECURITY NOTE: this LoadBalancer Service routes directly to the pod,
+# bypassing Traefik entirely — including the authentik-forward-auth
+# Middleware now gating this service's HTTPRoute (see
+# kubernetes/apps/authentik/forward-auth-middleware.yaml). Anyone who can
+# reach this LoadBalancer IP skips the auth gate completely. Same
+# LAN-only/local-testing tradeoff every lan-service.yaml in this pilot
+# makes, just worth flagging explicitly here since this one is
+# specifically meant to be gated.
 apiVersion: v1
 kind: Service
 metadata:

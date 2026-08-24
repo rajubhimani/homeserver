@@ -258,16 +258,35 @@ reconciling ArgoCD against everything in git, service by service.
   sharpest case yet) only work if the scheduler happens to colocate both
   pods — no `nodeAffinity` enforces it. Flagged in each manifest, not
   silently assumed away.
-- **No Traefik ForwardAuth ↔ Authentik wiring yet.** Compose gates several
-  things behind Authentik forward-auth at the proxy level (the browser hub
-  at `browser.${DOMAIN}` being the main one) — this pilot has no
-  equivalent middleware wired up for any service yet, so `firefox`,
-  `chromium`, `ungoogled-chromium`, `brave`, and `mullvad-browser` each
-  get their own plain HTTPRoute/hostname instead, with no auth gate. Don't
-  expose those HTTPRoutes publicly without adding that middleware first.
-  Same 5 services also drop Compose's static per-container Docker-bridge
-  IP (used for a LAN-isolation firewall rule) — k8s has no direct
-  equivalent; a `NetworkPolicy` would be the real fix, not yet written.
+- **Traefik ForwardAuth ↔ Authentik is now wired up** —
+  `kubernetes/apps/authentik/forward-auth-middleware.yaml` defines a
+  shared `Middleware` (`authentik-forward-auth`) pointing at Authentik's
+  *embedded* outpost (no separate outpost Deployment needed). Any
+  HTTPRoute in the `apps` namespace gates itself behind it with an
+  `ExtensionRef` filter — see that file's header for the exact snippet.
+  Applied to every host Compose gates the same way (cross-checked against
+  `services/nginx-plain/templates/default.conf.template`'s
+  `auth_request /outpost.goauthentik.io/auth/nginx` blocks): `firefox`,
+  `chromium`, `ungoogled-chromium`, `brave`, `mullvad-browser` (Compose
+  gates these as subpaths under one `browser.${DOMAIN}` hub; this pilot
+  gates each on its own hostname instead — functionally equivalent, wider
+  namespace footprint), `excalidraw`, `temporal`, `mailpit`, `ollama`.
+  Not applied (not ported, or ported without an app tier to gate): `dagster`
+  (app tier isn't ported), `dozzle` (excluded entirely), `wg-easy`/wg-admin
+  (not ported at all yet).
+  **Still missing:** the Authentik-side half — a Proxy Provider (forward
+  auth mode) + Application, created via Authentik's own UI/API once it's
+  actually running; that's live cluster state, not something git can
+  express as a manifest, same category as ArgoCD's admin password. Until
+  that exists, the outpost endpoint the Middleware calls won't resolve
+  correctly. Each gated service's `lan-service.yaml` (LoadBalancer,
+  routes straight to the pod) still fully bypasses this Middleware —
+  flagged with a security-note comment in each one, not silently assumed
+  safe.
+  Same 5 browser services also still drop Compose's static
+  per-container Docker-bridge IP (used for a LAN-isolation firewall
+  rule) — k8s has no direct equivalent; a `NetworkPolicy` would be the
+  real fix, not yet written.
 - **Vendor Postgres images, a growing list.** immich (pgvector/
   vectorchord) and zulip (`zulip/zulip-postgresql`) both need their own
   Postgres build, not the shared server and not even a stock `postgres:`

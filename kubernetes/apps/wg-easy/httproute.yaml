@@ -1,17 +1,19 @@
 # Gated behind Authentik forward-auth, matching services/nginx-plain/
-# templates/default.conf.template's auth_request block for this host in
-# Compose — see kubernetes/apps/authentik/forward-auth-middleware.yaml.
+# templates/default.conf.template's wg-admin.${DOMAIN} server block (its
+# own comment there: only the admin UI is proxied this way, the actual
+# WireGuard UDP tunnel never touches the proxy) — see
+# kubernetes/apps/authentik/forward-auth-middleware.yaml.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: ollama
+  name: wg-easy
   namespace: apps
 spec:
   parentRefs:
     - name: homeserver-gateway
       namespace: infra
   hostnames:
-    - "ollama.k8s.local"
+    - "wg-easy.k8s.local"
   rules:
     - filters:
         - type: ExtensionRef
@@ -20,5 +22,5 @@ spec:
             kind: Middleware
             name: authentik-forward-auth
       backendRefs:
-        - name: ollama
-          port: 11434
+        - name: wg-easy
+          port: 51821

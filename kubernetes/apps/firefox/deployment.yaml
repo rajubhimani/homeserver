@@ -4,12 +4,12 @@
 #
 # - Compose gates the whole "browser hub" behind Authentik forward-auth at
 #   a shared browser.${DOMAIN} host, serving each browser at a subpath
-#   (SUBFOLDER=/firefox/) via services/nginx-plain. This pilot has no
-#   Traefik ForwardAuth middleware wired to Authentik yet for any service,
-#   so firefox gets its own HTTPRoute/hostname instead (firefox.k8s.local,
-#   root path) — same pattern as every other single-container service
-#   here, but without the hub's auth gate. Don't expose this HTTPRoute
-#   publicly without adding that middleware first.
+#   (SUBFOLDER=/firefox/) via services/nginx-plain. This pilot instead gates
+#   firefox directly on its own HTTPRoute/hostname (firefox.k8s.local, root
+#   path, not a subpath) via the shared authentik-forward-auth Middleware —
+#   see kubernetes/apps/authentik/forward-auth-middleware.yaml and
+#   kubernetes/apps/firefox/httproute.yaml. Functionally equivalent auth
+#   gate, different routing shape (own hostname vs. subpath under one hub).
 # - Compose pins a static Docker-bridge IP (172.18.255.240) so a LAN
 #   firewall rule can target these 5 browser containers specifically. k8s
 #   has no direct equivalent (pod IPs aren't stable) — a NetworkPolicy

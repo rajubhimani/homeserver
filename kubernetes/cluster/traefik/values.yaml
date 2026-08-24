@@ -8,6 +8,15 @@ providers:
     enabled: true
   kubernetesIngress:
     enabled: false   # Gateway API only — no legacy Ingress objects in this cluster
+  # Explicit, not just relying on the chart default (true): this is what
+  # makes the `Middleware` CRD work (traefik.io/v1alpha1) — every
+  # authentik-forward-auth ExtensionRef on a Gateway API HTTPRoute (see
+  # kubernetes/apps/authentik/forward-auth-middleware.yaml) depends on this
+  # provider being on. Silently relying on a chart default that happens to
+  # match is exactly the kind of thing that breaks on a future chart
+  # upgrade without anyone noticing why.
+  kubernetesCRD:
+    enabled: true
 
 # Chart's own auto-created Gateway only allows routes from its own namespace
 # and would drift under future `helm upgrade`s — disabled in favor of our own

@@ -1,0 +1,115 @@
+# Mirrors services/wg-easy/compose.yml. `network_mode: host` -> k8s
+# `hostNetwork: true` + `dnsPolicy: ClusterFirstWithHostNet`, same mapping
+# already established for beszel-agent (see kubernetes/README.md's "Known
+# architectural gaps").
+#
+# IMPORTANT, kind-specific limitation (not just the usual gap-documentation
+# boilerplate — this one changes what the service can actually do): the
+# entire reason Compose uses `network_mode: host` here is to bind
+# WireGuard's UDP port directly on THIS PHYSICAL HOST's real, routable
+# IPv6 interface (see compose.yml's own comment — this homeserver is
+# behind CGNAT for IPv4 but has a real IPv6 /64). `kind`'s nodes are
+# themselves nested Docker containers running ON that host (see
+# kubernetes/README.md/TROUBLESHOOTING.md's "no host filesystem
+# passthrough" note for the same underlying reason) — a pod with
+# `hostNetwork: true` in this cluster binds to the KIND NODE CONTAINER's
+# network namespace, not the physical host's. The actual VPN tunnel
+# (UDP 51820) will NOT be reachable from the real internet the way it is
+# in Compose; only the admin UI, reached through Traefik same as any
+# other ported service, actually works end-to-end here. On a real
+# (non-kind) k8s distro without this nested-container indirection,
+# `hostNetwork: true` would work as intended.
+#
+# NET_ADMIN/SYS_MODULE capabilities + /lib/modules mount carried over from
+# compose.yml — WireGuard kernel module access. The host-level sysctls/
+# kernel-module/firewalld setup compose.yml's own comment says can't be
+# done via the container spec applies equally here — that's Linux host
+# config, not something either orchestrator manifest can express.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wg-easy-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wg-easy
+  namespace: apps
+  labels:
+    app: wg-easy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wg-easy
+  template:
+    metadata:
+      labels:
+        app: wg-easy
+    spec:
+      enableServiceLinks: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: wg-easy
+          image: ghcr.io/wg-easy/wg-easy:15
+          env:
+            # Admin UI is only reached through Traefik (+ the
+            # authentik-forward-auth Middleware, see httproute.yaml) inside
+            # the cluster network — HTTP-only here is the same tradeoff
+            # compose.yml's own comment makes (wg-easy refuses login over
+            # plain HTTP otherwise).
+            - name: INSECURE
+              value: "true"
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN", "SYS_MODULE"]
+          ports:
+            - containerPort: 51821
+            - containerPort: 51820
+              protocol: UDP
+          volumeMounts:
+            - name: data
+              mountPath: /etc/wireguard
+            - name: modules
+              mountPath: /lib/modules
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 51821
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 51821
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: wg-easy-data
+        - name: modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wg-easy
+  namespace: apps
+spec:
+  selector:
+    app: wg-easy
+  ports:
+    - port: 51821

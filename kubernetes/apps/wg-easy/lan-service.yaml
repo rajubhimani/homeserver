@@ -1,8 +1,8 @@
 # Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
-#
-# Port 8149 matches mullvad-browser/compose.dev.yml exactly. Stop the Compose
-# version (uv run homeserver.py dev down mullvad-browser) before applying this —
-# same host port, can't both bind it.
+# No fixed dev port to match here — compose.dev.yml is a no-op for wg-easy
+# (network_mode: host publishes no ports through Compose's own port
+# mapping), so this just uses the admin UI's real port (51821) directly,
+# same number the compose.yml comment documents accessing it on.
 #
 # SECURITY NOTE: this LoadBalancer Service routes directly to the pod,
 # bypassing Traefik entirely — including the authentik-forward-auth
@@ -11,16 +11,17 @@
 # reach this LoadBalancer IP skips the auth gate completely. Same
 # LAN-only/local-testing tradeoff every lan-service.yaml in this pilot
 # makes, just worth flagging explicitly here since this one is
-# specifically meant to be gated.
+# specifically meant to be gated — and doubly sensitive since it's a VPN
+# control panel.
 apiVersion: v1
 kind: Service
 metadata:
-  name: mullvad-browser-lan
+  name: wg-easy-lan
   namespace: apps
 spec:
   type: LoadBalancer
   selector:
-    app: mullvad-browser
+    app: wg-easy
   ports:
-    - port: 8149
-      targetPort: 3000
+    - port: 51821
+      targetPort: 51821

@@ -1,3 +1,6 @@
+# Gated behind Authentik forward-auth, matching services/nginx-plain/
+# templates/default.conf.template's auth_request block for this host in
+# Compose — see kubernetes/apps/authentik/forward-auth-middleware.yaml.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,6 +13,12 @@ spec:
   hostnames:
     - "firefox.k8s.local"
   rules:
-    - backendRefs:
+    - filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: authentik-forward-auth
+      backendRefs:
         - name: firefox
           port: 3000
