@@ -132,6 +132,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Supabase | `supabase-kong` | 8133 | 8000 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | manual |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 8180 / 8443 / 8181 (admin) | same | manual (optional) |
+| wg-easy | `wg-easy` | 51820/UDP, 51821 (admin) | same — `network_mode: host`, no port remapping | manual |
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 

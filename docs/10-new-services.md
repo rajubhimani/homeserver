@@ -87,6 +87,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Penpot | [docs/services/penpot.md](services/penpot.md) |
 | Supabase | [docs/services/supabase.md](services/supabase.md) |
 | GitLab CE | [docs/services/gitlab.md](services/gitlab.md) |
+| wg-easy | [docs/services/wg-easy.md](services/wg-easy.md) |
 
 ---
 

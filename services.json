@@ -748,6 +748,17 @@
       "svg": "<path d=\"M9 14 L3 6 L5.5 6 L9 12 L12.5 6 L15 6 Z\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <path d=\"M3 6 L2 9 L9 14 L16 9 L15 6\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/>",
       "desc": "Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking.",
       "replaces": "GitHub / GitLab.com"
+    },
+    {
+      "slug": "wg-easy",
+      "tier": "manual",
+      "name": "wg-easy",
+      "sub": "wg-admin",
+      "category": "system",
+      "icon": "purple",
+      "svg": "<path d=\"M9 2 C10.66 2 12 3.34 12 5 V7 H13 C13.55 7 14 7.45 14 8 V15 C14 15.55 13.55 16 13 16 H5 C4.45 16 4 15.55 4 15 V8 C4 7.45 4.45 7 5 7 H6 V5 C6 3.34 7.34 2 9 2 Z M9 3.5 C8.17 3.5 7.5 4.17 7.5 5 V7 H10.5 V5 C10.5 4.17 9.83 3.5 9 3.5 Z\" stroke=\"#6A4C93\" stroke-width=\"1.1\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "Self-hosted WireGuard VPN with a web UI. Full-tunnel or split-tunnel client profiles, works around ISP CGNAT over IPv6 with zero router port forwarding.",
+      "replaces": "Tailscale"
     }
   ]
 }

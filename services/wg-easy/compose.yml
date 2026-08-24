@@ -1,0 +1,47 @@
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:15
+    container_name: wg-easy
+    restart: unless-stopped
+
+    environment:
+      # Admin UI is LAN-only (not exposed publicly via nginx-plain/cloudflared
+      # — this is the sensitive VPN control panel), so HTTP-only access here
+      # is acceptable. wg-easy refuses login over plain HTTP otherwise.
+      INSECURE: "true"
+
+    # NOTE: the "Device" used for MASQUERADE (defaults to "eth0", wrong for
+    # this host) is NOT settable via env var in v15 despite some docs/issues
+    # suggesting WG_DEVICE — that variable is a no-op here. It's a database
+    # value, set once via Admin Panel -> Interface -> Device in the web UI
+    # (set to this host's real interface, e.g. wlp13s0) — see
+    # docs/services/wg-easy.md for the full first-run setup sequence.
+
+    # network_mode: host — this is the standard, recommended pattern for
+    # wg-easy. It lets the container bind WireGuard's UDP port directly on
+    # the host's real IPv6 address (this homeserver is behind Airtel CGNAT
+    # for IPv4 but has a real, routable /64 IPv6 prefix — see
+    # docs/services/wg-easy.md). Avoids needing NDP proxying that a
+    # separate container IPv6 address would require.
+    network_mode: host
+
+    volumes:
+      - ${DATA_ROOT}:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+
+    # network_mode: host means sysctls: here would apply to the HOST's
+    # network namespace, which Docker refuses to set via the container spec
+    # ("not allowed in host network namespace"). These must be set on the
+    # host directly instead — see docs/services/wg-easy.md for the exact
+    # commands and how to persist them across reboots.
+
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:51821',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

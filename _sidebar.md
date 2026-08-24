@@ -101,6 +101,7 @@
       - [Brave](/docs/services/brave.md "Privacy-focused, ad-blocking-by-default remote browser. Part of the Browser Hub, one login for all five browsers here.")
       - [Mullvad Browser](/docs/services/mullvad-browser.md "Hardened, anti-fingerprinting Firefox fork built with the Tor Project — does not itself route traffic through the Tor network. Part of the Browser Hub, one login for all five browsers here.")
     - [AdGuard Home](/docs/services/adguard-home.md "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) — this links to the admin panel. Replaces: Pi-hole.")
+    - [wg-easy](/docs/services/wg-easy.md "Self-hosted WireGuard VPN with a web UI. Full-tunnel or split-tunnel client profiles, reachable over IPv6 to work around ISP CGNAT with zero port forwarding. Replaces: Tailscale.")
     - [ntfy](/docs/services/ntfy.md "Self-hosted push notifications. Scripts and services curl a message straight to your phone. Replaces: Pushover / Pushbullet.")
     - [Docs](/docs/services/docs.md "Searchable site over every doc in this repo — setup guides, service reference, all per-service notes, live off the source files. Replaces: Read the Docs.")
   - Infrastructure
