@@ -154,14 +154,20 @@ services:
         # service_data/ resolves to on this host -- see the forgejo-docker
         # service comment above for why that distinction matters.
         #
-        # log.level: debug is temporary -- added while confirming this sidecar
-        # setup performs as well as the host socket did. Revert to the
-        # default (info) once confirmed.
+        # forgejo-runner does NOT auto-inject a DOCKER_HOST env var into job
+        # containers for a tcp:// docker_host (only unix:// socket URLs get
+        # auto-mounted -- see the runner's own `generate-config` comments).
+        # Without this, `docker build`/`push`/etc. in any workflow across
+        # any repo on this instance defaults to the nonexistent local socket
+        # and fails with "no such file or directory". runner.envs applies to
+        # every job container automatically, instance-wide -- set here once
+        # instead of requiring every repo's workflow to set DOCKER_HOST
+        # itself.
         cat > /data/config.yaml <<-CONFIG
-        log:
-          level: debug
         runner:
           file: .runner
+          envs:
+            DOCKER_HOST: tcp://forgejo-docker:2375
         container:
           docker_host: "tcp://forgejo-docker:2375"
         CONFIG

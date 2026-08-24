@@ -108,6 +108,16 @@ The image's own default command (`forgejo-runner` with no subcommand) just print
 
 **A workflow step running `docker build`/`docker push` uses an isolated `forgejo-docker` sidecar, not this host's real Docker.** Each CI job runs in its own separate sibling container, which needs *some* Docker daemon reachable inside it for `docker build`/`push` to work. Rather than automounting this host's own `docker.sock` (`container.docker_host: automount` — the simpler option, but it hands every CI job root-equivalent access to the host engine, and every image layer it builds lands on the OS drive under `/var/lib/docker`), `compose.yml` runs a dedicated `docker:28-dind` container (`forgejo-docker`) and points the runner's generated `config.yaml` at it over the internal network: `docker_host: "tcp://forgejo-docker:2375"`. This is unconditional — active whenever Forgejo is up, no toggle, no config.
 
+**A `tcp://` `docker_host` is not auto-wired into job containers the way `automount` is — a workflow using the `docker` CLI needs `DOCKER_HOST` set, or it silently defaults to a nonexistent local socket and fails with `no such file or directory`.** `automount`'s whole purpose is bind-mounting a real `/var/run/docker.sock` into every job container automatically; the runner's own `generate-config` output documents that behavior only for `unix://` socket URLs, not `tcp://`. Rather than requiring every repo's workflow to set `DOCKER_HOST` itself (easy to forget, breaks silently the same way for the next repo added to this instance), `config.yaml`'s `runner.envs` injects it into every job container instance-wide:
+
+```yaml
+runner:
+  envs:
+    DOCKER_HOST: tcp://forgejo-docker:2375
+```
+
+No per-repo workflow changes needed for this — any `.forgejo/workflows/*.yml` using plain `docker build`/`push`/`login` just works, the same as it would against `automount`.
+
 ```mermaid
 flowchart LR
     subgraph unchanged["Unchanged — this host's own Docker"]
