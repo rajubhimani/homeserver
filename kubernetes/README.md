@@ -192,6 +192,50 @@ that file's own comment for why it's 1 control-plane, not 2: etcd quorum
 needs an odd member count, and 2 is strictly worse than 1). `kubectl`
 points at it via the `kind-kind-cluster` context.
 
+## Migrating data from Compose
+
+If the Compose stack on this machine is already configured and in real
+use, run these in order once the cluster is up (`bootstrap.py` above) to
+carry that configuration and data across instead of starting every
+service from scratch in k8s:
+
+```bash
+uv run kubernetes/sync-env-from-compose.py   # copy real secrets: services/<service>/.env -> kubernetes/.env
+uv run kubernetes/apply-secrets.py           # push kubernetes/.env into the cluster's Secrets
+uv run kubernetes/k8s.py up <service>...     # scale up the service(s) you're about to migrate (or a whole tier)
+uv run kubernetes/migrate-db.py <service>... # copy each service's database from Compose into k8s
+# or: uv run kubernetes/migrate-db.py --all
+```
+
+**Why this order matters for logins specifically:** several apps use
+their own app-level secret to encrypt columns in their own database —
+Firefly's `APP_KEY`, Documenso's encryption keys, Outline's
+`SECRET_KEY`, NocoDB's JWT secret, and others. If `migrate-db.py` runs
+before `sync-env-from-compose.py`/`apply-secrets.py`, the k8s side gets
+the right *rows* encrypted with the wrong *key* — the app comes up but
+can't decrypt its own data, including stored sessions/credentials. Doing
+`sync-env-from-compose.py` → `apply-secrets.py` first means both sides
+hold the same key before any encrypted data crosses over, so decryption
+(and logins) works the same in k8s as it did in Compose. Plain password
+hashes (most app login tables) aren't affected either way — they migrate
+fine regardless of order — but there's no reason not to always do it in
+this order.
+
+`migrate-db.py` streams a `pg_dump`/`mariadb-dump` from the Compose
+container straight into a `psql`/`mariadb` on the k8s side (via `docker
+exec` piped to `kubectl exec`, nothing written to disk in between) —
+into the service's dedicated StatefulSet if it has one, or the right
+database on the shared Postgres/MariaDB server if it was onboarded onto
+one (same detection either way: is there a `kubernetes/apps/<service>/
+db-init-job.yaml`?). It's Postgres/MariaDB only: RocketChat's MongoDB
+replica set needs `mongodump`/`mongorestore` by hand instead, and
+**bind-mounted files are never copied** — Nextcloud's uploaded files,
+Immich's photos, Jellyfin's media, wiki attachments, and so on all live
+under `service_data/data/<service>/` at a different path per service,
+so there's no single generic "copy this into that PVC" that's safe
+across all of them; migrate those by hand per service if you need them
+in k8s too (`kubectl cp` into the matching pod once its PVC is mounted).
+
 ## What's installed
 
 | Component | Namespace | Purpose |
@@ -245,6 +289,7 @@ kubernetes/
   sync-env-from-compose.py # copies real secrets from services/*/.env into kubernetes/.env
   apply-secrets.py         # reads .env, creates/updates the matching k8s Secrets
   k8s.py                   # tier/group/service start-stop — see "Starting/stopping services"
+  migrate-db.py             # copies each service's DB from Compose into k8s — see "Migrating data from Compose"
 ```
 
 Hostnames use a `*.k8s.local` suffix (e.g. `excalidraw.k8s.local`), not the
