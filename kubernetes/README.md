@@ -109,11 +109,46 @@ brew install kind kubectl helm
 Originally built on a Windows/Docker-Desktop box (Settings → Kubernetes →
 enable → kind provisioning). This branch has since moved to its intended
 target — a real Linux (Fedora) host — using plain `kind` directly rather
-than Docker Desktop's bundled integration:
+than Docker Desktop's bundled integration.
+
+**`kubernetes/bootstrap.py` runs the whole first-time setup** — creating
+the cluster, installing Gateway API CRDs, bootstrapping ArgoCD, letting it
+bring up Traefik/MetalLB/shared Postgres+MariaDB, detecting and fixing
+MetalLB's IP pool for this specific Docker network, exposing ArgoCD's UI,
+running `apply-secrets.py`, and applying every service's ArgoCD
+Application:
+
+```bash
+uv run kubernetes/bootstrap.py
+# or, to fill in kubernetes/.env and run apply-secrets.py yourself later:
+uv run kubernetes/bootstrap.py --skip-secrets
+```
+
+Every step is independently idempotent — re-running after a partial
+failure only redoes what's actually missing, same "don't re-touch what's
+already there" idiom `homeserver.py`'s own `up core` has. What it actually
+runs, step by step, if you'd rather do any of it by hand or are debugging
+a failure:
 
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
 kubectl config current-context   # should print: kind-kind-cluster
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+kubectl apply -f kubernetes/cluster/namespaces.yaml
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml --server-side --force-conflicts
+# fix kubernetes/cluster/metallb/resources/ipaddresspool.yaml's range to match
+# this Docker network (docker network inspect kind), commit it
+kubectl apply -f kubernetes/argocd-apps/cluster-namespaces.yaml
+kubectl apply -f kubernetes/argocd-apps/cluster-gateway.yaml
+kubectl apply -f kubernetes/argocd-apps/cluster-traefik.yaml
+kubectl apply -f kubernetes/argocd-apps/cluster-metallb.yaml
+kubectl apply -f kubernetes/argocd-apps/cluster-postgres-shared.yaml
+kubectl apply -f kubernetes/argocd-apps/cluster-mariadb-shared.yaml
+kubectl patch cm argocd-cmd-params-cm -n argocd --type merge -p '{"data":{"server.insecure":"true"}}'
+kubectl rollout restart deployment argocd-server -n argocd
+kubectl apply -f kubernetes/cluster/argocd/lan-service.yaml   # UI at http://localhost:18081
+uv run kubernetes/apply-secrets.py
+kubectl apply -f kubernetes/argocd-apps/   # every remaining service Application
 ```
 
 Topology: 1 control-plane + 3 workers (`kubernetes/kind-config.yaml` — see
@@ -154,7 +189,7 @@ kubernetes/
         l2advertisement.yaml
     postgres/
       statefulset.yaml
-      secret.example.yaml         # template only — real Secret via apply-secrets.sh
+      secret.example.yaml         # template only — real Secret via apply-secrets.py
       db-init-job.template.yaml   # copy into apps/<service>/ when onboarding a
                                    # service onto the shared Postgres server
     mariadb/                      # same pattern, for MariaDB-using services
@@ -170,7 +205,9 @@ kubernetes/
   argocd-apps/
     <service>.yaml       # ArgoCD Application manifests, one per service
   .env.example            # template — copy to .env (gitignored) and fill in
-  apply-secrets.sh         # reads .env, creates/updates the matching k8s Secrets
+  bootstrap.py             # one-time cluster setup, idempotent — see "Cluster" above
+  apply-secrets.py         # reads .env, creates/updates the matching k8s Secrets
+  k8s.py                   # tier/group/service start-stop — see "Starting/stopping services"
 ```
 
 Hostnames use a `*.k8s.local` suffix (e.g. `excalidraw.k8s.local`), not the
@@ -242,7 +279,7 @@ re-apply), don't just edit and re-apply.
 
 Same convention as every other service in this repo: `.env` (gitignored,
 real values) + `.env.example` (checked in, template). Run
-`./kubernetes/apply-secrets.sh` after editing `.env` to push the values into
+`uv run kubernetes/apply-secrets.py` after editing `.env` to push the values into
 the cluster as Secrets. ArgoCD's admin password is a special case — ArgoCD
 only accepts a bcrypt hash in its Secret, so the script hashes it (via
 `uv run --with bcrypt`, no new project dependency) before patching
@@ -377,7 +414,7 @@ vendor `zulip/zulip-postgresql` image, same "own extensions" category as
 immich's pgvector image).
 
 Manifests exist and are internally consistent (every Secret reference has a
-matching `apply-secrets.sh` entry, every YAML file parses) but **have not
+matching `apply-secrets.py` entry, every YAML file parses) but **have not
 been applied to a live cluster yet** — this branch just moved to its
 intended real Linux hardware and the cluster itself hasn't been created
 here. Next step is standing up `kind` (`kubernetes/kind-config.yaml`) and

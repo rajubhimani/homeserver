@@ -252,7 +252,7 @@ realizing the env var itself was the problem).
 **Fix:** don't rely on in-manifest `$(VAR)` interpolation across two
 separate `secretKeyRef`s. Instead, pre-compose the full value (e.g. the
 whole `postgresql://user:pass@host:port/db` string) once, in
-`apply-secrets.sh`, and store it as its own single secret key. No
+`apply-secrets.py`, and store it as its own single secret key. No
 in-manifest interpolation needed at all.
 
 ### Vendor-pinned image versions aren't "just take latest"
@@ -348,7 +348,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 To set it to a chosen value instead (e.g. via this repo's `.env`
 convention), ArgoCD requires a **bcrypt hash** in `argocd-secret`'s
 `admin.password` key — it does not accept plaintext. See
-`apply-secrets.sh` for how this repo automates the hashing (via `uv run
+`apply-secrets.py` for how this repo automates the hashing (via `uv run
 --with bcrypt`, no new project dependency).
 
 ### Migrating an existing `helm install` release into ArgoCD management
@@ -475,7 +475,7 @@ to allow it):
      ```
      UI is then reachable at `http://localhost:18081` — not `https`, since
      `server.insecure` disables TLS.
-   - Re-run `kubernetes/apply-secrets.sh` — it reuses the existing values
+   - Re-run `kubernetes/apply-secrets.py` — it reuses the existing values
      already in `.env`, no need to regenerate secrets.
    - Individual service Applications (`argocd-apps/<service>.yaml`) can
      then be reapplied and tested one at a time, same as normal.

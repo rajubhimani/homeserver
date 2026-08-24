@@ -52,12 +52,12 @@ truth, not this page.
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
 # then follow kubernetes/README.md for Traefik/ArgoCD/MetalLB setup and
-# ./kubernetes/apply-secrets.sh for secrets, and use kubernetes/k8s.py to
+# `uv run kubernetes/apply-secrets.py` for secrets, and use kubernetes/k8s.py to
 # start/stop services by tier, group, or individually
 ```
 
 Manifests are validated (YAML parses, every Secret reference has a matching
-`apply-secrets.sh` entry) but this is a pilot, not a production deployment
+`apply-secrets.py` entry) but this is a pilot, not a production deployment
 path — don't point real traffic or real data at it.
 
 ---
