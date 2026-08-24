@@ -19,9 +19,6 @@ Usage: uv run kubernetes/apply-secrets.py
 from __future__ import annotations
 
 import datetime
-import glob
-import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -128,104 +125,73 @@ def apply_secret_from_file(name: str, namespace: str, file_key: str, file_path: 
         fail(f"failed to apply secret '{name}': {e.stderr.strip() if e.stderr else e}")
 
 
-def _legacy_module_filename() -> str:
-    system = platform.system()
-    if system == "Windows":
-        return "legacy.dll"
-    if system == "Darwin":
-        return "legacy.dylib"
-    return "legacy.so"
+# Builds the RSA key + self-signed cert + PKCS12 entirely in Python via the
+# `cryptography` package (ephemeral-installed with `uv run --with`, same
+# pattern bcrypt_hash() below already uses — no new project dependency).
+# Documenso's own signing library can only read the *old* PKCS12 scheme
+# (PBE-SHA1-3DES key/cert encryption, SHA1 MAC — confirmed against
+# Documenso's own SIGNING.md and issue #1087, unresolved as of the version
+# pinned in kubernetes/apps/documenso/), which OpenSSL 3.x moved behind a
+# 'legacy' provider that isn't loaded by default and, on at least one
+# Windows OpenSSL distribution, isn't installed at all. `cryptography`'s
+# own PKCS12 encryption_builder() can produce that exact legacy scheme
+# directly — no system openssl involved, so no provider/PATH/install
+# variance to debug across machines. Also requires a non-empty passphrase
+# (DOCUMENSO_SIGNING_PASSPHRASE): Documenso's docs flag an empty one as a
+# known cause of "Failed to get private key bags" at signing time.
+_DOCUMENSO_CERT_SCRIPT = """
+import datetime
+import sys
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import PrivateFormat, pkcs12
+from cryptography.x509.oid import NameOID
+
+out_path, passphrase = sys.argv[1], sys.argv[2].encode()
+key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "documenso.k8s.local")])
+now = datetime.datetime.now(datetime.timezone.utc)
+cert = (
+    x509.CertificateBuilder()
+    .subject_name(name)
+    .issuer_name(name)
+    .public_key(key.public_key())
+    .serial_number(x509.random_serial_number())
+    .not_valid_before(now)
+    .not_valid_after(now + datetime.timedelta(days=3650))
+    .sign(key, hashes.SHA256())
+)
+encryption = (
+    PrivateFormat.PKCS12.encryption_builder()
+    .key_cert_algorithm(pkcs12.PBES.PBESv1SHA1And3KeyTripleDESCBC)
+    .hmac_hash(hashes.SHA1())
+    .build(passphrase)
+)
+p12 = pkcs12.serialize_key_and_certificates(b"documenso", key, cert, None, encryption)
+with open(out_path, "wb") as f:
+    f.write(p12)
+"""
 
 
-def find_openssl_modules_dir() -> Path | None:
-    """Best-effort locate the directory holding openssl's 'legacy' provider
-    module, so `-legacy` (needed for pkcs12 -export below) works without
-    the user having to set OPENSSL_MODULES or fix their PATH by hand.
-    Tries the compiled-in default first (`openssl version -m` — correct on
-    a normal install, this is the common case on Fedora/Ubuntu/macOS and
-    most Windows installs too), then a couple of install layouts seen in
-    practice on Windows (a "Light" winget package whose openssl.exe has a
-    baked-in MODULESDIR that doesn't match where it actually got
-    installed). Returns None if it can't find one anywhere — caller falls
-    back to today's behavior (run without an override, let openssl's own
-    error surface)."""
-    module_name = _legacy_module_filename()
-
-    try:
-        result = subprocess.run(["openssl", "version", "-m"], capture_output=True, text=True, check=True)
-        marker = "MODULESDIR:"
-        if marker in result.stdout:
-            raw = result.stdout.split(marker, 1)[1].strip().strip('"')
-            if (Path(raw) / module_name).is_file():
-                return Path(raw)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-
-    candidates: list[Path] = []
-    openssl_path = shutil.which("openssl")
-    if openssl_path:
-        bin_dir = Path(openssl_path).resolve().parent
-        candidates += [bin_dir.parent / "lib" / "ossl-modules", bin_dir.parent / "lib64" / "ossl-modules"]
-    if platform.system() == "Windows":
-        # One level deep covers "OpenSSL-Win64", two covers vendor-prefixed
-        # installs like FireDaemon's "FireDaemon OpenSSL 3" — don't require
-        # the folder name to start with "OpenSSL".
-        for root in ("C:/Program Files", "C:/Program Files (x86)"):
-            candidates += [Path(p) for p in glob.glob(f"{root}/*/lib/ossl-modules")]
-            candidates += [Path(p) for p in glob.glob(f"{root}/*/*/lib/ossl-modules")]
-
-    for candidate in candidates:
-        if (candidate / module_name).is_file():
-            return candidate
-    return None
-
-
-def generate_documenso_cert() -> Path:
+def generate_documenso_cert(passphrase: str) -> Path:
     """Documenso refuses to start without a valid cert.p12 for local
     document signing. This pilot has no real signing use, so generate a
     throwaway self-signed one on the fly rather than committing a cert to
-    the repo. Shells out to the real `openssl` binary (list-form args, no
-    shell) rather than reimplementing PKCS12 generation in Python — safer
-    than guessing at cryptography-library equivalence for the `-legacy`
-    flag's exact compatibility behavior, which can't be verified without a
-    live cluster + running Documenso to test against."""
-    if not shutil.which("openssl"):
-        fail("openssl not found on PATH — needed for Documenso's self-signed cert (Git for Windows bundles it; Fedora/Ubuntu/macOS have it by default)")
+    the repo. See _DOCUMENSO_CERT_SCRIPT's comment above for why this
+    doesn't shell out to openssl."""
     cert_dir = Path(tempfile.mkdtemp(prefix="documenso-cert-"))
-    key_path = cert_dir / "private.key"
-    crt_path = cert_dir / "certificate.crt"
     p12_path = cert_dir / "cert.p12"
-
-    modules_dir = find_openssl_modules_dir()
-    env = os.environ.copy()
-    if modules_dir is not None:
-        env["OPENSSL_MODULES"] = str(modules_dir)
-
     try:
-        subprocess.run(["openssl", "genrsa", "-out", str(key_path), "2048"], capture_output=True, check=True, env=env)
         subprocess.run(
-            ["openssl", "req", "-new", "-x509", "-key", str(key_path), "-out", str(crt_path), "-days", "3650", "-subj", "/CN=documenso.k8s.local"],
+            ["uv", "run", "--with", "cryptography", "python", "-c", _DOCUMENSO_CERT_SCRIPT, str(p12_path), passphrase],
+            cwd=K8S_DIR.parent,
             capture_output=True,
             check=True,
-            env=env,
-        )
-        subprocess.run(
-            ["openssl", "pkcs12", "-export", "-out", str(p12_path), "-inkey", str(key_path), "-in", str(crt_path), "-legacy", "-passout", "pass:"],
-            capture_output=True,
-            check=True,
-            env=env,
         )
     except subprocess.CalledProcessError as e:
         shutil.rmtree(cert_dir, ignore_errors=True)
-        detail = e.stderr.decode(errors="replace") if e.stderr else str(e)
-        if modules_dir is None and ("legacy" in detail.lower() or "load the shared library" in detail.lower()):
-            detail += (
-                f"\nHint: no '{_legacy_module_filename()}' provider module found on this machine (checked openssl's "
-                "own compiled-in MODULESDIR and common install layouts) — this openssl build is missing the "
-                "legacy provider entirely. On Windows, a winget 'Light' OpenSSL package can omit it; try the "
-                "full (non-Light) build instead."
-            )
-        fail(f"documenso cert generation failed: {detail}")
+        fail(f"documenso cert generation failed: {e.stderr.decode(errors='replace') if e.stderr else e}")
     return p12_path
 
 
@@ -351,6 +317,7 @@ def main() -> None:
         "apps",
         {"password": documenso_db_password, "database-url": f"postgres://documenso:{documenso_db_password}@documenso-db:5432/documenso"},
     )
+    documenso_signing_passphrase = env["DOCUMENSO_SIGNING_PASSPHRASE"]
     apply_secret(
         "documenso-credentials",
         "apps",
@@ -358,15 +325,16 @@ def main() -> None:
             "nextauth-secret": env["DOCUMENSO_NEXTAUTH_SECRET"],
             "encryption-key": env["DOCUMENSO_ENCRYPTION_KEY"],
             "encryption-secondary-key": env["DOCUMENSO_ENCRYPTION_SECONDARY_KEY"],
+            "signing-passphrase": documenso_signing_passphrase,
         },
     )
     success("documenso-db-credentials + documenso-credentials applied")
 
-    cert_dir = generate_documenso_cert()
+    p12_path = generate_documenso_cert(documenso_signing_passphrase)
     try:
-        apply_secret_from_file("documenso-cert", "apps", "cert.p12", cert_dir)
+        apply_secret_from_file("documenso-cert", "apps", "cert.p12", p12_path)
     finally:
-        shutil.rmtree(cert_dir.parent, ignore_errors=True)
+        shutil.rmtree(p12_path.parent, ignore_errors=True)
     success("documenso-cert applied")
 
     apply_secret("invoiceshelf-db-credentials", "apps", {"root-password": env["INVOICESHELF_DB_ROOT_PASSWORD"], "password": env["INVOICESHELF_DB_PASSWORD"]})

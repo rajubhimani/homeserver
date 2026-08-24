@@ -8,14 +8,19 @@ full migration.
 
 ## Prerequisites
 
-Five tools, on whatever machine will run the cluster: **Docker** (or
+Four tools, on whatever machine will run the cluster: **Docker** (or
 Docker Desktop on Windows/Mac — `kind` needs a real running daemon),
-**kind**, **kubectl**, **helm**, and **openssl** (`apply-secrets.py`
-shells out to it to generate Documenso's self-signed cert — see that
-script's `generate_documenso_cert()`). Pick your OS below; all five
-should print a version afterward (`docker version`, `kind version`,
-`kubectl version --client`, `helm version`, `openssl version`) before
-moving on to "Cluster" below.
+**kind**, **kubectl**, and **helm**. `apply-secrets.py` needs `uv` (this
+repo already requires it — see the root `CLAUDE.md`) but not a system
+`openssl`: Documenso's self-signed cert is generated with Python's
+`cryptography` package instead (ephemeral-installed via `uv run --with`,
+same as `bcrypt_hash()`'s ArgoCD-password step) — see that script's
+`generate_documenso_cert()` for why plain `openssl pkcs12` can't be used
+here (Documenso needs an old PKCS12 encryption scheme OpenSSL 3.x moved
+behind a "legacy" provider that isn't always installed, especially on
+Windows). Pick your OS below; all four should print a version afterward
+(`docker version`, `kind version`, `kubectl version --client`, `helm
+version`) before moving on to "Cluster" below.
 
 <details>
 <summary><strong>Windows</strong></summary>
@@ -27,18 +32,12 @@ winget install Docker.DockerDesktop
 winget install Kubernetes.kind
 winget install Kubernetes.kubectl
 winget install Helm.Helm
-winget install ShiningLight.OpenSSL.Light
 ```
 
 Launch Docker Desktop and wait for it to report "running" before using
 `kind`. Close and reopen your terminal afterward so `PATH` picks up the
 new binaries. Chocolatey works too if you already use it:
-`choco install kind kubernetes-cli kubernetes-helm openssl`.
-
-If you already have Git for Windows installed, it bundles its own
-`openssl.exe` (`C:\Program Files\Git\usr\bin\openssl.exe`) — just not on
-`PATH` by default, so either install OpenSSL separately as above, or add
-that folder to `PATH` yourself.
+`choco install kind kubernetes-cli kubernetes-helm`.
 
 This pilot was originally built and tested on a Windows/Docker-Desktop box
 — see `kubernetes/TROUBLESHOOTING.md`'s "Cluster / Docker Desktop" section
@@ -71,8 +70,6 @@ chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
-`openssl` is already present on a stock Fedora install (`sudo dnf install -y openssl` if not — Fedora Server/minimal images sometimes skip it).
-
 This pilot's real, current target host (see "Cluster" below).
 </details>
 
@@ -103,16 +100,10 @@ chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
 # helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
-
-`openssl` is already present on a stock Ubuntu/Debian install
-(`sudo apt-get install -y openssl` if not).
 </details>
 
 <details>
 <summary><strong>macOS</strong></summary>
-
-`openssl` (technically LibreSSL) ships with macOS by default — no extra
-install needed for `apply-secrets.py`'s purposes.
 
 ```bash
 brew install --cask docker   # Docker Desktop for Mac
