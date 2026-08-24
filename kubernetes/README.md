@@ -149,6 +149,52 @@ only accepts a bcrypt hash in its Secret, so the script hashes it (via
 `uv run --with bcrypt`, no new project dependency) before patching
 `argocd-secret`.
 
+## Starting/stopping services
+
+`kubernetes/k8s.py` mirrors `homeserver.py`'s tier/group/service UX for
+this pilot — same `services.json` tiers and `group:<name>` categories,
+just driving `kubectl`/ArgoCD instead of Docker Compose:
+
+```bash
+uv run kubernetes/k8s.py up   min                # or core/daily/office/automation-ai/extra/manual/all
+uv run kubernetes/k8s.py down group:communication # mattermost + rocketchat + zulip
+uv run kubernetes/k8s.py up   mattermost          # single service, never prompts
+uv run kubernetes/k8s.py status                   # tier-by-tier + group-by-group, ● up / ○ down
+uv run kubernetes/k8s.py down core --dry-run       # print what would happen, change nothing
+```
+
+A tier keyword, `group:<name>`, or `all` previews the resolved service
+list and asks for confirmation (skip with `--yes`/`-y`); a literal service
+name never prompts. `--dry-run` resolves the target and prints every
+`kubectl`/ArgoCD command it would run without executing any of them — also
+how this tool gets verified before a live cluster exists (see "Current
+status" below).
+
+**What it actually does, per service** (this is the manual procedure below
+automated, not a new mechanism):
+- `up`: re-enable the ArgoCD `Application`'s automated sync
+  (`prune: true, selfHeal: true`), unsuspend any `CronJob`s, scale matched
+  `Deployment`/`StatefulSet` resources to `replicas: 1`.
+- `down`: disable ArgoCD automated sync **first** (must happen before
+  scaling, or `selfHeal` reverts the scale-down within one sync cycle —
+  see the "pausing a service" note in `TROUBLESHOOTING.md`), suspend any
+  `CronJob`s, scale matched `Deployment`/`StatefulSet` resources to
+  `replicas: 0`. PVCs and Secrets are never touched — same "no data loss,
+  nothing to re-provision on restart" guarantee as the manual procedure.
+
+Resources belonging to a service are found by name-prefix matching
+(`<service>` or `<service>-<suffix>`) against live `kubectl get
+deployment,statefulset,cronjob`, not new labels on every manifest — this
+holds for all but two directories (`guacamole`'s companion `guacd`
+Deployment, `observability`'s 6 unprefixed Deployments — both handled via
+a small `RESOURCE_EXCEPTIONS` map in the script) and correctly
+disambiguates `stirling-pdf` from `stirling-pdf-lite` via a
+longest-match-wins rule. `Job` resources (one-shot DB init/schema-setup)
+are never scaled — they're run-to-completion, not long-running workloads.
+
+There's no backup/snapshot step on `down` here, unlike Compose's automatic
+snapshot-on-down — this pilot has no backup mechanism of its own yet.
+
 ## Current status
 
 This repo's Compose side was restructured after this pilot was last brought
@@ -159,12 +205,12 @@ current tier lists). Counts below are against that current tier structure,
 not the older `SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL` naming
 this section used to use.
 
-63 of 70 Compose services are ported: `min` 4/6 (beszel, cloudflared,
+64 of 70 Compose services are ported: `min` 4/6 (beszel, cloudflared,
 landing, docs), `core` 14/14 beyond `min` (all ported, including
 `mailpit`), `daily` 13/15, `office` 8/8, `automation-ai` 6/6, `extra`
-17/19, `manual` 1/1 (gitlab). The cluster foundation (namespaces, Traefik,
-the shared Gateway, MetalLB, shared Postgres/MariaDB) is ArgoCD-managed
-too, see `kubernetes/argocd-apps/cluster-*.yaml`.
+17/19, `manual` 2/2 (gitlab, wg-easy). The cluster foundation (namespaces,
+Traefik, the shared Gateway, MetalLB, shared Postgres/MariaDB) is
+ArgoCD-managed too, see `kubernetes/argocd-apps/cluster-*.yaml`.
 
 Every remaining gap is either deliberately excluded (below) or not a real
 service — `daily`'s `browser` entry is the static browser-hub landing page

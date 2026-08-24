@@ -31,11 +31,12 @@ Everything else lives in `kubernetes/`, checked into this same repo:
 | Topic | Where |
 | --- | --- |
 | What's installed, cluster layout, LAN access, secrets, current port status (which services are ported, which are deliberately excluded and why) | [`kubernetes/README.md`](../kubernetes/README.md) |
+| Starting/stopping services by tier, group, or individually (`kubernetes/k8s.py`) — the k8s-side equivalent of `homeserver.py`'s `up`/`down` | [`kubernetes/README.md`](../kubernetes/README.md)'s "Starting/stopping services" section |
 | Every real gotcha hit building this out — kind quirks, `command` vs `args` traps, same-node PVC risk, disk-full recovery, ArgoCD bootstrap issues | [`kubernetes/TROUBLESHOOTING.md`](../kubernetes/TROUBLESHOOTING.md) |
 
 ## Status at a glance
 
-63 of 70 Compose services are ported — effectively full parity with
+64 of 70 Compose services are ported — effectively full parity with
 everything that has a real Kubernetes equivalent. Deliberately not
 ported: `nginx-plain` (Traefik already covers its one job — routing),
 `portainer`/`dozzle`/`dockge`/`coolify` (their entire purpose is managing
@@ -51,7 +52,8 @@ truth, not this page.
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
 # then follow kubernetes/README.md for Traefik/ArgoCD/MetalLB setup and
-# ./kubernetes/apply-secrets.sh for secrets
+# ./kubernetes/apply-secrets.sh for secrets, and use kubernetes/k8s.py to
+# start/stop services by tier, group, or individually
 ```
 
 Manifests are validated (YAML parses, every Secret reference has a matching
