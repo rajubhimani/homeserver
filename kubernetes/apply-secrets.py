@@ -19,6 +19,9 @@ Usage: uv run kubernetes/apply-secrets.py
 from __future__ import annotations
 
 import datetime
+import glob
+import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -125,6 +128,54 @@ def apply_secret_from_file(name: str, namespace: str, file_key: str, file_path: 
         fail(f"failed to apply secret '{name}': {e.stderr.strip() if e.stderr else e}")
 
 
+def _legacy_module_filename() -> str:
+    system = platform.system()
+    if system == "Windows":
+        return "legacy.dll"
+    if system == "Darwin":
+        return "legacy.dylib"
+    return "legacy.so"
+
+
+def find_openssl_modules_dir() -> Path | None:
+    """Best-effort locate the directory holding openssl's 'legacy' provider
+    module, so `-legacy` (needed for pkcs12 -export below) works without
+    the user having to set OPENSSL_MODULES or fix their PATH by hand.
+    Tries the compiled-in default first (`openssl version -m` — correct on
+    a normal install, this is the common case on Fedora/Ubuntu/macOS and
+    most Windows installs too), then a couple of install layouts seen in
+    practice on Windows (a "Light" winget package whose openssl.exe has a
+    baked-in MODULESDIR that doesn't match where it actually got
+    installed). Returns None if it can't find one anywhere — caller falls
+    back to today's behavior (run without an override, let openssl's own
+    error surface)."""
+    module_name = _legacy_module_filename()
+
+    try:
+        result = subprocess.run(["openssl", "version", "-m"], capture_output=True, text=True, check=True)
+        marker = "MODULESDIR:"
+        if marker in result.stdout:
+            raw = result.stdout.split(marker, 1)[1].strip().strip('"')
+            if (Path(raw) / module_name).is_file():
+                return Path(raw)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    candidates: list[Path] = []
+    openssl_path = shutil.which("openssl")
+    if openssl_path:
+        bin_dir = Path(openssl_path).resolve().parent
+        candidates += [bin_dir.parent / "lib" / "ossl-modules", bin_dir.parent / "lib64" / "ossl-modules"]
+    if platform.system() == "Windows":
+        for root in ("C:/Program Files", "C:/Program Files (x86)"):
+            candidates += [Path(p) for p in glob.glob(f"{root}/OpenSSL*/lib/ossl-modules")]
+
+    for candidate in candidates:
+        if (candidate / module_name).is_file():
+            return candidate
+    return None
+
+
 def generate_documenso_cert() -> Path:
     """Documenso refuses to start without a valid cert.p12 for local
     document signing. This pilot has no real signing use, so generate a
@@ -140,21 +191,37 @@ def generate_documenso_cert() -> Path:
     key_path = cert_dir / "private.key"
     crt_path = cert_dir / "certificate.crt"
     p12_path = cert_dir / "cert.p12"
+
+    modules_dir = find_openssl_modules_dir()
+    env = os.environ.copy()
+    if modules_dir is not None:
+        env["OPENSSL_MODULES"] = str(modules_dir)
+
     try:
-        subprocess.run(["openssl", "genrsa", "-out", str(key_path), "2048"], capture_output=True, check=True)
+        subprocess.run(["openssl", "genrsa", "-out", str(key_path), "2048"], capture_output=True, check=True, env=env)
         subprocess.run(
             ["openssl", "req", "-new", "-x509", "-key", str(key_path), "-out", str(crt_path), "-days", "3650", "-subj", "/CN=documenso.k8s.local"],
             capture_output=True,
             check=True,
+            env=env,
         )
         subprocess.run(
             ["openssl", "pkcs12", "-export", "-out", str(p12_path), "-inkey", str(key_path), "-in", str(crt_path), "-legacy", "-passout", "pass:"],
             capture_output=True,
             check=True,
+            env=env,
         )
     except subprocess.CalledProcessError as e:
         shutil.rmtree(cert_dir, ignore_errors=True)
-        fail(f"documenso cert generation failed: {e.stderr.decode(errors='replace') if e.stderr else e}")
+        detail = e.stderr.decode(errors="replace") if e.stderr else str(e)
+        if modules_dir is None and ("legacy" in detail.lower() or "load the shared library" in detail.lower()):
+            detail += (
+                f"\nHint: no '{_legacy_module_filename()}' provider module found on this machine (checked openssl's "
+                "own compiled-in MODULESDIR and common install layouts) — this openssl build is missing the "
+                "legacy provider entirely. On Windows, a winget 'Light' OpenSSL package can omit it; try the "
+                "full (non-Light) build instead."
+            )
+        fail(f"documenso cert generation failed: {detail}")
     return p12_path
 
 
