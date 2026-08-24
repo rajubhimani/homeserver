@@ -165,6 +165,10 @@ NO_AUTO_GENERATE = {
 }
 
 
+def _generate_for(key: str) -> str:
+    return SPECIAL_GENERATORS.get(key, lambda: _urlsafe(32))()
+
+
 def ensure_env_populated() -> None:
     """Creates kubernetes/.env from .env.example if it doesn't exist yet,
     then replaces every value still holding a .env.example placeholder
@@ -173,7 +177,14 @@ def ensure_env_populated() -> None:
     NO_AUTO_GENERATE's real external credentials, left for the user.
     Idempotent: a key already holding a real value (typed by hand, or
     pulled in by sync-env-from-compose.py) is never touched or
-    regenerated on a later run."""
+    regenerated on a later run.
+
+    Also merges in any key .env.example has that this existing .env
+    predates entirely — e.g. a key added to .env.example after someone's
+    .env was first created, which would otherwise be silently absent
+    (not even a placeholder) and only surface as a confusing "not set"
+    failure deep into main(), instead of being generated like any other
+    new key."""
     if not ENV_PATH.is_file():
         if not ENV_EXAMPLE_PATH.is_file():
             fail(f"neither {ENV_PATH} nor {ENV_EXAMPLE_PATH} exist — this repo is missing kubernetes/.env.example")
@@ -181,25 +192,44 @@ def ensure_env_populated() -> None:
         shutil.copyfile(ENV_EXAMPLE_PATH, ENV_PATH)
 
     lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
+    example_values = load_env_file(ENV_EXAMPLE_PATH)
     line_re = re.compile(r"^([A-Z_][A-Z0-9_]*)=(.*)$")
     new_lines: list[str] = []
     generated: list[str] = []
+    seen_keys: set[str] = set()
+
     for line in lines:
         m = line_re.match(line)
         if not m:
             new_lines.append(line)
             continue
         key, value = m.group(1), m.group(2)
+        seen_keys.add(key)
         if key in NO_AUTO_GENERATE or not is_placeholder(value):
             new_lines.append(line)
             continue
-        new_value = SPECIAL_GENERATORS.get(key, lambda: _urlsafe(32))()
+        new_value = _generate_for(key)
         new_lines.append(f"{key}={new_value}")
         generated.append(key)
 
-    if generated:
+    missing_keys = [k for k in example_values if k not in seen_keys]
+    if missing_keys:
+        new_lines.append("")
+        new_lines.append("# --- keys added to .env.example after this .env was created ---")
+        for key in missing_keys:
+            example_value = example_values[key]
+            if key in NO_AUTO_GENERATE or not is_placeholder(example_value):
+                new_lines.append(f"{key}={example_value}")
+                continue
+            new_lines.append(f"{key}={_generate_for(key)}")
+            generated.append(key)
+
+    if generated or missing_keys:
         ENV_PATH.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    if generated:
         success(f"auto-generated {len(generated)} secret(s) in {ENV_PATH}: {', '.join(generated)}")
+    if missing_keys and len(missing_keys) > len(generated):
+        info(f"added {len(missing_keys) - len(generated)} new non-secret key(s) from .env.example that this .env predated")
 
 
 class Env:
