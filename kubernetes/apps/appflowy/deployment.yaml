@@ -20,7 +20,7 @@ metadata:
   labels:
     app: appflowy-gotrue
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: appflowy-gotrue
@@ -92,7 +92,7 @@ metadata:
   labels:
     app: appflowy-cloud
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: appflowy-cloud
@@ -176,7 +176,7 @@ metadata:
   labels:
     app: appflowy-web
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: appflowy-web
@@ -218,7 +218,7 @@ metadata:
   labels:
     app: appflowy-admin
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: appflowy-admin

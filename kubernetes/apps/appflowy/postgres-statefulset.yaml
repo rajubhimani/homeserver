@@ -10,7 +10,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: appflowy-db
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: appflowy-db
@@ -76,7 +76,7 @@ metadata:
   labels:
     app: appflowy-redis
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: appflowy-redis

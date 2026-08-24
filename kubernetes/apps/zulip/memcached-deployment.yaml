@@ -20,7 +20,7 @@ metadata:
   labels:
     app: zulip-memcached
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: zulip-memcached

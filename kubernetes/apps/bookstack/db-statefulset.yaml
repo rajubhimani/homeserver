@@ -9,7 +9,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: bookstack-db
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: bookstack-db

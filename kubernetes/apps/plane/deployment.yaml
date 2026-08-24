@@ -14,7 +14,7 @@ metadata:
   labels:
     app: plane-api
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-api
@@ -91,7 +91,7 @@ metadata:
   labels:
     app: plane-worker
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-worker
@@ -143,7 +143,7 @@ metadata:
   labels:
     app: plane-beat
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-beat
@@ -181,7 +181,7 @@ metadata:
   labels:
     app: plane-web
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-web
@@ -221,7 +221,7 @@ metadata:
   labels:
     app: plane-admin
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-admin
@@ -261,7 +261,7 @@ metadata:
   labels:
     app: plane-space
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-space

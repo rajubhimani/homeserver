@@ -19,7 +19,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: supabase-db
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: supabase-db

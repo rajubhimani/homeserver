@@ -19,7 +19,7 @@ metadata:
   labels:
     app: plane-minio
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:

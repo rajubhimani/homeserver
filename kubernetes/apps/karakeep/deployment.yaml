@@ -15,7 +15,7 @@ metadata:
   labels:
     app: karakeep-chrome
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: karakeep-chrome
@@ -68,7 +68,7 @@ metadata:
   labels:
     app: karakeep-meilisearch
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -137,7 +137,7 @@ metadata:
   labels:
     app: karakeep
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:

@@ -17,7 +17,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: zulip-rabbitmq
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: zulip-rabbitmq

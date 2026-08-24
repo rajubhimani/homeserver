@@ -10,7 +10,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: zulip-db
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: zulip-db

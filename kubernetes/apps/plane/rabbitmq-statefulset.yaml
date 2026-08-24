@@ -9,7 +9,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: plane-mq
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plane-mq

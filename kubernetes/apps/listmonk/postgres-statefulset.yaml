@@ -5,7 +5,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: listmonk-db
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: listmonk-db

@@ -170,17 +170,33 @@ name never prompts. `--dry-run` resolves the target and prints every
 how this tool gets verified before a live cluster exists (see "Current
 status" below).
 
-**What it actually does, per service** (this is the manual procedure below
-automated, not a new mechanism):
-- `up`: re-enable the ArgoCD `Application`'s automated sync
-  (`prune: true, selfHeal: true`), unsuspend any `CronJob`s, scale matched
-  `Deployment`/`StatefulSet` resources to `replicas: 1`.
-- `down`: disable ArgoCD automated sync **first** (must happen before
-  scaling, or `selfHeal` reverts the scale-down within one sync cycle —
-  see the "pausing a service" note in `TROUBLESHOOTING.md`), suspend any
-  `CronJob`s, scale matched `Deployment`/`StatefulSet` resources to
-  `replicas: 0`. PVCs and Secrets are never touched — same "no data loss,
-  nothing to re-provision on restart" guarantee as the manual procedure.
+**Two tier baselines, self-healing in opposite directions** — `min`/`core`
+are committed to git at `replicas: 1` (self-heal **up**: survive a reboot
+or full ArgoCD resync on their own, same "always-on core infra" idiom
+`homeserver.py`'s `core` tier already has); every other tier is committed
+at `replicas: 0` (self-heals **down**: off unless deliberately started,
+same "opt-in" idiom as `homeserver.py`'s daily/office/automation-ai/extra/
+manual). This means `up`/`down` manage ArgoCD sync in the *opposite*
+direction depending which side of that line a service is on — the
+mirror-image table below, implemented as `k8s.py`'s `sync_direction()`:
+
+| | `min`/`core` (baseline **on**) | everything else (baseline **off**) |
+| --- | --- | --- |
+| `up` | enable sync + scale 1 (self-heals to git's 1) | **disable** sync + scale 1 (temporary override — git says 0, so sync must go off first or `selfHeal` reverts the manual scale-up within one cycle) |
+| `down` | **disable** sync first, then scale 0 (temporary override — see `TROUBLESHOOTING.md`'s "pausing a service" note for why the order matters) | scale 0 + enable sync (settles back to git's committed 0) |
+
+**A manual override on a baseline-off service is durable, not a fluke.**
+Once it's up with sync disabled, `spec.replicas` and the Application's
+disabled `syncPolicy` are both persisted control-plane state in etcd, not
+process memory — a node/cluster reboot doesn't reset either one. Nothing
+clears it except an explicit `k8s.py down <service>` on that exact
+service, or manually re-enabling its sync (which snaps it straight back
+to git's baseline). `status` flags any service whose live state disagrees
+with its tier baseline as `(override)`, so "this is running because
+someone turned it on" is visible at a glance instead of just inferred.
+PVCs and Secrets are never touched by either `up` or `down` — same "no
+data loss, nothing to re-provision on restart" guarantee the manual
+procedure always had.
 
 Resources belonging to a service are found by name-prefix matching
 (`<service>` or `<service>-<suffix>`) against live `kubectl get

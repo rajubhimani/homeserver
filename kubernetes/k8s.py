@@ -133,6 +133,20 @@ del _s, _key, _val, _cat, _sub
 # (manual-only services are excluded there too; start them by name).
 ALL_PORTED = [svc for tier in TIER_NAMES if tier != "manual" for svc in K8S_TIERS[tier]]
 
+# min/core are the only tiers committed to git at replicas:1 — they
+# self-heal UP (survive a reboot / full ArgoCD resync automatically, same
+# as core infra always has). Every other tier is committed at replicas:0
+# and self-heals DOWN — opt-in, stays off unless deliberately started,
+# same idiom as homeserver.py's daily/office/automation-ai/extra/manual
+# tiers never auto-starting. This means up/down manage ArgoCD sync in
+# OPPOSITE directions depending on which side of this line a service is
+# on — see sync_direction() below for why.
+BASELINE_ON = set(K8S_TIERS["min"]) | set(K8S_TIERS["core"])
+
+
+def is_baseline_on(service: str) -> bool:
+    return service in BASELINE_ON
+
 # Every kubernetes/apps/<dir> — including non-services.json infra like
 # 'dashboard' and 'authentik's own forward-auth-middleware.yaml' — used as
 # the universe for resource-name disambiguation (see resolve_resources()),
@@ -399,23 +413,61 @@ def suspend_cronjob(name: str, suspend: bool, dry_run: bool) -> bool:
         return False
 
 
+def sync_direction(service: str, action: str) -> tuple[bool, int]:
+    """(sync_enabled, target_replicas) for `service` + `action` ('up' or
+    'down') — the one piece of logic that has to know which way each tier
+    self-heals, kept as a small pure function so it's unit-testable without
+    a live cluster.
+
+    min/core (BASELINE_ON) are committed to git at replicas:1 and meant to
+    self-heal UP — 'up' enables sync (ArgoCD brings/keeps it at git's 1),
+    'down' disables sync first (temporary override, or selfHeal reverts
+    the scale-down within one sync cycle — see kubernetes/TROUBLESHOOTING.md's
+    "pausing a service" note).
+
+    Everything else is committed to git at replicas:0 and self-heals DOWN
+    — the two directions are the exact mirror image: 'up' has to DISABLE
+    sync first (git says 0; leaving sync on would let selfHeal revert the
+    manual scale-up within one cycle, same race as the min/core 'down'
+    case just flipped), 'down' enables sync so it settles back to git's
+    committed 0 instead of needing yet another manual step later.
+
+    In both action branches, argocd_patch() is called before scale() in
+    do_up/do_down below — that ordering matters for whichever branch is
+    disabling sync (must happen first to close the race window), and is
+    harmless for whichever branch is enabling it (nothing to race against,
+    both push toward the same target)."""
+    baseline_on = is_baseline_on(service)
+    if action == "up":
+        return (baseline_on, 1)
+    return (not baseline_on, 0)
+
+
 def do_up(services: list[str], dry_run: bool) -> int:
     all_names = get_all_workload_names()
     failures: list[str] = []
     for service in services:
         info(f"up: {service}")
+        sync_enabled, target = sync_direction(service, "up")
         resources = resolve_resources(service, all_names)
         if not resources:
             warn(f"  no matching Deployment/StatefulSet/CronJob found for '{service}' (already scaled down, or not applied to a live cluster yet)")
-        argocd_patch(service, sync_enabled=True, dry_run=dry_run)
+        argocd_patch(service, sync_enabled=sync_enabled, dry_run=dry_run)
         ok = True
         for name in resources.get("cronjob", []):
             ok = suspend_cronjob(name, suspend=False, dry_run=dry_run) and ok
         for kind in ("deployment", "statefulset"):
             for name in resources.get(kind, []):
-                ok = scale(kind, name, replicas=1, dry_run=dry_run) and ok
+                ok = scale(kind, name, replicas=target, dry_run=dry_run) and ok
         if ok:
-            success(f"  {service} up")
+            # Baseline-off services staying up outside their tier default
+            # is a durable override, not a fluke — spec.replicas and the
+            # Application's disabled syncPolicy are both persisted
+            # control-plane state (etcd), so this survives a reboot same
+            # as anything else. Only an explicit 'down' on this service
+            # (or manually re-enabling its sync) clears it.
+            tag = "" if sync_enabled else " (override — stays up until you run 'down' on it, survives a reboot)"
+            success(f"  {service} up{tag}")
         else:
             failures.append(service)
     return _summarize(failures)
@@ -426,19 +478,17 @@ def do_down(services: list[str], dry_run: bool) -> int:
     failures: list[str] = []
     for service in services:
         info(f"down: {service}")
+        sync_enabled, target = sync_direction(service, "down")
         resources = resolve_resources(service, all_names)
         if not resources:
             warn(f"  no matching Deployment/StatefulSet/CronJob found for '{service}' (already scaled down, or not applied to a live cluster yet)")
-        # Disable ArgoCD automated sync FIRST — selfHeal reverts a plain
-        # scale-down within one sync cycle otherwise, see this file's and
-        # kubernetes/TROUBLESHOOTING.md's "pausing a service" notes.
-        argocd_patch(service, sync_enabled=False, dry_run=dry_run)
+        argocd_patch(service, sync_enabled=sync_enabled, dry_run=dry_run)
         ok = True
         for name in resources.get("cronjob", []):
             ok = suspend_cronjob(name, suspend=True, dry_run=dry_run) and ok
         for kind in ("deployment", "statefulset"):
             for name in resources.get(kind, []):
-                ok = scale(kind, name, replicas=0, dry_run=dry_run) and ok
+                ok = scale(kind, name, replicas=target, dry_run=dry_run) and ok
         if ok:
             success(f"  {service} down (PVCs/Secrets untouched)")
         else:
@@ -471,6 +521,15 @@ def do_status(target_services: list[str] | None) -> int:
 
     scope = set(target_services) if target_services else None
 
+    def is_override(service: str) -> bool:
+        # Live state disagreeing with what the service's tier baseline
+        # would produce IS the definition of an override — a baseline-off
+        # service that's up, or a baseline-on service that's down. No
+        # extra ArgoCD Application fetch needed: this comparison alone
+        # tells the whole story, since do_up/do_down are what put a
+        # service in that state in the first place.
+        return is_up(service) != is_baseline_on(service)
+
     def show_tier(label: str, services: list[str]) -> None:
         services = [s for s in services if scope is None or s in scope]
         if not services:
@@ -478,7 +537,8 @@ def do_status(target_services: list[str] | None) -> int:
         print(f"  {BOLD}{label}:{RESET}")
         for s in services:
             marker = f"{GREEN}●{RESET}" if is_up(s) else "○"
-            print(f"    {marker} {s}")
+            tag = f" {YELLOW}(override){RESET}" if ctx and is_override(s) else ""
+            print(f"    {marker} {s}{tag}")
         print()
 
     header("Service status (● up, ○ down):")

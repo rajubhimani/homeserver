@@ -33,7 +33,7 @@ metadata:
   labels:
     app: penpot-backend
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -113,7 +113,7 @@ metadata:
   labels:
     app: penpot-exporter
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: penpot-exporter

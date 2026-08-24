@@ -12,7 +12,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: paperless-db
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: paperless-db

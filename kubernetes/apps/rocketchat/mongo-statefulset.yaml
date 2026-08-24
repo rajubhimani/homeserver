@@ -28,7 +28,7 @@ metadata:
   namespace: apps
 spec:
   serviceName: rocketchat-mongodb
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: rocketchat-mongodb

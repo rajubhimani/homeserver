@@ -29,7 +29,7 @@ metadata:
   labels:
     app: temporal
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -122,7 +122,7 @@ metadata:
   labels:
     app: temporal-ui
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:

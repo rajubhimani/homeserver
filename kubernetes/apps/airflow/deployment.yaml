@@ -25,7 +25,7 @@ metadata:
   labels:
     app: airflow-apiserver
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: airflow-apiserver
@@ -149,7 +149,7 @@ metadata:
   labels:
     app: airflow-scheduler
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: airflow-scheduler
@@ -260,7 +260,7 @@ metadata:
   labels:
     app: airflow-dag-processor
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: airflow-dag-processor
@@ -351,7 +351,7 @@ metadata:
   labels:
     app: airflow-triggerer
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: airflow-triggerer
