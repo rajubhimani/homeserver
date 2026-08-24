@@ -320,6 +320,16 @@ committed, applied locally at runtime" pattern `apply-secrets.py`
 already uses for Secrets. Re-run the script anytime you add a new
 service or change your domain; it's idempotent.
 
+**The bare domain and `www` are a special case**, not a per-service
+translation — there's no `k8s.local` equivalent of "the root domain" to
+translate from. The script always additionally creates two fixed
+routes, matching Compose's `nginx-plain/templates/default.conf.template`
+exactly: `yourdomain.com` 301-redirects to `www.yourdomain.com`, and
+`www.yourdomain.com` serves whatever `landing`'s `HTTPRoute` points at
+(reads that backend Service/port directly from
+`kubernetes/apps/landing/httproute.yaml`, so it stays correct even if
+landing's backend ever changes).
+
 **If you're reusing the same Cloudflare Tunnel as the Compose stack**
 (same `TUNNEL_TOKEN`, matching that key's own comment in `.env.example`):
 Cloudflare Tunnel supports multiple simultaneous connections and load-

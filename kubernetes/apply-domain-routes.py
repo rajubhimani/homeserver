@@ -119,6 +119,66 @@ def kubectl_apply(manifest_text: str, name: str) -> bool:
     return True
 
 
+BACKEND_RE = re.compile(r"backendRefs:\n\s*- name:\s*(\S+)\n\s*port:\s*(\d+)")
+
+
+def build_root_domain_routes(domain: str) -> list[tuple[str, str, str]]:
+    """The bare domain and www.<domain> have no *.k8s.local route to
+    translate from — Compose's nginx-plain/templates/default.conf.template
+    handles them as a special case (bare domain 301-redirects to
+    www.<domain>; www.<domain> is what actually serves landing), not a
+    per-service pattern. Replicates that exactly. Returns
+    (object_name, hostname, manifest_text) tuples."""
+    landing_route = APPS_DIR / "landing" / "httproute.yaml"
+    if not landing_route.is_file():
+        warn("kubernetes/apps/landing/httproute.yaml not found — skipping bare-domain/www routes")
+        return []
+    backend_match = BACKEND_RE.search(landing_route.read_text(encoding="utf-8"))
+    if not backend_match:
+        warn("landing/httproute.yaml doesn't match the expected backendRefs shape — skipping bare-domain/www routes")
+        return []
+    backend_name, backend_port = backend_match.group(1), backend_match.group(2)
+
+    redirect_manifest = f"""apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: root-domain-redirect
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "{domain}"
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            hostname: www.{domain}
+            statusCode: 301
+"""
+    www_manifest = f"""apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: root-domain-www
+  namespace: apps
+spec:
+  parentRefs:
+    - name: homeserver-gateway
+      namespace: infra
+  hostnames:
+    - "www.{domain}"
+  rules:
+    - backendRefs:
+        - name: {backend_name}
+          port: {backend_port}
+"""
+    return [
+        ("root-domain-redirect", domain, redirect_manifest),
+        ("root-domain-www", f"www.{domain}", www_manifest),
+    ]
+
+
 def main() -> int:
     env = load_env_file(ENV_PATH)
     domain = env.get("DOMAIN", "").strip()
@@ -163,6 +223,17 @@ def main() -> int:
                 applied += 1
             else:
                 failed += 1
+
+    # Always attempted, regardless of which services were targeted above —
+    # the bare domain / www routes aren't tied to any one service's run,
+    # they're fixed root-domain setup. kubectl apply is idempotent, so
+    # re-running this on every invocation is harmless.
+    for name, hostname, manifest_text in build_root_domain_routes(domain):
+        if kubectl_apply(manifest_text, name):
+            success(f"{name}: {hostname}")
+            applied += 1
+        else:
+            failed += 1
 
     info(f"{applied} domain route(s) applied, {skipped} skipped, {failed} failed")
     return 1 if failed else 0
