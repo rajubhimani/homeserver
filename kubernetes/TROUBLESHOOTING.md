@@ -474,7 +474,12 @@ to allow it):
      kubectl apply -f kubernetes/cluster/argocd/lan-service.yaml
      ```
      UI is then reachable at `http://localhost:18081` — not `https`, since
-     `server.insecure` disables TLS.
+     `server.insecure` disables TLS. **This localhost part was specific to
+     Docker Desktop's kind integration**, which auto-published
+     LoadBalancer Services to real `localhost`. Since this pilot moved to
+     plain `kind` (see the README's "Cluster" section), the same Service
+     instead gets a MetalLB-assigned IP — find it with `kubectl get svc -n
+     argocd argocd-server-lan` (EXTERNAL-IP column), not `localhost`.
    - Re-run `kubernetes/apply-secrets.py` — it reuses the existing values
      already in `.env`, no need to regenerate secrets.
    - Individual service Applications (`argocd-apps/<service>.yaml`) can

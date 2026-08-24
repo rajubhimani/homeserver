@@ -139,7 +139,7 @@ uv run kubernetes/bootstrap.py --skip-secrets
 5. Installs ArgoCD (server-side apply, its CRDs are too large for client-side), waits for it to become available.
 6. Detects this machine's `kind` Docker-network subnet and rewrites `kubernetes/cluster/metallb/resources/ipaddresspool.yaml` to match it.
 7. Applies the 6 cluster-level ArgoCD Applications (namespaces/gateway/traefik/metallb/postgres-shared/mariadb-shared) — ArgoCD then brings up Traefik, MetalLB, and the two shared DB servers on its own.
-8. Exposes ArgoCD's UI over plain HTTP (`http://localhost:18081` once the restart finishes).
+8. Exposes ArgoCD's UI over plain HTTP as a LoadBalancer Service on port `18081` — **not** `http://localhost:18081`, that only worked back when this pilot ran on Docker Desktop's kind integration (which auto-publishes LoadBalancer ports to real `localhost`); on plain `kind` it gets a MetalLB-assigned IP instead, same as every other service (see "LAN access" below). Find it with `kubectl get svc -n argocd argocd-server-lan` (EXTERNAL-IP column) once the restart finishes.
 9. Runs `apply-secrets.py` **using whatever is already in `kubernetes/.env` at that moment** — if that file doesn't exist yet or still holds `.env.example` placeholders, this step only pushes placeholders into the cluster (or does nothing, and warns, if `kubernetes/.env` doesn't exist).
 10. Applies every remaining per-service ArgoCD Application (`kubernetes/argocd-apps/*.yaml`).
 
@@ -176,7 +176,7 @@ kubectl apply -f kubernetes/argocd-apps/cluster-postgres-shared.yaml
 kubectl apply -f kubernetes/argocd-apps/cluster-mariadb-shared.yaml
 kubectl patch cm argocd-cmd-params-cm -n argocd --type merge -p '{"data":{"server.insecure":"true"}}'
 kubectl rollout restart deployment argocd-server -n argocd
-kubectl apply -f kubernetes/cluster/argocd/lan-service.yaml   # UI at http://localhost:18081
+kubectl apply -f kubernetes/cluster/argocd/lan-service.yaml   # UI's real address: kubectl get svc -n argocd argocd-server-lan (NOT localhost — see "LAN access" below)
 uv run kubernetes/apply-secrets.py
 kubectl apply -f kubernetes/argocd-apps/   # every remaining service Application
 ```

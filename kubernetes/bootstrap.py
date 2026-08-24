@@ -144,7 +144,7 @@ def expose_argocd_ui() -> None:
     kubectl_run(["patch", "cm", "argocd-cmd-params-cm", "-n", "argocd", "--type", "merge", "-p", '{"data":{"server.insecure":"true"}}'])
     kubectl_run(["rollout", "restart", "deployment", "argocd-server", "-n", "argocd"])
     kubectl_run(["apply", "-f", str(K8S_DIR / "cluster" / "argocd" / "lan-service.yaml")])
-    success("ArgoCD UI will be reachable at http://localhost:18081 once the restart finishes")
+    success("ArgoCD UI exposed on port 18081 — NOT localhost (that only worked under Docker Desktop's kind integration); find its real address once the restart finishes with: kubectl get svc -n argocd argocd-server-lan")
 
 
 def apply_secrets(skip: bool) -> None:
