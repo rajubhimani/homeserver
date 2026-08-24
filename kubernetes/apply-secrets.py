@@ -167,8 +167,12 @@ def find_openssl_modules_dir() -> Path | None:
         bin_dir = Path(openssl_path).resolve().parent
         candidates += [bin_dir.parent / "lib" / "ossl-modules", bin_dir.parent / "lib64" / "ossl-modules"]
     if platform.system() == "Windows":
+        # One level deep covers "OpenSSL-Win64", two covers vendor-prefixed
+        # installs like FireDaemon's "FireDaemon OpenSSL 3" — don't require
+        # the folder name to start with "OpenSSL".
         for root in ("C:/Program Files", "C:/Program Files (x86)"):
-            candidates += [Path(p) for p in glob.glob(f"{root}/OpenSSL*/lib/ossl-modules")]
+            candidates += [Path(p) for p in glob.glob(f"{root}/*/lib/ossl-modules")]
+            candidates += [Path(p) for p in glob.glob(f"{root}/*/*/lib/ossl-modules")]
 
     for candidate in candidates:
         if (candidate / module_name).is_file():
