@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# dependencies = ["pyyaml"]
-# ///
 """kubernetes/apply-domain-routes.py — creates a second HTTPRoute per
 service pointing at your real domain (read from kubernetes/.env's
 DOMAIN), alongside the existing git-managed *.k8s.local one.
@@ -16,11 +13,17 @@ value never committed, applied locally at runtime" pattern
 apply-secrets.py already uses for Secrets — your real domain never has
 to be committed to git the way every *.k8s.local hostname already is.
 
-Discovers every service by reading its existing
-kubernetes/apps/<service>/httproute.yaml (a file can hold more than one
-HTTPRoute — e.g. firefly's importer sub-route) and cloning each one
-verbatim (same parentRefs/rules/filters, including Authentik forward-auth
-Middleware refs where present) with only the name and hostnames changed.
+Pure stdlib, no YAML library: every kubernetes/apps/*/httproute.yaml in
+this repo (verified against all of them) follows one exact, uniform
+shape — `metadata:` immediately followed by its `name:` line, and
+`hostnames:` immediately followed by exactly one quoted `*.k8s.local`
+entry. Rather than parse+re-serialize full YAML (which pulls in a
+dependency whose C extension has been observed to crash outright with
+an access violation on at least one real Windows machine, with zero
+error output), this does two targeted text substitutions on each
+document's own raw text and leaves everything else — parentRefs, rules,
+filters like Authentik's forward-auth Middleware ref, comments,
+formatting — byte-identical to the original.
 
 Usage:
   uv run kubernetes/apply-domain-routes.py                # every service with an httproute.yaml
@@ -29,12 +32,10 @@ Usage:
 
 from __future__ import annotations
 
-import copy
+import re
 import subprocess
 import sys
 from pathlib import Path
-
-import yaml
 
 K8S_DIR = Path(__file__).resolve().parent
 APPS_DIR = K8S_DIR / "apps"
@@ -83,33 +84,37 @@ def load_env_file(path: Path) -> dict[str, str]:
     return result
 
 
-def domain_hostnames(hostnames: list[str], domain: str) -> list[str]:
-    result = []
-    for h in hostnames:
-        if not h.endswith(".k8s.local"):
-            warn(f"hostname '{h}' doesn't end in .k8s.local, leaving it out of the domain route")
-            continue
-        prefix = h[: -len(".k8s.local")]
-        result.append(f"{prefix}.{domain}" if prefix else domain)
-    return result
+NAME_RE = re.compile(r"^(metadata:\n(?:[ \t]*\n)*[ \t]*name:[ \t]*)(\S+)(\n)", re.MULTILINE)
+HOSTNAME_RE = re.compile(r'^([ \t]*hostnames:\n[ \t]*- ")([^"]+)("\n)', re.MULTILINE)
 
 
-def build_domain_route(doc: dict, domain: str) -> dict | None:
-    hostnames = doc.get("spec", {}).get("hostnames", [])
-    new_hostnames = domain_hostnames(hostnames, domain)
-    if not new_hostnames:
+def build_domain_route_text(doc_text: str, domain: str) -> tuple[str, str, str] | None:
+    """Returns (new_doc_text, new_name, new_hostname), or None if this
+    document doesn't match the expected shape (e.g. no *.k8s.local
+    hostname to translate)."""
+    name_match = NAME_RE.search(doc_text)
+    host_match = HOSTNAME_RE.search(doc_text)
+    if not name_match or not host_match:
         return None
-    new_doc = copy.deepcopy(doc)
-    new_doc["metadata"]["name"] = f"{doc['metadata']['name']}-domain"
-    new_doc["spec"]["hostnames"] = new_hostnames
-    return new_doc
+    old_hostname = host_match.group(2)
+    if not old_hostname.endswith(".k8s.local"):
+        return None
+    prefix = old_hostname[: -len(".k8s.local")]
+    new_hostname = f"{prefix}.{domain}" if prefix else domain
+    new_name = f"{name_match.group(2)}-domain"
+
+    new_text = doc_text[: name_match.start()] + name_match.group(1) + new_name + name_match.group(3) + doc_text[name_match.end() :]
+    # Re-locate the hostname match against the mutated text (the name
+    # substitution shifted offsets) rather than reuse the original match.
+    host_match = HOSTNAME_RE.search(new_text)
+    new_text = new_text[: host_match.start()] + host_match.group(1) + new_hostname + host_match.group(3) + new_text[host_match.end() :]
+    return new_text, new_name, new_hostname
 
 
-def kubectl_apply(doc: dict) -> bool:
-    manifest = yaml.safe_dump(doc, sort_keys=False)
-    result = subprocess.run(["kubectl", "apply", "-f", "-"], input=manifest, capture_output=True, text=True)
+def kubectl_apply(manifest_text: str, name: str) -> bool:
+    result = subprocess.run(["kubectl", "apply", "-f", "-"], input=manifest_text, capture_output=True, text=True)
     if result.returncode != 0:
-        warn(f"failed to apply {doc['metadata']['name']}: {result.stderr.strip()}")
+        warn(f"failed to apply {name}: {result.stderr.strip()}")
         return False
     return True
 
@@ -142,14 +147,19 @@ def main() -> int:
             warn(f"{service}: no httproute.yaml, skipping (not an HTTP-routed service)")
             skipped += 1
             continue
-        docs = [d for d in yaml.safe_load_all(route_path.read_text(encoding="utf-8")) if d]
-        for doc in docs:
-            new_doc = build_domain_route(doc, domain)
-            if new_doc is None:
+        content = route_path.read_text(encoding="utf-8")
+        docs = re.split(r"\n---[ \t]*\n", content)
+        for doc_text in docs:
+            if "kind: HTTPRoute" not in doc_text:
+                continue
+            result = build_domain_route_text(doc_text, domain)
+            if result is None:
+                warn(f"{service}: a document in httproute.yaml didn't match the expected shape, skipping it")
                 skipped += 1
                 continue
-            if kubectl_apply(new_doc):
-                success(f"{new_doc['metadata']['name']}: {', '.join(new_doc['spec']['hostnames'])}")
+            new_text, new_name, new_hostname = result
+            if kubectl_apply(new_text, new_name):
+                success(f"{new_name}: {new_hostname}")
                 applied += 1
             else:
                 failed += 1
