@@ -128,12 +128,10 @@ enable → kind provisioning). This branch has since moved to its intended
 target — a real Linux (Fedora) host — using plain `kind` directly rather
 than Docker Desktop's bundled integration.
 
-**`kubernetes/bootstrap.py` runs the whole first-time setup** — creating
-the cluster, installing Gateway API CRDs, bootstrapping ArgoCD, letting it
-bring up Traefik/MetalLB/shared Postgres+MariaDB, detecting and fixing
-MetalLB's IP pool for this specific Docker network, exposing ArgoCD's UI,
-running `apply-secrets.py`, and applying every service's ArgoCD
-Application:
+**`kubernetes/bootstrap.py` runs the whole first-time setup**, one-shot,
+idempotent (re-running after a partial failure only redoes what's
+actually missing — same "don't re-touch what's already there" idiom
+`homeserver.py`'s own `up core` has):
 
 ```bash
 uv run kubernetes/bootstrap.py
@@ -141,30 +139,35 @@ uv run kubernetes/bootstrap.py
 uv run kubernetes/bootstrap.py --skip-secrets
 ```
 
-If the Compose stack is already configured on this machine (real
-passwords/keys sitting in `services/<service>/.env`, not
-`services/<service>/.env.example`), run
-`uv run kubernetes/sync-env-from-compose.py` **before** `apply-secrets.py`
-(`bootstrap.py` does not run this automatically — it only touches
-`kubernetes/.env`, which you may not have created yet). It copies every
-value it has a mapping for out of the matching Compose `.env` into
-`kubernetes/.env`, so app-level secrets (Nextcloud's `NEXTCLOUD_ADMIN_PASSWORD`,
-Firefly's `APP_KEY`, Vaultwarden's `ADMIN_TOKEN`, etc.) match on both
-sides — this matters beyond convenience: several apps use that value to
-encrypt data at rest (Firefly's `APP_KEY`, Documenso's encryption keys,
-Outline's `SECRET_KEY`, ...), so if you also migrate that service's
-database (see "Migrating data from Compose" below), the copied rows are
-only decryptable if the k8s secret matches what Compose encrypted them
-with. Safe to run any time, repeatedly — it never overwrites a real
-`kubernetes/.env` value with a Compose-side placeholder, and leaves
-anything it has no Compose mapping for (ArgoCD's own admin password, the
-shared Postgres/MariaDB passwords) untouched for you to fill in by hand.
+**What it actually does, in order:**
 
-Every step is independently idempotent — re-running after a partial
-failure only redoes what's actually missing, same "don't re-touch what's
-already there" idiom `homeserver.py`'s own `up core` has. What it actually
-runs, step by step, if you'd rather do any of it by hand or are debugging
-a failure:
+1. Checks docker/kind/kubectl/helm are on PATH and the Docker daemon is reachable.
+2. Creates the `kind-cluster` kind cluster from `kubernetes/kind-config.yaml` (1 control-plane + 3 workers) — skipped if it already exists.
+3. Installs the Gateway API CRDs (`Gateway`/`HTTPRoute`).
+4. Applies the namespaces (`argocd`, `apps`, `data`, `infra`, `metallb-system`) — `argocd` has to exist before ArgoCD can be installed into it.
+5. Installs ArgoCD (server-side apply, its CRDs are too large for client-side), waits for it to become available.
+6. Detects this machine's `kind` Docker-network subnet and rewrites `kubernetes/cluster/metallb/resources/ipaddresspool.yaml` to match it.
+7. Applies the 6 cluster-level ArgoCD Applications (namespaces/gateway/traefik/metallb/postgres-shared/mariadb-shared) — ArgoCD then brings up Traefik, MetalLB, and the two shared DB servers on its own.
+8. Exposes ArgoCD's UI over plain HTTP (`http://localhost:18081` once the restart finishes).
+9. Runs `apply-secrets.py` **using whatever is already in `kubernetes/.env` at that moment** — if that file doesn't exist yet or still holds `.env.example` placeholders, this step only pushes placeholders into the cluster (or does nothing, and warns, if `kubernetes/.env` doesn't exist).
+10. Applies every remaining per-service ArgoCD Application (`kubernetes/argocd-apps/*.yaml`).
+
+**What it deliberately does *not* do:** pull any secret from the Compose
+stack, scale any service up (min/core come up on their own — they're
+committed at `replicas: 1`; everything else stays at `0` until you scale
+it, see "Starting/stopping services" below), or copy any database data.
+**Run these next**, in this order — see "Migrating data from Compose"
+below for why the order matters:
+
+```bash
+uv run kubernetes/sync-env-from-compose.py     # pull real secrets from services/*/.env into kubernetes/.env
+uv run kubernetes/apply-secrets.py             # push them into the cluster (safe to re-run even if bootstrap.py already ran this once with placeholders)
+uv run kubernetes/k8s.py up <tier-or-service>  # scale up whatever you want running (min/core are already up)
+uv run kubernetes/migrate-db.py --all          # copy each service's Postgres/MariaDB data from Compose into k8s
+```
+
+What `bootstrap.py` runs step by step, if you'd rather do any of it by
+hand or are debugging a failure:
 
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
@@ -194,20 +197,13 @@ points at it via the `kind-kind-cluster` context.
 
 ## Migrating data from Compose
 
-If the Compose stack on this machine is already configured and in real
-use, run these in order once the cluster is up (`bootstrap.py` above) to
-carry that configuration and data across instead of starting every
-service from scratch in k8s:
+The 4-command sequence for this (`sync-env-from-compose.py` →
+`apply-secrets.py` → `k8s.py up` → `migrate-db.py`) is listed under
+"Cluster" above, right after what `bootstrap.py` does and doesn't cover.
+This section is about *why* that order matters and exactly what
+`migrate-db.py` does and doesn't move.
 
-```bash
-uv run kubernetes/sync-env-from-compose.py   # copy real secrets: services/<service>/.env -> kubernetes/.env
-uv run kubernetes/apply-secrets.py           # push kubernetes/.env into the cluster's Secrets
-uv run kubernetes/k8s.py up <service>...     # scale up the service(s) you're about to migrate (or a whole tier)
-uv run kubernetes/migrate-db.py <service>... # copy each service's database from Compose into k8s
-# or: uv run kubernetes/migrate-db.py --all
-```
-
-**Why this order matters for logins specifically:** several apps use
+**Why the order matters for logins specifically:** several apps use
 their own app-level secret to encrypt columns in their own database —
 Firefly's `APP_KEY`, Documenso's encryption keys, Outline's
 `SECRET_KEY`, NocoDB's JWT secret, and others. If `migrate-db.py` runs
