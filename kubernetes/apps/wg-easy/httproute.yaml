@@ -14,6 +14,7 @@ spec:
       namespace: infra
   hostnames:
     - "wg-easy.k8s.local"
+    - "wg-admin.k8s.local"
   rules:
     - filters:
         - type: ExtensionRef

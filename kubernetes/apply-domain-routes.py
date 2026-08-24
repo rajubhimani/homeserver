@@ -85,30 +85,41 @@ def load_env_file(path: Path) -> dict[str, str]:
 
 
 NAME_RE = re.compile(r"^(metadata:\n(?:[ \t]*\n)*[ \t]*name:[ \t]*)(\S+)(\n)", re.MULTILINE)
-HOSTNAME_RE = re.compile(r'^([ \t]*hostnames:\n[ \t]*- ")([^"]+)("\n)', re.MULTILINE)
+# One or more `- "x.k8s.local"` lines right after `hostnames:` — some
+# services have more than one, matching a Compose server_name with
+# multiple aliases (e.g. "immich.${DOMAIN} photos.${DOMAIN}").
+HOSTNAME_BLOCK_RE = re.compile(r'^([ \t]*hostnames:\n)((?:[ \t]*- "[^"]+"\n)+)', re.MULTILINE)
+HOSTNAME_ENTRY_RE = re.compile(r'([ \t]*)- "([^"]+)"\n')
 
 
-def build_domain_route_text(doc_text: str, domain: str) -> tuple[str, str, str] | None:
-    """Returns (new_doc_text, new_name, new_hostname), or None if this
+def build_domain_route_text(doc_text: str, domain: str) -> tuple[str, str, list[str]] | None:
+    """Returns (new_doc_text, new_name, new_hostnames), or None if this
     document doesn't match the expected shape (e.g. no *.k8s.local
     hostname to translate)."""
     name_match = NAME_RE.search(doc_text)
-    host_match = HOSTNAME_RE.search(doc_text)
-    if not name_match or not host_match:
+    block_match = HOSTNAME_BLOCK_RE.search(doc_text)
+    if not name_match or not block_match:
         return None
-    old_hostname = host_match.group(2)
-    if not old_hostname.endswith(".k8s.local"):
+
+    entries = HOSTNAME_ENTRY_RE.findall(block_match.group(2))
+    indent = entries[0][0] if entries else "    "
+    new_hostnames = []
+    for _, old_hostname in entries:
+        if not old_hostname.endswith(".k8s.local"):
+            continue
+        prefix = old_hostname[: -len(".k8s.local")]
+        new_hostnames.append(f"{prefix}.{domain}" if prefix else domain)
+    if not new_hostnames:
         return None
-    prefix = old_hostname[: -len(".k8s.local")]
-    new_hostname = f"{prefix}.{domain}" if prefix else domain
     new_name = f"{name_match.group(2)}-domain"
+    new_block = "".join(f'{indent}- "{h}"\n' for h in new_hostnames)
 
     new_text = doc_text[: name_match.start()] + name_match.group(1) + new_name + name_match.group(3) + doc_text[name_match.end() :]
-    # Re-locate the hostname match against the mutated text (the name
+    # Re-locate the hostname block against the mutated text (the name
     # substitution shifted offsets) rather than reuse the original match.
-    host_match = HOSTNAME_RE.search(new_text)
-    new_text = new_text[: host_match.start()] + host_match.group(1) + new_hostname + host_match.group(3) + new_text[host_match.end() :]
-    return new_text, new_name, new_hostname
+    block_match = HOSTNAME_BLOCK_RE.search(new_text)
+    new_text = new_text[: block_match.start()] + block_match.group(1) + new_block + new_text[block_match.end() :]
+    return new_text, new_name, new_hostnames
 
 
 def kubectl_apply(manifest_text: str, name: str) -> bool:
@@ -217,9 +228,9 @@ def main() -> int:
                 warn(f"{service}: a document in httproute.yaml didn't match the expected shape, skipping it")
                 skipped += 1
                 continue
-            new_text, new_name, new_hostname = result
+            new_text, new_name, new_hostnames = result
             if kubectl_apply(new_text, new_name):
-                success(f"{new_name}: {new_hostname}")
+                success(f"{new_name}: {', '.join(new_hostnames)}")
                 applied += 1
             else:
                 failed += 1

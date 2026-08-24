@@ -9,6 +9,7 @@ spec:
       namespace: infra
   hostnames:
     - "immich.k8s.local"
+    - "photos.k8s.local"
   rules:
     - backendRefs:
         - name: immich-server

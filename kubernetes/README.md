@@ -320,6 +320,14 @@ committed, applied locally at runtime" pattern `apply-secrets.py`
 already uses for Secrets. Re-run the script anytime you add a new
 service or change your domain; it's idempotent.
 
+**A few services have a second hostname alias**, matching Compose's own
+`server_name a.${DOMAIN} b.${DOMAIN};` for them — `immich`
+(`photos.<domain>`), `invoiceshelf` (`invoice.<domain>`), `uptime-kuma`
+(`status.<domain>`), and `wg-easy` (`wg-admin.<domain>` — Compose calls
+this route `wg-admin` even though the underlying service is `wg-easy`).
+Both the `*.k8s.local` route and the generated domain route carry both
+hostnames for each of these; every other service has exactly one.
+
 **The bare domain and `www` are a special case**, not a per-service
 translation — there's no `k8s.local` equivalent of "the root domain" to
 translate from. The script always additionally creates two fixed
