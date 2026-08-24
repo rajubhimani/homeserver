@@ -18,15 +18,20 @@ Usage: uv run kubernetes/apply-secrets.py
 
 from __future__ import annotations
 
+import base64
 import datetime
+import re
+import secrets
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Callable
 
 K8S_DIR = Path(__file__).resolve().parent
 ENV_PATH = K8S_DIR / ".env"
+ENV_EXAMPLE_PATH = K8S_DIR / ".env.example"
 
 GREEN = "\033[0;32m"
 RED = "\033[0;31m"
@@ -67,21 +72,157 @@ def load_env_file(path: Path) -> dict[str, str]:
     return result
 
 
+_PLACEHOLDER_MARKERS = ("your_", "please_change", "change_me", "changeme")
+
+
+def is_placeholder(value: str) -> bool:
+    """Same heuristic as sync-env-from-compose.py's own is_placeholder —
+    every .env.example default in this repo follows the your_..._here
+    convention, so this reliably tells a real value apart from one nobody
+    has filled in yet."""
+    if not value.strip():
+        return True
+    lowered = value.strip().lower()
+    return any(marker in lowered for marker in _PLACEHOLDER_MARKERS)
+
+
+# Keys needing a specific byte-format, not just "any random string" — see
+# each one's own comment in .env.example for the exact constraint this
+# mirrors. Everything else still a placeholder falls back to a generic
+# secrets.token_urlsafe(32) (32 bytes, URL-safe alphabet — no '+', '/', or
+# '=' to trip up anything that splits on those).
+def _urlsafe(nbytes: int) -> str:
+    return secrets.token_urlsafe(nbytes)
+
+
+def _hex64() -> str:
+    return secrets.token_hex(32)  # 32 bytes -> 64 hex chars
+
+
+def _base64_prefixed(nbytes: int = 32) -> str:
+    # BookStack/InvoiceShelf Laravel APP_KEY convention: "base64:" + real
+    # (non-urlsafe) base64 — Laravel's own key format, not negotiable.
+    return f"base64:{base64.b64encode(secrets.token_bytes(nbytes)).decode()}"
+
+
+def _standard_base64(nbytes: int = 32) -> str:
+    # Plausible's TOTP_VAULT_KEY specifically: must decode to exactly 32
+    # raw bytes with a *standard* base64 decoder (its own .env.example
+    # comment: a same-length hex string only decodes to 16 bytes and
+    # Plausible refuses to boot) — token_urlsafe's '-'/'_' alphabet isn't
+    # valid standard base64, so this needs the real thing.
+    return base64.b64encode(secrets.token_bytes(nbytes)).decode()
+
+
+def _fernet_key() -> str:
+    # Airflow's Fernet key: exactly 32 raw bytes, standard urlsafe base64
+    # WITH padding intact (44 chars, trailing '=') — the `cryptography`
+    # Fernet class rejects anything else, including token_urlsafe's
+    # padding-stripped output.
+    return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
+
+
+SPECIAL_GENERATORS: dict[str, Callable[[], str]] = {
+    "FIREFLY_APP_KEY": lambda: _urlsafe(24),  # exactly 32 chars — see its own comment
+    "DOCUMENSO_ENCRYPTION_KEY": lambda: _urlsafe(24),
+    "DOCUMENSO_ENCRYPTION_SECONDARY_KEY": lambda: _urlsafe(24),
+    "SUPABASE_VAULT_ENC_KEY": lambda: _urlsafe(24),
+    "SUPABASE_REALTIME_DB_ENC_KEY": lambda: _urlsafe(12),  # exactly 16 chars
+    "BOOKSTACK_APP_KEY": _base64_prefixed,
+    "INVOICESHELF_APP_KEY": _base64_prefixed,
+    "OUTLINE_SECRET_KEY": _hex64,
+    "OUTLINE_UTILS_SECRET": _hex64,
+    "N8N_ENCRYPTION_KEY": _hex64,
+    "PLAUSIBLE_TOTP_VAULT_KEY": _standard_base64,
+    "AIRFLOW_FERNET_KEY": _fernet_key,
+    "HOMEBOX_AUTH_API_KEY_PEPPER": lambda: _urlsafe(48),
+    "SILVERBULLET_SB_USER": lambda: f"admin:{_urlsafe(24)}",  # format: username:password
+}
+
+# TUNNEL_TOKEN: a real external-service credential (Cloudflare's own
+# dashboard issues it) — nothing in this repo can invent a valid value,
+# so it's left exactly as .env.example ships it (still a placeholder) for
+# the user to fill in by hand. It's read via the required env["..."]
+# form, so Env.__getitem__ below fails clearly on it rather than silently
+# pushing a fake token into the cluster.
+#
+# Everything else here ships genuinely blank in .env.example on purpose
+# (Beszel's agent pairing, RocketChat's optional admin bootstrap, and
+# Supabase's unused asymmetric/opaque keys — see each one's own comment)
+# and is read via the optional env.get(...) form, so leaving it blank is
+# already the correct, working state — not a placeholder needing a value.
+NO_AUTO_GENERATE = {
+    "TUNNEL_TOKEN",
+    "BESZEL_AGENT_TOKEN",
+    "BESZEL_AGENT_KEY",
+    "ROCKETCHAT_ADMIN_PASSWORD",
+    "ROCKETCHAT_REG_TOKEN",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_ANON_KEY_ASYMMETRIC",
+    "SUPABASE_SERVICE_ROLE_KEY_ASYMMETRIC",
+    "SUPABASE_OPENAI_API_KEY",
+}
+
+
+def ensure_env_populated() -> None:
+    """Creates kubernetes/.env from .env.example if it doesn't exist yet,
+    then replaces every value still holding a .env.example placeholder
+    with a real, randomly-generated one (format-aware via
+    SPECIAL_GENERATORS, generic token_urlsafe(32) otherwise) — except
+    NO_AUTO_GENERATE's real external credentials, left for the user.
+    Idempotent: a key already holding a real value (typed by hand, or
+    pulled in by sync-env-from-compose.py) is never touched or
+    regenerated on a later run."""
+    if not ENV_PATH.is_file():
+        if not ENV_EXAMPLE_PATH.is_file():
+            fail(f"neither {ENV_PATH} nor {ENV_EXAMPLE_PATH} exist — this repo is missing kubernetes/.env.example")
+        info(f"{ENV_PATH} doesn't exist yet — creating it from .env.example")
+        shutil.copyfile(ENV_EXAMPLE_PATH, ENV_PATH)
+
+    lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
+    line_re = re.compile(r"^([A-Z_][A-Z0-9_]*)=(.*)$")
+    new_lines: list[str] = []
+    generated: list[str] = []
+    for line in lines:
+        m = line_re.match(line)
+        if not m:
+            new_lines.append(line)
+            continue
+        key, value = m.group(1), m.group(2)
+        if key in NO_AUTO_GENERATE or not is_placeholder(value):
+            new_lines.append(line)
+            continue
+        new_value = SPECIAL_GENERATORS.get(key, lambda: _urlsafe(32))()
+        new_lines.append(f"{key}={new_value}")
+        generated.append(key)
+
+    if generated:
+        ENV_PATH.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        success(f"auto-generated {len(generated)} secret(s) in {ENV_PATH}: {', '.join(generated)}")
+
+
 class Env:
-    """Thin wrapper so a missing required key fails with a clear message
-    (which .env var, which secret it was needed for) instead of a raw
-    KeyError traceback — same fail-fast behavior bash's `set -u` gave the
-    original script, just with a friendlier error."""
+    """Thin wrapper so a missing or still-placeholder required key fails
+    with a clear message (which .env var, which secret it was needed for)
+    instead of a raw KeyError or a placeholder string silently getting
+    pushed into the cluster as a real secret — same fail-fast behavior
+    bash's `set -u` gave the original script, just with a friendlier
+    error. By the time this runs, ensure_env_populated() has already
+    replaced every generatable placeholder, so a key still showing up
+    here as a placeholder is one of NO_AUTO_GENERATE's real external
+    credentials the user genuinely has to supply."""
 
     def __init__(self, data: dict[str, str]):
         self._data = data
 
     def __getitem__(self, key: str) -> str:
-        try:
-            return self._data[key]
-        except KeyError:
+        value = self._data.get(key)
+        if value is None:
             fail(f"{key} not set in kubernetes/.env")
-            raise  # unreachable, fail() exits
+        if is_placeholder(value):
+            fail(f"{key} is still a placeholder in kubernetes/.env — this one can't be auto-generated, fill in a real value (see its comment in .env.example)")
+        return value
 
     def get(self, key: str, default: str = "") -> str:
         return self._data.get(key, default)
@@ -211,9 +352,7 @@ def bcrypt_hash(password: str) -> str:
 
 
 def main() -> None:
-    if not ENV_PATH.is_file():
-        fail("kubernetes/.env not found — copy .env.example to .env and fill in real values first.")
-
+    ensure_env_populated()
     env = Env(load_env_file(ENV_PATH))
 
     # Applied first, deliberately — everything below this can fail partway

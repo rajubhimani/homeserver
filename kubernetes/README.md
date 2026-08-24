@@ -126,7 +126,7 @@ actually missing — same "don't re-touch what's already there" idiom
 
 ```bash
 uv run kubernetes/bootstrap.py
-# or, to fill in kubernetes/.env and run apply-secrets.py yourself later:
+# or, to run apply-secrets.py yourself later (e.g. after sync-env-from-compose.py):
 uv run kubernetes/bootstrap.py --skip-secrets
 ```
 
@@ -140,7 +140,7 @@ uv run kubernetes/bootstrap.py --skip-secrets
 6. Detects this machine's `kind` Docker-network subnet and rewrites `kubernetes/cluster/metallb/resources/ipaddresspool.yaml` to match it.
 7. Applies the 6 cluster-level ArgoCD Applications (namespaces/gateway/traefik/metallb/postgres-shared/mariadb-shared) — ArgoCD then brings up Traefik, MetalLB, and the two shared DB servers on its own.
 8. Exposes ArgoCD's UI over plain HTTP as a LoadBalancer Service on port `18081` — **not** `http://localhost:18081`, that only worked back when this pilot ran on Docker Desktop's kind integration (which auto-publishes LoadBalancer ports to real `localhost`); on plain `kind` it gets a MetalLB-assigned IP instead, same as every other service (see "LAN access" below). Find it with `kubectl get svc -n argocd argocd-server-lan` (EXTERNAL-IP column) once the restart finishes.
-9. Runs `apply-secrets.py` **using whatever is already in `kubernetes/.env` at that moment** — if that file doesn't exist yet or still holds `.env.example` placeholders, this step only pushes placeholders into the cluster (or does nothing, and warns, if `kubernetes/.env` doesn't exist).
+9. Runs `apply-secrets.py`, which creates `kubernetes/.env` from `.env.example` first if it doesn't exist yet, and auto-generates (format-aware — exact byte length, hex vs. base64, Laravel's `base64:` prefix, Fernet's padded urlsafe-base64, etc., matching each key's own `.env.example` comment) a real value for every key still holding a placeholder — persisted back into `kubernetes/.env`, so it's stable across reruns, not regenerated each time. Nothing to fill in by hand for a fresh cluster. The one exception: `TUNNEL_TOKEN` is a real Cloudflare-issued credential nothing here can invent, so it's left for you and this step fails clearly if it's still unset.
 10. Applies every remaining per-service ArgoCD Application (`kubernetes/argocd-apps/*.yaml`).
 
 **What it deliberately does *not* do:** pull any secret from the Compose
@@ -152,7 +152,7 @@ below for why the order matters:
 
 ```bash
 uv run kubernetes/sync-env-from-compose.py     # pull real secrets from services/*/.env into kubernetes/.env
-uv run kubernetes/apply-secrets.py             # push them into the cluster (safe to re-run even if bootstrap.py already ran this once with placeholders)
+uv run kubernetes/apply-secrets.py             # push them into the cluster, auto-generating anything still unset (safe to re-run)
 uv run kubernetes/k8s.py up <tier-or-service>  # scale up whatever you want running (min/core are already up)
 uv run kubernetes/migrate-db.py --all          # copy each service's Postgres/MariaDB data from Compose into k8s
 ```

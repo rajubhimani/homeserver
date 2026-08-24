@@ -148,14 +148,16 @@ def expose_argocd_ui() -> None:
 
 
 def apply_secrets(skip: bool) -> None:
-    env_path = K8S_DIR / ".env"
     if skip:
         warn("--skip-secrets passed, not running apply-secrets.py")
         return
-    if not env_path.is_file():
-        warn(f"{env_path} not found — copy kubernetes/.env.example to kubernetes/.env, fill in real values, then run: uv run kubernetes/apply-secrets.py")
-        return
     info("running apply-secrets.py...")
+    # apply-secrets.py creates kubernetes/.env from .env.example itself if
+    # it doesn't exist yet, and auto-generates every secret still holding a
+    # placeholder (format-aware — see its own ensure_env_populated()) — no
+    # manual .env setup needed before this. The only thing it can't invent
+    # is TUNNEL_TOKEN (a real Cloudflare credential), which it fails on
+    # clearly if still unset — see that error for what to do next.
     subprocess.run([sys.executable, str(K8S_DIR / "apply-secrets.py")], check=True)
 
 
