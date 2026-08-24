@@ -126,6 +126,7 @@ Quick links for day-to-day use once the stack is running.
 | [Services Reference](docs/11-services-reference.md) | Look up any service's port, proxy config, or setup notes |
 | [Maintenance](docs/08-maintenance.md) | Update images, check health, troubleshoot |
 | [Docker Cheatsheet](docs/docker-cheatsheet.md) | Images, containers, volumes, networks, cleanup commands |
+| [Kubernetes Pilot](docs/12-kubernetes-pilot.md) | Experimental, parallel to Compose — not required setup |
 
 ---
 
