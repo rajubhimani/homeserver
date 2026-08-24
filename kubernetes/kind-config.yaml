@@ -9,8 +9,15 @@
 # never 2.
 #
 # 3 workers matches the README's documented topology (4 nodes total).
+#
+# name: explicit, not left to kind's own default (which is literally
+# "kind", context "kind-kind") — self-documenting, and avoids colliding
+# with some other unrelated kind cluster on the same machine. Renaming
+# this after the cluster already exists doesn't work; requires a full
+# `kind delete cluster` + recreate to take effect.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+name: kind-cluster
 nodes:
   - role: control-plane
   - role: worker
