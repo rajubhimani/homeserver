@@ -14,8 +14,8 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, landing, docs, portainer |
-| `core` | `uv run homeserver.py dev up core` | min + observability, plausible, mailpit, nextcloud, vaultwarden, forgejo, firefly, immich, jellyfin, guacamole, it-tools, authentik, atuin, adguard-home |
+| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
+| `core` | `uv run homeserver.py dev up core` | min + adguard-home, authentik, vaultwarden, firefly, immich, nextcloud, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, observability, plausible |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + every office service below — **opt-in, never implied by `up daily`** |
 | `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + office + every automation/AI service below — **opt-in, never implied by `up office`** |
@@ -36,23 +36,22 @@ one command that stops the entire stack, in reverse order — no list to
 maintain.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
-firefox, chromium, ungoogled-chromium, brave, mullvad-browser, browser,
-uptime-kuma, syncthing, trilium, silverbullet, excalidraw, karakeep,
-wallabag, coolify, homebox.
+brave, chromium, coolify, uptime-kuma, excalidraw, firefox, ungoogled-chromium,
+mullvad-browser, browser, karakeep, homebox, silverbullet, syncthing, trilium,
+wallabag.
 
 **Office services** (firm/business apps — started with `up office`/`up all` or individually):
-stirling-pdf-lite, stirling-pdf, miniflux, appflowy, plane, vikunja, listmonk, calcom.
+stirling-pdf-lite, stirling-pdf, vikunja, appflowy, plane, calcom, listmonk, miniflux.
 
 **Automation & AI services** (workflow/automation/AI apps — started with `up automation-ai`/`up all` or individually):
-ollama, open-webui, n8n, airflow, temporal, dagster.
+airflow, dagster, temporal, ollama, open-webui, n8n.
 
 **Extra services** (started with `up all` or individually):
-dozzle, dockge, openproject, paperless,
-mealie, audiobookshelf, invoiceshelf,
-outline, bookstack, ntfy,
-mattermost, rocketchat, zulip,
-orangehrm, nocodb,
-documenso, penpot, supabase, crowdsec.
+crowdsec, dockge, ntfy, dozzle,
+paperless, bookstack, audiobookshelf, mealie,
+supabase, nocodb, outline, penpot,
+documenso, invoiceshelf, openproject, mattermost,
+rocketchat, zulip, orangehrm.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost).
@@ -65,74 +64,74 @@ gitlab (redundant with forgejo at far higher memory cost).
 | --- | --- | --- | --- | --- |
 | Beszel | `beszel` | 8106 | 8090 | min |
 | nginx-plain | `nginx-plain` | 8180 / 8443 | 80 / 443 | min |
-| Landing Page | `landing` | 8080 | 80 | min |
 | Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | min |
 | Docs | `docs` | 8144 | 80 | min |
-| Nextcloud | `nextcloud` | 8081 | 80 | core |
+| Landing Page | `landing` | 8080 | 80 | min |
+| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | core |
+| Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | core |
 | Vaultwarden | `vaultwarden` | 8200 | 80 | core |
-| Forgejo | `forgejo` | 3002 / 2223 (SSH) | 3000 / 22 | core |
 | Firefly III + Importer | `firefly` / `firefly-importer` | 8102 / 8104 | 8080 | core |
 | Immich | `immich-server` | 2283 | 2283 | core |
+| Nextcloud | `nextcloud` | 8081 | 80 | core |
 | Jellyfin | `jellyfin` | 8096 | 8096 | core |
+| Forgejo | `forgejo` | 3002 / 2223 (SSH) | 3000 / 22 | core |
+| wg-easy | `wg-easy` | 51820/UDP, 51821 (admin) | same — `network_mode: host`, no port remapping | core |
+| Atuin | `atuin` | 8122 | 8888 | core |
 | Guacamole | `guacamole` | 8107 | 8080 | core |
-| Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | core |
 | IT-Tools | `it-tools` | 8119 | 80 | core |
 | Mailpit | `mailpit` | 8140 | 8025 | core |
-| Atuin | `atuin` | 8122 | 8888 | core |
-| Plausible | `plausible` | 8130 | 8000 | core |
 | Observability (Grafana) | `grafana` | 8134 | 3000 | core |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
-| AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | core |
+| Plausible | `plausible` | 8130 | 8000 | core |
+| Brave | `brave` | 8148 | 3000 | daily |
+| Chromium | `chromium` | 8146 | 3000 | daily |
+| Coolify | `coolify` | 8132 | 8080 | daily |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | daily |
-| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | office |
+| Excalidraw | `excalidraw` | 8116 | 80 | daily |
+| Firefox | `firefox` | 8145 | 3000 | daily |
+| Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | daily |
+| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | daily |
+| Karakeep | `karakeep` | 8117 | 3000 | daily |
 | HomeBox | `homebox` | 8136 | 7745 | daily |
+| SilverBullet | `silverbullet` | 8113 | 3000 | daily |
 | Syncthing | `syncthing` | 8087 | 8384 | daily |
-| Miniflux | `miniflux` | 8093 | 8080 | office |
+| Trilium Notes | `trilium` | 8112 | 8080 | daily |
+| Wallabag | `wallabag` | 8121 | 80 | daily |
+| Stirling PDF Lite | `stirling-pdf-lite` | 8090 | 8080 | office |
+| Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | office |
+| Vikunja | `vikunja` | 8111 | 3456 | office |
 | AppFlowy | `appflowy-nginx` | 8103 | 80 | office |
 | Plane | `plane-proxy` | 8100 | 80 | office |
+| Cal.com | `calcom` | 8129 | 3000 | office |
+| Listmonk | `listmonk` | 8127 | 9000 | office |
+| Miniflux | `miniflux` | 8093 | 8080 | office |
+| Airflow | `airflow-apiserver` | 8137 | 8080 | automation-ai |
+| Dagster | `dagster-webserver` | 8139 | 3000 | automation-ai |
+| Temporal | `temporal-ui` | 8138 | 8080 | automation-ai |
 | Ollama | `ollama` | 8110 | 11434 | automation-ai |
 | Open WebUI | `open-webui` | 8109 | 8080 | automation-ai |
-| Vikunja | `vikunja` | 8111 | 3456 | office |
-| Trilium Notes | `trilium` | 8112 | 8080 | daily |
-| SilverBullet | `silverbullet` | 8113 | 3000 | daily |
-| Excalidraw | `excalidraw` | 8116 | 80 | daily |
-| Karakeep | `karakeep` | 8117 | 3000 | daily |
-| Firefox | `firefox` | 8145 | 3000 | daily |
-| Chromium | `chromium` | 8146 | 3000 | daily |
-| Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | daily |
-| Brave | `brave` | 8148 | 3000 | daily |
-| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | daily |
 | n8n | `n8n` | 8120 | 5678 | automation-ai |
-| Airflow | `airflow-apiserver` | 8137 | 8080 | automation-ai |
-| Temporal | `temporal-ui` | 8138 | 8080 | automation-ai |
-| Dagster | `dagster-webserver` | 8139 | 3000 | automation-ai |
-| Wallabag | `wallabag` | 8121 | 80 | daily |
-| Listmonk | `listmonk` | 8127 | 9000 | office |
-| Cal.com | `calcom` | 8129 | 3000 | office |
-| Coolify | `coolify` | 8132 | 8080 | daily |
-| Stirling PDF Full | `stirling-pdf` | 8089 | 8080 | office |
-| Dozzle | `dozzle` | 9999 | 8080 | extra |
+| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
-| OpenProject | `openproject` | 8099 | 80 | extra |
-| Paperless-ngx | `paperless` | 8010 | 8000 | extra |
-| Mealie | `mealie` | 9925 | 9000 | extra |
-| Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
-| InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
-| Outline | `outline` | 8114 | 3000 | extra |
-| BookStack | `bookstack` | 8115 | 80 | extra |
 | ntfy | `ntfy` | 8118 | 80 | extra |
+| Dozzle | `dozzle` | 9999 | 8080 | extra |
+| Paperless-ngx | `paperless` | 8010 | 8000 | extra |
+| BookStack | `bookstack` | 8115 | 80 | extra |
+| Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
+| Mealie | `mealie` | 9925 | 9000 | extra |
+| Supabase | `supabase-kong` | 8133 | 8000 | extra |
+| NocoDB | `nocodb` | 8126 | 8080 | extra |
+| Outline | `outline` | 8114 | 3000 | extra |
+| Penpot | `penpot-frontend` | 8131 | 8080 | extra |
+| Documenso | `documenso` | 8128 | 3000 | extra |
+| InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
+| OpenProject | `openproject` | 8099 | 80 | extra |
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
 | Zulip | `zulip` | 8143 | 80 | extra |
-| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | OrangeHRM | `orangehrm` | 8125 | 80 | extra |
-| NocoDB | `nocodb` | 8126 | 8080 | extra |
-| Documenso | `documenso` | 8128 | 3000 | extra |
-| Penpot | `penpot-frontend` | 8131 | 8080 | extra |
-| Supabase | `supabase-kong` | 8133 | 8000 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | manual |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 8180 / 8443 / 8181 (admin) | same | manual (optional) |
-| wg-easy | `wg-easy` | 51820/UDP, 51821 (admin) | same — `network_mode: host`, no port remapping | manual |
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
