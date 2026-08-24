@@ -3,9 +3,11 @@ services:
     ports:
       # DNS must stay reachable from the LAN even in "prod" — not loopback-only
       # like every other service's compose.prod.yml, since its whole purpose is
-      # to answer DNS queries from other devices on the network.
-      - "0.0.0.0:53:53/tcp"
-      - "0.0.0.0:53:53/udp"
+      # to answer DNS queries from other devices on the network. Bound to
+      # DNS_BIND_IP, not 0.0.0.0 — see the comment in .env.example for why
+      # (systemd-resolved conflict on Linux).
+      - "${DNS_BIND_IP}:53:53/tcp"
+      - "${DNS_BIND_IP}:53:53/udp"
       # Web UI: loopback-only, consistent with every other service's prod
       # override — reach it via SSH tunnel or the LAN-only nginx route instead
       # of exposing the admin panel to the LAN directly.

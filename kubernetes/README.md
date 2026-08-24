@@ -120,10 +120,11 @@ only accepts a bcrypt hash in its Secret, so the script hashes it (via
 
 ## Current status
 
-All 7 `SERVICES_CORE` services are ported and validated: guacamole,
-vaultwarden, forgejo, firefly, nextcloud, jellyfin, immich — each with a
-dedicated or shared Postgres as appropriate, routed through Traefik/Gateway
-API, and ArgoCD-managed (`Synced`/`Healthy`). Plus the cluster foundation
+All 8 `SERVICES_CORE` services are ported and validated: guacamole,
+vaultwarden, forgejo, firefly, nextcloud, jellyfin, immich, it-tools — each
+with a dedicated or shared Postgres as appropriate (it-tools needs neither),
+routed through Traefik/Gateway API, and ArgoCD-managed (`Synced`/`Healthy`).
+Plus the cluster foundation
 (namespaces, Traefik itself, the shared Gateway, shared Postgres) — also
 ArgoCD-managed, see `kubernetes/argocd-apps/cluster-*.yaml`.
 

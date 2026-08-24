@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Personal finance manager — income, expenses, budgets, accounts, recurring transactions.
-**Port:** `8102` (host) → `8080` (container) | **Data:** `service_data/data/firefly/` (app storage) + named volume `firefly-postgres` (DB) | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~177MB total (importer 55 + cron 2 + app 93 + db 27)
+**Port:** `8102` (host) → `8080` (container) | **Data:** `service_data/data/firefly/` (app storage) + named volume `firefly-postgres-alpine` (DB) | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~141MB total (importer 59 + cron 2 + app 74 + db 6)
 
 ## Setup
 
@@ -28,6 +28,15 @@ chmod 644 service_data/data/firefly/storage/oauth-private.key service_data/data/
 ## First login
 
 Browse to `http://<ip>:8102` — the **first registration becomes admin**. Disable further signups at Administration → `/settings/configuration`.
+
+## Using it day to day
+
+Confirmed against Firefly III's own current documentation, not assumed from memory.
+
+- **Accounts:** **Accounts** menu splits into **Asset accounts** (your actual checking/savings/cash — the accounts money lives in), **Expense accounts** (who you paid), **Revenue accounts** (who paid you), and **Liabilities** (debts, loans, credit cards with a balance). Create each from that same Accounts page — asset accounts are the ones you'll pick from when entering a transaction.
+- **Budgets:** the `/budgets` page — set a maximum amount for each budget, which applies to the current period (a month, for most users). Every transaction can optionally be assigned to a budget so you can track spend-vs-budget per category of spending; **Categories** are a separate, unrelated grouping used mainly for reporting rather than a spending cap.
+- **Recurring transactions:** **Recurring** → create one for any withdrawal, deposit, or transfer that repeats — give it a title/description and a repetition rule (every week on day X, every month on a fixed day, every month on the nth weekday, or yearly on a date) plus a first-fire date in the future. This stack's `firefly-cron` container checks daily at 03:00 and creates the actual transaction whenever one is due — nothing to trigger manually.
+- **Rules:** **Automation → Rules** — a rule group holds ordered rules, each with triggers (e.g. description contains X, amount over Y, from a specific account) and actions (set category, set budget, add a tag, etc.). Rules can auto-apply to new transactions as they're entered/imported, or be run in bulk over existing transactions from the rule's own page — useful for auto-categorizing imports from the Data Importer below.
 
 ## Notes
 
@@ -70,7 +79,7 @@ docker logs firefly-db 2>&1 | grep "database system was"
 ```bash
 # 1. Copy the corrupted volume to a scratch volume and try pg_resetwal there
 docker volume create firefly-recovery-test
-docker run --rm -v firefly_firefly-postgres:/from:ro -v firefly-recovery-test:/to alpine sh -c "cp -a /from/. /to/"
+docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v firefly-recovery-test:/to alpine:3.24.1 sh -c "cp -a /from/. /to/"
 docker run --rm -u 999:999 -v firefly-recovery-test:/var/lib/postgresql postgres:18.4 pg_resetwal -f /var/lib/postgresql/18/docker
 
 # 2. Boot postgres against the scratch copy and verify with pg_dump — not just SELECT count(*),
@@ -79,8 +88,8 @@ docker run -d --name firefly-recovery-test -v firefly-recovery-test:/var/lib/pos
 docker exec firefly-recovery-test pg_dump -U firefly -d firefly -f /tmp/dump.sql && echo OK
 
 # 3. Only once that validates cleanly: back up the real volume, then apply the same fix to it
-docker run --rm -v firefly_firefly-postgres:/from:ro -v "$(pwd)/service_data/backup/firefly:/backup" alpine sh -c "tar czf /backup/firefly-postgres-precorrupt.tar.gz -C /from ."
-docker run --rm -u 999:999 -v firefly_firefly-postgres:/var/lib/postgresql postgres:18.4 pg_resetwal -f /var/lib/postgresql/18/docker
+docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v "$(pwd)/service_data/backup/firefly:/backup" alpine:3.24.1 sh -c "tar czf /backup/firefly-postgres-precorrupt.tar.gz -C /from ."
+docker run --rm -u 999:999 -v firefly_firefly-postgres-alpine:/var/lib/postgresql postgres:18.4 pg_resetwal -f /var/lib/postgresql/18/docker
 
 # 4. Clean up the scratch volume/container
 docker rm -f firefly-recovery-test

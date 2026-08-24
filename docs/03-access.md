@@ -6,6 +6,15 @@
 
 This is the only branch in the setup. Choose based on your goal:
 
+```mermaid
+flowchart LR
+    S["02 — Docker + Network"] --> D{Choose access}
+    D -->|production, public| CF["03a — Cloudflare Tunnel<br/>domain required, auto HTTPS"]
+    D -->|testing, private| TS["03b — Tailscale<br/>no domain, HTTP over tailnet IP"]
+    CF --> N["04 — Reverse Proxy"]
+    TS --> N
+```
+
 | | [Cloudflare Tunnel](03a-cloudflare.md) | [Tailscale](03b-tailscale.md) |
 | --- | --- | --- |
 | **Use case** | Production, public access | Testing, local/private access |

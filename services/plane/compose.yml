@@ -1,6 +1,6 @@
 services:
   plane-db:
-    image: postgres:18.4-alpine
+    image: postgres:18.6-alpine
     container_name: plane-db
     restart: unless-stopped
     env_file: .env
@@ -78,7 +78,7 @@ services:
       - homeserver
 
   plane-migrator:
-    image: makeplane/plane-backend:v1.4.0
+    image: makeplane/plane-backend:v1.4.1
     container_name: plane-migrator
     restart: "no"
     command: ./bin/docker-entrypoint-migrator.sh
@@ -98,7 +98,7 @@ services:
       - homeserver
 
   plane-api:
-    image: makeplane/plane-backend:v1.4.0
+    image: makeplane/plane-backend:v1.4.1
     container_name: plane-api
     restart: unless-stopped
     command: ./bin/docker-entrypoint-api.sh
@@ -129,7 +129,7 @@ services:
       - homeserver
 
   plane-worker:
-    image: makeplane/plane-backend:v1.4.0
+    image: makeplane/plane-backend:v1.4.1
     container_name: plane-worker
     restart: unless-stopped
     command: ./bin/docker-entrypoint-worker.sh
@@ -154,7 +154,7 @@ services:
       - homeserver
 
   plane-beat:
-    image: makeplane/plane-backend:v1.4.0
+    image: makeplane/plane-backend:v1.4.1
     container_name: plane-beat
     restart: unless-stopped
     command: ./bin/docker-entrypoint-beat.sh
@@ -175,7 +175,7 @@ services:
       - homeserver
 
   plane-web:
-    image: makeplane/plane-frontend:v1.4.0
+    image: makeplane/plane-frontend:v1.4.1
     container_name: plane-web
     restart: unless-stopped
     env_file: .env
@@ -189,7 +189,7 @@ services:
       - homeserver
 
   plane-admin:
-    image: makeplane/plane-admin:v1.4.0
+    image: makeplane/plane-admin:v1.4.1
     container_name: plane-admin
     restart: unless-stopped
     env_file: .env
@@ -205,7 +205,7 @@ services:
       - homeserver
 
   plane-space:
-    image: makeplane/plane-space:v1.4.0
+    image: makeplane/plane-space:v1.4.1
     container_name: plane-space
     restart: unless-stopped
     env_file: .env
@@ -221,7 +221,7 @@ services:
       - homeserver
 
   plane-proxy:
-    image: makeplane/plane-proxy:v1.4.0
+    image: makeplane/plane-proxy:v1.4.1
     container_name: plane-proxy
     restart: unless-stopped
     env_file: .env

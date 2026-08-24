@@ -1,8 +1,10 @@
 services:
   adguard-home:
     ports:
-      # DNS — LAN devices point their DNS at this host's IP on port 53
-      - "0.0.0.0:53:53/tcp"
-      - "0.0.0.0:53:53/udp"
+      # DNS — LAN devices point their DNS at this host's IP on port 53.
+      # Bound to DNS_BIND_IP (this host's LAN IP), not 0.0.0.0 — see the
+      # comment in .env.example for why (systemd-resolved conflict on Linux).
+      - "${DNS_BIND_IP}:53:53/tcp"
+      - "${DNS_BIND_IP}:53:53/udp"
       # Web UI setup wizard / admin panel
       - "0.0.0.0:8123:3000/tcp"

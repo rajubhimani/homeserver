@@ -1,0 +1,28 @@
+services:
+  mailpit:
+    image: axllent/mailpit:${MAILPIT_VERSION}
+    container_name: mailpit
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    volumes:
+      - ${DATA_ROOT}/data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/api/v1/info"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

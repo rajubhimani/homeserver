@@ -1,0 +1,4 @@
+services:
+  airflow-scheduler:
+    security_opt:
+      - label=disable

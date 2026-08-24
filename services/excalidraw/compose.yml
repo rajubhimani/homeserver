@@ -1,5 +1,12 @@
 services:
   excalidraw:
+    # Deliberately not pinned to a specific version, unlike every other
+    # service here: the upstream image publishes no semver/dated tags at
+    # all — only "latest" and a batch of abandoned sha-* build tags from
+    # 2020 (verified against Docker Hub directly). Pinning to one of those
+    # would be a downgrade, not a real pin. Re-check
+    # https://hub.docker.com/r/excalidraw/excalidraw/tags occasionally in
+    # case that ever changes.
     image: excalidraw/excalidraw:latest
     container_name: excalidraw
     restart: unless-stopped

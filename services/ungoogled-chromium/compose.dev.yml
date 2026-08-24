@@ -1,0 +1,4 @@
+services:
+  ungoogled-chromium:
+    ports:
+      - "0.0.0.0:8147:3000"

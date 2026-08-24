@@ -1,0 +1,141 @@
+services:
+  # MongoDB data dir needs to be owned by the mongodb image's own uid before
+  # it will start — a one-shot fix, same shape as airflow-init/mongodb's own
+  # official compose reference (RocketChat/rocketchat-compose).
+  mongodb-fix-permission:
+    image: docker.io/mongodb/mongodb-community-server:${MONGODB_VERSION}
+    container_name: rocketchat-mongodb-fix-permission
+    restart: "no"
+    user: "0"
+    volumes:
+      - rocketchat-mongodb:/data/db:rw
+      - rocketchat-mongodb-configdb:/data/configdb:rw
+    entrypoint: |
+      sh -xc '
+        chown -R "${MONGODB_USER_ID}" /data/db /data/configdb;
+        echo "=====> Ownership set to uid ${MONGODB_USER_ID}";
+      '
+    networks:
+      - homeserver
+
+  mongodb:
+    image: docker.io/mongodb/mongodb-community-server:${MONGODB_VERSION}
+    container_name: rocketchat-mongodb
+    restart: unless-stopped
+    depends_on:
+      mongodb-fix-permission:
+        condition: service_completed_successfully
+    user: "${MONGODB_USER_ID}"
+    volumes:
+      - rocketchat-mongodb:/data/db:rw
+      - rocketchat-mongodb-configdb:/data/configdb:rw
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        exec mongod --replSet "${MONGODB_REPLICA_SET_NAME}" --bind_ip_all
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD", "mongosh", "mongodb://mongodb:27017/?directConnection=true", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - homeserver
+
+  # One-shot: initiates the MongoDB replica set Rocket.Chat requires
+  # (oplog tailing for real-time updates) — without this, rocketchat's
+  # MONGO_URL (?replicaSet=rs0) never connects successfully. Idempotent —
+  # rs.initiate() on an already-initiated set just errors harmlessly, same
+  # pattern as this stack's temporal-create-namespace.
+  mongodb-init:
+    image: docker.io/mongodb/mongodb-community-server:${MONGODB_VERSION}
+    container_name: rocketchat-mongodb-init
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint: |
+      sh -xc '
+        mongosh "mongodb://mongodb:27017/?directConnection=true" --eval "rs.initiate({_id: \"${MONGODB_REPLICA_SET_NAME}\", members: [{ _id: 0, host: \"mongodb:27017\" }]})" || true;
+      '
+    networks:
+      - homeserver
+
+  # Rocket.Chat's default inter-instance message transporter — required even
+  # for a single instance, since TRANSPORTER defaults to monolith+nats.
+  nats:
+    image: docker.io/nats:${NATS_VERSION}
+    container_name: rocketchat-nats
+    restart: unless-stopped
+    command: --http_port 8222
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - homeserver
+
+  rocketchat:
+    image: registry.rocket.chat/rocketchat/rocket.chat:${ROCKETCHAT_VERSION}
+    container_name: rocketchat
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ROOT_URL: https://rocketchat.${DOMAIN}
+      PORT: "3000"
+      DEPLOY_METHOD: docker
+      DEPLOY_PLATFORM: compose
+      MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=${MONGODB_REPLICA_SET_NAME}
+      MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=${MONGODB_REPLICA_SET_NAME}
+      TRANSPORTER: monolith+nats://nats:4222
+      # Without this, an unhandled promise rejection from the missing mail
+      # config trips Node's EXIT_UNHANDLEDPROMISEREJECTION policy and kills
+      # the process outright — a real crash observed live, not theoretical.
+      # Routed through the shared Mailpit catcher, same as Airflow.
+      MAIL_URL: smtp://mailpit:1025
+      # Rocket.Chat 6.x+ enforces "workspace registration" through its setup
+      # wizard by default — whatever email you enter there gets a real
+      # verification email from Rocket.Chat's own actual cloud
+      # infrastructure (cloud@rocket.chat), completely bypassing MAIL_URL
+      # above since it's sent by Rocket.Chat's servers, not this container.
+      # Hit this live: a real email landed in a real inbox from a
+      # self-hosted "playground" instance. This marks the wizard as
+      # already completed so it never prompts for/sends that again.
+      OVERWRITE_SETTING_Show_Setup_Wizard: completed
+    volumes:
+      - ${DATA_ROOT}/uploads:/app/uploads
+    deploy:
+      resources:
+        limits:
+          # 1024M wasn't enough — observed a real "FATAL ERROR: Reached heap
+          # limit Allocation failed - JavaScript heap out of memory" crash
+          # live while just loading the app's home page.
+          memory: 2048M
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/info', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
+      nats:
+        condition: service_started
+    networks:
+      - homeserver
+
+volumes:
+  rocketchat-mongodb:
+  rocketchat-mongodb-configdb:
+
+networks:
+  homeserver:
+    external: true

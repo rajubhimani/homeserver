@@ -1,20 +1,26 @@
 services:
   karakeep-chrome:
-    image: gcr.io/zenika-hub/alpine-chrome:124
+    # gcr.io/zenika-hub/alpine-chrome:124 (the image used here previously)
+    # started failing to pull with a Google Cloud "billing must be enabled on
+    # this project" error — an upstream GCR change unrelated to this stack.
+    # Karakeep's own docker-compose.yml has since moved to a chrome image
+    # they build and publish themselves; switched to that instead of chasing
+    # a GCR fix or a Docker Hub mirror, since it also tracks the app version.
+    image: ghcr.io/karakeep-app/karakeep-chrome:release
     container_name: karakeep-chrome
     restart: unless-stopped
+    init: true
     command:
-      - --no-sandbox
       - --disable-gpu
       - --disable-dev-shm-usage
-      - --remote-debugging-address=0.0.0.0
-      - --remote-debugging-port=9222
       - --hide-scrollbars
+      - --disable-blink-features=AutomationControlled
+      - --window-size=1440,900
     networks:
       - homeserver
 
   karakeep-meilisearch:
-    image: getmeili/meilisearch:v1.51.0
+    image: getmeili/meilisearch:v1.53.1
     container_name: karakeep-meilisearch
     restart: unless-stopped
     environment:

@@ -1,0 +1,7 @@
+services:
+  dagster-webserver:
+    security_opt:
+      - label=disable
+  dagster-daemon:
+    security_opt:
+      - label=disable

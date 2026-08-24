@@ -96,6 +96,29 @@
       line-height: 1.6;
     }
 
+    .docs-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--pt-accent);
+      text-decoration: none;
+      padding: 5px 12px;
+      margin-left: auto;
+      align-self: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .docs-link:hover {
+      border-color: var(--pt-accent);
+      background: color-mix(in srgb, var(--pt-accent) 8%, transparent);
+    }
+
+    .docs-link svg { width: 14px; height: 14px; }
+
     /* ── Tab bar ───────────────────────────────────────────────────── */
     .tab-bar {
       display: flex;
@@ -378,6 +401,12 @@
       margin-top: 1rem;
     }
   </style>
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://plausible.prajnatech.in/js/pa-T_P8F5fkcAqrfCsggtqUO.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
 </head>
 <body>
   <div class="wrap">
@@ -403,6 +432,13 @@
       <button class="tab-btn" data-tab="offline" onclick="switchTab('offline')">
         Offline <span class="tab-count">0</span>
       </button>
+      <a class="docs-link" href="https://docs.DOMAIN_PLACEHOLDER" target="_blank" rel="noopener">
+        <svg viewBox="0 0 18 18" fill="none">
+          <path d="M9 4.5 C7.2 3.5 4.7 3.5 3 4.2 V13.7 C4.7 13 7.2 13 9 14 C10.8 13 13.3 13 15 13.7 V4.2 C13.3 3.5 10.8 3.5 9 4.5 Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M9 4.5 V14" stroke="currentColor" stroke-width="1.1"/>
+        </svg>
+        Docs
+      </a>
     </div>
 
     <!-- ── Online section ─────────────────────────────────────────── -->
@@ -458,83 +494,27 @@
   <script>
     const DOMAIN = 'DOMAIN_PLACEHOLDER';
 
-    // Service data -- the only thing you touch to add/edit/remove a service.
-    // category: 'storage' | 'productivity' | 'dev' | 'system'
-    // subcategory: optional -- groups cards within a category under a subheading
-    //   (see SUBCATEGORY_LABELS below for display names; only 'productivity'
-    //   and 'dev' currently use subgroups, 'storage'/'system' don't need them)
-    // sub: public subdomain, only needed when it differs from slug
-    // testSub/testHealth/testLabel: optional secondary "test instance" link
-    //   sharing this card -- see homeserver-add-service skill step 7a
-    const SERVICES = [
-  { slug: "immich", name: "Immich", category: "storage", icon: "teal", svg: "<rect x=\"2\" y=\"2\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"7\" r=\"2.5\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M5 15 Q9 12 13 15\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted photo and video backup. Google Photos alternative with facial recognition and smart search." },
-  { slug: "nextcloud", name: "Nextcloud", category: "storage", icon: "blue", svg: "<path d=\"M3 5 L3 14 Q3 15 4 15 L14 15 Q15 15 15 14 L15 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M2 5 L9 2 L16 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M7 15 L7 10 L11 10 L11 15\" stroke=\"#185FA5\" stroke-width=\"1.4\"/>", desc: "Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more." },
-  { slug: "jellyfin", name: "Jellyfin", category: "storage", icon: "purple", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M6 9 L8 11 L12 7\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M9 2 L9 4\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions." },
-  { slug: "syncthing", name: "Syncthing", category: "storage", icon: "teal", svg: "<path d=\"M9 3 A6 6 0 0 1 15 9\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M9 15 A6 6 0 0 1 3 9\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M13 7 L15 9 L13 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M5 7 L3 9 L5 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Continuous P2P file sync between your devices. No cloud middleman — direct device-to-device." },
-  { slug: "audiobookshelf", name: "Audiobookshelf", category: "storage", icon: "purple", svg: "<rect x=\"3\" y=\"3\" width=\"12\" height=\"12\" rx=\"2\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M7 7 L7 11 M9 6 L9 12 M11 8 L11 11\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted audiobook and podcast server. Stream from anywhere with the mobile app." },
-  { slug: "paperless", name: "Paperless", category: "productivity", subcategory: "documents", icon: "orange", svg: "<path d=\"M4 3 L14 3 Q15 3 15 4 L15 14 Q15 15 14 15 L4 15 Q3 15 3 14 L3 4 Q3 3 4 3Z\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M6 7 L12 7 M6 10 L10 10\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Scan, index, and archive all your documents. Full-text search with OCR — go paperless." },
-  { slug: "stirling-pdf-lite", name: "Stirling PDF", category: "productivity", subcategory: "documents", icon: "red", svg: "<rect x=\"3\" y=\"2\" width=\"9\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M6 5 L9 5 M6 8 L9 8\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M11 10 L15 14 M13 10 L15 12\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Merge, split, compress, and edit PDFs. Lightweight toolkit — always on." },
-  { slug: "stirling-pdf", name: "Stirling PDF (Full)", category: "productivity", subcategory: "documents", icon: "red", svg: "<rect x=\"3\" y=\"2\" width=\"9\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M6 5 L9 5 M6 8 L9 8\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M11 10 L15 14 M13 10 L15 12\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand." },
-  { slug: "guacamole", name: "Guacamole", category: "system", icon: "purple", svg: "<rect x=\"2\" y=\"3\" width=\"14\" height=\"9\" rx=\"1.5\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M7 15 L11 15 M9 12 L9 15\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M6 7.5 L8 9.5 L12 5.5\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Clientless remote desktop gateway — access VNC/RDP/SSH targets from any browser, on your LAN or over the internet." },
-  { slug: "open-webui", name: "Open WebUI", category: "productivity", subcategory: "ai", icon: "pink", svg: "<path d=\"M3 4 h12 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 h-8 l-3 3 v-3 h-1 a1 1 0 0 1 -1 -1 v-6 a1 1 0 0 1 1 -1 Z\" stroke=\"#A5356B\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Chat interface for local LLMs served by Ollama." },
-  { slug: "mealie", name: "Mealie", category: "productivity", subcategory: "home", icon: "pink", svg: "<path d=\"M9 2 L10.5 6.5 L15.5 6.5 L11.5 9.5 L13 14 L9 11 L5 14 L6.5 9.5 L2.5 6.5 L7.5 6.5 Z\" stroke=\"#A5356B\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists." },
-  { slug: "homebox", name: "HomeBox", category: "productivity", subcategory: "home", icon: "orange", svg: "<rect x=\"3\" y=\"6\" width=\"12\" height=\"9\" rx=\"1\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M3 6 L9 2.5 L15 6\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M9 6 L9 15\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>", desc: "Home inventory tracker with QR labels. Log what's in every box, drawer, and closet, then scan to find it." },
-  { slug: "trilium", name: "Trilium Notes", category: "productivity", subcategory: "notes", icon: "blue", svg: "<path d=\"M9 2 L9 16 M9 2 L4 5 L4 11 L9 14 M9 2 L14 5 L14 11 L9 14\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid." },
-  { slug: "silverbullet", name: "SilverBullet", category: "productivity", subcategory: "notes", icon: "gray", svg: "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\"/> <path d=\"M9 5.5 L9 9 L11.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Markdown notes with a query language over your own space. Lightweight, single space." },
-  { slug: "outline", name: "Outline", category: "productivity", subcategory: "notes", icon: "blue", svg: "<rect x=\"3\" y=\"2.5\" width=\"12\" height=\"13\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M6 6 L12 6 M6 9 L12 9 M6 12 L9.5 12\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Polished self-hosted team wiki and docs, good search. Logs in via Authentik." },
-  { slug: "bookstack", name: "BookStack", category: "productivity", subcategory: "notes", icon: "orange", svg: "<path d=\"M4 3 h5 v12 h-5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 A1.5 1.5 0 0 1 4 3 Z\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 3 h5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha." },
-  { slug: "excalidraw", name: "Excalidraw", category: "productivity", subcategory: "notes", icon: "purple", svg: "<path d=\"M3 14 L6 14.5 L13.5 7 a1.2 1.2 0 0 0 0 -1.7 l-0.8 -0.8 a1.2 1.2 0 0 0 -1.7 0 L3.5 12 Z\" stroke=\"#6B35B5\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>", desc: "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage." },
-  { slug: "karakeep", name: "Karakeep", category: "productivity", subcategory: "notes", icon: "yellow", svg: "<path d=\"M5 2.5 h8 v13 l-4 -3 l-4 3 Z\" stroke=\"#8A6D00\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Bookmark manager with AI auto-tagging and full-text search of saved pages." },
-  { slug: "it-tools", name: "IT-Tools", category: "dev", subcategory: "tools", icon: "blue", svg: "<path d=\"M11 2.5 a3 3 0 0 0 -3.9 3.9 L2.5 11 l1.5 1.5 l0.7 -0.7 l1 1 l0.8 -0.8 l-1 -1 l1.9 -1.9 a3 3 0 0 0 3.9 -3.9 l-2 2 l-1.4 -1.4 Z\" stroke=\"#1565C0\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>", desc: "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester." },
-  { slug: "n8n", name: "n8n", category: "dev", subcategory: "automation", icon: "pink", svg: "<circle cx=\"4\" cy=\"4.5\" r=\"1.8\" stroke=\"#A5356B\" stroke-width=\"1.3\"/> <circle cx=\"14\" cy=\"4.5\" r=\"1.8\" stroke=\"#A5356B\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"13.5\" r=\"1.8\" stroke=\"#A5356B\" stroke-width=\"1.3\"/> <path d=\"M5.6 5.2 L8 12 M12.4 5.2 L10 12 M5.8 4.5 L12.2 4.5\" stroke=\"#A5356B\" stroke-width=\"1.3\" stroke-linecap=\"round\"/>", desc: "Self-hosted workflow automation. Webhook → transform → notify style glue for homelab scripts." },
-  { slug: "wallabag", name: "Wallabag", category: "productivity", subcategory: "reading", icon: "green", svg: "<path d=\"M4 3 h10 v11 l-5 -2.5 l-5 2.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles." },
-  { slug: "nocodb", name: "NocoDB", category: "dev", subcategory: "automation", icon: "green", svg: "<rect x=\"2.5\" y=\"3\" width=\"13\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7.5 h13 M6.5 3 v12\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/>", desc: "Turns any database into an Airtable-style spreadsheet UI." },
-  { slug: "listmonk", name: "Listmonk", category: "productivity", subcategory: "reading", icon: "blue", svg: "<path d=\"M2.5 5 L9 9.5 L15.5 5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <rect x=\"2.5\" y=\"4\" width=\"13\" height=\"10\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/>", desc: "Self-hosted newsletter and mailing list manager." },
-  { slug: "documenso", name: "Documenso", category: "productivity", subcategory: "documents", icon: "blue", svg: "<path d=\"M5 2.5 h6 l3 3 v10 h-9 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7 11.5 l1.5 1.5 l3 -3.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted document e-signing." },
-  { slug: "calcom", name: "Cal.com", category: "productivity", subcategory: "finance", icon: "green", svg: "<rect x=\"2.5\" y=\"3.5\" width=\"13\" height=\"11\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7 h13 M6 2 v3 M12 2 v3\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted scheduling and booking pages." },
-  { slug: "plausible", name: "Plausible", category: "dev", subcategory: "tools", icon: "green", svg: "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted, privacy-friendly web analytics." },
-  { slug: "penpot", name: "Penpot", category: "dev", subcategory: "tools", icon: "purple", svg: "<path d=\"M4 4 L14 4 L14 9 L9 14 L4 14 Z\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 9 L9 14 M9 9 L14 9\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted design and prototyping tool." },
-  { slug: "coolify", name: "Coolify", category: "dev", subcategory: "tools", icon: "blue", svg: "<path d=\"M9 2 L15 5.5 L15 12.5 L9 16 L3 12.5 L3 5.5 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 8.5 L8 10 L11.5 6.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted PaaS — deploy other projects with a Vercel/Heroku-style workflow." },
-  { slug: "supabase", name: "Supabase", category: "dev", subcategory: "automation", icon: "green", svg: "<path d=\"M10 2 L4 10 L8.5 10 L8 16 L14 8 L9.5 8 Z\" stroke=\"#2E7D32\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>", desc: "Self-hosted Firebase alternative — Postgres, Auth, Realtime, Storage, Edge Functions." },
-  { slug: "vikunja", name: "Vikunja", category: "productivity", subcategory: "projects", icon: "teal", svg: "<rect x=\"2.5\" y=\"2.5\" width=\"13\" height=\"13\" rx=\"2\" stroke=\"#00695C\" stroke-width=\"1.4\"/> <path d=\"M5.5 9 L7.5 11 L12.5 6\" stroke=\"#00695C\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "To-do list and task management app. Organize projects, set due dates, and track work." },
-  { slug: "miniflux", name: "Miniflux", category: "productivity", subcategory: "reading", icon: "orange", svg: "<path d=\"M3 5 L15 5 M3 9 L12 9 M3 13 L9 13\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms." },
-  { slug: "openproject", name: "OpenProject", category: "productivity", subcategory: "projects", icon: "blue", svg: "<rect x=\"2\" y=\"2\" width=\"14\" height=\"14\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M5 6 L13 6 M5 9 L10 9 M5 12 L8 12\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking." },
-  { slug: "plane", name: "Plane", category: "productivity", subcategory: "projects", icon: "purple", svg: "<circle cx=\"9\" cy=\"9\" r=\"3\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M9 2 L9 6 M9 12 L9 16 M2 9 L6 9 M12 9 L16 9\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Modern open-source project management. Issues, cycles, modules and analytics. Jira alternative." },
-  { slug: "invoiceshelf", name: "InvoiceShelf", category: "productivity", subcategory: "finance", icon: "orange", svg: "<rect x=\"3\" y=\"2\" width=\"12\" height=\"14\" rx=\"2\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M6 6 L12 6 M6 9 L12 9 M6 12 L9 12\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M10 11 L13 14 M11.5 11 L13 12.5\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>", desc: "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments." },
-  { slug: "firefly", name: "Firefly III", category: "productivity", subcategory: "finance", icon: "green", svg: "<circle cx=\"9\" cy=\"9\" r=\"6\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9 L12 11\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M6 7 L9 5 L12 7\" stroke=\"#2E7D32\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Personal finance manager. Track income, expenses, budgets and accounts in one place." },
-  { slug: "firefly-importer", name: "Firefly Importer", category: "productivity", subcategory: "finance", icon: "green", svg: "<path d=\"M9 2 L9 11 M6 8 L9 11 L12 8\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M4 13 L4 15 L14 15 L14 13\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Import financial data into Firefly III from CSV, YNAB, or bank accounts via Nordigen.", sub: "firefly-import" },
-  { slug: "appflowy", name: "AppFlowy", category: "productivity", subcategory: "notes", icon: "blue", svg: "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"2\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M5 7 L13 7 M5 10 L10 10\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M9 3 L9 1 M12 3 L12 1 M6 3 L6 1\" stroke=\"#1565C0\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>", desc: "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools." },
-  { slug: "forgejo", name: "Forgejo", category: "dev", subcategory: "git", icon: "teal", svg: "<circle cx=\"9\" cy=\"9\" r=\"7\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M6 5 Q6 9 9 9 Q12 9 12 13 M9 9 L7 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage." },
-  { slug: "orangehrm", name: "OrangeHRM", category: "productivity", subcategory: "finance", icon: "orange", svg: "<circle cx=\"9\" cy=\"6\" r=\"2.5\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M4 15 c0 -3 2.2 -5 5 -5 s5 2 5 5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Open-source HR management — employee records, leave, time tracking, recruitment." },
-  { slug: "photoprism", name: "PhotoPrism", category: "storage", icon: "yellow", svg: "<rect x=\"2.5\" y=\"4\" width=\"13\" height=\"10\" rx=\"1.5\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"9\" r=\"2.5\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M6 4 L7 2.5 L11 2.5 L12 4\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately)." },
-  { slug: "gitlab", name: "GitLab", category: "dev", subcategory: "git", icon: "teal", svg: "<path d=\"M9 14 L3 6 L5.5 6 L9 12 L12.5 6 L15 6 Z\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <path d=\"M3 6 L2 9 L9 14 L16 9 L15 6\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/>", desc: "Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking." },
-  { slug: "authentik", name: "Authentik", category: "dev", subcategory: "identity", icon: "blue", svg: "<circle cx=\"9\" cy=\"7\" r=\"3\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M3 16 C3 13 5.7 11 9 11 C12.3 11 15 13 15 16\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Single sign-on for all your services. One login, one identity, full access control." },
-  { slug: "vaultwarden", name: "Vaultwarden", category: "dev", subcategory: "identity", icon: "blue", svg: "<rect x=\"4\" y=\"3\" width=\"10\" height=\"13\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M7 7 L7 11 M9 6 L9 12 M11 8 L11 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted password manager. Bitwarden-compatible — use any Bitwarden app to sync passwords." },
-  { slug: "uptime-kuma", name: "Uptime Kuma", category: "system", icon: "yellow", svg: "<circle cx=\"9\" cy=\"9\" r=\"6\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <circle cx=\"9\" cy=\"12\" r=\"1\" fill=\"#8A7A04\"/>", desc: "Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking." },
-  { slug: "atuin", name: "Atuin", category: "dev", subcategory: "tools", icon: "gray", svg: "<path d=\"M3 9 a6 6 0 1 1 3 5.2\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M3 9 L3 12.5 L6.5 12.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted shell history sync across your machines — searchable with context (dir, exit code)." },
-  { slug: "adguard-home", name: "AdGuard Home", category: "system", icon: "green", svg: "<path d=\"M9 2 L15 4.5 V9 c0 4 -2.5 6.5 -6 7 c-3.5 -0.5 -6 -3 -6 -7 V4.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 9 L8.2 10.7 L11.5 7\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) — this links to the admin panel." },
-  { slug: "ntfy", name: "ntfy", category: "system", icon: "yellow", svg: "<path d=\"M9 2.5 a3 3 0 0 0 -3 3 v2.5 l-1.5 2.5 h9 l-1.5 -2.5 v-2.5 a3 3 0 0 0 -3 -3 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7.5 12.5 a1.5 1.5 0 0 0 3 0\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted push notifications. Scripts and services curl a message straight to your phone." },
-  { slug: "dockge", name: "Dockge", category: "system", icon: "orange", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M5 8 L5 11 M8 6 L8 11 M11 8 L11 11 M14 9 L14 11\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Fancy Docker Compose stack manager. Deploy and manage stacks via a clean web UI." },
-  { slug: "portainer", name: "Portainer", category: "system", icon: "blue", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <circle cx=\"6\" cy=\"9\" r=\"1.5\" fill=\"#185FA5\"/> <path d=\"M9 7 L9 11 M12 7 L12 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Docker container management UI. Inspect, start/stop, and manage all containers from the browser." },
-  { slug: "observability", name: "Grafana", category: "system", icon: "orange", svg: "<path d=\"M3 14 L3 4 M3 14 L15 14\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5 12 L8 8 L10.5 10.5 L14 5\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Metrics and log dashboards (Prometheus + Loki), covering every container in the stack.", sub: "grafana" },
-  { slug: "dozzle", name: "Dozzle", category: "system", icon: "gray", svg: "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#555555\" stroke-width=\"1.4\"/> <path d=\"M5 8 L8 11 L13 7\" stroke=\"#555555\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Real-time Docker container log viewer in the browser. Quickly tail logs from any running container." },
-  { slug: "beszel", name: "Beszel", category: "system", icon: "green", svg: "<path d=\"M3 14 L3 9 M7 14 L7 5 M11 14 L11 8 M15 14 L15 3\" stroke=\"#1E7A2E\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Lightweight server monitoring. CPU, memory, disk, and Docker container stats with alerts." },
-    ];
+    // Service + tier + grouping data lives in one place: services.json at
+    // the repo root (bind-mounted in) -- see the homeserver-add-service
+    // skill. Populated by loadServiceData() before renderCards() runs.
+    let SERVICES = [];
+    let SUBCATEGORY_LABELS = {};
 
-    // Display labels for subgroups within a category -- keyed by subcategory
-    const SUBCATEGORY_LABELS = {
-      notes: 'Notes & Knowledge',
-      projects: 'Project & Task Mgmt',
-      documents: 'Documents',
-      finance: 'Finance & Business',
-      reading: 'Reading & Feeds',
-      home: 'Home',
-      ai: 'AI',
-      git: 'Git & CI',
-      automation: 'Automation & Low-code',
-      identity: 'Identity & Secrets',
-      tools: 'Tools',
-    };
+    async function loadServiceData() {
+      const res = await fetch('services.json', { cache: 'no-store' });
+      const data = await res.json();
+      // Only entries with a category get a card -- tier-only infra entries
+      // (cloudflared, nginx-plain, landing itself, crowdsec, ollama) are
+      // deliberately invisible here, same as before this was data-driven.
+      // Sorted alphabetically by name (case-insensitive) so each category/
+      // subgroup grid is easy to scan for a specific service instead of
+      // whatever order they happen to appear in services.json (historically
+      // insertion/tier order) -- placeCard() appends in this array's order,
+      // so sorting here is the single place that controls it.
+      SERVICES = data.services.filter(s => s.category)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      SUBCATEGORY_LABELS = data.subcategoryLabels || {};
+    }
 
     const EXTERNAL_LINK_SVG = '<svg viewBox="0 0 12 12" fill="none"><path d="M2 10 L10 2 M5 2 L10 2 L10 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -548,8 +528,20 @@
       if (s.subcategory) card.dataset.subcategory = s.subcategory;
 
       const sub = s.sub || s.slug;
-      const url = `https://${sub}.${DOMAIN}`;
-      const label = `${sub}.${DOMAIN}`;
+      // s.path is a subpath under THIS card's own subdomain (sub.${DOMAIN}),
+      // not the bare apex domain -- Browser Hub's individual browsers live
+      // at browser.${DOMAIN}/<path>/ (see docs/services/browser-hub.md),
+      // sharing the hub's "browser" subdomain via their own s.sub, not
+      // browsing off ${DOMAIN} directly.
+      const url = s.path ? `https://${sub}.${DOMAIN}/${s.path}` : `https://${sub}.${DOMAIN}`;
+      const label = s.path ? `${sub}.${DOMAIN}/${s.path}` : `${sub}.${DOMAIN}`;
+      // Skip the "Replaces: X" suffix when desc already names X (e.g.
+      // "Google Drive alternative...") — avoids saying it twice.
+      const mentionsReplaces = s.replaces && s.replaces.split(' / ').some(
+        alt => s.desc.toLowerCase().includes(alt.split(' (')[0].trim().toLowerCase())
+      );
+      const tooltip = (s.replaces && !mentionsReplaces) ? `${s.desc} Replaces: ${s.replaces}.` : s.desc;
+      card.title = tooltip;
 
       let secondaryLink = '';
       if (s.testSub) {
@@ -574,7 +566,17 @@
 
     function renderCards() {
       const pool = document.getElementById('card-pool');
-      SERVICES.forEach(s => pool.appendChild(buildCard(s)));
+      // data-order = this card's rank in the already-alphabetized SERVICES
+      // array -- placeCard() below inserts by this rank rather than by
+      // arrival order, since health checks resolve concurrently/out of
+      // order (see placeCard's comment) and a plain appendChild there would
+      // place cards in whatever order their network request happened to
+      // finish, not alphabetically.
+      SERVICES.forEach((s, i) => {
+        const card = buildCard(s);
+        card.dataset.order = i;
+        pool.appendChild(card);
+      });
     }
 
     let activeTab = 'online';
@@ -630,7 +632,14 @@
           catDiv.appendChild(grid);
         }
       }
-      grid.appendChild(card);
+      // Insert by data-order (this card's rank in the alphabetized SERVICES
+      // array) rather than appendChild -- cards arrive here in whatever
+      // order their async health check happened to resolve (see
+      // checkService/recheckAll), not alphabetically, so a plain append
+      // would undo the sort every time cards get placed or re-placed.
+      const order = Number(card.dataset.order);
+      const next = Array.from(grid.children).find(c => Number(c.dataset.order) > order);
+      grid.insertBefore(card, next || null);
       updateVisibility();
     }
 
@@ -689,20 +698,23 @@
       placeCard(card, up);
     }
 
-    // On re-check, move cards back to pool first so they can be re-sorted
+    // Re-check every card in place -- placeCard() already inserts each card
+    // at its correct sorted position (data-order is a fixed alphabetical
+    // rank) and moves it between the online/offline grids if its status
+    // changed, so there's no need to clear categories out first. Doing that
+    // used to make every section/tab-count flash empty for the duration of
+    // each health check, which read as the whole page "refreshing".
     function recheckAll() {
-      const pool = document.getElementById('card-pool');
-      document.querySelectorAll('.card[data-service]').forEach(card => {
-        pool.appendChild(card);
-      });
-      updateVisibility();
-      document.querySelectorAll('#card-pool .card[data-service]').forEach(checkService);
+      document.querySelectorAll('.card[data-service]').forEach(checkService);
     }
 
-    renderCards();
-    // Initial check: pull all cards from pool and check each one
-    document.querySelectorAll('#card-pool .card[data-service]').forEach(checkService);
-    setInterval(recheckAll, 30000);
+    (async () => {
+      await loadServiceData();
+      renderCards();
+      // Initial check: pull all cards from pool and check each one
+      document.querySelectorAll('#card-pool .card[data-service]').forEach(checkService);
+      setInterval(recheckAll, 30000);
+    })();
   </script>
 </body>
 </html>

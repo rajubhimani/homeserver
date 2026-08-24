@@ -6,6 +6,18 @@
 
 Tailscale gives every device on your tailnet a private IP. Services are reachable by IP — no domain, no DNS, no open ports. Good for testing before you set up a domain.
 
+```mermaid
+flowchart LR
+    subgraph Tailnet["Your private tailnet — WireGuard mesh, no public exposure"]
+        direction LR
+        D1["Your laptop<br/>100.x.x.a"] -.->|encrypted, peer-to-peer| Srv["Server<br/>100.x.x.b"]
+        D2["Your phone<br/>100.x.x.c"] -.->|encrypted, peer-to-peer| Srv
+    end
+    Srv --> P["service ports<br/>e.g. :8080, :8081, :2283"]
+```
+
+Each device reaches the server directly by its Tailscale IP and a service's own dev port — there's no reverse-proxy hop and no TLS, since traffic never leaves the tailnet. Compare to [03a — Cloudflare Tunnel](03a-cloudflare.md)'s path, which is public and TLS-terminated at Cloudflare's edge instead.
+
 ---
 
 ## Install
@@ -38,7 +50,7 @@ tailscale ip -4
 | Nextcloud | `http://100.x.x.x:8081` |
 | Immich | `http://100.x.x.x:2283` |
 | Dozzle | `http://100.x.x.x:9999` |
-| NPM admin (if using NPM) | `http://100.x.x.x:81` |
+| NPM admin (if using NPM) | `http://100.x.x.x:8181` |
 | SSH | `ssh user@100.x.x.x` |
 
 > Replace `100.x.x.x` with your actual Tailscale IP everywhere in the remaining steps.

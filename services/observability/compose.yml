@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:v3.13.2
+    image: prom/prometheus:v3.14.0
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -20,7 +20,7 @@ services:
       - homeserver
 
   loki:
-    image: grafana/loki:3.7.4
+    image: grafana/loki:3.7.6
     container_name: loki
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
@@ -42,7 +42,7 @@ services:
   # config needed since FastAPI services here already log Loki-compatible
   # JSON to stdout (queryable in Grafana via `| json` in LogQL).
   alloy:
-    image: grafana/alloy:v1.18.0
+    image: grafana/alloy:v1.18.1
     container_name: alloy
     restart: unless-stopped
     command:
@@ -74,6 +74,23 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
+    # Only track actual container cgroups, not the whole host cgroup tree
+    # (systemd slices, root) — cuts tracked cgroups roughly in half and
+    # keeps memory usage proportional to container count. That's still
+    # proportional, though: at 100+ running containers this host measured
+    # ~3.5GB RSS. This cAdvisor build's --disable_metrics default already
+    # skips the heavy collectors this stack doesn't use (tcp/udp, process,
+    # cpu_topology, hugetlb, etc — see `docker logs cadvisor` usage text),
+    # so that flag isn't the lever. The actual lever: --housekeeping_interval
+    # defaults to 1s *per container* (a full stats + disk-usage-walk pass
+    # every second, times 116 containers), while Prometheus only scrapes
+    # this endpoint every 15s (prometheus.yml global scrape_interval) — so
+    # cAdvisor was recomputing/caching stats ~15x more often than anything
+    # ever reads them. Matching it to the scrape interval cuts that waste
+    # without losing any resolution Prometheus actually captures.
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -134,6 +151,13 @@ services:
       # Grafana is admin-provisioned (no public signup expected for a
       # monitoring dashboard) — kept at the image's own default.
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # SMTP for alerting emails — points at Mailpit for testing (see
+      # GRAFANA_SMTP_HOST/FROM in .env). SKIP_VERIFY since Mailpit has no
+      # TLS at all, not just a self-signed cert to ignore.
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${GRAFANA_SMTP_HOST}
+      GF_SMTP_SKIP_VERIFY: "true"
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM}
     volumes:
       - ${DATA_ROOT}/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

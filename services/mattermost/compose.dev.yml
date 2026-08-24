@@ -1,0 +1,4 @@
+services:
+  mattermost:
+    ports:
+      - "8141:8065"

@@ -21,23 +21,92 @@ cp docker/.env.example docker/.env
 ## Usage
 
 ```bash
-python docker/docker-limits.py check            # show what would be applied — read-only, safe to run anytime
-python docker/docker-limits.py apply             # CPU + memory + log rotation (restarts Docker — confirms first)
-python docker/docker-limits.py apply --yes       # same, skip the confirmation
-python docker/docker-limits.py disk-quota        # the disk cap — separate step, more disruptive on Linux (confirms first)
-python docker/docker-limits.py status            # show current applied state
+python docker/docker-limits.py check                 # show what would be applied — read-only, safe to run anytime
+python docker/docker-limits.py apply                  # CPU + memory + log rotation (restarts Docker — confirms first)
+python docker/docker-limits.py apply --yes            # same, skip the confirmation
+python docker/docker-limits.py relocate-data-root      # move Docker's data-root to DOCKER_DATA_ROOT (confirms first)
+python docker/docker-limits.py disk-quota             # cap disk usage wherever the data-root currently is (confirms first)
+python docker/docker-limits.py status                 # show current applied state, including the data-root path
 ```
 
-`apply` and `disk-quota` are deliberately separate commands. `apply`
-restarts Docker (interrupts every running container, but is otherwise
-quick and safe). `disk-quota` is a bigger deal on Linux — see "Platform
-mechanics" below — so it's never bundled into `apply` and always asks for
-confirmation on its own.
+`apply`, `relocate-data-root`, and `disk-quota` are deliberately separate
+commands. `apply` restarts Docker (interrupts every running container, but
+is otherwise quick and safe). `relocate-data-root` and `disk-quota` are
+bigger deals — full data copies, more disruptive on Linux (see "Platform
+mechanics" below) — so neither is ever bundled into `apply` and both always
+ask for confirmation on their own.
+
+## Two independent knobs: where vs. how much
+
+Both are entirely opt-in — nothing here runs automatically, and neither
+command does anything unless you invoke it yourself:
+
+- **`relocate-data-root`** — *where* Docker's data (images, containers,
+  volumes, build cache) physically lives, for the **whole host, every
+  container**. By default that's `/var/lib/docker` on the OS drive. If you
+  have a bigger secondary disk and want to move everything Docker stores
+  over to it — not just one service's — set `DOCKER_DATA_ROOT` in
+  `docker/.env` and run this once. It's your call whether that's worth the
+  restart/data-copy; nothing in this repo requires it.
+- **`disk-quota`** — *how much* space Docker is allowed to use, wherever its
+  data-root currently is. Works whether or not you've relocated it.
+
+They compose because every command here re-detects the data-root live via
+`docker info` — run `relocate-data-root` first (if at all), and `disk-quota`
+(and `status`/`check`) automatically target the new location afterward, no
+extra config.
+
+**Not what Forgejo's CI storage uses.** Forgejo's runner already keeps its
+build/push traffic off the OS drive by default, unconditionally, via its own
+isolated Docker-in-Docker sidecar (`forgejo-docker` in
+`services/forgejo/compose.yml`) — see `docs/services/forgejo.md`. That's
+active the moment the `runner` profile is up; there's no toggle for it and
+it doesn't touch this folder at all. `relocate-data-root` is a separate,
+whole-host tool for if you want *everything* Docker does on this machine —
+not just Forgejo CI — living somewhere other than the OS drive.
+
+**Efficiency: this is a disk-speed trade, not a free win, whichever knob you
+use.** Neither mechanism makes Docker faster — both just decide *which
+physical disk* absorbs the I/O. Check what you actually have before
+assuming either direction helps:
+
+```bash
+lsblk -d -o NAME,ROTA,MODEL,TRAN   # ROTA=0 -> SSD/NVMe, ROTA=1 -> spinning HDD
+```
+
+- If the OS drive is the faster disk (commonly true — SSD boot drive, HDD
+  for bulk storage) and you `relocate-data-root` onto a bigger-but-slower
+  secondary disk, every container on the host — not just CI — now does its
+  image/layer I/O against the slower disk. More headroom, less speed, for
+  everything.
+- Forgejo's isolated sidecar makes the same trade but scoped to CI only —
+  its storage sits wherever `DATA_ROOT` resolves to (this repo's normal
+  `service_data/data/forgejo/` convention), so CI build/extract speed
+  follows whatever disk that happens to be, while the OS drive and every
+  other service are unaffected either way.
+- Nothing here is permanent: `DATA_ROOT`/`DOCKER_DATA_ROOT` are just bind
+  mount targets. Point either one at a faster disk later (e.g. add an SSD)
+  and speed follows it automatically — the isolation/relocation mechanism
+  doesn't change, only which physical disk sits behind it.
+
+**Rule of thumb:** reach for `relocate-data-root` only if the *whole host*
+is tight on OS-drive space and you're fine with every container's I/O
+moving to the new disk. If the OS drive is otherwise fine and the actual
+concern is CI build storage specifically, Forgejo's sidecar already handles
+that on its own — no action needed here at all.
 
 Needs `sudo` — every privileged step shells out to `sudo` itself (`tee`,
 `systemctl`, `btrfs`, etc.), so run these as your normal user, not as
 root. A coding assistant without an interactive terminal can prepare
 these files but can't run the privileged steps itself.
+
+**Also check `fs.inotify.max_user_instances` if containers crash-loop or
+come up unhealthy right after a reboot or a mass `docker restart`.**
+Separate axis from CPU/memory/disk, not something this tool sets — a
+host running many containers at once can exhaust the default 128-instance
+inotify ceiling well before memory/CPU are the actual problem. See
+["Host inotify limits" in `docs/08-maintenance.md`](../docs/08-maintenance.md#host-inotify-limits-hit-when-running-many-containers-at-once)
+for the symptom and the one-line permanent fix.
 
 ## Platform dispatch
 

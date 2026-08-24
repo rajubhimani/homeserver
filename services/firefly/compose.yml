@@ -1,6 +1,6 @@
 services:
   firefly-db:
-    image: postgres:18.4-alpine
+    image: postgres:18.6-alpine
     container_name: firefly-db
     restart: unless-stopped
     env_file: .env
@@ -52,7 +52,12 @@ services:
       # also load .env via env_file, and their own upstream defaults for these differ
       # (importer defaults to APP_ENV=local, MAIL_MAILER=empty)
       APP_ENV: production
-      MAIL_MAILER: log
+      # Points at Mailpit (services/mailpit/, container "mailpit") — this
+      # stack's SMTP test-catcher, no real mail delivery.
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_FROM: firefly@example.com
       TRUSTED_PROXIES: "**"
       CACHE_DRIVER: file
       SESSION_DRIVER: file

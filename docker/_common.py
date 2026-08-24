@@ -223,7 +223,95 @@ CPUQuota={cfg['_cpu_quota_pct']}%
     return 0
 
 
+def relocate_data_root(cfg: dict[str, str], assume_yes: bool) -> int:
+    """Move Docker's entire data-root (images/containers/volumes/build cache)
+    to DOCKER_DATA_ROOT via daemon.json's "data-root" key. Same mechanism on
+    any systemd Linux host (Fedora/Ubuntu/other) -- not filesystem-specific,
+    unlike the disk-quota cap.
+
+    Independent of disk-quota: this decides WHERE the data lives, disk-quota
+    decides HOW MUCH space it's allowed to use there. Every other command in
+    this tool calls docker_root_dir(), which re-queries `docker info` live,
+    so run this first (if at all) and disk-quota/status/check automatically
+    target the new location afterward -- no other config to update.
+    """
+    target = cfg.get("DOCKER_DATA_ROOT", "").strip()
+    if not target:
+        error("DOCKER_DATA_ROOT is not set in docker/.env -- nothing to relocate to.")
+        return 1
+
+    current = docker_root_dir()
+    if str(Path(target)) == current:
+        info(f"Docker data-root is already {current} -- nothing to do.")
+        return 0
+
+    target_path = Path(target)
+    if target_path.is_dir() and any(target_path.iterdir()):
+        error(f"{target} already exists and isn't empty -- refusing to overwrite it.")
+        error("Pick an empty/new path, or remove it first if you're sure it's not needed.")
+        return 1
+
+    info(f"About to move Docker's data-root from {current} to {target}.")
+    warn("This stops Docker (interrupts every running container) and copies")
+    warn(f"all existing images/containers/volumes from {current}.")
+    if not confirm("Proceed?", assume_yes):
+        info("Cancelled")
+        return 1
+
+    info("Stopping Docker...")
+    sudo_run(["systemctl", "stop", "docker"])
+
+    info(f"Creating {target}...")
+    if sudo_run(["mkdir", "-p", target]).returncode != 0:
+        error("Failed to create target directory")
+        return 1
+
+    info(f"Copying {current} -> {target} (this can take a while for a large data-root)...")
+    copy = sudo_run(["cp", "-a", f"{current}/.", f"{target}/"])
+    if copy.returncode != 0:
+        error(f"Copy failed -- original data is untouched at {current}. Investigate before retrying.")
+        return 1
+
+    daemon_json_path = Path(DAEMON_JSON_PATH)
+    existing: dict = {}
+    if daemon_json_path.is_file():
+        try:
+            existing = json.loads(daemon_json_path.read_text())
+        except json.JSONDecodeError:
+            warn(f"{DAEMON_JSON_PATH} exists but isn't valid JSON -- not touching it. Fix or remove it first.")
+            return 1
+    existing["data-root"] = target
+    if not sudo_write(DAEMON_JSON_PATH, json.dumps(existing, indent=2) + "\n"):
+        return 1
+    success(f"Wrote {DAEMON_JSON_PATH} (data-root: {target})")
+
+    info("Starting Docker...")
+    if sudo_run(["systemctl", "start", "docker"]).returncode != 0:
+        error("Docker failed to start with the new data-root -- check `journalctl -u docker`.")
+        error(f"Old data is still intact at {current} if you need to roll back daemon.json.")
+        return 1
+
+    new_root = docker_root_dir()
+    if new_root != target:
+        error(f"Docker started, but its data-root reports as {new_root}, not {target} -- check daemon.json.")
+        return 1
+
+    du_new = run(["sudo", "du", "-sh", target], capture_output=True).stdout.strip()
+    du_old = run(["sudo", "du", "-sh", current], capture_output=True).stdout.strip()
+    info(f"New: {du_new}")
+    info(f"Old: {du_old}")
+    success(f"Docker is now running with data-root {target}")
+    if confirm(f"Sizes look right? Delete the old data at {current} to free the OS drive?", assume_yes):
+        sudo_run(["rm", "-rf", current])
+        success(f"Removed old data at {current}")
+    else:
+        warn(f"Leaving old data at {current} -- delete it manually once you've verified the new location works.")
+    return 0
+
+
 def cgroup_status(cfg: dict[str, str]) -> None:
+    info(f"Docker data-root: {docker_root_dir()}")
+    print()
     info("docker-workloads.slice:")
     run(["systemctl", "status", SLICE_NAME, "--no-pager"])
     print()

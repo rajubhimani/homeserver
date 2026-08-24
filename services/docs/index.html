@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SITE_TITLE_PLACEHOLDER</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="/vendor/docsify-vue.css">
+  <link rel="stylesheet" href="/vendor/prism-tomorrow.min.css">
+  <style>
+    :root {
+      --theme-color: #3a5ba0;
+    }
+    .markdown-section { max-width: 900px; }
+    .markdown-section code { background-color: rgba(58,91,160,0.08); }
+    .search input { border-radius: 4px; }
+  </style>
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://plausible.prajnatech.in/js/pa-USN6l-4ebm4_NzjKTmKFJ.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window.$docsify = {
+      name: 'SITE_TITLE_PLACEHOLDER',
+      homepage: 'setup.md',
+      loadSidebar: true,
+      loadNavbar: false,
+      // auto2top:true (the old setting here) scrolled to the top on
+      // *every* navigation, including the browser's own Back button — so
+      // clicking into an example and hitting Back always dumped you at
+      // the top of the sidebar page instead of back where you were
+      // reading. The plugin below replaces it: scroll to top on a fresh
+      // link click (same as auto2top used to do), but restore the exact
+      // saved scroll position on Back/Forward instead.
+      relativePath: true,
+      maxLevel: 4,
+      subMaxLevel: 3,
+      sidebarDisplayLevel: 1,
+      search: {
+        maxAge: 0,
+        paths: 'auto',
+        placeholder: 'Search docs',
+        noData: 'No results',
+        depth: 4,
+      },
+      copyCode: {
+        buttonText: 'Copy',
+        errorText: 'Error',
+        successText: 'Copied',
+      },
+      formatUpdated: '{MM}/{DD}/{YYYY}',
+    };
+
+    // Scroll-position memory: track whether the current route change was
+    // a Back/Forward (popstate fires) vs. a fresh link click (no
+    // popstate). Scroll position is saved continuously per-hash in
+    // sessionStorage (survives the SPA content swap, cleared when the tab
+    // closes) so it's still there however long you spent on the other
+    // page. Restored only on Back/Forward; a fresh click still lands at
+    // the top of the new page, same as auto2top used to do.
+    (function () {
+      var isPopping = false;
+      window.addEventListener('popstate', function () {
+        isPopping = true;
+      });
+      window.addEventListener(
+        'scroll',
+        function () {
+          sessionStorage.setItem('docsify-scroll:' + location.hash, String(window.scrollY));
+        },
+        { passive: true }
+      );
+      window.$docsify.plugins = (window.$docsify.plugins || []).concat(function (hook) {
+        hook.doneEach(function () {
+          if (isPopping) {
+            isPopping = false;
+            var saved = sessionStorage.getItem('docsify-scroll:' + location.hash);
+            if (saved !== null) {
+              // rAF: wait one frame so the swapped-in content has actually
+              // been laid out before scrolling, or a shorter old page can
+              // clamp the scroll before the new page's real height applies.
+              requestAnimationFrame(function () {
+                window.scrollTo(0, parseInt(saved, 10));
+              });
+              return;
+            }
+          }
+          window.scrollTo(0, 0);
+        });
+      });
+    })();
+  </script>
+  <script src="/vendor/docsify.min.js"></script>
+  <script src="/vendor/docsify-search.min.js"></script>
+  <script src="/vendor/docsify-sidebar-collapse.min.js"></script>
+  <script src="/vendor/docsify-copy-code.min.js"></script>
+  <!-- mermaid must load before docsify-mermaid, which hooks docsify's
+       markdown renderer to turn ```mermaid fences into rendered SVG
+       instead of a plain highlighted code block. -->
+  <script src="/vendor/mermaid.min.js"></script>
+  <script src="/vendor/docsify-mermaid.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false });
+  </script>
+  <script src="/vendor/prism.min.js"></script>
+  <script src="/vendor/prism-bash.min.js"></script>
+  <script src="/vendor/prism-yaml.min.js"></script>
+  <script src="/vendor/prism-json.min.js"></script>
+  <script src="/vendor/prism-python.min.js"></script>
+  <script src="/vendor/prism-nginx.min.js"></script>
+  <script src="/vendor/prism-docker.min.js"></script>
+</body>
+</html>

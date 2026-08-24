@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted to-do list and task management app — projects, due dates, labels, Kanban/Gantt views.
-**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres
+**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~52MB total (app 31 + db 21)
 
 ## Setup
 
@@ -24,6 +24,26 @@ No admin account is created on first start. Open `https://vikunja.<domain>/` (or
 ## Registration
 
 `VIKUNJA_ENABLE_REGISTRATION` in `.env` (maps to `VIKUNJA_SERVICE_ENABLEREGISTRATION`) controls self-signup, default `true`. Set to `false` once accounts are provisioned to close the instance to new signups.
+
+## Connecting the mobile app
+
+Vikunja has official native apps for [Android](https://play.google.com/store/apps/details?id=io.vikunja.app) (Play Store and F-Droid) and [iOS](https://apps.apple.com/us/app/vikunja/id6751271029) that talk to a self-hosted instance — there's no "cloud-only" edition, every install expects you to point it at a server:
+
+1. Install the app from the store above.
+2. On the login screen, enter the instance URL: `https://vikunja.${DOMAIN}` (do **not** point it at the bare host/port — the app needs the public HTTPS URL that matches `VIKUNJA_SERVICE_PUBLICURL`, or CORS rejects it).
+3. Log in with the account created in the web UI (or register from the app if `VIKUNJA_ENABLE_REGISTRATION` is `true`).
+
+This works because `VIKUNJA_SERVICE_PUBLICURL` is already hardcoded to `https://vikunja.${DOMAIN}/` in `compose.yml` (see Notes below) — without a matching public URL, the mobile app's requests get blocked by CORS before login even gets a chance to fail on credentials.
+
+There's also an official CLI ([go-vikunja/app](https://github.com/go-vikunja/app) covers desktop/CLI use) and a full [REST API](https://vikunja.io/docs/api-documentation/) if you want to script task creation instead.
+
+## Using it day to day
+
+- **Projects:** the main organizational unit — create one from the **+** in the sidebar. Projects can be nested (sub-projects) for larger structures.
+- **Views:** each project offers List, Kanban (Board), Table, and Gantt views of the same tasks — switch from the tabs at the top of a project; none of them are a separate data set.
+- **Tasks:** due dates, priorities, labels, assignees (in shared projects), checklists, and file attachments (capped by `VIKUNJA_FILES_MAXSIZE`, see Notes) all live on the task detail view.
+- **Filters and saved filters:** build a reusable query (e.g. "due this week across all projects") and pin it alongside regular projects in the sidebar — useful once there are more than a couple of projects.
+- **Labels:** free-form tags, managed from a task's detail view or **Labels** in the sidebar, for cross-project categorization that doesn't fit the project/sub-project hierarchy.
 
 ## Notes
 

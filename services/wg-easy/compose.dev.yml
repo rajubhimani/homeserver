@@ -1,0 +1,5 @@
+# network_mode: host means the container binds directly to the host's
+# network interfaces — no port publishing needed or possible here.
+# This file exists only to satisfy the three-file compose pattern.
+services:
+  wg-easy: {}

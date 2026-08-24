@@ -1,0 +1,4 @@
+services:
+  temporal-ui:
+    ports:
+      - "127.0.0.1:8138:8080"

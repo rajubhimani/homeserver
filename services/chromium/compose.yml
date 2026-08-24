@@ -1,0 +1,58 @@
+services:
+  chromium:
+    # Deliberate exception to this repo's pinned-version convention, same
+    # rationale as services/firefox/compose.yml: internet-reachable, stateless
+    # (profile lives in the /config volume), benefits from always-current
+    # security patches. `uv run homeserver.py dev update chromium` stays current.
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: chromium
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PUID: 1000
+      PGID: 1000
+      # No CUSTOM_USER/PASSWORD — Authentik forward-auth gates the whole hub
+      # at browser.${DOMAIN} now (see docs/services/browser-hub.md); this
+      # container's own Basic Auth was dropped deliberately rather than kept
+      # as defense-in-depth, since it no longer shares a credential with the
+      # hub gate and was producing a separate popup on every browser.
+      # Public-facing container: reduce blast radius if the browser itself is
+      # ever compromised — disables sudo, terminal emulators, and xdg/exo-open.
+      HARDEN_DESKTOP: "true"
+      # Compensates for HARDEN_DESKTOP above: with no terminal/xdg-open to
+      # relaunch it, accidentally closing Chromium itself (not just your own
+      # viewing tab) would otherwise strand the session with no way to get
+      # the browser back short of restarting the whole container. This
+      # watchdog auto-relaunches the main app whenever it exits.
+      RESTART_APP: "true"
+      # Served at https://browser.${DOMAIN}/chromium/ via the shared browser
+      # hub (services/nginx-plain), not its own subdomain — see
+      # docs/services/browser-hub.md. Needs both slashes per upstream's docs.
+      SUBFOLDER: /chromium/
+    volumes:
+      - ${DATA_ROOT}/config:/config
+    shm_size: "1gb"
+    # Chromium's own sandbox needs syscalls modern Docker restricts by
+    # default — this is in upstream's own base compose example, not just a
+    # troubleshooting fallback. HARDEN_DESKTOP above offsets some of the
+    # extra surface this opens up.
+    security_opt:
+      - seccomp:unconfined
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      homeserver:
+        # Static IP, not dynamically assigned — the LAN-isolation firewall
+        # rule in docs/services/browser-hub.md targets these 5 fixed
+        # addresses specifically, and a rule pinned to a dynamic IP would
+        # silently stop matching (or start matching some other container)
+        # after any recreation.
+        ipv4_address: 172.18.255.241
+
+networks:
+  homeserver:
+    external: true

@@ -1,6 +1,6 @@
 services:
   forgejo-db:
-    image: postgres:18.4-alpine
+    image: postgres:18.6-alpine
     container_name: forgejo-db
     restart: unless-stopped
     env_file: .env
@@ -47,6 +47,9 @@ services:
       # X-Forwarded-For/X-Real-IP are still honored correctly.
       FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES: 172.18.0.0/16
       FORGEJO__actions__ENABLED: "true"
+      # Put the requested common choices first in the repository license picker.
+      # These names match Forgejo's bundled SPDX template filenames.
+      FORGEJO__repository__PREFERRED_LICENSES: ${PREFERRED_LICENSES:-Apache-2.0,GPL-3.0-only,MIT}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
       interval: 60s
@@ -62,19 +65,96 @@ services:
     networks:
       - homeserver
 
+  # Isolated Docker-in-Docker engine used ONLY by forgejo-runner's CI jobs --
+  # keeps CI's images/containers/build-cache on a completely separate daemon
+  # and storage location from this host's real Docker (which stays on the OS
+  # drive, untouched). Storage lands under ${DATA_ROOT}/docker-data, which is
+  # this repo's usual service_data/data/forgejo path -- i.e. wherever that
+  # disk actually is, same as every other service's data, not necessarily the
+  # OS drive. See docs/services/forgejo.md for the isolation rationale.
+  forgejo-docker:
+    image: docker:28-dind
+    container_name: forgejo-docker
+    restart: unless-stopped
+    privileged: true
+    environment:
+      # Empty (not unset) disables TLS cert generation -- fine since this
+      # daemon is only reachable over the internal `homeserver` bridge
+      # network, never published to a host port.
+      DOCKER_TLS_CERTDIR: ""
+    # The dind entrypoint only auto-adds a -H flag when DOCKER_TLS_CERTDIR is
+    # set (for the TLS case); with it empty it just execs dockerd with
+    # whatever args follow, so the plaintext listener needs to be explicit.
+    command:
+      - dockerd
+      - --host=tcp://0.0.0.0:2375
+      - --host=unix:///var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ${DATA_ROOT}/docker-data:/var/lib/docker
+    networks:
+      - homeserver
+
   forgejo-runner:
     image: code.forgejo.org/forgejo/runner:12.13.2
     container_name: forgejo-runner
     restart: unless-stopped
-    profiles:
-      - runner
     environment:
       FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
+      RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:-}
+      RUNNER_NAME: ${RUNNER_NAME:-forgejo-runner}
+      # catthehacker/ubuntu is the standard community image for act/Forgejo/Gitea
+      # runners -- it emulates GitHub's runner environment (Node ABI, curl, docker
+      # CLI, build tools). Plain node:20-bookworm crashes on actions/checkout@v7's
+      # post-run cache step (undici expects a newer Node than that image ships).
+      # Aliasing GitHub's own runs-on names (ubuntu-latest/24.04/22.04) to the same
+      # images means a workflow copied straight from a GitHub-mirrored repo works
+      # unmodified -- no one has to know to write `runs-on: docker` instead.
+      RUNNER_LABELS: ${RUNNER_LABELS:-docker:docker://catthehacker/ubuntu:act-latest,ubuntu-latest:docker://catthehacker/ubuntu:act-latest,ubuntu-24.04:docker://catthehacker/ubuntu:act-24.04,ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04}
+    # The image's default CMD is the bare binary with no subcommand, which just prints
+    # help text and exits 0 -- with restart:unless-stopped that loops forever and the
+    # container never stays up long enough to `docker exec` a manual `register` into it.
+    # Register once (writes /data/.runner) using RUNNER_REGISTRATION_TOKEN, then daemon.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /data/.runner ]; then
+          if [ -z "$$RUNNER_REGISTRATION_TOKEN" ]; then
+            echo "forgejo-runner: /data/.runner not found and RUNNER_REGISTRATION_TOKEN is unset -- set it in services/forgejo/.env (get a token from https://forgejo.${DOMAIN}/-/admin/actions/runners, 'Create new Runner')" >&2
+            exit 1
+          fi
+          forgejo-runner register --no-interactive \
+            --instance "$$FORGEJO_INSTANCE_URL" \
+            --token "$$RUNNER_REGISTRATION_TOKEN" \
+            --name "$$RUNNER_NAME" \
+            --labels "$$RUNNER_LABELS"
+        fi
+        # A workflow step running `docker build`/`docker push` needs a docker
+        # daemon reachable inside its job container. Rather than automounting
+        # this host's real docker.sock (which would give every CI job root-
+        # equivalent access to the host engine and dump build layers on the OS
+        # drive), point at the dedicated forgejo-docker sidecar over TCP on
+        # the internal network instead -- fully isolated daemon and storage,
+        # host Docker is never touched by a CI job.
+        cat > /data/config.yaml <<-CONFIG
+        runner:
+          file: .runner
+        container:
+          docker_host: "tcp://forgejo-docker:2375"
+        CONFIG
+        exec forgejo-runner daemon --config /data/config.yaml
     volumes:
-      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/runner-data:/data
     depends_on:
       forgejo:
+        condition: service_healthy
+      forgejo-docker:
         condition: service_healthy
     networks:
       - homeserver
