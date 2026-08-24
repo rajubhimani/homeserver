@@ -1,0 +1,443 @@
+# Mirrors airflow/compose.yml's airflow-apiserver, airflow-scheduler,
+# airflow-dag-processor, airflow-triggerer — one Deployment per role, all
+# against the same dedicated Postgres (postgres-statefulset.yaml) and the
+# same shared dags/logs/config/plugins PVC (airflow-data, see init-job.yaml).
+#
+# Compose's `depends_on: {airflow-db: service_healthy, airflow-init:
+# service_completed_successfully}` on every one of these has no direct k8s
+# equivalent (see kubernetes/README.md's "No depends_on equivalent") —
+# apply init-job.yaml first; until it completes these will crash-loop on an
+# unmigrated schema and recover on their own restarts once it finishes.
+#
+# Deliberately dropped versus compose:
+#   - airflow-scheduler's docker.sock mount + group_add + the
+#     apache-airflow-providers-docker/temporalio _PIP_ADDITIONAL_REQUIREMENTS
+#     — DockerOperator has no k8s equivalent on a containerd kind node (same
+#     "no live socket" reasoning kubernetes/README.md gives for dropping
+#     portainer/dozzle/dockge/coolify entirely), and the one example DAG
+#     that used temporalio isn't ported either (dags-examples is skipped,
+#     see init-job.yaml's comment).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-apiserver
+  namespace: apps
+  labels:
+    app: airflow-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-apiserver
+  template:
+    metadata:
+      labels:
+        app: airflow-apiserver
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 50000
+        runAsGroup: 0
+      containers:
+        - name: airflow-apiserver
+          image: apache/airflow:3.3.1
+          # compose's `command: api-server --proxy-headers` overrides CMD
+          # only — args: here, not command: (ENTRYPOINT's own dispatch
+          # logic still runs), same reasoning as every image in this repo
+          # with a custom ENTRYPOINT (see TROUBLESHOOTING.md).
+          args: ["api-server", "--proxy-headers"]
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW__CORE__AUTH_MANAGER
+              value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-db-credentials
+                  key: sql-alchemy-conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: fernet-key
+            - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+              value: http://airflow-apiserver:8080/execution/
+            - name: AIRFLOW__API_AUTH__JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: jwt-secret
+            - name: AIRFLOW__API__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: api-secret-key
+            - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+              value: "true"
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "false"
+            - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+              value: "true"
+            # Admin -> Configuration in the UI 403s without this ("Your
+            # Airflow administrator chose not to expose the configuration").
+            # "True" still masks sensitive values automatically.
+            - name: AIRFLOW__API__EXPOSE_CONFIG
+              value: "False"
+            - name: AIRFLOW_CONFIG
+              value: /opt/airflow/config/airflow.cfg
+            # Traefik is a separate pod (not the same host process), so
+            # Airflow won't trust its X-Forwarded-* headers without both
+            # --proxy-headers (above) and this — redirects/CSRF checks
+            # silently build http:// URLs otherwise even with Proto:https
+            # set upstream.
+            - name: FORWARDED_ALLOW_IPS
+              value: "*"
+          volumeMounts:
+            - name: data
+              mountPath: /opt/airflow/dags
+              subPath: dags
+            - name: data
+              mountPath: /opt/airflow/logs
+              subPath: logs
+            - name: data
+              mountPath: /opt/airflow/config
+              subPath: config
+            - name: data
+              mountPath: /opt/airflow/plugins
+              subPath: plugins
+          resources:
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v2/monitor/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v2/monitor/health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: airflow-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-apiserver
+  namespace: apps
+spec:
+  selector:
+    app: airflow-apiserver
+  ports:
+    - port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  namespace: apps
+  labels:
+    app: airflow-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app: airflow-scheduler
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 50000
+        runAsGroup: 0
+      containers:
+        - name: airflow-scheduler
+          image: apache/airflow:3.3.1
+          args: ["scheduler"]
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW__CORE__AUTH_MANAGER
+              value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-db-credentials
+                  key: sql-alchemy-conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: fernet-key
+            - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+              value: http://airflow-apiserver:8080/execution/
+            - name: AIRFLOW__API_AUTH__JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: jwt-secret
+            - name: AIRFLOW__API__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: api-secret-key
+            - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+              value: "true"
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "false"
+            - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+              value: "true"
+            - name: AIRFLOW_CONFIG
+              value: /opt/airflow/config/airflow.cfg
+            # Mailpit catcher (see mailpit/deployment.yaml) — what actually
+            # makes AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_RETRY/FAILURE below
+            # genuinely send mail instead of silently no-op'ing. No auth,
+            # nothing leaves the cluster.
+            - name: AIRFLOW__SMTP__SMTP_HOST
+              value: mailpit
+            - name: AIRFLOW__SMTP__SMTP_PORT
+              value: "1025"
+            - name: AIRFLOW__SMTP__SMTP_MAIL_FROM
+              value: airflow@homeserver.local
+            - name: AIRFLOW__SMTP__SMTP_STARTTLS
+              value: "false"
+            - name: AIRFLOW__SMTP__SMTP_SSL
+              value: "false"
+            - name: AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_RETRY
+              value: "true"
+            - name: AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_FAILURE
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /opt/airflow/dags
+              subPath: dags
+            - name: data
+              mountPath: /opt/airflow/logs
+              subPath: logs
+            - name: data
+              mountPath: /opt/airflow/config
+              subPath: config
+            - name: data
+              mountPath: /opt/airflow/plugins
+              subPath: plugins
+          resources:
+            limits:
+              memory: 768Mi
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "airflow jobs check --job-type SchedulerJob --hostname \"$HOSTNAME\""]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "airflow jobs check --job-type SchedulerJob --hostname \"$HOSTNAME\""]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: airflow-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-dag-processor
+  namespace: apps
+  labels:
+    app: airflow-dag-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-dag-processor
+  template:
+    metadata:
+      labels:
+        app: airflow-dag-processor
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 50000
+        runAsGroup: 0
+      containers:
+        - name: airflow-dag-processor
+          image: apache/airflow:3.3.1
+          args: ["dag-processor"]
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW__CORE__AUTH_MANAGER
+              value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-db-credentials
+                  key: sql-alchemy-conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: fernet-key
+            - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+              value: http://airflow-apiserver:8080/execution/
+            - name: AIRFLOW__API_AUTH__JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: jwt-secret
+            - name: AIRFLOW__API__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: api-secret-key
+            - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+              value: "true"
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "false"
+            - name: AIRFLOW_CONFIG
+              value: /opt/airflow/config/airflow.cfg
+          volumeMounts:
+            - name: data
+              mountPath: /opt/airflow/dags
+              subPath: dags
+            - name: data
+              mountPath: /opt/airflow/logs
+              subPath: logs
+            - name: data
+              mountPath: /opt/airflow/config
+              subPath: config
+            - name: data
+              mountPath: /opt/airflow/plugins
+              subPath: plugins
+          resources:
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "airflow jobs check --job-type DagProcessorJob --hostname \"$HOSTNAME\""]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "airflow jobs check --job-type DagProcessorJob --hostname \"$HOSTNAME\""]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: airflow-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-triggerer
+  namespace: apps
+  labels:
+    app: airflow-triggerer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-triggerer
+  template:
+    metadata:
+      labels:
+        app: airflow-triggerer
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 50000
+        runAsGroup: 0
+      containers:
+        - name: airflow-triggerer
+          image: apache/airflow:3.3.1
+          args: ["triggerer"]
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW__CORE__AUTH_MANAGER
+              value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-db-credentials
+                  key: sql-alchemy-conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: fernet-key
+            - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+              value: http://airflow-apiserver:8080/execution/
+            - name: AIRFLOW__API_AUTH__JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: jwt-secret
+            - name: AIRFLOW__API__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: api-secret-key
+            - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+              value: "true"
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "false"
+            - name: AIRFLOW_CONFIG
+              value: /opt/airflow/config/airflow.cfg
+            # Deferrable operators serialize their Trigger's classpath as a
+            # bare module name and the triggerer resolves it with plain
+            # import_string — unlike the scheduler/dag-processor, which add
+            # each DAG file's own directory to sys.path while parsing it,
+            # the triggerer never does that, so a trigger class living in a
+            # DAG file is otherwise unimportable here.
+            - name: PYTHONPATH
+              value: /opt/airflow/dags
+          volumeMounts:
+            - name: data
+              mountPath: /opt/airflow/dags
+              subPath: dags
+            - name: data
+              mountPath: /opt/airflow/logs
+              subPath: logs
+            - name: data
+              mountPath: /opt/airflow/config
+              subPath: config
+            - name: data
+              mountPath: /opt/airflow/plugins
+              subPath: plugins
+          resources:
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "airflow jobs check --job-type TriggererJob --hostname \"$HOSTNAME\""]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "airflow jobs check --job-type TriggererJob --hostname \"$HOSTNAME\""]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: airflow-data

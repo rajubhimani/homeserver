@@ -1,0 +1,179 @@
+# Mirrors temporal/compose.yml's temporal + temporal-ui services (frontend/
+# history/matching/worker roles bundled in temporalio/server — this is
+# Temporal's own internal "worker", unrelated to compose.yml's
+# temporal-worker container). Deliberately omitted from this pilot:
+#
+#   - temporal-worker: a CUSTOM-BUILT image (temporal/worker/Dockerfile +
+#     bind-mounted Python workflow code, built locally via `docker-compose
+#     build`, not pulled from a public registry). This pilot has no CI/
+#     registry to build and push a custom image against a real cluster —
+#     same category of decision as forgejo's CI runner or immich's
+#     offline-remover being left out of their own manifests. Port it once
+#     this pilot gets an image registry to push to.
+#   - temporal-admin-tools: compose's long-running, `stdin_open`/`tty`
+#     container exists only as a `docker exec` target for ad-hoc `temporal`
+#     CLI use — not part of the app-serving/DB pattern this pilot is
+#     validating. The same temporalio/admin-tools image is already exercised
+#     by schema-setup-job.yaml and create-namespace-job.yaml; add a
+#     Deployment for interactive `kubectl exec` access later if it's
+#     actually needed.
+#
+# No `depends_on` equivalent for either Deployment below (temporal on
+# temporal-db + temporal-schema-setup; temporal-ui on temporal) — both
+# rely on connection retries + crash-loop restart, see kubernetes/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: apps
+  labels:
+    app: temporal
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: temporal
+          image: temporalio/server:1.30.4
+          env:
+            - name: DB
+              value: postgres12
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              value: temporal
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-db-credentials
+                  key: password
+            - name: POSTGRES_SEEDS
+              value: postgres-shared.data.svc.cluster.local
+            - name: DYNAMIC_CONFIG_FILE_PATH
+              value: config/dynamicconfig/development-sql.yaml
+            - name: TEMPORAL_ADDRESS
+              value: temporal:7233
+            - name: TEMPORAL_CLI_ADDRESS
+              value: temporal:7233
+            - name: LOG_LEVEL
+              value: info
+            - name: NUM_HISTORY_SHARDS
+              value: "4"
+          ports:
+            - containerPort: 7233
+          volumeMounts:
+            - name: dynamicconfig
+              mountPath: /etc/temporal/config/dynamicconfig
+              readOnly: true
+          resources:
+            limits:
+              memory: 768Mi
+          # compose's healthcheck execs `nc -z temporal 7233` inside the
+          # container because the frontend binds only its own
+          # container-network IP, not 127.0.0.1 (see compose.yml's
+          # comment) — a k8s tcpSocket probe sidesteps that gotcha
+          # entirely: it's kubelet-initiated against the Pod IP, not
+          # exec'd against the container's own localhost, so no
+          # hostname-vs-localhost trick is needed here.
+          readinessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
+      volumes:
+        - name: dynamicconfig
+          configMap:
+            name: temporal-dynamicconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  namespace: apps
+spec:
+  selector:
+    app: temporal
+  ports:
+    - port: 7233
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-ui
+  namespace: apps
+  labels:
+    app: temporal-ui
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: temporal-ui
+  template:
+    metadata:
+      labels:
+        app: temporal-ui
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: temporal-ui
+          image: temporalio/ui:2.53.3
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal:7233
+            - name: TEMPORAL_CORS_ORIGINS
+              value: https://temporal.k8s.local
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              memory: 256Mi
+          # compose's healthcheck uses `wget` (curl isn't in this image) —
+          # a k8s httpGet probe needs neither binary, it's kubelet-side
+          # against the Pod IP directly.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-ui
+  namespace: apps
+spec:
+  selector:
+    app: temporal-ui
+  ports:
+    - port: 8080

@@ -377,11 +377,46 @@ kubectl create secret generic supabase-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "supabase-db-credentials + supabase-credentials applied"
 
-# ── Dagster's own dedicated Postgres (DB only, no app tier ported) ────
+# ── Dagster (DB only, no app tier ported) — shared Postgres ───────────
 kubectl create secret generic dagster-db-credentials -n apps \
   --from-literal=password="$DAGSTER_DB_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "dagster-db-credentials applied"
+
+# ── Mattermost — shared Postgres ───────────────────────────────────────
+kubectl create secret generic mattermost-db-credentials -n apps \
+  --from-literal=password="$MATTERMOST_DB_PASSWORD" \
+  --from-literal=datasource="postgres://mattermost:${MATTERMOST_DB_PASSWORD}@postgres-shared.data.svc.cluster.local:5432/mattermost?sslmode=disable&connect_timeout=10" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "mattermost-db-credentials applied"
+
+# ── Airflow — shared Postgres + Fernet/JWT/API secrets + admin account ─
+kubectl create secret generic airflow-db-credentials -n apps \
+  --from-literal=password="$AIRFLOW_DB_PASSWORD" \
+  --from-literal=sql-alchemy-conn="postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@postgres-shared.data.svc.cluster.local:5432/airflow" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic airflow-credentials -n apps \
+  --from-literal=fernet-key="$AIRFLOW_FERNET_KEY" \
+  --from-literal=jwt-secret="$AIRFLOW_JWT_SECRET" \
+  --from-literal=api-secret-key="$AIRFLOW_API_SECRET_KEY" \
+  --from-literal=admin-username="$AIRFLOW_ADMIN_USERNAME" \
+  --from-literal=admin-password="$AIRFLOW_ADMIN_PASSWORD" \
+  --from-literal=admin-email="$AIRFLOW_ADMIN_EMAIL" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "airflow-db-credentials + airflow-credentials applied"
+
+# ── Temporal — shared Postgres (two databases, one role) ──────────────
+kubectl create secret generic temporal-db-credentials -n apps \
+  --from-literal=password="$TEMPORAL_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "temporal-db-credentials applied"
+
+# ── Rocket.Chat — MongoDB runs with no auth, both keys optional ───────
+kubectl create secret generic rocketchat-credentials -n apps \
+  --from-literal=admin-password="${ROCKETCHAT_ADMIN_PASSWORD:-}" \
+  --from-literal=reg-token="${ROCKETCHAT_REG_TOKEN:-}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "rocketchat-credentials applied"
 
 # ── HomeBox's API key HMAC pepper ─────────────────────────────────────
 kubectl create secret generic homebox-credentials -n apps \

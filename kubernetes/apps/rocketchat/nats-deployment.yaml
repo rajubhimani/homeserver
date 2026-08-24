@@ -1,0 +1,60 @@
+# Mirrors rocketchat/compose.yml's nats service — Rocket.Chat's default
+# inter-instance message transporter, required even for a single instance
+# since TRANSPORTER defaults to monolith+nats (compose.yml's own comment).
+# Not microservices mode — rocketchat/compose.yml runs no other
+# microservice containers, just this one monolith+nats transporter, so
+# this is the only extra Deployment beyond Mongo + the app itself.
+#
+# Stateless, no volume in compose -> no PVC here either, same shape as
+# immich/postgres-statefulset.yaml's immich-redis Deployment.
+#
+# Command vs args: compose sets `command: --http_port 8222`, which
+# overrides CMD only (nats:2.11-alpine's ENTRYPOINT is nats-server itself)
+# -> maps to k8s `args:`, not `command:`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketchat-nats
+  namespace: apps
+  labels:
+    app: rocketchat-nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketchat-nats
+  template:
+    metadata:
+      labels:
+        app: rocketchat-nats
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: nats
+          image: docker.io/nats:2.11-alpine
+          args: ["--http_port", "8222"]
+          ports:
+            - containerPort: 4222
+            - containerPort: 8222
+          resources:
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            tcpSocket:
+              port: 4222
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketchat-nats
+  namespace: apps
+spec:
+  selector:
+    app: rocketchat-nats
+  ports:
+    - name: client
+      port: 4222
+    - name: monitor
+      port: 8222

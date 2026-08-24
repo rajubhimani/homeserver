@@ -1,0 +1,144 @@
+# Mirrors rocketchat/compose.yml's rocketchat service. Depends on
+# rocketchat-mongodb (mongo-statefulset.yaml, replSet initiated by
+# mongo-init-job.yaml) and rocketchat-nats (nats-deployment.yaml) — no
+# depends_on equivalent in k8s, so this pod will crash-loop until both are
+# reachable, same documented gap as every other multi-container service in
+# this pilot.
+#
+# MAIL_URL points at the mailpit Service already ported at
+# kubernetes/apps/mailpit/ (smtp://mailpit:1025), same as compose routes
+# through the shared Mailpit catcher. OVERWRITE_SETTING_Show_Setup_Wizard
+# stays "completed" for the same reason compose sets it — Rocket.Chat's
+# workspace-registration wizard emails a real verification link from
+# Rocket.Chat's own cloud infra (cloud@rocket.chat), not through MAIL_URL,
+# so this avoids ever triggering that from a pilot deployment.
+#
+# Deviation: DEPLOY_PLATFORM is "kubernetes" here (compose hardcodes
+# "compose") — purely informational deployment metadata Rocket.Chat
+# reports in its admin panel/telemetry, not functional.
+#
+# No secrets required for a baseline install: compose.yml sets no
+# OAuth/encryption env vars, and ADMIN_PASS/REG_TOKEN are blank in
+# rocketchat/.env.example (first admin created via the setup wizard in the
+# browser instead, per docs/services/rocketchat.md). Both are still wired
+# via optional secretKeyRef so an operator can add them centrally later
+# (see apply-secrets.sh) without ever hardcoding a password here — the pod
+# just runs without them until then.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rocketchat-uploads
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketchat
+  namespace: apps
+  labels:
+    app: rocketchat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: rocketchat
+  template:
+    metadata:
+      labels:
+        app: rocketchat
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: rocketchat
+          image: registry.rocket.chat/rocketchat/rocket.chat:8.7.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: ROOT_URL
+              value: https://rocketchat.k8s.local
+            - name: PORT
+              value: "3000"
+            - name: DEPLOY_METHOD
+              value: docker
+            - name: DEPLOY_PLATFORM
+              value: kubernetes
+            - name: MONGO_URL
+              value: mongodb://rocketchat-mongodb:27017/rocketchat?replicaSet=rs0
+            - name: MONGO_OPLOG_URL
+              value: mongodb://rocketchat-mongodb:27017/local?replicaSet=rs0
+            - name: TRANSPORTER
+              value: monolith+nats://rocketchat-nats:4222
+            - name: MAIL_URL
+              value: smtp://mailpit:1025
+            - name: OVERWRITE_SETTING_Show_Setup_Wizard
+              value: completed
+            - name: OVERWRITE_SETTING_SMTP_Host
+              value: mailpit
+            - name: OVERWRITE_SETTING_SMTP_Port
+              value: "1025"
+            - name: OVERWRITE_SETTING_From_Email
+              value: rocketchat@example.com
+            - name: OVERWRITE_SETTING_Prometheus_Enabled
+              value: "false"
+            - name: ADMIN_USERNAME
+              value: admin
+            - name: ADMIN_NAME
+              value: Admin
+            - name: ADMIN_EMAIL
+              value: admin@example.com
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rocketchat-credentials
+                  key: admin-password
+                  optional: true
+            - name: REG_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rocketchat-credentials
+                  key: reg-token
+                  optional: true
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          resources:
+            limits:
+              memory: 2048Mi
+          readinessProbe:
+            httpGet:
+              path: /api/info
+              port: 3000
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /api/info
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: rocketchat-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketchat
+  namespace: apps
+spec:
+  selector:
+    app: rocketchat
+  ports:
+    - port: 3000

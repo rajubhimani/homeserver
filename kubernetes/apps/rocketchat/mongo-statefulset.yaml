@@ -1,0 +1,116 @@
+# Mirrors rocketchat/compose.yml's mongodb-fix-permission + mongodb
+# services. This is the pilot's first Mongo-backed service — Rocket.Chat
+# requires Mongo transactions, which require replSet mode even for a
+# single-node "replica set of 1" (see mongo-init-job.yaml for the
+# rs.initiate() step compose's mongodb-init container does).
+#
+# No auth: compose runs mongod with ALLOW_EMPTY_PASSWORD=yes and no
+# MONGO_INITDB_ROOT_USERNAME/PASSWORD — this is a single-internal-network
+# instance with no credentials to carry over, so no Secret is wired here
+# (per the "don't invent auth k8s doesn't need" guidance).
+#
+# Command vs args: compose sets `entrypoint:` (not `command:`) to
+# `exec mongod --replSet ... --bind_ip_all` — that overrides the image's
+# own ENTRYPOINT, so it maps to k8s `command:`, not `args:` (see
+# TROUBLESHOOTING.md's command-vs-args gotcha). Replica set name (rs0) is
+# read verbatim from rocketchat/.env.example's MONGODB_REPLICA_SET_NAME,
+# which that file documents as "not meant to be changed" — hardcoded here
+# same as plane's DB name/vhost are hardcoded rather than piped through env.
+#
+# initContainer replaces compose's separate mongodb-fix-permission
+# container (same one-shot chown, same reasoning: the mongodb-community-
+# server image's data dirs must be owned by its own uid, 1001 —
+# rocketchat/.env.example's MONGODB_USER_ID — before mongod will start).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rocketchat-mongodb
+  namespace: apps
+spec:
+  serviceName: rocketchat-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketchat-mongodb
+  template:
+    metadata:
+      labels:
+        app: rocketchat-mongodb
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: fix-permission
+          image: docker.io/mongodb/mongodb-community-server:8.2-ubi8
+          securityContext:
+            runAsUser: 0
+          command:
+            - sh
+            - -xc
+            - |
+              chown -R 1001 /data/db /data/configdb
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+            - name: configdb
+              mountPath: /data/configdb
+      containers:
+        - name: mongodb
+          image: docker.io/mongodb/mongodb-community-server:8.2-ubi8
+          securityContext:
+            runAsUser: 1001
+          command:
+            - sh
+            - -ec
+            - exec mongod --replSet rs0 --bind_ip_all
+          env:
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+            - name: configdb
+              mountPath: /data/configdb
+          resources:
+            limits:
+              memory: 1024Mi
+          readinessProbe:
+            exec:
+              command: ["mongosh", "mongodb://localhost:27017/?directConnection=true", "--eval", "db.adminCommand('ping')"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+    - metadata:
+        name: configdb
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+# Headless — single-replica StatefulSet, so this name resolves straight to
+# the mongod pod's IP. Used as the replSet member host (mongo-init-job.yaml)
+# and as the Mongo host in rocketchat's MONGO_URL/MONGO_OPLOG_URL
+# (deployment.yaml), same as compose's container_name-derived "mongodb"
+# hostname served both roles.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketchat-mongodb
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: rocketchat-mongodb
+  ports:
+    - port: 27017

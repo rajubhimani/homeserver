@@ -1,0 +1,45 @@
+# Onboards temporal onto the shared Postgres server (kubernetes/cluster/
+# postgres/) instead of a dedicated StatefulSet — adapted from
+# kubernetes/cluster/postgres/db-init-job.template.yaml. Temporal is the
+# one exception to that template's single-database assumption: it needs
+# TWO databases under the same role (temporal + temporal_visibility, per
+# schema-setup-job.yaml's temporal-sql-tool calls) — both created here,
+# schema itself still applied by schema-setup-job.yaml afterward.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-db-init
+  namespace: data
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          image: postgres:18.6-alpine
+          env:
+            - name: PGHOST
+              value: postgres-shared.data.svc.cluster.local
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-shared-credentials
+                  key: postgres-password
+            - name: SERVICE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-db-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              psql -tc "SELECT 1 FROM pg_roles WHERE rolname='temporal'" | grep -q 1 || \
+                psql -c "CREATE ROLE \"temporal\" LOGIN PASSWORD '$SERVICE_DB_PASSWORD';"
+              psql -tc "SELECT 1 FROM pg_database WHERE datname='temporal'" | grep -q 1 || \
+                psql -c "CREATE DATABASE \"temporal\" OWNER \"temporal\";"
+              psql -tc "SELECT 1 FROM pg_database WHERE datname='temporal_visibility'" | grep -q 1 || \
+                psql -c "CREATE DATABASE \"temporal_visibility\" OWNER \"temporal\";"

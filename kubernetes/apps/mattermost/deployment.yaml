@@ -1,0 +1,182 @@
+# Mirrors mattermost/compose.yml's mattermost service. Compose's
+# `depends_on: condition: service_healthy` on mattermost-db has no k8s
+# equivalent (documented gap in kubernetes/README.md) — this relies on the
+# app's own DB connection retries + k8s's crash-loop restart instead.
+#
+# compose.yml mounts six separate DATA_ROOT subdirectories
+# (config/data/logs/plugins/client-plugins/bleve-indexes). All six live
+# directly under the same DATA_ROOT parent in Compose, so here they're
+# subPath mounts of one PVC rather than six separate PVCs — same layout,
+# one claim (see landing/deployment.yaml for the same subPath-per-mount
+# pattern applied to a ConfigMap instead of a PVC).
+#
+# compose.yml runs the container as `user: "2000:2000"` (the official
+# image's own uid/gid) with the comment that DATA_ROOT subdirs are
+# pre-created/chowned to match. A fresh k8s PVC has no such pre-chown
+# step, so `fsGroup: 2000` on the pod (plus runAsUser/runAsGroup on the
+# container) is the k8s-native equivalent — it group-owns the volume as
+# 2000 so the non-root container can write to it.
+#
+# No shell/wget/curl in the official image (confirmed distroless — see
+# compose.yml's own comment), so Compose relies on the image's baked-in
+# `HEALTHCHECK` (`mmctl system status --local`), which k8s does not
+# execute. `/api/v4/system/ping` is Mattermost's documented unauthenticated
+# HTTP health endpoint — used here for readiness/liveness instead of
+# trying to exec into a shell-less image.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mattermost-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost
+  namespace: apps
+  labels:
+    app: mattermost
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mattermost
+  template:
+    metadata:
+      labels:
+        app: mattermost
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 2000
+      containers:
+        - name: mattermost
+          image: mattermost/mattermost-team-edition:11.10.0
+          securityContext:
+            runAsUser: 2000
+            runAsGroup: 2000
+          env:
+            - name: TZ
+              value: UTC
+            - name: MM_SQLSETTINGS_DRIVERNAME
+              value: postgres
+            - name: MM_SQLSETTINGS_DATASOURCE
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-db-credentials
+                  key: datasource
+            - name: MM_BLEVESETTINGS_INDEXDIR
+              value: /mattermost/bleve-indexes
+            - name: MM_SERVICESETTINGS_SITEURL
+              value: https://mattermost.k8s.local
+            - name: MM_SERVICESETTINGS_ENABLELOCALMODE
+              value: "true"
+            # Routed at the shared Mailpit catcher hostname, same as
+            # Compose — Mailpit itself isn't ported to this k8s pilot yet
+            # (see kubernetes/README.md's status table), so email sends
+            # will fail at runtime until it is; this does not block
+            # Mattermost's own boot, matching Compose's soft dependency.
+            - name: MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS
+              value: "true"
+            - name: MM_EMAILSETTINGS_SMTPSERVER
+              value: mailpit
+            - name: MM_EMAILSETTINGS_SMTPPORT
+              value: "1025"
+            - name: MM_EMAILSETTINGS_ENABLESMTPAUTH
+              value: "false"
+            - name: MM_EMAILSETTINGS_CONNECTIONSECURITY
+              value: ""
+            - name: MM_EMAILSETTINGS_FEEDBACKEMAIL
+              value: mattermost@example.com
+            - name: MM_TEAMSETTINGS_ENABLEOPENSERVER
+              value: "true"
+            - name: MM_TEAMSETTINGS_ENABLEUSERCREATION
+              value: "true"
+            - name: MM_TEAMSETTINGS_MAXUSERSPERTEAM
+              value: "50"
+            - name: MM_TEAMSETTINGS_MAXCHANNELSPERTEAM
+              value: "2000"
+            - name: MM_TEAMSETTINGS_RESTRICTCREATIONTODOMAINS
+              value: ""
+            - name: MM_PASSWORDSETTINGS_MINIMUMLENGTH
+              value: "8"
+            - name: MM_PASSWORDSETTINGS_LOWERCASE
+              value: "false"
+            - name: MM_PASSWORDSETTINGS_NUMBER
+              value: "false"
+            - name: MM_PASSWORDSETTINGS_UPPERCASE
+              value: "false"
+            - name: MM_PASSWORDSETTINGS_SYMBOL
+              value: "false"
+            - name: MM_RATELIMITSETTINGS_ENABLE
+              value: "false"
+            - name: MM_RATELIMITSETTINGS_PERSEC
+              value: "10"
+            - name: MM_RATELIMITSETTINGS_MAXBURST
+              value: "100"
+            - name: MM_FILESETTINGS_MAXFILESIZE
+              value: "104857600"
+            - name: MM_FILESETTINGS_ENABLEPUBLICLINK
+              value: "false"
+            - name: MM_LOGSETTINGS_ENABLECONSOLE
+              value: "true"
+            - name: MM_LOGSETTINGS_CONSOLELEVEL
+              value: DEBUG
+          ports:
+            - containerPort: 8065
+          resources:
+            limits:
+              memory: 1024Mi
+          volumeMounts:
+            - name: data
+              mountPath: /mattermost/config
+              subPath: config
+            - name: data
+              mountPath: /mattermost/data
+              subPath: data
+            - name: data
+              mountPath: /mattermost/logs
+              subPath: logs
+            - name: data
+              mountPath: /mattermost/plugins
+              subPath: plugins
+            - name: data
+              mountPath: /mattermost/client/plugins
+              subPath: client-plugins
+            - name: data
+              mountPath: /mattermost/bleve-indexes
+              subPath: bleve-indexes
+          readinessProbe:
+            httpGet:
+              path: /api/v4/system/ping
+              port: 8065
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/v4/system/ping
+              port: 8065
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mattermost-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost
+  namespace: apps
+spec:
+  selector:
+    app: mattermost
+  ports:
+    - port: 8065
