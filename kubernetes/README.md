@@ -6,6 +6,104 @@ as-is; this folder is where the same services get ported to Kubernetes
 manifests, one at a time, to validate the pattern before committing to a
 full migration.
 
+## Prerequisites
+
+Four tools, on whatever machine will run the cluster: **Docker** (or Docker
+Desktop on Windows/Mac — `kind` needs a real running daemon), **kind**,
+**kubectl**, **helm**. Pick your OS below; all four should print a version
+afterward (`docker version`, `kind version`, `kubectl version --client`,
+`helm version`) before moving on to "Cluster" below.
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+`winget` is built into Windows 10/11 — no extra installer needed:
+
+```powershell
+winget install Docker.DockerDesktop
+winget install Kubernetes.kind
+winget install Kubernetes.kubectl
+winget install Helm.Helm
+```
+
+Launch Docker Desktop and wait for it to report "running" before using
+`kind`. Close and reopen your terminal afterward so `PATH` picks up the
+new binaries. Chocolatey works too if you already use it:
+`choco install kind kubernetes-cli kubernetes-helm`.
+
+This pilot was originally built and tested on a Windows/Docker-Desktop box
+— see `kubernetes/TROUBLESHOOTING.md`'s "Cluster / Docker Desktop" section
+for real gotchas already hit there (no host filesystem passthrough into
+`kind` nodes, how Docker Desktop's `LoadBalancer` auto-exposure differs
+from plain `kind`'s).
+</details>
+
+<details>
+<summary><strong>Fedora</strong></summary>
+
+Fedora doesn't ship `docker-ce` in its default repos — add Docker's own:
+
+```bash
+sudo dnf -y install dnf-plugins-core
+sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"   # log out/in (or `newgrp docker`) for this to take effect
+
+# kind — check https://github.com/kubernetes-sigs/kind/releases for a newer tag
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64
+chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+# kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+
+# helm
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+
+This pilot's real, current target host (see "Cluster" below).
+</details>
+
+<details>
+<summary><strong>Ubuntu / Debian</strong></summary>
+
+```bash
+# Docker Engine — Docker's own apt repo, not Ubuntu's bundled docker.io package
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker "$USER"   # log out/in (or `newgrp docker`) for this to take effect
+
+# kind — check https://github.com/kubernetes-sigs/kind/releases for a newer tag
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64
+chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+# kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+
+# helm
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+brew install --cask docker   # Docker Desktop for Mac
+open -a Docker               # launch it, wait until it reports "running"
+brew install kind kubectl helm
+```
+</details>
+
 ## Cluster
 
 Originally built on a Windows/Docker-Desktop box (Settings → Kubernetes →
@@ -15,6 +113,7 @@ than Docker Desktop's bundled integration:
 
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
+kubectl config current-context   # should print: kind-kind-cluster
 ```
 
 Topology: 1 control-plane + 3 workers (`kubernetes/kind-config.yaml` — see
