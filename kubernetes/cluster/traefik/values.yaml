@@ -24,10 +24,14 @@ providers:
 gateway:
   enabled: false
 
-# Chart 41.1.0 (latest as of this writing) still ships v3.7.9 by default —
-# pin the image tag directly to pick up the newer patch release.
+# Chart 41.3.0's own appVersion default already matches this — pinned
+# explicitly anyway, not left to the chart default, so a future chart bump
+# never silently changes the running Traefik version without a deliberate
+# edit here. v3.7.10+ is also the version this cluster's Gateway API CRDs
+# (v1.6.1) were verified against — see kubernetes/TROUBLESHOOTING.md's
+# Gateway API section.
 image:
-  tag: v3.7.10
+  tag: v3.7.11
 
 # On the original Docker-Desktop-backed pilot box, LoadBalancer Services
 # auto-exposed on localhost with no extra setup. This branch has since moved

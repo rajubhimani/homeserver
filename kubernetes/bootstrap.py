@@ -39,8 +39,16 @@ sys.path.insert(0, str(K8S_DIR))
 from k8s import GREEN, RED, YELLOW, CYAN, BOLD, RESET, info, success, error, warn, header, kubectl_run, kubectl_json, current_context  # noqa: E402
 
 EXPECTED_CONTEXT = "kind-kind-cluster"  # explicit `name: kind-cluster` in kind-config.yaml — see k8s.py's EXPECTED_CONTEXT comment
-ARGOCD_INSTALL_URL = "https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml"
-GATEWAY_API_CRDS_URL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/experimental-install.yaml"
+ARGOCD_INSTALL_URL = "https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.0/manifests/install.yaml"
+# Standard channel, not experimental — as of Gateway API v1.6.1, BackendTLSPolicy
+# and TLSRoute (what Traefik's Gateway provider needs) have both graduated to
+# the standard channel (verified directly against the release's own CRD
+# manifests: only 3 unrelated x-k8s.io mesh-extension CRDs remain experimental-
+# only). Earlier pinned at v1.2.1, standard channel only — Traefik v3.7.10
+# expects v1.6.1 and couldn't find BackendTLSPolicy/TLSRoute at all on that
+# older CRD set, which left it unable to ever claim its GatewayClass (see
+# kubernetes/TROUBLESHOOTING.md's Gateway API section for the full story).
+GATEWAY_API_CRDS_URL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml"
 
 CLUSTER_APPS = [
     "cluster-namespaces",
@@ -79,16 +87,17 @@ def create_cluster() -> None:
 
 
 def install_gateway_api_crds() -> None:
-    # Checked against an experimental-channel-only CRD (not e.g. Gateway
-    # itself, which the standard channel also has) so a cluster bootstrapped
-    # before this switched from standard-install.yaml to experimental-
-    # install.yaml still gets upgraded on a re-run, instead of the check
-    # matching on the standard CRDs already there and skipping forever.
+    # Checked against backendtlspolicies specifically (not e.g. Gateway
+    # itself, which the older v1.2.1 standard channel also had) so a
+    # cluster bootstrapped before the v1.2.1 -> v1.6.1 version bump still
+    # gets upgraded on a re-run, instead of the check matching on the
+    # older CRDs already there and skipping forever — v1.2.1's standard
+    # channel didn't include BackendTLSPolicy at all; v1.6.1's does.
     existing = kubectl_run(["get", "crd", "backendtlspolicies.gateway.networking.k8s.io"], check=False)
     if existing.returncode == 0:
         success("Gateway API CRDs already installed, skipping")
         return
-    info("installing Gateway API CRDs (experimental channel — Traefik's Gateway provider watches BackendTLSPolicy/TLSRoute, which only the experimental bundle includes; the standard channel alone leaves Traefik unable to ever claim its GatewayClass)...")
+    info("installing Gateway API CRDs (v1.6.1 standard channel — Traefik's Gateway provider needs BackendTLSPolicy/TLSRoute, both standard as of this version)...")
     kubectl_run(["apply", "-f", GATEWAY_API_CRDS_URL])
     success("Gateway API CRDs installed")
 
