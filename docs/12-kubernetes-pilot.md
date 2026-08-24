@@ -35,12 +35,16 @@ Everything else lives in `kubernetes/`, checked into this same repo:
 
 ## Status at a glance
 
-Most of `SERVICES_CORE` and `SERVICES_EXTRA` are ported. Deliberately not
-ported: `nginx-plain` (Traefik already covers its one job — routing), and
+63 of 70 Compose services are ported — effectively full parity with
+everything that has a real Kubernetes equivalent. Deliberately not
+ported: `nginx-plain` (Traefik already covers its one job — routing),
 `portainer`/`dozzle`/`dockge`/`coolify` (their entire purpose is managing
-the Docker socket, which has no Kubernetes-native equivalent). See
-`kubernetes/README.md`'s "Current status" section for the live count and
-the full reasoning — that section is the source of truth, not this page.
+the Docker socket, which has no Kubernetes-native equivalent), and the
+app tier of `dagster` plus `temporal`'s worker container (both build
+custom images locally in Compose; this pilot has no CI/registry to build
+and push them). See `kubernetes/README.md`'s "Current status" section for
+the live count and the full reasoning — that section is the source of
+truth, not this page.
 
 ## Trying it
 

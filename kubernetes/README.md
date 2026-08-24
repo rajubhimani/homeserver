@@ -158,23 +158,20 @@ current tier lists). Counts below are against that current tier structure,
 not the older `SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL` naming
 this section used to use.
 
-49 of 70 Compose services are ported: `min` 3/6 (beszel, cloudflared,
-landing), `core` 20/20 beyond `min` (all ported except `mailpit`, which is
-still missing), `daily` 7/15, `office` 8/8, `automation-ai` 3/6, `extra`
-14/19, `manual` 1/1 (gitlab). The cluster foundation (namespaces, Traefik,
+63 of 70 Compose services are ported: `min` 4/6 (beszel, cloudflared,
+landing, docs), `core` 14/14 beyond `min` (all ported, including
+`mailpit`), `daily` 13/15, `office` 8/8, `automation-ai` 6/6, `extra`
+17/19, `manual` 1/1 (gitlab). The cluster foundation (namespaces, Traefik,
 the shared Gateway, MetalLB, shared Postgres/MariaDB) is ArgoCD-managed
 too, see `kubernetes/argocd-apps/cluster-*.yaml`.
 
-Missing but portable, no known blocker (not yet done, just not gotten to):
-`docs`, `mailpit`, the 6 remote-browser services (firefox, chromium,
-ungoogled-chromium, brave, mullvad-browser, browser-hub), `homebox`, and
-the 6 heavier multi-container platforms — `airflow`, `temporal`,
-`dagster`, `mattermost`, `rocketchat`, `zulip` — each needs its own
-Postgres/Mongo/Redis-backed StatefulSet(s), same pattern as `supabase`
-below but not yet done.
+Every remaining gap is either deliberately excluded (below) or not a real
+service — `daily`'s `browser` entry is the static browser-hub landing page
+served by `nginx-plain` itself, not its own container, so there's nothing
+separate to port. That's effectively full parity with everything in the
+Compose stack that has a real Kubernetes equivalent.
 
-Not ported, deliberately — same reasoning as before, unaffected by the
-tier rename:
+Not ported, deliberately:
 
 - **`nginx-plain`** — its one job, routing, is already covered by
   Traefik/Gateway API in this cluster; porting it too would just be two
@@ -187,6 +184,35 @@ tier rename:
   actually do its job isn't worth carrying. `portainer` moved into the
   `min` tier in the Compose-side reshuffle above, but the reasoning for
   excluding it here hasn't changed.
+- **`dagster`'s app tier** (webserver/daemon/user-code) — all three build
+  from a local Dockerfile in Compose rather than pulling a public image
+  (a Dagster code location *is* your own code by definition, and there's
+  no stock "just run it" webserver/daemon image either). This pilot has
+  no CI/registry to build and push custom images, so only `dagster-db` is
+  ported — see `kubernetes/apps/dagster/db-init-job.yaml`'s header. Same
+  category of gap as `temporal`'s custom worker image (below), just
+  total rather than partial.
+- **`temporal`'s custom worker container** — `services/temporal/worker/`
+  is a locally-built Python image (Dockerfile + bind-mounted code), same
+  no-registry blocker as dagster. The core Temporal server + UI use public
+  images and are ported; only the worker is left out.
+
+**Minimizing DB instance count:** `airflow`, `temporal`, `mattermost`, and
+`dagster` are onboarded onto the shared Postgres server
+(`kubernetes/cluster/postgres/`, via each service's own
+`db-init-job.yaml`) rather than getting a dedicated StatefulSet each —
+none of them needs a specific Postgres version/extension the shared
+server can't provide. `temporal` is the one adjustment to the standard
+single-database onboarding template: it needs two databases (`temporal` +
+`temporal_visibility`) under one role. Every other Postgres-backed service
+in this pilot predates that convention and still runs its own dedicated
+instance (own version/extensions, or just following the established
+per-service pattern) — not retrofitted, since that would touch ~20
+already-working services for no functional gain. Two exceptions stay
+dedicated out of necessity, not oversight: `rocketchat`'s MongoDB (no
+shared Mongo exists in this pilot) and `zulip`'s Postgres (needs the
+vendor `zulip/zulip-postgresql` image, same "own extensions" category as
+immich's pgvector image).
 
 Manifests exist and are internally consistent (every Secret reference has a
 matching `apply-secrets.sh` entry, every YAML file parses) but **have not
@@ -227,9 +253,25 @@ reconciling ArgoCD against everything in git, service by service.
   silently ignores your flags or crash-loops.
 - **Same-node PVC risk.** Several two-pod-sharing-one-`ReadWriteOnce`-PVC
   setups (authentik server+worker, penpot backend+frontend, supabase
-  storage+imgproxy) only work if the scheduler happens to colocate both
+  storage+imgproxy, and now airflow's 5 pods — apiserver/scheduler/
+  dag-processor/triggerer/init-Job — sharing one `airflow-data` PVC, the
+  sharpest case yet) only work if the scheduler happens to colocate both
   pods — no `nodeAffinity` enforces it. Flagged in each manifest, not
   silently assumed away.
+- **No Traefik ForwardAuth ↔ Authentik wiring yet.** Compose gates several
+  things behind Authentik forward-auth at the proxy level (the browser hub
+  at `browser.${DOMAIN}` being the main one) — this pilot has no
+  equivalent middleware wired up for any service yet, so `firefox`,
+  `chromium`, `ungoogled-chromium`, `brave`, and `mullvad-browser` each
+  get their own plain HTTPRoute/hostname instead, with no auth gate. Don't
+  expose those HTTPRoutes publicly without adding that middleware first.
+  Same 5 services also drop Compose's static per-container Docker-bridge
+  IP (used for a LAN-isolation firewall rule) — k8s has no direct
+  equivalent; a `NetworkPolicy` would be the real fix, not yet written.
+- **Vendor Postgres images, a growing list.** immich (pgvector/
+  vectorchord) and zulip (`zulip/zulip-postgresql`) both need their own
+  Postgres build, not the shared server and not even a stock `postgres:`
+  dedicated instance — same category, different vendor image each time.
 - **supabase** is the single most complex service here (~15 containers).
   db/auth/rest/storage/kong got full attention; realtime needed a real fix
   (its Compose container name, `realtime-dev.supabase-realtime`, isn't a
