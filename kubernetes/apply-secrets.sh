@@ -377,6 +377,12 @@ kubectl create secret generic supabase-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "supabase-db-credentials + supabase-credentials applied"
 
+# ── Dagster's own dedicated Postgres (DB only, no app tier ported) ────
+kubectl create secret generic dagster-db-credentials -n apps \
+  --from-literal=password="$DAGSTER_DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "dagster-db-credentials applied"
+
 # ── HomeBox's API key HMAC pepper ─────────────────────────────────────
 kubectl create secret generic homebox-credentials -n apps \
   --from-literal=api-key-pepper="$HOMEBOX_AUTH_API_KEY_PEPPER" \
