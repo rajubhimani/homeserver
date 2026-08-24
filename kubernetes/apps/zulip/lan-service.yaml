@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8143 matches zulip/compose.dev.yml exactly (`"8143:80"` — the zulip
+# app container binds it there too). Not currently live-applied — see
+# kubernetes/README.md's "Current status".
+apiVersion: v1
+kind: Service
+metadata:
+  name: zulip-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: zulip
+  ports:
+    - port: 8143
+      targetPort: 80

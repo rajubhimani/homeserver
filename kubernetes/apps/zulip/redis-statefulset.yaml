@@ -1,0 +1,77 @@
+# Mirrors zulip/compose.yml's zulip-redis. Deliberately a StatefulSet, not
+# a Deployment like kubernetes/apps/immich/postgres-statefulset.yaml's
+# immich-redis or kubernetes/apps/plane/postgres-statefulset.yaml's
+# plane-redis — those two disable RDB snapshotting outright
+# (`--save ""`) and mount no volume, i.e. genuinely ephemeral caches.
+# zulip/compose.yml does neither: it mounts `zulip-redis:/data` as a named
+# volume AND leaves snapshotting on its default schedule, so this data is
+# meant to survive a restart (verified: docs/services/zulip.md's "down
+# snapshots all 4 named volumes" lists it among the persisted ones). PVC +
+# StatefulSet, same pattern as zulip-db/zulip-rabbitmq above.
+#
+# Compose's command re-invokes docker-entrypoint.sh manually just to read
+# the password out of a Docker-secret file first. With the password
+# already a real env var here (secretKeyRef), that collapses to a plain
+# `args: ["--requirepass", "$(REDIS_PASSWORD)"]` — CMD-only override via
+# args:, ENTRYPOINT (docker-entrypoint.sh) untouched, same convention as
+# every other container in this repo (see TROUBLESHOOTING.md).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zulip-redis
+  namespace: apps
+spec:
+  serviceName: zulip-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zulip-redis
+  template:
+    metadata:
+      labels:
+        app: zulip-redis
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          image: redis:alpine
+          args: ["--requirepass", "$(REDIS_PASSWORD)"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: redis-password
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zulip-redis
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: zulip-redis
+  ports:
+    - port: 6379

@@ -1,0 +1,74 @@
+# Mirrors zulip/compose.yml's zulip-memcached. No volume mounted in
+# compose.yml (not in the "4 named volumes" docs/services/zulip.md lists
+# as persisted) — genuinely an ephemeral cache, so a plain Deployment, no
+# PVC. Same "simple Deployment for an ephemeral cache" pattern as
+# kubernetes/apps/immich/postgres-statefulset.yaml's immich-redis.
+#
+# Zulip requires memcached with SASL auth enabled (plain mechanism), which
+# the stock memcached:alpine image doesn't set up on its own — compose
+# works around this with a shell script that writes the SASL config/pwdb
+# files from a Docker-secret file, then execs `memcached -S`. Ported
+# almost verbatim, just reading MEMCACHED_PASSWORD as a real env var
+# (secretKeyRef) instead of `cat`-ing a secret file. args: (not command:)
+# keeps the image's own ENTRYPOINT (docker-entrypoint.sh) intact, matching
+# how compose's own `command:` only overrides CMD.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zulip-memcached
+  namespace: apps
+  labels:
+    app: zulip-memcached
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zulip-memcached
+  template:
+    metadata:
+      labels:
+        app: zulip-memcached
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: memcached
+          image: memcached:alpine
+          env:
+            - name: SASL_CONF_PATH
+              value: /home/memcache/memcached.conf
+            - name: MEMCACHED_SASL_PWDB
+              value: /home/memcache/memcached-sasl-db
+            - name: MEMCACHED_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: memcached-password
+          args:
+            - sh
+            - -euc
+            - |
+              echo 'mech_list: plain' > "$SASL_CONF_PATH"
+              echo "zulip@$HOSTNAME:$MEMCACHED_PASSWORD" > "$MEMCACHED_SASL_PWDB"
+              echo "zulip@localhost:$MEMCACHED_PASSWORD" >> "$MEMCACHED_SASL_PWDB"
+              exec memcached -S
+          ports:
+            - containerPort: 11211
+          resources:
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            tcpSocket:
+              port: 11211
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zulip-memcached
+  namespace: apps
+spec:
+  selector:
+    app: zulip-memcached
+  ports:
+    - port: 11211

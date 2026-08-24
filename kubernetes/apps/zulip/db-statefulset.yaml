@@ -1,0 +1,68 @@
+# Mirrors zulip/compose.yml's zulip-db. Zulip's own Postgres image (not
+# this stack's usual postgres:18.4-alpine default) — bakes in
+# extensions/config Zulip specifically requires, same reasoning as
+# immich's vendor Postgres image (see kubernetes/apps/immich/
+# postgres-statefulset.yaml and the homeserver-postgres skill).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zulip-db
+  namespace: apps
+spec:
+  serviceName: zulip-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zulip-db
+  template:
+    metadata:
+      labels:
+        app: zulip-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: zulip/zulip-postgresql:14
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: zulip
+            - name: POSTGRES_USER
+              value: zulip
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+          resources:
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "zulip"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zulip-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: zulip-db
+  ports:
+    - port: 5432

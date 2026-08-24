@@ -1,0 +1,181 @@
+# Mirrors zulip/compose.yml's zulip app container. Wires to all four
+# backing services above via SETTING_* env vars (Zulip's own settings.py
+# mapping) and SECRETS_* env vars for credentials.
+#
+# SECRETS_* is the ghcr.io/zulip/zulip-server image's own env-var
+# convention (verified against its entrypoint.sh) — it scans for
+# SECRETS_<key> env vars and writes each into /etc/zulip/zulip-secrets.conf
+# via crudini, exactly like it would for a /run/secrets/zulip__<key>
+# Docker-secret file. That means no Docker-secrets emulation is needed
+# here at all: secretKeyRef straight onto SECRETS_postgres_password etc.
+# does what compose's whole `secrets:` block + `_FILE` plumbing did.
+#
+# See init-job.yaml for the one-time `app:init` migration/secrets-bootstrap
+# step compose's own docs run manually before first bringing this up
+# (docs/services/zulip.md's "Setup" section) — apply that Job and let it
+# finish before scaling this Deployment up, same order Compose's own setup
+# doc already prescribes, since there's no k8s-native way to gate one on
+# the other (see kubernetes/README.md's "No depends_on equivalent").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zulip-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zulip
+  namespace: apps
+  labels:
+    app: zulip
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: zulip
+  template:
+    metadata:
+      labels:
+        app: zulip
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: zulip
+          image: ghcr.io/zulip/zulip-server:12.2-0
+          ports:
+            - containerPort: 80
+          env:
+            - name: SETTING_REMOTE_POSTGRES_HOST
+              value: zulip-db
+            - name: SETTING_MEMCACHED_LOCATION
+              value: zulip-memcached:11211
+            - name: SETTING_RABBITMQ_HOST
+              value: zulip-rabbitmq
+            - name: SETTING_REDIS_HOST
+              value: zulip-redis
+            - name: SETTING_EXTERNAL_HOST
+              value: zulip.k8s.local
+            - name: SETTING_ZULIP_ADMINISTRATOR
+              value: admin@example.com
+            # Matches compose.yml's default (ZULIP_OPEN_REALM_CREATION=True
+            # in services/zulip/.env.example) — playground stack, not a
+            # public multi-tenant server. See docs/services/zulip.md.
+            - name: SETTING_OPEN_REALM_CREATION
+              value: "True"
+            # Routed through this pilot's own ported Mailpit
+            # (kubernetes/apps/mailpit/) — same no-auth SMTP catcher role
+            # as the compose stack's mailpit container.
+            - name: SETTING_EMAIL_HOST
+              value: mailpit
+            - name: SETTING_EMAIL_PORT
+              value: "1025"
+            - name: SETTING_EMAIL_USE_TLS
+              value: "False"
+            - name: SETTING_EMAIL_USE_SSL
+              value: "False"
+            - name: SETTING_MAX_FILE_UPLOAD_SIZE
+              value: "100"
+            - name: SETTING_RATE_LIMITING
+              value: "True"
+            - name: SETTING_PASSWORD_MIN_LENGTH
+              value: "8"
+            - name: SETTING_SESSION_COOKIE_AGE
+              value: "1209600"
+            # Deviation from compose.yml: that file hardcodes
+            # 172.16.0.0/12 (this host's specific Docker bridge
+            # allocation, deliberately broadened to Docker's whole default
+            # bridge range) for the same "trust X-Forwarded-* from
+            # sibling containers, not just the gateway IP" reason
+            # documented in docs/services/zulip.md. A kind cluster's pod
+            # CIDR isn't in that range (kindnet/Calico typically hand out
+            # 10.244.0.0/16 or similar, and it's configurable per
+            # kind-config.yaml besides), so this widens to all of
+            # RFC1918 instead of guessing this cluster's exact pod CIDR —
+            # still internal-only, never reachable from outside the
+            # cluster either way.
+            - name: LOADBALANCER_IPS
+              value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+            - name: SECRETS_postgres_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: password
+            - name: SECRETS_rabbitmq_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: rabbitmq-password
+            - name: SECRETS_redis_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: redis-password
+            - name: SECRETS_memcached_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: memcached-password
+            - name: SECRETS_secret_key
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-credentials
+                  key: secret-key
+            - name: SECRETS_email_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-credentials
+                  key: email-password
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          # compose.yml sets ulimits.nofile (soft 1000000 / hard 1048576).
+          # No k8s PodSpec/securityContext field maps to Compose's
+          # per-container ulimits — deliberately dropped, not forgotten;
+          # node-default file-descriptor limits already exceed Zulip's own
+          # requirement in practice.
+          resources:
+            limits:
+              memory: 1536Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: zulip.k8s.local
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: zulip.k8s.local
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 6
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: zulip-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zulip
+  namespace: apps
+spec:
+  selector:
+    app: zulip
+  ports:
+    - port: 80

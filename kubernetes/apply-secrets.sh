@@ -424,6 +424,20 @@ kubectl create secret generic homebox-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "homebox-credentials applied"
 
+# ── Zulip's own dedicated Postgres (vendor image) + RabbitMQ + Redis +
+# Memcached + app secret key ───────────────────────────────────────────
+kubectl create secret generic zulip-db-credentials -n apps \
+  --from-literal=password="$ZULIP_DB_PASSWORD" \
+  --from-literal=rabbitmq-password="$ZULIP_RABBITMQ_PASSWORD" \
+  --from-literal=redis-password="$ZULIP_REDIS_PASSWORD" \
+  --from-literal=memcached-password="$ZULIP_MEMCACHED_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic zulip-credentials -n apps \
+  --from-literal=secret-key="$ZULIP_SECRET_KEY" \
+  --from-literal=email-password="$ZULIP_EMAIL_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "zulip-db-credentials + zulip-credentials applied"
+
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

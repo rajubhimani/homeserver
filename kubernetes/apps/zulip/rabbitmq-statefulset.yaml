@@ -1,0 +1,74 @@
+# Mirrors zulip/compose.yml's zulip-rabbitmq. compose.yml persists
+# `/var/lib/rabbitmq` to a named volume (`zulip-rabbitmq`), so this is a
+# StatefulSet + PVC, not a plain Deployment — same reasoning as
+# kubernetes/apps/plane/rabbitmq-statefulset.yaml.
+#
+# Compose's own command wraps rabbitmq-server with a shell script that
+# reads RABBITMQ_DEFAULT_PASS out of a Docker-secret file
+# (/run/secrets/zulip__rabbitmq_password) because the plain rabbitmq image
+# has no built-in "*_FILE" env convention. That indirection is unnecessary
+# here: secretKeyRef already injects the real password straight into
+# RABBITMQ_DEFAULT_PASS, so this uses the image's stock entrypoint/CMD
+# untouched (no command/args override needed at all).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zulip-rabbitmq
+  namespace: apps
+spec:
+  serviceName: zulip-rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zulip-rabbitmq
+  template:
+    metadata:
+      labels:
+        app: zulip-rabbitmq
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.2
+          ports:
+            - containerPort: 5672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: zulip
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: rabbitmq-password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          resources:
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zulip-rabbitmq
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: zulip-rabbitmq
+  ports:
+    - port: 5672
