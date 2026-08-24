@@ -40,7 +40,7 @@ from k8s import GREEN, RED, YELLOW, CYAN, BOLD, RESET, info, success, error, war
 
 EXPECTED_CONTEXT = "kind-kind-cluster"  # explicit `name: kind-cluster` in kind-config.yaml — see k8s.py's EXPECTED_CONTEXT comment
 ARGOCD_INSTALL_URL = "https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml"
-GATEWAY_API_CRDS_URL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml"
+GATEWAY_API_CRDS_URL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/experimental-install.yaml"
 
 CLUSTER_APPS = [
     "cluster-namespaces",
@@ -79,11 +79,16 @@ def create_cluster() -> None:
 
 
 def install_gateway_api_crds() -> None:
-    existing = kubectl_run(["get", "crd", "gateways.gateway.networking.k8s.io"], check=False)
+    # Checked against an experimental-channel-only CRD (not e.g. Gateway
+    # itself, which the standard channel also has) so a cluster bootstrapped
+    # before this switched from standard-install.yaml to experimental-
+    # install.yaml still gets upgraded on a re-run, instead of the check
+    # matching on the standard CRDs already there and skipping forever.
+    existing = kubectl_run(["get", "crd", "backendtlspolicies.gateway.networking.k8s.io"], check=False)
     if existing.returncode == 0:
         success("Gateway API CRDs already installed, skipping")
         return
-    info("installing Gateway API CRDs...")
+    info("installing Gateway API CRDs (experimental channel — Traefik's Gateway provider watches BackendTLSPolicy/TLSRoute, which only the experimental bundle includes; the standard channel alone leaves Traefik unable to ever claim its GatewayClass)...")
     kubectl_run(["apply", "-f", GATEWAY_API_CRDS_URL])
     success("Gateway API CRDs installed")
 

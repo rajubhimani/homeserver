@@ -134,7 +134,7 @@ uv run kubernetes/bootstrap.py --skip-secrets
 
 1. Checks docker/kind/kubectl/helm are on PATH and the Docker daemon is reachable.
 2. Creates the `kind-cluster` kind cluster from `kubernetes/kind-config.yaml` (1 control-plane + 3 workers) — skipped if it already exists.
-3. Installs the Gateway API CRDs (`Gateway`/`HTTPRoute`).
+3. Installs the Gateway API CRDs — the **experimental channel** bundle, not just standard (`Gateway`/`HTTPRoute`/`GatewayClass`/`ReferenceGrant`): Traefik's Gateway provider also watches `BackendTLSPolicy`/`TLSRoute`, which only exist in the experimental channel. Missing them doesn't just skip a feature — it stops Traefik's informers from ever syncing, so it never claims its `GatewayClass` at all and every `Gateway` sits stuck at `Programmed: Unknown, "Waiting for controller"` forever (see `kubernetes/TROUBLESHOOTING.md`'s Gateway API section).
 4. Applies the namespaces (`argocd`, `apps`, `data`, `infra`, `metallb-system`) — `argocd` has to exist before ArgoCD can be installed into it.
 5. Installs ArgoCD (server-side apply, its CRDs are too large for client-side), waits for it to become available.
 6. Detects this machine's `kind` Docker-network subnet and rewrites `kubernetes/cluster/metallb/resources/ipaddresspool.yaml` to match it.
@@ -163,7 +163,7 @@ hand or are debugging a failure:
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
 kubectl config current-context   # should print: kind-kind-cluster
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/experimental-install.yaml
 kubectl apply -f kubernetes/cluster/namespaces.yaml
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml --server-side --force-conflicts
 # fix kubernetes/cluster/metallb/resources/ipaddresspool.yaml's range to match

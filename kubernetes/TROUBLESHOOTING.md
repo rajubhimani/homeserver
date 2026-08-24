@@ -566,4 +566,62 @@ statically.
 
 ---
 
+## Gateway API
+
+### Traefik never claims its GatewayClass — standard-channel CRDs aren't enough
+
+Confirmed on a live cluster: `cluster-gateway`'s Application stayed
+`Synced` but `Progressing` indefinitely — `homeserver-gateway`'s status
+showed both `Accepted` and `Programmed` stuck at `status: Unknown, reason:
+Pending, message: Waiting for controller`, even though `cluster-traefik`
+itself was `Healthy` and its pod was `Running`. The actual problem was
+one level up: `kubectl get gatewayclass traefik -o yaml` showed the
+**GatewayClass itself** stuck the same way — Traefik had never claimed
+it at all — and `kubectl logs` on the Traefik pod was repeating:
+
+```
+Failed to watch" err="failed to list *v1.BackendTLSPolicy: the server could not find the requested resource (get backendtlspolicies.gateway.networking.k8s.io)"
+Failed to watch" err="failed to list *v1.TLSRoute: the server could not find the requested resource (get tlsroutes.gateway.networking.k8s.io)"
+```
+
+Traefik's Gateway API provider watches `BackendTLSPolicy` and `TLSRoute`
+as part of its normal reconciliation, whether or not anything actually
+uses them — but those CRDs only exist in the Gateway API's
+**experimental channel**. `bootstrap.py` was installing the **standard
+channel** bundle (`standard-install.yaml`: `Gateway`/`HTTPRoute`/
+`GatewayClass`/`ReferenceGrant` only). Missing CRDs don't just mean a
+missing feature here — they stop those specific informers from ever
+syncing, which appears to stop Traefik's controller from reaching the
+point of reconciling *anything*, including claiming its own
+`GatewayClass`. Every symptom (Gateway stuck Pending, GatewayClass
+stuck Pending, ArgoCD reporting `Progressing` forever since it checks
+the `Programmed` condition) cascades from that one missing CRD set.
+
+**Fix:** install the experimental channel instead
+(`experimental-install.yaml`) — it's a superset of standard, not a
+different/incompatible thing, so nothing else changes:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/experimental-install.yaml
+```
+
+`bootstrap.py`'s `install_gateway_api_crds()` now installs this URL by
+default. Its own already-installed check was also fixed to look for
+`backendtlspolicies.gateway.networking.k8s.io` specifically (an
+experimental-only CRD) rather than `gateways.gateway.networking.k8s.io`
+(present in both channels) — checking the latter would have matched a
+cluster already on the standard-only bundle and skipped the upgrade
+forever on a re-run.
+
+**Diagnostic path that actually found this**, worth repeating for any
+future "Application stuck Progressing, controller pod Healthy" case:
+check the *actual custom resource's* `status.conditions` first
+(`kubectl get <kind> -o yaml`, not just `kubectl get application`), then
+walk one level further to whatever that condition says it's waiting on
+(here: the GatewayClass, not the Gateway itself), then the controller's
+own logs. ArgoCD's health status is a summary of that chain, not the
+place the real reason lives.
+
+---
+
 [← kubernetes/README.md](README.md)
