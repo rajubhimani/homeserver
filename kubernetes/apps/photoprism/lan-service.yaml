@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8124 matches photoprism/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down photoprism) before applying this
+# — same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: photoprism-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: photoprism
+  ports:
+    - port: 8124
+      targetPort: 2342

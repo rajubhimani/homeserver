@@ -1,0 +1,145 @@
+# Mirrors gitlab/compose.yml's gitlab service. gitlab-runner intentionally
+# omitted, same reasoning as forgejo's CI runner and immich's
+# offline-remover: it exists solely to talk to the Docker socket
+# (docker/compose profile "runner"), which has no live equivalent on a
+# containerd kind node — see kubernetes/README.md's "Docker-socket
+# tools removed" note. GitLab CE Omnibus bundles its own Postgres/Redis
+# inside the one container, so there is no separate db-statefulset.yaml
+# here (unlike forgejo/photoprism/bookstack).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-config
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-logs
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab
+  namespace: apps
+  labels:
+    app: gitlab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gitlab
+  template:
+    metadata:
+      labels:
+        app: gitlab
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: gitlab
+          image: gitlab/gitlab-ce:19.2.1-ce.0
+          env:
+            # Same multi-line omnibus config Compose passes via
+            # GITLAB_OMNIBUS_CONFIG — Cloudflare/Traefik terminates TLS,
+            # so GitLab's bundled nginx serves plain HTTP internally.
+            - name: GITLAB_OMNIBUS_CONFIG
+              value: |
+                external_url 'https://gitlab.k8s.local'
+                gitlab_rails['gitlab_ssh_host'] = 'gitlab.k8s.local'
+                gitlab_rails['gitlab_shell_ssh_port'] = 2224
+                gitlab_rails['gitlab_signup_enabled'] = false
+                nginx['listen_https'] = false
+                nginx['listen_port'] = 80
+                nginx['proxy_set_headers'] = {
+                  "X-Forwarded-Proto" => "https",
+                  "X-Forwarded-Ssl" => "on"
+                }
+          ports:
+            - name: http
+              containerPort: 80
+            - name: ssh
+              containerPort: 22
+          volumeMounts:
+            - name: config
+              mountPath: /etc/gitlab
+            - name: logs
+              mountPath: /var/log/gitlab
+            - name: data
+              mountPath: /var/opt/gitlab
+            - name: dshm
+              mountPath: /dev/shm
+          resources:
+            limits:
+              memory: 6Gi
+          # GitLab Omnibus takes minutes to finish reconfiguring on first
+          # boot — generous start_period-equivalent via initialDelaySeconds,
+          # matching how long the Compose healthcheck-less container
+          # actually takes to become reachable in practice.
+          readinessProbe:
+            httpGet:
+              path: /-/readiness
+              port: 80
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /-/liveness
+              port: 80
+            initialDelaySeconds: 240
+            periodSeconds: 60
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: gitlab-config
+        - name: logs
+          persistentVolumeClaim:
+            claimName: gitlab-logs
+        - name: data
+          persistentVolumeClaim:
+            claimName: gitlab-data
+        # Matches compose.yml's shm_size: 256m — Omnibus's bundled
+        # Postgres needs more shared memory than k8s's tiny emptyDir
+        # tmpfs default.
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab
+  namespace: apps
+spec:
+  selector:
+    app: gitlab
+  ports:
+    - name: http
+      port: 80
+    - name: ssh
+      port: 22

@@ -150,14 +150,19 @@ only accepts a bcrypt hash in its Secret, so the script hashes it (via
 
 ## Current status
 
-7 of 8 `SERVICES_CORE` and 37 of 39 `SERVICES_EXTRA` are ported. Not
-ported, deliberately:
+7 of 8 `SERVICES_CORE` and 37 of 39 `SERVICES_EXTRA` are ported, plus all
+3 of `SERVICES_MANUAL` that have a real Kubernetes equivalent (gitlab,
+stirling-pdf full, photoprism — see `kubernetes/apps/gitlab/`,
+`kubernetes/apps/stirling-pdf/`, `kubernetes/apps/photoprism/`). They're
+`SERVICES_MANUAL` here for the same reason as on the Compose side —
+redundant with forgejo/stirling-pdf-lite/immich, never auto-started by any
+tier — not because anything about them is k8s-incompatible.
+
+Not ported, deliberately:
 
 - **`nginx-plain`** — its one job, routing, is already covered by
   Traefik/Gateway API in this cluster; porting it too would just be two
   reverse proxies fighting for the same role.
-- **`SERVICES_MANUAL`** (gitlab, stirling-pdf full, photoprism) — never
-  auto-started by any tier on the Compose side either.
 - **`portainer`, `dozzle`, `dockge`, `coolify`** — removed after review,
   not just left broken. Each one's entire purpose is managing Docker
   itself via `/var/run/docker.sock` (container/stack management, live log

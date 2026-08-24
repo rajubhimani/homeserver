@@ -1,0 +1,99 @@
+# Mirrors stirling-pdf/compose.yml (the full image, not the -lite variant
+# already ported at kubernetes/apps/stirling-pdf-lite/). Login stays
+# disabled (SECURITY_ENABLELOGIN=false, same default as the Compose .env.example)
+# so no credentials secret is needed here, unlike stirling-pdf-lite's.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stirling-pdf-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stirling-pdf
+  namespace: apps
+  labels:
+    app: stirling-pdf
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stirling-pdf
+  template:
+    metadata:
+      labels:
+        app: stirling-pdf
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: stirling-pdf
+          image: stirlingtools/stirling-pdf:2.14.2
+          env:
+            - name: SECURITY_ENABLELOGIN
+              value: "false"
+            - name: SECURITY_JWT_TOKENEXPIRYMINUTES
+              value: "1440"
+            - name: SYSTEM_SERVERCERTIFICATE_ENABLED
+              value: "true"
+            - name: LEGAL_LOGINAGREEMENT_ENABLED
+              value: "false"
+            - name: MAIL_ENABLED
+              value: "false"
+            - name: UI_LOGOSTYLE
+              value: classic
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: configs
+              mountPath: /configs
+            - name: logs
+              mountPath: /logs
+            - name: custom-files
+              mountPath: /customFiles
+            - name: pipeline
+              mountPath: /pipeline
+            - name: tessdata
+              mountPath: /usr/share/tessdata
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: configs
+          persistentVolumeClaim:
+            claimName: stirling-pdf-data
+        - name: logs
+          emptyDir: {}
+        - name: custom-files
+          emptyDir: {}
+        - name: pipeline
+          emptyDir: {}
+        - name: tessdata
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stirling-pdf
+  namespace: apps
+spec:
+  selector:
+    app: stirling-pdf
+  ports:
+    - port: 8080
