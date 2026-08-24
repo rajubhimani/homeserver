@@ -132,7 +132,7 @@ a failure:
 
 ```bash
 kind create cluster --config kubernetes/kind-config.yaml
-kubectl config current-context   # should print: kind-kind-cluster
+kubectl config current-context   # should print: kind-kind
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
 kubectl apply -f kubernetes/cluster/namespaces.yaml
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml --server-side --force-conflicts
@@ -154,7 +154,7 @@ kubectl apply -f kubernetes/argocd-apps/   # every remaining service Application
 Topology: 1 control-plane + 3 workers (`kubernetes/kind-config.yaml` — see
 that file's own comment for why it's 1 control-plane, not 2: etcd quorum
 needs an odd member count, and 2 is strictly worse than 1). `kubectl`
-points at it via the `kind-kind-cluster` context.
+points at it via the `kind-kind` context.
 
 ## What's installed
 

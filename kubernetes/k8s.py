@@ -59,13 +59,15 @@ SERVICES_JSON_PATH = BASE_DIR / "services.json"
 NAMESPACE = "apps"
 ARGOCD_NAMESPACE = "argocd"
 
-# kind names the cluster "kind-cluster" in kubernetes/kind-config.yaml,
-# giving context "kind-<cluster-name>" per kind's own naming convention —
-# see kubernetes/README.md. A mismatch here doesn't block anything (someone
-# may legitimately rename the cluster later), it just warns loudly before
-# a mutating command runs against a kubeconfig context that might not be
-# this pilot's cluster at all.
-EXPECTED_CONTEXT = "kind-kind-cluster"
+# kubernetes/kind-config.yaml has no `name:` field, so kind defaults the
+# cluster's own name to "kind" (not "kind-cluster" — a previous version of
+# this comment/README assumed the wrong default and was never actually
+# verified against a live cluster), giving context "kind-<cluster-name>"
+# = "kind-kind" per kind's own naming convention. A mismatch here doesn't
+# block anything (someone may legitimately rename the cluster later), it
+# just warns loudly before a mutating command runs against a kubeconfig
+# context that might not be this pilot's cluster at all.
+EXPECTED_CONTEXT = "kind-kind"
 
 TIER_NAMES = ["min", "core", "daily", "office", "automation-ai", "extra", "manual"]
 

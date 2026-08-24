@@ -38,7 +38,7 @@ BASE_DIR = K8S_DIR.parent
 sys.path.insert(0, str(K8S_DIR))
 from k8s import GREEN, RED, YELLOW, CYAN, BOLD, RESET, info, success, error, warn, header, kubectl_run, kubectl_json, current_context  # noqa: E402
 
-EXPECTED_CONTEXT = "kind-kind-cluster"
+EXPECTED_CONTEXT = "kind-kind"  # kind-config.yaml has no `name:` field, so kind defaults the cluster's own name to "kind" — see k8s.py's EXPECTED_CONTEXT comment
 ARGOCD_INSTALL_URL = "https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml"
 GATEWAY_API_CRDS_URL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml"
 
@@ -67,7 +67,7 @@ def check_prereqs() -> None:
 
 def create_cluster() -> None:
     existing = subprocess.run(["kind", "get", "clusters"], capture_output=True, text=True, check=True).stdout.split()
-    if "kind-cluster" in existing:
+    if "kind" in existing:
         success("kind cluster already exists, skipping create")
         return
     info("creating kind cluster (kubernetes/kind-config.yaml)...")
