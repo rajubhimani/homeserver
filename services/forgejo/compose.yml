@@ -25,7 +25,7 @@ services:
       - homeserver
 
   forgejo:
-    image: codeberg.org/forgejo/forgejo:16.0.2
+    image: codeberg.org/forgejo/forgejo:16.0.3
     container_name: forgejo
     restart: unless-stopped
     env_file: .env
@@ -68,10 +68,18 @@ services:
   # Isolated Docker-in-Docker engine used ONLY by forgejo-runner's CI jobs --
   # keeps CI's images/containers/build-cache on a completely separate daemon
   # and storage location from this host's real Docker (which stays on the OS
-  # drive, untouched). Storage lands under ${DATA_ROOT}/docker-data, which is
-  # this repo's usual service_data/data/forgejo path -- i.e. wherever that
-  # disk actually is, same as every other service's data, not necessarily the
-  # OS drive. See docs/services/forgejo.md for the isolation rationale.
+  # drive, untouched). Storage lands under ${FORGEJO_DOCKER_DATA_ROOT}, an
+  # absolute path OUTSIDE service_data/ set in .env -- deliberately NOT the
+  # usual ${DATA_ROOT} convention, because service_data on this host is a
+  # symlink to a slow FUSE-mounted spinning HDD. overlay2 can't mount on a
+  # FUSE filesystem, so dockerd falls back to the vfs storage driver there
+  # (full layer copies per container instead of copy-on-write), which made
+  # every CI job minutes slower or hang indefinitely -- confirmed by testing
+  # the exact same runner against the host's own Docker (overlayfs on the
+  # SSD/btrfs), which ran the same job in seconds. FORGEJO_DOCKER_DATA_ROOT
+  # must point at a native-filesystem path on a fast disk; see the comment
+  # in .env for how to verify one before changing it. See
+  # docs/services/forgejo.md for the full isolation rationale.
   forgejo-docker:
     image: docker:28-dind
     container_name: forgejo-docker
@@ -96,12 +104,12 @@ services:
       retries: 5
       start_period: 20s
     volumes:
-      - ${DATA_ROOT}/docker-data:/var/lib/docker
+      - ${FORGEJO_DOCKER_DATA_ROOT}:/var/lib/docker
     networks:
       - homeserver
 
   forgejo-runner:
-    image: code.forgejo.org/forgejo/runner:12.13.2
+    image: code.forgejo.org/forgejo/runner:13.0.0
     container_name: forgejo-runner
     restart: unless-stopped
     environment:
@@ -140,9 +148,18 @@ services:
         # this host's real docker.sock (which would give every CI job root-
         # equivalent access to the host engine and dump build layers on the OS
         # drive), point at the dedicated forgejo-docker sidecar over TCP on
-        # the internal network instead -- fully isolated daemon and storage,
-        # host Docker is never touched by a CI job.
+        # the internal network instead -- fully isolated daemon, and its
+        # storage now lives on a fast native-filesystem SSD path
+        # (FORGEJO_DOCKER_DATA_ROOT in .env), not the slow FUSE-mounted HDD
+        # service_data/ resolves to on this host -- see the forgejo-docker
+        # service comment above for why that distinction matters.
+        #
+        # log.level: debug is temporary -- added while confirming this sidecar
+        # setup performs as well as the host socket did. Revert to the
+        # default (info) once confirmed.
         cat > /data/config.yaml <<-CONFIG
+        log:
+          level: debug
         runner:
           file: .runner
         container:
@@ -150,7 +167,7 @@ services:
         CONFIG
         exec forgejo-runner daemon --config /data/config.yaml
     volumes:
-      - ${DATA_ROOT}/runner-data:/data
+      - ${FORGEJO_RUNNER_DATA_ROOT}:/data
     depends_on:
       forgejo:
         condition: service_healthy
