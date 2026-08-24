@@ -154,20 +154,29 @@ services:
         # service_data/ resolves to on this host -- see the forgejo-docker
         # service comment above for why that distinction matters.
         #
-        # forgejo-runner does NOT auto-inject a DOCKER_HOST env var into job
-        # containers for a tcp:// docker_host (only unix:// socket URLs get
-        # auto-mounted -- see the runner's own `generate-config` comments).
-        # Without this, `docker build`/`push`/etc. in any workflow across
-        # any repo on this instance defaults to the nonexistent local socket
-        # and fails with "no such file or directory". runner.envs applies to
-        # every job container automatically, instance-wide -- set here once
-        # instead of requiring every repo's workflow to set DOCKER_HOST
-        # itself.
+        # This only controls how forgejo-runner itself creates each job's
+        # OWN container -- it does NOT give that job container a way to run
+        # `docker build`/`push` itself. forgejo-docker is a completely
+        # separate, nested Docker engine (job containers live inside ITS
+        # containerd, not the host's or forgejo-runner's), so there is no
+        # host/hostname/socket a job container can reach back to forgejo-docker
+        # through -- confirmed live: a plain DOCKER_HOST pointed at
+        # forgejo-docker's own hostname failed inside job containers with
+        # "no such host", since that name only resolves on the outer
+        # `homeserver` network, not the per-job network living inside
+        # forgejo-docker's nested engine.
+        #
+        # Any workflow that itself needs `docker build`/`push` should declare
+        # its own per-job Docker-in-Docker SERVICE instead (see
+        # docs/services/forgejo.md) -- the same proven mechanism this repo's
+        # `check` jobs already use for their postgres/redis service
+        # containers, which forgejo-runner places on that job's own network
+        # and makes reachable by the service's alias. No runner-side config
+        # is needed for that; it's ordinary Actions YAML, portable to any
+        # Forgejo/Gitea instance.
         cat > /data/config.yaml <<-CONFIG
         runner:
           file: .runner
-          envs:
-            DOCKER_HOST: tcp://forgejo-docker:2375
         container:
           docker_host: "tcp://forgejo-docker:2375"
         CONFIG

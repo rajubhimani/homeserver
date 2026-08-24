@@ -106,17 +106,27 @@ The image's own default command (`forgejo-runner` with no subcommand) just print
 
 **Labels only take effect at registration time.** Changing `RUNNER_LABELS` in `.env` after the runner has already registered has no effect until you force it to re-register: `docker exec forgejo-runner rm -f /data/.runner` then `uv run homeserver.py dev up forgejo`.
 
-**A workflow step running `docker build`/`docker push` uses an isolated `forgejo-docker` sidecar, not this host's real Docker.** Each CI job runs in its own separate sibling container, which needs *some* Docker daemon reachable inside it for `docker build`/`push` to work. Rather than automounting this host's own `docker.sock` (`container.docker_host: automount` — the simpler option, but it hands every CI job root-equivalent access to the host engine, and every image layer it builds lands on the OS drive under `/var/lib/docker`), `compose.yml` runs a dedicated `docker:28-dind` container (`forgejo-docker`) and points the runner's generated `config.yaml` at it over the internal network: `docker_host: "tcp://forgejo-docker:2375"`. This is unconditional — active whenever Forgejo is up, no toggle, no config.
+**`forgejo-docker` is how the runner creates every job's own container — it is not, by itself, a Docker daemon a job can use to run `docker build`/`docker push`.** Each CI job runs in its own separate sibling container. Rather than automounting this host's own `docker.sock` (`container.docker_host: automount` — the simpler option, but it hands every CI job root-equivalent access to the host engine, and every image layer it builds lands on the OS drive under `/var/lib/docker`), `compose.yml` points the runner's generated `config.yaml` at the dedicated `forgejo-docker` sidecar over the internal network instead: `docker_host: "tcp://forgejo-docker:2375"`. This is unconditional — active whenever Forgejo is up, no toggle, no config. It governs container *creation* only.
 
-**A `tcp://` `docker_host` is not auto-wired into job containers the way `automount` is — a workflow using the `docker` CLI needs `DOCKER_HOST` set, or it silently defaults to a nonexistent local socket and fails with `no such file or directory`.** `automount`'s whole purpose is bind-mounting a real `/var/run/docker.sock` into every job container automatically; the runner's own `generate-config` output documents that behavior only for `unix://` socket URLs, not `tcp://`. Rather than requiring every repo's workflow to set `DOCKER_HOST` itself (easy to forget, breaks silently the same way for the next repo added to this instance), `config.yaml`'s `runner.envs` injects it into every job container instance-wide:
+**A workflow step that itself needs `docker build`/`docker push` cannot just reach `forgejo-docker` over that same address — it needs its own per-job Docker-in-Docker *service*.** Job containers created via `forgejo-docker` live entirely inside its own nested Docker engine; `forgejo-docker`'s hostname only resolves on the outer `homeserver` network, not from inside a job container (confirmed live: `DOCKER_HOST: tcp://forgejo-docker:2375` set globally failed inside a job with `lookup forgejo-docker: no such host`). The fix is the same well-established mechanism GitHub/Gitea/Forgejo Actions already use for this exact problem, and the same one this repo's own `check` jobs already rely on for their `postgres`/`redis` service containers: declare `docker` as a `services:` entry on the job that needs it. The runner places service containers on that job's own per-job network and makes them reachable by the service's alias, exactly like `postgres`/`redis` already are — no runner-side config needed, ordinary Actions YAML, portable to any Forgejo/Gitea instance:
 
 ```yaml
-runner:
-  envs:
-    DOCKER_HOST: tcp://forgejo-docker:2375
+jobs:
+  publish:
+    services:
+      docker:
+        image: docker:28-dind
+        options: --privileged
+        env:
+          DOCKER_TLS_CERTDIR: ""
+    env:
+      DOCKER_HOST: tcp://docker:2375
+    steps:
+      - run: docker build -t myimage .
+      - run: docker push myimage
 ```
 
-No per-repo workflow changes needed for this — any `.forgejo/workflows/*.yml` using plain `docker build`/`push`/`login` just works, the same as it would against `automount`.
+`trade-pipeline`'s `.forgejo/workflows/cicd.yaml` `publish` job uses exactly this pattern.
 
 ```mermaid
 flowchart LR
