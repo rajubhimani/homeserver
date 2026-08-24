@@ -277,16 +277,62 @@ kubernetes/
   apply-secrets.py         # reads .env, creates/updates the matching k8s Secrets
   k8s.py                   # tier/group/service start-stop — see "Starting/stopping services"
   migrate-db.py             # copies each service's DB from Compose into k8s — see "Migrating data from Compose"
+  apply-domain-routes.py    # real-domain HTTPRoute per service — see "Real-domain routing"
 ```
 
-Hostnames use a `*.k8s.local` suffix (e.g. `excalidraw.k8s.local`), not the
-real production domain — this is a parallel experiment, not production
-traffic. Test routing locally the same way `nginx-plain` health checks are
-tested elsewhere in this repo:
+Hostnames use a `*.k8s.local` suffix (e.g. `excalidraw.k8s.local`) by
+default, not the real production domain — every `httproute.yaml`
+committed to git stays scoped to local testing only, on purpose (see
+"Real-domain routing" below for the opt-in way to reach a service over
+your actual domain instead). Test routing locally the same way
+`nginx-plain` health checks are tested elsewhere in this repo:
 
 ```bash
 curl -H "Host: excalidraw.k8s.local" http://localhost:80/
 ```
+
+## Real-domain routing
+
+By default nothing here is reachable over your real domain — every
+`HTTPRoute` only matches `*.k8s.local`. To route your actual domain
+(e.g. through the same Cloudflare Tunnel the Compose stack uses) to a
+service in this pilot:
+
+1. Add your domain to `kubernetes/.env`:
+   ```
+   DOMAIN=yourdomain.com
+   ```
+2. Run:
+   ```bash
+   uv run kubernetes/apply-domain-routes.py                # every service with an httproute.yaml
+   uv run kubernetes/apply-domain-routes.py nextcloud immich # or just specific ones
+   ```
+
+This creates a **second** `HTTPRoute` per service (`<service>-domain`,
+e.g. `nextcloud-domain`) with your real hostname (`nextcloud.yourdomain.com`),
+alongside the existing `*.k8s.local` one — applied directly to the
+cluster, not committed to git and not tracked by ArgoCD at all. That's
+deliberate: if your domain were baked into the git-managed route
+instead, ArgoCD's `selfHeal` would revert it back to `*.k8s.local` on
+its next sync since the live object wouldn't match git. A separate,
+ArgoCD-invisible object sidesteps that — same "real value never
+committed, applied locally at runtime" pattern `apply-secrets.py`
+already uses for Secrets. Re-run the script anytime you add a new
+service or change your domain; it's idempotent.
+
+**If you're reusing the same Cloudflare Tunnel as the Compose stack**
+(same `TUNNEL_TOKEN`, matching that key's own comment in `.env.example`):
+Cloudflare Tunnel supports multiple simultaneous connections and load-
+balances across all of them, so running both this k8s pilot's
+`cloudflared` and Compose's at the same time means requests randomly
+land on whichever one — and each only has this cluster's or Compose's
+own network reachable. Stop one before testing the other
+(`uv run homeserver.py dev down cloudflared` for the Compose side), and
+point the tunnel's Public Hostname origin at whichever one you're
+testing: `http://cluster-traefik.infra.svc.cluster.local:80` for this
+pilot's Traefik (confirm the exact Service name/port for your cluster
+with `kubectl -n infra get svc`), or the Compose `nginx-plain` origin
+you already had configured, for Compose.
 
 ## LAN access (phone, other devices)
 

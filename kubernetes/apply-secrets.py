@@ -139,12 +139,15 @@ SPECIAL_GENERATORS: dict[str, Callable[[], str]] = {
     "SILVERBULLET_SB_USER": lambda: f"admin:{_urlsafe(24)}",  # format: username:password
 }
 
-# TUNNEL_TOKEN: a real external-service credential (Cloudflare's own
-# dashboard issues it) — nothing in this repo can invent a valid value,
-# so it's left exactly as .env.example ships it (still a placeholder) for
-# the user to fill in by hand. It's read via the required env["..."]
-# form, so Env.__getitem__ below fails clearly on it rather than silently
-# pushing a fake token into the cluster.
+# TUNNEL_TOKEN and DOMAIN: real values nothing in this repo can invent
+# (a Cloudflare-issued credential, and your own actual domain) — left
+# exactly as .env.example ships them (still placeholders) for the user
+# to fill in by hand. TUNNEL_TOKEN is read via the required env["..."]
+# form here, so Env.__getitem__ below fails clearly on it rather than
+# silently pushing a fake token into the cluster; DOMAIN isn't read by
+# this script at all (only by apply-domain-routes.py, which has its own
+# equivalent check) but still must never get a random auto-generated
+# "domain" string.
 #
 # Everything else here ships genuinely blank in .env.example on purpose
 # (Beszel's agent pairing, RocketChat's optional admin bootstrap, and
@@ -153,6 +156,7 @@ SPECIAL_GENERATORS: dict[str, Callable[[], str]] = {
 # already the correct, working state — not a placeholder needing a value.
 NO_AUTO_GENERATE = {
     "TUNNEL_TOKEN",
+    "DOMAIN",
     "BESZEL_AGENT_TOKEN",
     "BESZEL_AGENT_KEY",
     "ROCKETCHAT_ADMIN_PASSWORD",
