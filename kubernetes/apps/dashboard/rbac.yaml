@@ -1,0 +1,32 @@
+# Kubernetes Dashboard's own RBAC — separate from the Authentik gate in
+# front of it (httproute.yaml). Authentik answers "who are you"; this
+# answers "what can the Dashboard UI do once someone's through." The two
+# layers are independent — getting past Authentik doesn't grant any
+# Kubernetes permission by itself, it just lets the request reach
+# Dashboard's own login (a ServiceAccount token, see README below).
+#
+# cluster-admin is broad — deliberate, not accidental: the whole point of
+# this port is a Portainer-equivalent "start/stop anything" remote
+# interface, so it needs to scale Deployments/StatefulSets, edit
+# ConfigMaps/Secrets, exec into pods, etc. across every namespace. Scope
+# this down to a custom ClusterRole (e.g. get/list/watch + scale on
+# apps/batch resources only, no Secret read) once real usage patterns are
+# known and full admin power isn't actually needed day to day.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard-admin
+  namespace: apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dashboard-admin
+subjects:
+  - kind: ServiceAccount
+    name: dashboard-admin
+    namespace: apps
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

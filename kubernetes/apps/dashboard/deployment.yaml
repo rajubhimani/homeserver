@@ -1,0 +1,106 @@
+# Kubernetes Dashboard v2.7.0 — the Portainer-equivalent remote UI for
+# this pilot (Portainer itself has no Kubernetes-native job to do, see
+# kubernetes/README.md's "Not ported, deliberately"). Not a port of any
+# Compose service — new to this pilot, added specifically to answer "how
+# do I start/stop a service remotely without kubectl" the way Portainer
+# already answers it for the Compose stack.
+#
+# Runs HTTP-only internally (--insecure-bind-address/--insecure-port,
+# no --auto-generate-certificates) rather than the upstream default of a
+# self-signed HTTPS listener — TLS termination and the actual auth gate
+# both happen one layer up, at Traefik + the authentik-forward-auth
+# Middleware (see httproute.yaml). Dashboard's own login (a ServiceAccount
+# bearer token, see rbac.yaml) is a second, independent layer: Authentik
+# answers "who are you", the token answers "what can you do once you're
+# in" — getting through Authentik alone grants no cluster permission.
+#
+# csrf/key-holder Secrets created empty, same convention as upstream's own
+# recommended.yaml — Dashboard populates them itself on first boot via its
+# own RBAC (cluster-admin from rbac.yaml covers the get/create/update it
+# needs, no extra Role required).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubernetes-dashboard-csrf
+  namespace: apps
+type: Opaque
+data: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubernetes-dashboard-key-holder
+  namespace: apps
+type: Opaque
+data: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernetes-dashboard-settings
+  namespace: apps
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: apps
+  labels:
+    app: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: dashboard-admin
+      containers:
+        - name: dashboard
+          image: kubernetesui/dashboard:v2.7.0
+          args:
+            - --namespace=apps
+            - --insecure-bind-address=0.0.0.0
+            - --insecure-port=9090
+            - --enable-insecure-login
+            - --disable-settings-authorizer
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+          securityContext:
+            runAsUser: 1001
+            runAsGroup: 2001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: apps
+spec:
+  selector:
+    app: dashboard
+  ports:
+    - port: 9090
