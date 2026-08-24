@@ -216,6 +216,24 @@ def main() -> None:
 
     env = Env(load_env_file(ENV_PATH))
 
+    # Applied first, deliberately — everything below this can fail partway
+    # through (a missing .env key, a slow/unready cluster) and still leave
+    # a working ArgoCD login, which is often the fastest way to see what's
+    # actually wrong with the rest.
+    info("hashing ArgoCD admin password...")
+    argocd_hash = bcrypt_hash(env["ARGOCD_ADMIN_PASSWORD"])
+    mtime = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        kubectl(
+            [
+                "-n", "argocd", "patch", "secret", "argocd-secret",
+                "-p", f'{{"stringData": {{"admin.password": "{argocd_hash}", "admin.passwordMtime": "{mtime}"}}}}',
+            ]
+        )
+    except subprocess.CalledProcessError as e:
+        fail(f"failed to patch argocd-secret: {e.stderr.strip() if e.stderr else e}")
+    success("argocd admin password applied")
+
     apply_secret("postgres-shared-credentials", "data", {"postgres-password": env["POSTGRES_SHARED_PASSWORD"]})
     success("postgres-shared-credentials applied")
 
@@ -538,20 +556,6 @@ def main() -> None:
     )
     apply_secret("zulip-credentials", "apps", {"secret-key": env["ZULIP_SECRET_KEY"], "email-password": env["ZULIP_EMAIL_PASSWORD"]})
     success("zulip-db-credentials + zulip-credentials applied")
-
-    info("hashing ArgoCD admin password...")
-    argocd_hash = bcrypt_hash(env["ARGOCD_ADMIN_PASSWORD"])
-    mtime = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    try:
-        kubectl(
-            [
-                "-n", "argocd", "patch", "secret", "argocd-secret",
-                "-p", f'{{"stringData": {{"admin.password": "{argocd_hash}", "admin.passwordMtime": "{mtime}"}}}}',
-            ]
-        )
-    except subprocess.CalledProcessError as e:
-        fail(f"failed to patch argocd-secret: {e.stderr.strip() if e.stderr else e}")
-    success("argocd admin password applied")
 
 
 if __name__ == "__main__":
