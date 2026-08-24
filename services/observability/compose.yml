@@ -42,7 +42,7 @@ services:
   # config needed since FastAPI services here already log Loki-compatible
   # JSON to stdout (queryable in Grafana via `| json` in LogQL).
   alloy:
-    image: grafana/alloy:v1.18.1
+    image: grafana/alloy:v1.19.0
     container_name: alloy
     restart: unless-stopped
     command:

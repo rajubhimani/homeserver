@@ -19,7 +19,7 @@ uv run homeserver.py dev up vaultwarden
 
 ## Health endpoint
 
-Confirmed live against the running container (`vaultwarden/server:1.37.1`): the image ships its own `/healthcheck.sh` baked into `CMD` (60s interval, 10s timeout) — this repo's `compose.yml`/`compose.dev.yml` do not define a separate `healthcheck:` block, `docker inspect` shows the image default is in effect. The script curls `http://localhost:80/alive` (reading `ROCKET_PORT`/`DOMAIN` from the container's own env/`config.json` to build the URL) and exits non-zero on anything but success.
+Confirmed live against the running container (`vaultwarden/server:1.37.2`): the image ships its own `/healthcheck.sh` baked into `CMD` (60s interval, 10s timeout) — this repo's `compose.yml`/`compose.dev.yml` do not define a separate `healthcheck:` block, `docker inspect` shows the image default is in effect. The script curls `http://localhost:80/alive` (reading `ROCKET_PORT`/`DOMAIN` from the container's own env/`config.json` to build the URL) and exits non-zero on anything but success.
 
 `GET /alive` returns HTTP `200` with a bare JSON timestamp string, e.g. `"2026-08-21T22:37:44.046902Z"` — confirmed both with `docker exec vaultwarden curl http://localhost:80/alive` and with `curl http://localhost:8200/alive` from the host (dev port). `docker ps` / `docker inspect` reports the container as `healthy` accordingly.
 
@@ -42,7 +42,7 @@ Vaultwarden implements the real Bitwarden server API, so every **official Bitwar
 
 ### Client version compatibility with this stack's pinned Vaultwarden version
 
-This stack pins `vaultwarden/server:1.37.1`. Checked directly against Vaultwarden's own GitHub release notes (not assumed): the **1.37.0** release (1.37.1 is a same-day-ish patch on top, fixing an invite-URL bug and an Alpine build issue — no further client-facing changes) states plainly *"This update is required for support with clients with version 2026.7.0+, please update before reporting any issues with them."* — i.e. 1.37.0/1.37.1 exists specifically because newer official Bitwarden clients (2026.7.0 and later, which use an updated `/identity/accounts/prelogin` flow, updated registration requests, and a `vnext` policy format) stopped working against older Vaultwarden servers. Running 1.37.1 means current Bitwarden clients are expected to work correctly against this instance — if a client ever reports a login/registration failure after an autoupdate, the Vaultwarden image pin here (not the client) is the first thing to check.
+This stack pins `vaultwarden/server:1.37.2`. Checked directly against Vaultwarden's own GitHub release notes (not assumed): 1.37.0 first required newer Bitwarden clients (2026.7.0+, an updated `/identity/accounts/prelogin` flow, updated registration requests, and a `vnext` policy format); 1.37.2 is a maintenance release on top (Debian build fix, sendmail permission-check fix, login logs now include the user's email) that states it's *"required for support with clients with version 2026.8.0+"*. Running 1.37.2 means current Bitwarden clients are expected to work correctly against this instance — if a client ever reports a login/registration failure after an autoupdate, the Vaultwarden image pin here (not the client) is the first thing to check.
 
 ## Using it day to day
 
