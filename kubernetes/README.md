@@ -141,6 +141,25 @@ uv run kubernetes/bootstrap.py
 uv run kubernetes/bootstrap.py --skip-secrets
 ```
 
+If the Compose stack is already configured on this machine (real
+passwords/keys sitting in `services/<service>/.env`, not
+`services/<service>/.env.example`), run
+`uv run kubernetes/sync-env-from-compose.py` **before** `apply-secrets.py`
+(`bootstrap.py` does not run this automatically — it only touches
+`kubernetes/.env`, which you may not have created yet). It copies every
+value it has a mapping for out of the matching Compose `.env` into
+`kubernetes/.env`, so app-level secrets (Nextcloud's `NEXTCLOUD_ADMIN_PASSWORD`,
+Firefly's `APP_KEY`, Vaultwarden's `ADMIN_TOKEN`, etc.) match on both
+sides — this matters beyond convenience: several apps use that value to
+encrypt data at rest (Firefly's `APP_KEY`, Documenso's encryption keys,
+Outline's `SECRET_KEY`, ...), so if you also migrate that service's
+database (see "Migrating data from Compose" below), the copied rows are
+only decryptable if the k8s secret matches what Compose encrypted them
+with. Safe to run any time, repeatedly — it never overwrites a real
+`kubernetes/.env` value with a Compose-side placeholder, and leaves
+anything it has no Compose mapping for (ArgoCD's own admin password, the
+shared Postgres/MariaDB passwords) untouched for you to fill in by hand.
+
 Every step is independently idempotent — re-running after a partial
 failure only redoes what's actually missing, same "don't re-touch what's
 already there" idiom `homeserver.py`'s own `up core` has. What it actually
@@ -223,6 +242,7 @@ kubernetes/
     <service>.yaml       # ArgoCD Application manifests, one per service
   .env.example            # template — copy to .env (gitignored) and fill in
   bootstrap.py             # one-time cluster setup, idempotent — see "Cluster" above
+  sync-env-from-compose.py # copies real secrets from services/*/.env into kubernetes/.env
   apply-secrets.py         # reads .env, creates/updates the matching k8s Secrets
   k8s.py                   # tier/group/service start-stop — see "Starting/stopping services"
 ```
