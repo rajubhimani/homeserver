@@ -26,6 +26,28 @@ schema_config:
 
 limits_config:
   retention_period: 336h
+  # Two separate things reject "old" log entries in Loki, and both
+  # needed fixing — a single reject_old_samples: false is NOT enough on
+  # its own (verified: confirmed live via /config, rejections continued
+  # regardless):
+  #  1. This distributor-level check, against reject_old_samples_max_age
+  #     (default 1 week) — genuinely old/stale data.
+  #  2. The ingester-level per-stream out-of-order window, sized at HALF
+  #     of ingester.max_chunk_age below (default 2h -> 1h window) from
+  #     that stream's own most recent entry — a completely different
+  #     mechanism, the one actually producing "entry too far behind,
+  #     oldest acceptable timestamp is: ..." in Alloy/Loki's own logs.
+  # This stack's normal workflow is frequent up/down/restart cycles
+  # (homeserver.py), and Docker/Alloy can flush a multi-hour backlog of
+  # buffered log lines on reconnect after a container's been stopped for
+  # a while — comfortably wider than the default ~1h ingester window.
+  # Disabled/widened rather than left default: the risk of accepting
+  # genuinely-old data is low for a homelab log store, and the cost of
+  # silently losing real logs after ordinary restarts is worse.
+  reject_old_samples: false
+
+ingester:
+  max_chunk_age: 24h
 
 compactor:
   working_directory: /loki/compactor

@@ -19,6 +19,30 @@ uv run homeserver.py dev up openproject
 
 `admin` / `admin` — **change immediately** on first login.
 
+To set a real name/email/password from the start instead (fresh installs
+only — see `.env.example`'s commented `OPENPROJECT_SEED_ADMIN_USER_*`
+block), fill those in **before** the first `up openproject`. They're seed
+vars: only read during the initial `db:seeds` run that creates the
+database, so setting them on an already-running instance has no effect —
+change the password via the UI instead (Administration → Users, or your
+own account settings). Note there's no seed var for the *login* itself —
+OpenProject hardcodes it to `admin` regardless of what
+`OPENPROJECT_SEED_ADMIN_USER_NAME`/`_MAIL` are set to.
+
+**However you get in — default `admin`/`admin`, or a seeded password —
+`OPENPROJECT_SEED_ADMIN_USER_PASSWORD_RESET` defaults to `true`, so
+OpenProject forces a password change screen on first login either way.**
+Setting it to `false` in `.env` (fresh installs only, same caveat as
+above) skips that prompt and lets the seeded password be used as-is.
+
+## Connecting the mobile app (Android — beta)
+
+OpenProject Mobile (beta, [Google Play](https://play.google.com/store/apps/details?id=org.openproject.app)) connects to any on-premises instance with API access enabled — on first launch, choose a self-hosted server and enter `https://openproject.${DOMAIN}`, then log in with the same account used on the web. Covers work packages (create/edit/comment/attach files/log time), with direct camera capture and local notifications. Still beta as of this check (last Android update mid-2026) — expect rough edges. No separate iOS listing was confirmed at time of writing; check the [OpenProject mobile app guide](https://www.openproject.org/docs/mobile-app-guide/) for current platform availability before assuming iOS support.
+
+## Health endpoint
+
+`services/openproject/compose.yml`'s healthcheck hits `http://localhost:80/health_checks/default` — OpenProject's own built-in Rails health-check endpoint, returns 200 when the app and its bundled Postgres are both reachable.
+
 ## Implementation note — HTTPS behind Cloudflare
 
 `OPENPROJECT_HTTPS` must be `"true"` when running behind Cloudflare/any TLS-terminating proxy. This is OpenProject's own documented env var for telling Rails the connection is secure, independent of the `X-Forwarded-Proto` header the proxy sends. Leaving it `"false"` while the proxy claims `https` is contradictory and causes broken links/redirect issues.

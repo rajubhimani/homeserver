@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Open-source Notion alternative — docs, databases, kanban, and AI writing tools.
-**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** Postgres (pgvector) + Redis + MinIO | **Memory:** no hard limit set in compose.yml; measured idle ~382MB across all 8 containers (appflowy-cloud is the largest single piece at ~121MB). No official RAM figure exists upstream — AppFlowy's own `docker-compose.yml` uses unpinned `latest` tags with no published resource spec, so treat any number here (including this one) as observed, not guaranteed
+**Port:** `8103` (host) → `80` (container, `appflowy-nginx`) | **Data:** `service_data/data/appflowy/` | **Requires:** Postgres (pgvector) + Redis + MinIO | **Memory:** no hard limit set in compose.yml; measured idle ~509MB across all 8 containers (appflowy-cloud is the largest single piece at ~218MB). No official RAM figure exists upstream — AppFlowy's own `docker-compose.yml` uses unpinned `latest` tags with no published resource spec, so treat any number here (including this one) as observed, not guaranteed
 
 ## Setup
 
@@ -13,7 +13,7 @@
 cp services/appflowy/.env.example services/appflowy/.env
 # generate: openssl rand -hex 32 → GOTRUE_JWT_SECRET
 # set POSTGRES_PASSWORD and MINIO_ROOT_PASSWORD
-mkdir -p service_data/data/appflowy/{postgres,redis,minio}
+mkdir -p service_data/data/appflowy/minio
 uv run homeserver.py dev up appflowy
 ```
 
@@ -23,6 +23,10 @@ uv run homeserver.py dev up appflowy
 - Admin UI: `http://<ip>:8103/web/` — manage users and workspaces
 - GoTrue auth: `https://appflowy.yourdomain.com/gotrue/`
 - Desktop/mobile clients connect directly to `https://appflowy.yourdomain.com`
+
+## Connecting the desktop/mobile apps
+
+Install the official [AppFlowy app](https://appflowy.io/download) (desktop: Mac/Windows/Linux; mobile: iOS/Android), then in-app: **Settings → Cloud Settings → Custom Cloud Server** → enter `https://appflowy.${DOMAIN}` exactly, including the `https://` prefix (a mismatch here — e.g. missing protocol or a trailing slash — is a common cause of login failing against a self-hosted instance). Log in with the same account created via the web UI in "First login" above. Workspaces/docs sync the same whether accessed through the app or the web UI at `http://<ip>:8103`.
 
 > The `appflowy-minio-setup` container runs once to create the `appflowy` S3 bucket, then exits — this is normal, not a crash.
 
@@ -36,12 +40,12 @@ All services below must stay in sync. `appflowy_web` uses its own versioning sch
 
 | Service | Image | Version | Notes |
 | --- | --- | --- | --- |
-| Cloud backend | `appflowyinc/appflowy_cloud` | `0.16.5` | Must match gotrue/admin |
-| Auth service | `appflowyinc/gotrue` | `0.16.5` | Must match cloud/admin |
-| Admin UI | `appflowyinc/admin_frontend` | `0.16.5` | Must match cloud/gotrue |
-| Web frontend | `appflowyinc/appflowy_web` | `0.15.5` | Own versioning scheme — nginx rewrite handles path differences |
+| Cloud backend | `appflowyinc/appflowy_cloud` | `0.16.5` | Pinned independently — not currently in lockstep with gotrue/admin |
+| Auth service | `appflowyinc/gotrue` | `0.17.1` | Must match admin |
+| Admin UI | `appflowyinc/admin_frontend` | `0.17.1` | Must match gotrue |
+| Web frontend | `appflowyinc/appflowy_web` | `0.16.2` | Own versioning scheme — nginx rewrite handles path differences |
 | Database | `pgvector/pgvector` | `pg16` | — |
-| Cache | `redis` | `7-alpine` | — |
+| Cache | `redis` | `8.10-alpine` | — |
 
 > **WebSocket path difference:** `appflowy_web:0.15.5` sends WebSocket requests to `/ws/{workspace_id}/` but `appflowy_cloud:0.16.x` changed to `/ws/v2/{workspace_id}`. The internal nginx (`appflowy/nginx.conf`) rewrites the path automatically.
 
@@ -53,7 +57,7 @@ GoTrue's own migrations always fully-qualify their schema (`{{Namespace}}.users`
 
 AppFlowy Cloud (the Rust service)'s sqlx migrations, on the other hand, assume unqualified names resolve to `public` — a later migration hardcodes `public.af_user`. Since both services share the same DB role, a role-wide `ALTER ROLE ... SET search_path` (an earlier version of this setup) forces one choice for both and breaks the other.
 
-**Fix:** scope `search_path=auth,public` to **only** GoTrue's own connection string via the Postgres URI's `options` param (`?options=-c%20search_path%3Dauth%2Cpublic` on `GOTRUE_DB_DATABASE_URL`), leaving `APPFLOWY_DATABASE_URL` (and the role default) at plain `public`. This is handled automatically by `appflowy/postgres-init/init.sh` on first DB initialization.
+**Fix:** scope `search_path=auth,public` to **only** GoTrue's own connection string via the Postgres URI's `options` param (`?options=-c%20search_path%3Dauth%2Cpublic` on `GOTRUE_DB_DATABASE_URL`), leaving `APPFLOWY_DATABASE_URL` (and the role default) at plain `public`. This is baked directly into `GOTRUE_DB_DATABASE_URL` in `compose.yml`, so it applies automatically on every start — no init script involved.
 
 ### Migration tracking split — applies when upgrading or after container recreation on an existing DB
 
@@ -87,11 +91,12 @@ docker restart appflowy-gotrue appflowy-cloud
 ```bash
 uv run homeserver.py prod down appflowy
 sudo rm -rf ~/homeserver/service_data/data/appflowy/
-mkdir -p ~/homeserver/service_data/data/appflowy/{postgres,redis,minio}
+docker volume rm appflowy-postgres appflowy-redis-alpine
+mkdir -p ~/homeserver/service_data/data/appflowy/minio
 uv run homeserver.py prod up appflowy
 ```
 
-After a clean wipe, `postgres-init/init.sh` runs automatically on the DB's first boot, sets `search_path`, and everything works without manual steps.
+After a clean wipe, the `search_path` fix (baked into `GOTRUE_DB_DATABASE_URL` in `compose.yml`) applies automatically — everything works without manual steps.
 
 ### Stale gotrue IP after recreation
 

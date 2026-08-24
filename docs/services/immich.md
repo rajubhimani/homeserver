@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Photo management, replaces Google Photos.
-**Port:** `2283` (host) → `2283` (container, `immich-server`) | **Requires:** Postgres (custom pgvector build) + Redis | **Memory:** DB capped 2G in compose.yml (raised from 512M — see incident below); app/ml/redis: no hard limit set; measured idle ~1.4GB total across all 5 containers. Immich's own docs state 6GB minimum / 8GB recommended for the full stack with ML enabled, and explicitly recommend **at least 2GB for Postgres** if a Docker memory limit is set on it at all
+**Port:** `2283` (host) → `2283` (container, `immich-server`) | **Requires:** Postgres (custom pgvector build) + Redis | **Memory:** DB capped 2G in compose.yml (raised from 512M — see incident below); app/ml/redis: no hard limit set; measured idle ~531MB total across all 5 containers (server 501 + ml 12 + redis 4 + db 14 + offline-remover <1). Immich's own docs state 6GB minimum / 8GB recommended for the full stack with ML enabled, and explicitly recommend **at least 2GB for Postgres** if a Docker memory limit is set on it at all
 
 ## Setup
 
@@ -16,7 +16,7 @@ cp services/immich/.env.example services/immich/.env
 Edit `services/immich/.env`:
 
 ```env
-UPLOAD_LOCATION=/mnt/seagate/immich
+UPLOAD_LOCATION=../../service_data/media/immich
 # Postgres data lives in a named Docker volume (declared in compose.yml), not
 # a bind mount — no path to set here. Back it up with
 # `uv run homeserver.py <env> backup immich`.
@@ -56,7 +56,47 @@ Install the **Immich** app (Android / iOS — free). Server URL by access path:
 - Cloudflare: `https://immich.yourdomain.com`
 - Tailscale: `http://100.x.x.x:2283` — only works while connected to the tailnet; the Cloudflare path works anywhere
 
-Login with the user's account, then enable auto-backup in app settings.
+Not independently confirmed live (no phone was used to install/log into the app for this pass) — the rest of this section is Immich's own current mobile-app documentation, not training-memory guesswork.
+
+**Login:** enter the server URL above. If login instead fails with **"Your app major version is not compatible with the server!"**, this is Immich's mobile app enforcing a real runtime major-version check against the server (confirmed via Immich's own GitHub issue tracker) — see the version-compatibility note below before troubleshooting anything else.
+
+**Enabling backup:**
+
+1. Tap the cloud icon in the top-right corner to open the backup screen.
+2. Select which album(s) on the device to back up — Immich auto-detects common source folders (Camera, Screenshots, WhatsApp Images, Downloads, etc.) and each gets its own toggle; double-tap an album to exclude it instead.
+3. Scroll to the bottom and tap **Enable Backup**.
+
+**Network/background behavior (defaults, changeable in the backup settings screen):**
+
+- Wi-Fi only by default — uploading a large existing library over mobile data first is not recommended unless this is deliberately turned off.
+- **iOS:** background uploads require **Settings (the iOS Settings app, not Immich's) → General → Background App Refresh** enabled for the Immich app, or backup only proceeds while the app is open in the foreground.
+- **Android:** the app exposes its own toggle to restrict background uploads to only run while charging, plus a minimum-delay setting for how long after a photo is taken the background upload task is allowed to run. Aggressive OEM battery optimization (common on some Android skins) can still kill the background worker regardless of these toggles — if backups stall with the app closed, check the phone's per-app battery/background-activity restriction setting too.
+- **Album sync:** a separate feature from picking which local albums to back up — under **Library → On this device**, syncing keeps a chosen device album's membership mirrored to an Immich album server-side, rather than just uploading the files into one flat timeline.
+
+**Version compatibility — checked specifically for the pinned `v3.1.0` server:** Immich's mobile app enforces a **major-version match** against the server at login/sync time, not just a soft recommendation — an app still on a `v2.x.x` build cannot talk to this stack's `v3.1.0` server at all (confirmed via Immich's own upgrade docs and multiple GitHub issues describing the exact "app major version is not compatible" error). Update the mobile app to a current `v3.x.x` build before or immediately after any server major-version bump; minor/patch bumps (e.g. this repo's pin of `v3.1.0` moving to a later `v3.x.x`) don't have this constraint.
+
+## Using it day to day
+
+Confirmed against Immich's own current documentation, not assumed from memory.
+
+- **Albums:** select one or more photos/videos → the album icon (or **+**) → create a new album or add to an existing one. Albums are the main way to group a trip/event across what auto-backup otherwise dumps into one flat timeline.
+- **Sharing an album:** open the album → **Share** → choose which users on this instance can see it, as either **Editor** (can add their own photos/videos to it) or **Viewer** (read-only). A **public link** is the other option — generates a URL anyone can open without an account, with its own settings for an expiration date, password, whether downloads are allowed, and whether metadata is shown.
+- **Partner sharing:** distinct from album sharing — **Account Settings → Partner Sharing** shares your *entire* library (not just one album) with another user of your choice, who can then view and download everything, not just a curated subset.
+- **Smart search:** the search bar takes natural-language queries ("dog on a beach") thanks to the CLIP model `immich-ml` runs — no manual tagging needed for this to work, since `immich-ml` is always-on in this stack (no profile gate, see Setup above). Narrow further with explicit filters in the same search: by person/face, city/state/country (reverse-geocoded from GPS), camera make/model, file name or folder path, date range, media type, star rating, or OCR'd text found in the image itself. The underlying CLIP model is swappable under **Administration → Settings → Machine Learning Settings → Smart Search** if search quality/speed needs tuning for a particular language mix.
+- **People:** **Explore → People** lists everyone Face Detection has clustered (see the Machine Learning jobs above) — name a person once and their photos become searchable/filterable by name across the whole library.
+
+## Health endpoint
+
+`immich-server` and `immich-ml` both ship a Docker-image-baked `HEALTHCHECK` (not declared in this repo's `compose.yml` — inherited from the upstream image, confirmed via `docker inspect immich-server`/`immich-ml --format '{{json .Config.Healthcheck}}'`, which show `immich-healthcheck` and `python3 healthcheck.py` respectively rather than a plain HTTP probe). Confirmed live against the running `v3.1.0` containers:
+
+```bash
+docker exec immich-server curl -s http://localhost:2283/api/server/ping
+# {"res":"pong"}  — HTTP 200
+docker exec immich-server curl -s http://localhost:2283/api/server/version
+# {"major":3,"minor":1,"patch":0,"prerelease":null}
+```
+
+`immich-db` and `immich-redis` use plain compose-level healthchecks instead (`pg_isready` and `valkey-cli ping`, both visible directly in `compose.yml`). All five containers (`immich-server`, `immich-ml`, `immich-db`, `immich-redis`, `immich-offline-remover`) were observed `Up`/`(healthy)` via `docker ps --filter name=immich` at the time of this pass.
 
 ## Notes
 

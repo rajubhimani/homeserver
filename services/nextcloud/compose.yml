@@ -1,6 +1,6 @@
 services:
   nextcloud-db:
-    image: postgres:18.4-alpine
+    image: postgres:18.6-alpine
     container_name: nextcloud-db
     restart: unless-stopped
     env_file: .env
@@ -38,7 +38,7 @@ services:
       - homeserver
 
   nextcloud:
-    image: nextcloud:34
+    image: nextcloud:34.0.3
     container_name: nextcloud
     restart: unless-stopped
     env_file: .env
@@ -79,7 +79,7 @@ services:
       - homeserver
 
   nextcloud-cron:
-    image: nextcloud:34
+    image: nextcloud:34.0.3
     container_name: nextcloud-cron
     restart: unless-stopped
     env_file: .env
@@ -88,12 +88,21 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; sleep 300; done"
+    # The extra `occ files:scan --all` alongside cron.php exists because
+    # external storage mounts (OS_ISO_ROOT) don't reliably self-detect new
+    # files just from users browsing the folder in the web UI — confirmed
+    # after swapping OS_ISO_ROOT to a new host path: filesystem_check_changes
+    # didn't pick up the new files until a manual `occ files:scan` ran. This
+    # keeps that mount in sync automatically instead of needing a manual
+    # rescan every time files change on disk. Dataset is small (a few dozen
+    # ISOs), so a full scan every 5 minutes is cheap.
+    entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; runuser -u www-data -- php /var/www/html/occ files:scan --all; sleep 300; done"
     volumes:
       - nextcloud-html:/var/www/html
       - nextcloud-config:/var/www/html/config
       - nextcloud-data:/var/www/html/data
       - nextcloud-custom-apps:/var/www/html/custom_apps
+      - ${OS_ISO_ROOT}:/mnt/os-iso:ro
       # - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
       nextcloud:

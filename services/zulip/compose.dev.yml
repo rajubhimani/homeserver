@@ -1,0 +1,4 @@
+services:
+  zulip:
+    ports:
+      - "8143:80"

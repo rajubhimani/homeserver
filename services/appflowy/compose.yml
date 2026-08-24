@@ -93,7 +93,7 @@ services:
       GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT:-465}
       GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-}
       GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-}
-      GOTRUE_SMTP_SENDER_NAME: "AppFlowy"
+      GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-AppFlowy}
       API_EXTERNAL_URL: https://appflowy.${DOMAIN}/gotrue
       PORT: "9999"
     depends_on:

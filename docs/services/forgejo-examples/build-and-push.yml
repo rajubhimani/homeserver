@@ -1,0 +1,45 @@
+name: Build and Push Python Container Image
+
+# Copy this file into a target repo's .forgejo/workflows/ (not into this infra
+# repo -- forgejo doesn't build a Python image itself). Requires Forgejo
+# Actions to be enabled (already is, see docs/services/forgejo.md) and a
+# runner registered with the "docker" label (already the default here).
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: docker
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: forgejo.prajnatech.in
+      IMAGE: forgejo.prajnatech.in/${{ github.repository_owner }}/my-python-app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Forgejo Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          # Forgejo/Gitea Actions injects a repo-scoped token automatically --
+          # no manual secret needed for pushing to this same instance. Only
+          # switch to a personal access token (e.g. secrets.FORGEJO_TOKEN) if
+          # you need to push to a *different* repo/owner's packages than the
+          # one the workflow runs in.
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}

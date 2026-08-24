@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted bookmark manager with AI auto-tagging and full-text search of saved pages.
-**Port:** `8117` (host) → `3000` (container) | **Data:** `service_data/data/karakeep/` | **Requires:** bundled SQLite (no external DB), plus Meilisearch and a headless Chrome container
+**Port:** `8117` (host) → `3000` (container) | **Data:** `service_data/data/karakeep/` | **Requires:** bundled SQLite (no external DB), plus Meilisearch and a headless Chrome container | **Memory:** no hard limit set; measured idle ~263MB total across all 3 containers (app 236 + meilisearch 8 + chrome 19)
 
 ## Setup
 
@@ -17,6 +17,19 @@ uv run homeserver.py dev up karakeep
 
 Open `https://karakeep.<domain>/` (or `http://<host>:8117` in dev) and register the first account.
 
+## Connecting the mobile apps and browser extensions
+
+The web UI alone only covers browsing what's already saved — actually capturing bookmarks day to day happens through the official clients, all of which point at this server the same way:
+
+1. In the web UI: **Settings → API Keys** → create a new key, copy it.
+2. Install the client:
+   - **Android:** official Karakeep app (Google Play).
+   - **Chrome/Firefox:** official browser extension (Chrome Web Store / Firefox Add-ons) — works the same way on Ubuntu, Fedora, Windows, and Mac.
+   - **Safari (Mac only):** official Safari extension, also available.
+3. In the client's own settings, set the **Server Address** to `https://karakeep.<domain>/` and paste the API key from step 1.
+
+Once connected, the mobile app's share-sheet ("Share → Karakeep" from any other app) and the browser extension's toolbar button are the actual day-to-day capture path — save first, let the background workers (screenshot, full-text extraction, AI tagging if enabled) fill in the rest asynchronously.
+
 ## Registration
 
 `DISABLE_SIGNUPS` in `.env`, default `false`. Set to `true` once your account exists to close the instance to new signups.
@@ -25,7 +38,7 @@ Open `https://karakeep.<domain>/` (or `http://<host>:8117` in dev) and register 
 
 - `karakeep` — the app itself (web UI + background workers combined), SQLite database and uploaded assets under `service_data/data/karakeep/data/`.
 - `karakeep-meilisearch` — full-text search index. Data lives in a named Docker volume (`karakeep-meilisearch`), not under `service_data/data/` — it's a rebuildable index, not source data.
-- `karakeep-chrome` — headless Chrome (`alpine-chrome`), used for fetching/rendering pages so bookmarks get proper screenshots and content extraction.
+- `karakeep-chrome` — headless Chrome, used for fetching/rendering pages so bookmarks get proper screenshots and content extraction. Uses `ghcr.io/karakeep-app/karakeep-chrome:release` — Karakeep's own maintained chrome image, matching their current upstream `docker-compose.yml`. (Previously `gcr.io/zenika-hub/alpine-chrome:124`; switched after that image started failing to pull with a Google Cloud "billing must be enabled on this project" error — an upstream GCR change, not anything specific to this stack.)
 
 ## Notes
 

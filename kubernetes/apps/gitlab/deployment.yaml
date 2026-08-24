@@ -5,7 +5,8 @@
 # containerd kind node — see kubernetes/README.md's "Docker-socket
 # tools removed" note. GitLab CE Omnibus bundles its own Postgres/Redis
 # inside the one container, so there is no separate db-statefulset.yaml
-# here (unlike forgejo/photoprism/bookstack).
+# here (unlike forgejo/bookstack, which have their own dedicated
+# db-statefulset.yaml).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

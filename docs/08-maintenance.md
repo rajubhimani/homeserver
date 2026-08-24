@@ -1,6 +1,6 @@
 # 08 — Maintenance
 
-[← Landing Page](07-landing.md) | [Home](../setup.md)
+[← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)
 
 ---
 
@@ -9,7 +9,7 @@
 All services are managed via `homeserver.py` in the repo root.
 
 ```bash
-# Tiers — MIN ⊂ CORE ⊂ ALL
+# Tiers — MIN ⊂ CORE ⊂ DAILY ⊂ OFFICE ⊂ AUTOMATION-AI ⊂ ALL
 uv run homeserver.py dev up min          # infrastructure only
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything
@@ -165,7 +165,7 @@ docker stats --no-stream   # per-container CPU/memory
 
 A container reporting "unhealthy" right after a restart batch is often just the healthcheck probe itself failing to get CPU-scheduled in time under load — not a real failure. Check `docker logs <container>` for the app's own "ready" message before assuming the config is wrong.
 
-**1. Run fewer services at once.** This is the first and biggest lever — see the `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_EXTRA` tiers in `CLAUDE.md`. Use `up core` day-to-day and bring up `SERVICES_EXTRA` services individually only when actively using them, instead of `up all`.
+**1. Run fewer services at once.** This is the first and biggest lever — see the `SERVICES_MIN`/`SERVICES_CORE`/`SERVICES_DAILY`/`SERVICES_OFFICE`/`SERVICES_AUTOMATION_AI`/`SERVICES_EXTRA` tiers in `CLAUDE.md`. Use `up core` day-to-day and bring up `SERVICES_DAILY`/`SERVICES_OFFICE`/`SERVICES_AUTOMATION_AI`/`SERVICES_EXTRA` services individually only when actively using them, instead of `up all`.
 
 **2. Tune every Postgres container's own memory settings, plus a hard cap as a backstop.** A memory cap alone (`deploy.resources.limits.memory`) isn't enough — Postgres doesn't know the cap exists and will try to use its defaults, getting OOM-killed under load (migrations, vacuum, big queries). Tune the internal settings too so it paces itself:
 
@@ -367,6 +367,51 @@ consuming the whole root partition. `uv run homeserver.py gc` (prune +
 compact — see below) is still the right periodic maintenance regardless
 of whether a hard quota is set.
 
+### Host inotify limits: hit when running many containers at once
+
+A different axis from CPU/memory/disk above, and not something
+`docker/docker-limits.py` touches — worth checking separately if
+containers crash-loop or come up unhealthy right after a host reboot or a
+`docker restart` of many containers at once (as opposed to steady-state
+OOM/throttling, which the memory slice above already covers). Each
+container's `containerd-shim` opens an inotify watch for OOM event
+detection, and plenty of app images add their own file-watchers on top
+(hot-reload, config/log tailing). Running enough containers concurrently
+can exhaust the host's `fs.inotify.max_user_instances` — **128** by
+default on Fedora and most distros — well before CPU or memory are
+actually the bottleneck. Past that ceiling, `containerd` logs (but
+doesn't itself crash on) errors like:
+
+```text
+failed to get memory.events watch FD: failed to create inotify fd: too many open files
+```
+
+Any container that relies on its own inotify watches during startup can
+fail to come up cleanly or flap unhealthy right alongside those log
+lines — a different failure mode from an actual memory/CPU shortage, so
+it's worth ruling out on its own rather than assuming a bigger
+`DOCKER_MEMORY_LIMIT` will fix it.
+
+Raise it (`max_user_instances` is a separate, much lower-ceiling limit
+than `max_user_watches` — raising the latter doesn't help here):
+
+```bash
+sudo sysctl -w fs.inotify.max_user_instances=1024   # takes effect immediately, no restart needed
+
+# Persist across reboots:
+sudo tee /etc/sysctl.d/99-docker-inotify.conf <<'EOF'
+fs.inotify.max_user_instances=1024
+EOF
+sudo sysctl --system
+```
+
+Verify:
+
+```bash
+sysctl fs.inotify.max_user_instances
+journalctl -u containerd --since "-5min" | grep -i "too many open files"   # should go quiet after raising
+```
+
 ---
 
 ## Reclaiming disk space (Docker Desktop on Windows / WSL2)
@@ -473,4 +518,4 @@ Preventive knowledge — things to know *before* they bite you, as opposed to th
 
 ---
 
-[← Landing Page](07-landing.md) | [Home](../setup.md)
+[← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)

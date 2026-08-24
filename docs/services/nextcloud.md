@@ -5,7 +5,8 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~685MB total (app 612 + db 35 + redis 16 + cron 22) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres-alpine` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
+**Pinned versions (as of this pass):** `nextcloud:34.0.3` (app + cron), `postgres:18.4-alpine` (db), `redis:8.10-alpine` (cache/locking). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
 
 ## Setup
 
@@ -16,7 +17,6 @@ cp services/nextcloud/.env.example services/nextcloud/.env
 Edit `services/nextcloud/.env`:
 
 ```env
-DATA_ROOT=/mnt/seagate
 USER_DATA_ROOT=/mnt/seagate
 OS_ISO_ROOT=/mnt/os-iso
 
@@ -53,6 +53,8 @@ Settings → Administration → External Storage → Add Storage
 
 `OS_ISO_ROOT` (mounted at `/mnt/os-iso`) works the same way — add a second External Storage entry pointing at that path if you want the ISO folder browsable in Nextcloud too.
 
+**External storage doesn't reliably self-detect new files just from browsing the folder in the web UI**, despite `filesystem_check_changes` being enabled by default — confirmed after repointing `OS_ISO_ROOT` at a new host path: the files existed on disk and the mount tested green, but nothing showed up until a manual `occ files:scan` ran. This now self-heals automatically — see `nextcloud-cron`'s dual responsibility under "Architecture notes" below. If you add another external storage mount that's large (thousands of files), reconsider the blanket `--all` scan — scope it to a path/user instead so the 5-minute cron doesn't get expensive.
+
 ## Create Family Accounts
 
 ```text
@@ -61,11 +63,37 @@ Top right avatar → Administration → Users → New User
 
 One account per family member. They log in via the same URL you use.
 
+## Making devices actually use it
+
+Every family member's account (above) needs to actually be connected from their own devices — the web UI alone doesn't sync anything locally. Confirmed live against [nextcloud.com/install](https://nextcloud.com/install/#install-clients) and Nextcloud 34's own [Desktop Client user manual](https://docs.nextcloud.com/server/34/user_manual/en/desktop/installation.html) — not assumed from memory. Could not actually install any of these apps myself (no phone/desktop to test against this instance); the steps below are transcribed from Nextcloud's own current docs, not independently confirmed end-to-end.
+
+- **Desktop sync client (Windows/macOS/Linux):** download from [nextcloud.com/install](https://nextcloud.com/install/#install-clients) — current build at time of writing is **34.0.2** (Windows `.msi`, macOS `.pkg` for macOS 13+, Linux AppImage; distro packages also listed on that page). Windows/macOS: run the installer and follow its wizard. Linux: add the distro repo listed on that same page, install the signing key, then install via your package manager (or just use the AppImage) — and make sure a keyring (GNOME Keyring or KWallet) is running, or the client can't store the login. First run of the setup wizard asks for the **server address** — enter the same URL used in a browser, e.g. `https://nextcloud.yourdomain.com` — then opens a browser tab to log in and grant access, then a local-folder screen to sync everything or pick individual folders before clicking **Connect**. Runs in the background afterward, syncing both directions. Each client release supports the latest three stable server major versions at the time it was built, so client `34.0.2` against this stack's pinned server `34.0.3` is squarely inside that window (matching major version) — keep the client reasonably current rather than assuming forward compatibility indefinitely.
+- **Mobile app (Android/iOS):** install "Nextcloud" (package `com.nextcloud.client`) — Android via [Google Play](https://play.google.com/store/apps/details?id=com.nextcloud.client) or [F-Droid](https://f-droid.org/packages/com.nextcloud.client/), iOS via the [App Store](https://apps.apple.com/us/app/nextcloud/id1125420102). Same pattern as the desktop client: enter the server address (`https://nextcloud.yourdomain.com`), it opens a browser to log in and grant access, then you land in the app. Turn on auto-upload for photos/videos in the app's own settings if you want camera-roll backup this way — Immich is this stack's dedicated photo tool, but Nextcloud's auto-upload works too if you'd rather keep everything in one place.
+- **WebDAV (any third-party file manager/client that isn't the official app):** point it at `https://nextcloud.yourdomain.com/remote.php/dav/files/<username>/` (that exact path — not just the bare domain, which is only what the *official* clients auto-discover). Use an **app password** for this rather than the real account password: avatar menu → **Settings** → **Security** (left sidebar) → **Devices & sessions** → generate a new app password at the bottom, and give it a name so it's identifiable later if you need to revoke it. Nextcloud's own docs note this is both more secure (revocable without changing the main password) and noticeably faster for WebDAV specifically than the primary password.
+
+## Using it day to day
+
+Confirmed against Nextcloud's own current user manual, not assumed from memory.
+
+- **Sharing links:** in **Files**, hover a file/folder → the **Share** icon → **Create link**. This generates a public URL (`https://nextcloud.yourdomain.com/s/<token>`). Folder links can be set to **Read only**, **Allow upload and editing**, **File drop** (others can upload without seeing existing contents), **Hide download**, password-protected, and given an expiration date after which the link auto-disables. Sharing directly with another user/group on this instance (instead of a public link) uses the same Share panel — pick their name instead of "create link" — and their access level is adjustable there too.
+- **Installing apps (Calendar, Contacts, etc.):** top-right avatar menu → **Apps** → browse or search by name → **Enable**. Nextcloud pulls the app from its app store and installs it if it isn't bundled already. Enabled apps then show up in the top app-switcher bar next to Files — this is the same mechanism used for "External storage support" above.
+
+## Health endpoint
+
+`compose.yml`'s healthcheck runs `curl -f http://localhost/status.php` inside the `nextcloud` container every 30s (10s timeout, 5 retries, 60s start period). Confirmed live on this instance (`docker exec nextcloud curl -s http://localhost/status.php`):
+
+```json
+{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"34.0.3.2","versionstring":"34.0.3","edition":"","productname":"Nextcloud","extendedSupport":false}
+```
+
+`installed`/`maintenance`/`needsDbUpgrade` are the fields that actually matter for health — `curl -f` just checks for a non-error HTTP status, so a `200` with `"maintenance":true` still reports "healthy" to Docker even though the app is refusing normal requests (see the maintenance-mode troubleshooting section below, which checks this endpoint's near-neighbor `occ status` for exactly that reason). `versionstring` matches the pinned image tag (`34.0.3`) as expected.
+
 ## Architecture notes
 
 - Uses **partial volume mounts** (`config`, `data`, `custom_apps`) — do **not** mount the full `/var/www/html`
 - `nextcloud/hooks/before-starting/00-sync-php.sh` runs `rsync` on every startup to populate PHP files into the partial mount
 - `nextcloud/hooks/before-starting/02-configure-proxy.sh` runs `occ config:system:set` for `trusted_proxies`, `trusted_domains`, `overwriteprotocol`, and `overwrite.cli.url` on **every** startup (skipped only pre-install) — this is why those don't need to be set manually and won't drift even if `DOMAIN`/network config changes later. If you ever need a value this hook doesn't set (e.g. a raw Tailscale IP in `trusted_domains` for IP-only access with no domain), edit that script directly — a one-off `docker exec ... occ config:system:set` gets silently overwritten by the hook on the next restart.
+- **`nextcloud-cron` has two responsibilities, not one** — its entrypoint loop (`compose.yml`) runs `cron.php` (Nextcloud's own background jobs: notifications, previews, housekeeping — the reason this container exists at all) *and* `occ files:scan --all` (external storage rescan — added because `filesystem_check_changes` doesn't reliably pick up new files on the `OS_ISO_ROOT` mount from browsing alone; see "Enable External Storage" above), back-to-back, every 5 minutes. It mounts `OS_ISO_ROOT` read-only for the scan step — `USER_DATA_ROOT`/`/mnt/seagate` is deliberately commented out here since nothing currently needs cron to rescan it, only the app container. If you add another external storage mount that should also self-heal this way, mount it here too and it rides the same loop.
 
 ## Troubleshooting: unhealthy / 503 / redirect loops behind the proxy
 
@@ -81,6 +109,49 @@ Nextcloud validates the `Host` header against `trusted_domains` on **every** req
 
 **General lesson for any service's `/health/<service>` block:** if the app validates the `Host` header (trusted domains/allowed hosts/CSRF origin checks — Nextcloud, and potentially others), a bare `proxy_pass $upstream/;` health check will silently 400 forever; explicitly set `proxy_set_header Host localhost;` (or whatever the app trusts) on that specific location block.
 
+## Troubleshooting: stuck in maintenance mode / every request 503s after an update
+
+Symptom: `docker exec nextcloud php occ status` shows `maintenance: true` and `needsDbUpgrade: true`, every request (web UI, desktop/mobile clients, `status.php`) returns `503`, and this persists across container/host restarts instead of resolving itself.
+
+**Cause:** `compose.yml` pins the image to the floating tag `nextcloud:34`, not an exact point release. Any `dev update` (or a recreate that re-pulls that tag) can silently jump point releases — Docker Hub keeps moving `34` to whatever the newest `34.x.y` build is. On startup the official image's entrypoint auto-detects the version bump and runs `occ upgrade` itself, no confirmation, no staging. If that upgrade's DB migration fails partway, maintenance mode is left on and every subsequent container restart just retries (and re-fails) the same migration — it does not fix itself.
+
+**Check the actual failure** in the non-access-log lines of `docker logs nextcloud` (the access log dominates the tail, so grep it out):
+
+```bash
+docker logs nextcloud 2>&1 | grep -viE '^\S+ - \S+ \[.*"(GET|POST|PROPFIND|PUT|HEAD|OPTIONS|DELETE|MKCOL|REPORT|UNLOCK|LOCK)'
+```
+
+Look for `Exception: Database error when running migration ... Update failed`.
+
+**Root cause hit here:** `SQLSTATE[42501]: Insufficient privilege: must be owner of table oc_calendars_federated`. This is the `oc_admin` ownership split again (see "Migrated: `nextcloud-db`..." below) — `config.php`'s `dbuser` is `oc_admin`, but every table and sequence in the database (152 tables, 124 sequences at the time) was owned by role `nextcloud` instead. `oc_admin` had DML grants (SELECT/INSERT/UPDATE/DELETE) but not ownership, which is all normal app usage needs — so this sat latent until an upgrade's migration needed `ALTER TABLE`, which requires ownership.
+
+**Fix:** reassign ownership of every table and sequence to `oc_admin`, then restart so the upgrade hook retries:
+
+```bash
+# snapshot first — this runs a real schema migration
+docker exec nextcloud-db pg_dump -U nextcloud -d nextcloud > nextcloud_pre_upgrade_fix.sql
+
+docker exec nextcloud-db psql -U nextcloud -d nextcloud -t -c "
+SELECT 'ALTER TABLE ' || quote_ident(tablename) || ' OWNER TO oc_admin;' FROM pg_tables WHERE schemaname='public' AND tableowner='nextcloud'
+UNION ALL
+SELECT 'ALTER SEQUENCE ' || quote_ident(sequencename) || ' OWNER TO oc_admin;' FROM pg_sequences WHERE schemaname='public' AND sequenceowner='nextcloud';
+" > reassign.sql
+docker cp reassign.sql nextcloud-db:/tmp/reassign.sql
+docker exec nextcloud-db psql -U nextcloud -d nextcloud -f /tmp/reassign.sql
+
+docker restart nextcloud
+```
+
+Note plain `REASSIGN OWNED BY nextcloud TO oc_admin;` does **not** work here — it errors with `cannot reassign ownership of objects owned by role nextcloud because they are required by the database system`, because `nextcloud` also owns the database itself. Generating explicit `ALTER TABLE`/`ALTER SEQUENCE` statements sidesteps that. This is safe to run live: the `nextcloud` role is itself a Postgres superuser, so it keeps full access to everything regardless of object ownership (needed for `pg_dump`/backups) — reassigning objects to `oc_admin` doesn't take anything away from it.
+
+After the restart, `occ status` should show `needsDbUpgrade: false`, but the upgrade hook has been observed to print `Update successful` and then still leave `maintenance: true` — check and clear it explicitly:
+
+```bash
+docker exec -u www-data nextcloud php occ maintenance:mode --off
+```
+
+**To stop this from recurring:** `compose.yml` is now pinned to the exact tag `nextcloud:34.0.3` (was the floating `nextcloud:34`) — bump it deliberately rather than letting `dev update` silently jump point releases.
+
 ## Why `html`/`config`/`data`/`custom_apps` are named volumes, not bind mounts
 
 Nextcloud enforces two checks a Windows bind mount can't reliably satisfy — see the `homeserver-postgres` skill for the general Windows-`chown`-reliability caveat this is an instance of:
@@ -94,7 +165,7 @@ Named volumes sidestep both checks entirely (daemon-managed, no host-filesystem 
 
 ```bash
 docker volume create nextcloud_nextcloud-config
-docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to alpine sh -c "cp -a /from/. /to/ && chown -R 33:33 /to"
+docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to alpine:3.24.1 sh -c "cp -a /from/. /to/ && chown -R 33:33 /to"
 # repeat for data (nextcloud_nextcloud-data) and html (nextcloud_nextcloud-html)
 ```
 

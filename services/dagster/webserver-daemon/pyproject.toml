@@ -1,0 +1,14 @@
+[project]
+name = "dagster-webserver-daemon"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "dagster==1.13.18",
+    "dagster-graphql==1.13.18",
+    "dagster-webserver==1.13.18",
+    "dagster-postgres==0.29.18",
+    "dagster-docker==0.29.18",
+]
+
+[tool.uv]
+package = false

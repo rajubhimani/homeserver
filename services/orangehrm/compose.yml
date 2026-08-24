@@ -1,6 +1,10 @@
 services:
   orangehrm-db:
-    image: mariadb:12.3.2
+    # Pinned below the stack-wide mariadb:12.3.2 default deliberately —
+    # OrangeHRM's own compatibility matrix requires MariaDB >5 and <12, so
+    # 12.x fails its installer's DB-version check. 11.4 is the current
+    # MariaDB LTS and satisfies that range.
+    image: mariadb:11.4
     container_name: orangehrm-db
     restart: unless-stopped
     env_file: .env
@@ -26,7 +30,8 @@ services:
       - homeserver
 
   orangehrm:
-    image: orangehrm/orangehrm:latest
+    # Pin explicitly, check https://hub.docker.com/r/orangehrm/orangehrm/tags for updates
+    image: orangehrm/orangehrm:5.8.1
     container_name: orangehrm
     restart: unless-stopped
     # No volume mount to a data path yet — see docs/services/orangehrm.md.

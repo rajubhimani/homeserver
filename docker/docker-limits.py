@@ -3,10 +3,24 @@
 platform this actually runs on.
 
 Usage:
-  python docker-limits.py check                 show what would be applied, don't touch anything
-  python docker-limits.py apply [--yes]          apply CPU + memory + log rotation (restarts Docker)
-  python docker-limits.py disk-quota [--yes]     apply the disk cap (separate — more disruptive on Linux)
-  python docker-limits.py status                 show current applied state
+  python docker-limits.py check                    show what would be applied, don't touch anything
+  python docker-limits.py apply [--yes]             apply CPU + memory + log rotation (restarts Docker)
+  python docker-limits.py disk-quota [--yes]        apply the disk cap (separate — more disruptive on Linux)
+  python docker-limits.py relocate-data-root [--yes]  move Docker's data-root to DOCKER_DATA_ROOT (separate — a full data copy)
+  python docker-limits.py status                    show current applied state
+
+relocate-data-root and disk-quota are independent and composable: relocate
+moves WHERE Docker's data lives (e.g. off the OS drive onto a bigger secondary
+disk), disk-quota caps HOW MUCH space it's allowed to use wherever it ends up.
+Every command re-detects the data-root live via `docker info`, so running
+relocate-data-root first means disk-quota (and everything else here)
+automatically targets the new location — no other config to change.
+
+This is a whole-host, all-containers knob — not specific to any one service.
+Forgejo's CI storage is isolated by its own dedicated mechanism instead (a
+Docker-in-Docker sidecar, see docs/services/forgejo.md); relocate-data-root
+here is for when you want to move Docker's storage for everything running on
+this host, which is a separate decision entirely up to you.
 
 Config comes from docker/.env (copy docker/.env.example, same convention
 as every other .env in this repo — and the same filename, so the repo's
@@ -30,7 +44,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import docker_root_dir, error, filesystem_type, header, load_env_file, parse_size_to_bytes, warn
+from _common import (
+    docker_root_dir,
+    error,
+    filesystem_type,
+    header,
+    load_env_file,
+    parse_size_to_bytes,
+    relocate_data_root,
+    warn,
+)
 
 HERE = Path(__file__).resolve().parent
 
@@ -46,6 +69,7 @@ def load_config() -> dict[str, str]:
     cfg.setdefault("DOCKER_CPU_CORES", "8")
     cfg.setdefault("DOCKER_MEMORY_LIMIT", "10G")
     cfg.setdefault("DOCKER_DISK_LIMIT", "50G")
+    cfg.setdefault("DOCKER_DATA_ROOT", "")
     cfg.setdefault("DOCKER_LOG_MAX_SIZE", "10m")
     cfg.setdefault("DOCKER_LOG_MAX_FILE", "3")
 
@@ -101,7 +125,7 @@ def load_module(platform: str):
 
 def main() -> int:
     argv = sys.argv[1:]
-    if not argv or argv[0] not in ("check", "apply", "disk-quota", "status"):
+    if not argv or argv[0] not in ("check", "apply", "disk-quota", "relocate-data-root", "status"):
         print(__doc__)
         return 1
 
@@ -121,6 +145,12 @@ def main() -> int:
         return mod.apply(cfg, assume_yes)
     if action == "disk-quota":
         return mod.apply_disk_quota(cfg, assume_yes)
+    if action == "relocate-data-root":
+        if platform == "windows":
+            error("Docker Desktop on Windows keeps its data-root under its own setting, not daemon.json.")
+            error("Move it via Docker Desktop -> Settings -> Resources -> Advanced -> 'Disk image location'.")
+            return 1
+        return relocate_data_root(cfg, assume_yes)
     if action == "status":
         mod.status(cfg)
         return 0

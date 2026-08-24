@@ -26,7 +26,7 @@ services:
       - homeserver
 
   bookstack:
-    image: lscr.io/linuxserver/bookstack:v26.05.3-ls277
+    image: lscr.io/linuxserver/bookstack:v26.05.3-ls280
     container_name: bookstack
     restart: unless-stopped
     env_file: .env

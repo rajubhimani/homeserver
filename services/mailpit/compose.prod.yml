@@ -1,0 +1,4 @@
+services:
+  mailpit:
+    ports:
+      - "127.0.0.1:8140:8025"

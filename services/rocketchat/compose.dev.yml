@@ -1,0 +1,4 @@
+services:
+  rocketchat:
+    ports:
+      - "8142:3000"

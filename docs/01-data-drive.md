@@ -48,8 +48,12 @@ ls /mnt/seagate
 
 ## Create folder structure
 
+This drive is for your own external data (e.g. files to expose via Nextcloud's
+External Storage, or media for Jellyfin) — not for service state, which lives
+under `service_data/` in the repo (bind mounts) or named Docker volumes
+(Postgres/MariaDB/RabbitMQ). Create whatever subfolders suit your own data:
+
 ```bash
-sudo mkdir -p /mnt/seagate/{nextcloud,immich,postgres-nextcloud,postgres-immich}
 sudo chown -R $USER:$USER /mnt/seagate
 ```
 

@@ -2,9 +2,41 @@
 # Use Docker's internal DNS — resolves container names at request time
 resolver ${NGINX_RESOLVER} valid=10s;
 
+# Only send "Connection: upgrade" to the upstream on an actual WebSocket
+# handshake. A hardcoded "upgrade" breaks keepalive/reuse for the plain HTTP
+# requests a mixed location (app + WS tunnel, e.g. Guacamole) also serves.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# Real client IP for traffic arriving via Cloudflare Tunnel. $remote_addr at
+# this layer is always cloudflared's own container IP (confirmed live) —
+# CF-Connecting-IP is the header Cloudflare's edge always sets accurately to
+# the actual visitor IP, and cloudflared preserves it end to end. Falls back
+# to $remote_addr for direct dev-port access that bypasses Cloudflare entirely.
+map $http_cf_connecting_ip $real_client_ip {
+    default $http_cf_connecting_ip;
+    ''      $remote_addr;
+}
+
+# Same field shape as nginx's built-in "combined" format, just with
+# $real_client_ip instead of $remote_addr — CrowdSec's bundled nginx parser
+# (services/crowdsec/, crowdsec.labels.type=nginx on this container) expects
+# that exact shape, so only the IP source changes, not the log structure.
+# NOT set at http level: multiple access_log directives at the SAME context
+# level accumulate (both fire, doubling every request) rather than the later
+# one replacing the earlier one — confirmed live. A child context's directive
+# (server-level, below) correctly overrides what it would otherwise inherit
+# from http, so this format is applied per-server-block instead.
+log_format cf_combined '$real_client_ip - $remote_user [$time_local] '
+                        '"$request" $status $body_bytes_sent '
+                        '"$http_referer" "$http_user_agent"';
+
 # ── Internal health check — never proxied, used by Docker healthcheck ─────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name _;
     location /_health {
         access_log off;
@@ -19,19 +51,21 @@ server {
 # ── Landing page ──────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name ${DOMAIN};
     return 301 https://www.${DOMAIN}$request_uri;
 }
 
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name www.${DOMAIN};
     location / {
         set $upstream http://landing:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -39,13 +73,14 @@ server {
 # ── OpenProject ──────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name openproject.${DOMAIN};
     location / {
         set $upstream http://openproject:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 500M;
         proxy_read_timeout 300s;
@@ -55,47 +90,50 @@ server {
 # ── Dockge (Stack Manager) ────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name dockge.${DOMAIN};
     location / {
         set $upstream http://dockge:5001;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Portainer (Container Manager) ─────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name portainer.${DOMAIN};
     location / {
         set $upstream http://portainer:9000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Plane ─────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name plane.${DOMAIN};
     location / {
         set $upstream http://plane-proxy:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 100M;
     }
@@ -104,13 +142,14 @@ server {
 # ── InvoiceShelf (Invoicing) ──────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name invoiceshelf.${DOMAIN} invoice.${DOMAIN};
     location / {
         set $upstream http://invoiceshelf:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -118,13 +157,14 @@ server {
 # ── Firefly III (Personal Finance) ───────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name firefly.${DOMAIN};
     location / {
         set $upstream http://firefly:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -132,13 +172,14 @@ server {
 # ── Firefly III Data Importer ─────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name firefly-import.${DOMAIN};
     location / {
         set $upstream http://firefly-importer:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -146,17 +187,18 @@ server {
 # ── AppFlowy (Collaborative workspace) ───────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name appflowy.${DOMAIN};
     location / {
         set $upstream http://appflowy-nginx:80;
         proxy_pass $upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         client_max_body_size 512m;
         proxy_read_timeout 86400s;
     }
@@ -166,13 +208,14 @@ server {
 # ── Syncthing ────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name syncthing.${DOMAIN};
     location / {
         set $upstream http://syncthing:8384;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -180,31 +223,33 @@ server {
 # ── Authentik ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name authentik.${DOMAIN};
     location / {
         set $upstream http://authentik-server:9000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Miniflux ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name miniflux.${DOMAIN};
     location / {
         set $upstream http://miniflux:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -212,13 +257,14 @@ server {
 # ── Vikunja ───────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name vikunja.${DOMAIN};
     location / {
         set $upstream http://vikunja:3456;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -226,13 +272,17 @@ server {
 # ── Trilium Notes ─────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name trilium.${DOMAIN};
     location / {
         set $upstream http://trilium:8080;
         proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -240,13 +290,14 @@ server {
 # ── SilverBullet ──────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name silverbullet.${DOMAIN};
     location / {
         set $upstream http://silverbullet:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -254,13 +305,14 @@ server {
 # ── Outline ───────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name outline.${DOMAIN};
     location / {
         set $upstream http://outline:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -268,41 +320,220 @@ server {
 # ── BookStack ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name bookstack.${DOMAIN};
     location / {
         set $upstream http://bookstack:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── Browser Hub (Firefox/Chromium/Ungoogled Chromium/Brave/Mullvad Browser) ───
+# Authentik forward-auth gates every remote browser below — see
+# docs/services/browser-hub.md for the design. Individual browsers are
+# deliberately NOT given their own server_name/subdomain — there is no route to
+# any of them except through this block, so there's nothing to reach directly.
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name browser.${DOMAIN};
+
+    # Authentik forward-auth — see docs/services/authentik.md. Server-level,
+    # same scope the old auth_basic had — applies to every location below
+    # except the two internal outpost locations, which explicitly turn it
+    # off (required — without that, the auth-check endpoint would need to
+    # check its own auth first, an infinite loop).
+    auth_request /outpost.goauthentik.io/auth/nginx;
+    error_page 401 = @goauthentik_proxy_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie;
+
+    root /usr/share/nginx/html/browser-hub;
+    location = / {
+        try_files /index.html =404;
+    }
+
+    # Liveness pings for the hub page's own JS (same-origin, so the session
+    # cookie set by the auth check above already covers these too — no
+    # separate auth wiring needed. No WWW-Authenticate header to hide from
+    # them either, unlike Basic Auth — an unauthenticated request here gets
+    # a 302 redirect, not a 401 Basic challenge).
+    # Short timeouts since these are only for a UI dot, not real traffic.
+    location = /_status/firefox {
+        set $upstream http://firefox:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/chromium {
+        set $upstream http://chromium:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/ungoogled-chromium {
+        set $upstream http://ungoogled-chromium:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/brave {
+        set $upstream http://brave:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/mullvad-browser {
+        set $upstream http://mullvad-browser:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+
+    location /firefox/ {
+        set $upstream http://firefox:3000;
+        # No URI component after the host — SUBFOLDER-aware apps expect the
+        # full /firefox/... path forwarded unchanged, not stripped, so their
+        # own generated asset/API/WebSocket URLs line up with what they receive.
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /chromium/ {
+        set $upstream http://chromium:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /ungoogled-chromium/ {
+        set $upstream http://ungoogled-chromium:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /brave/ {
+        set $upstream http://brave:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /mullvad-browser/ {
+        set $upstream http://mullvad-browser:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        auth_request off;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        auth_request off;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
     }
 }
 
 # ── Excalidraw ────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name excalidraw.${DOMAIN};
     location / {
         set $upstream http://excalidraw:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
+        # Authentik forward-auth — see docs/services/authentik.md
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @goauthentik_proxy_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
     }
 }
 
 # ── Karakeep ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name karakeep.${DOMAIN};
     location / {
         set $upstream http://karakeep:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -310,13 +541,14 @@ server {
 # ── ntfy ──────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name ntfy.${DOMAIN};
     location / {
         set $upstream http://ntfy:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
     }
@@ -325,13 +557,14 @@ server {
 # ── IT-Tools ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name it-tools.${DOMAIN};
     location / {
         set $upstream http://it-tools:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -339,30 +572,230 @@ server {
 # ── n8n ───────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name n8n.${DOMAIN};
     location / {
         set $upstream http://n8n:5678;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+# ── Airflow ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name airflow.${DOMAIN};
+    location / {
+        set $upstream http://airflow-apiserver:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+# ── Temporal ─────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name temporal.${DOMAIN};
+    location / {
+        set $upstream http://temporal-ui:8080;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # Authentik forward-auth — see docs/services/authentik.md
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @goauthentik_proxy_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
+    }
+}
+
+# ── Dagster ──────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name dagster.${DOMAIN};
+    location / {
+        set $upstream http://dagster-webserver:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # Authentik forward-auth — see docs/services/authentik.md
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @goauthentik_proxy_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
+    }
+}
+
+# ── Mailpit ───────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name mailpit.${DOMAIN};
+    location / {
+        set $upstream http://mailpit:8025;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # Authentik forward-auth — see docs/services/authentik.md
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @goauthentik_proxy_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
+    }
+}
+
+# ── Mattermost ────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name mattermost.${DOMAIN};
+    location / {
+        set $upstream http://mattermost:8065;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+# ── Rocket.Chat ───────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name rocketchat.${DOMAIN};
+    location / {
+        set $upstream http://rocketchat:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+# ── Zulip ─────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name zulip.${DOMAIN};
+    location / {
+        set $upstream http://zulip:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Wallabag ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name wallabag.${DOMAIN};
     location / {
         set $upstream http://wallabag:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -370,13 +803,14 @@ server {
 # ── Atuin ─────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name atuin.${DOMAIN};
     location / {
         set $upstream http://atuin:8888;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -384,27 +818,14 @@ server {
 # ── AdGuard Home (web UI only — DNS itself is LAN-only on port 53) ────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name adguard-home.${DOMAIN};
     location / {
         set $upstream http://adguard-home:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-
-# ── PhotoPrism (manual-only — redundant with Immich) ──────────────────────────
-server {
-    listen 80;
-    server_name photoprism.${DOMAIN};
-    location / {
-        set $upstream http://photoprism:2342;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -412,13 +833,14 @@ server {
 # ── OrangeHRM ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name orangehrm.${DOMAIN};
     location / {
         set $upstream http://orangehrm:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -426,13 +848,14 @@ server {
 # ── NocoDB ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name nocodb.${DOMAIN};
     location / {
         set $upstream http://nocodb:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -440,13 +863,14 @@ server {
 # ── Listmonk ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name listmonk.${DOMAIN};
     location / {
         set $upstream http://listmonk:9000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -454,13 +878,14 @@ server {
 # ── Documenso ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name documenso.${DOMAIN};
     location / {
         set $upstream http://documenso:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -468,13 +893,14 @@ server {
 # ── Cal.com ───────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name calcom.${DOMAIN};
     location / {
         set $upstream http://calcom:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
@@ -482,82 +908,132 @@ server {
 # ── Plausible ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name plausible.${DOMAIN};
     location / {
         set $upstream http://plausible:8000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
+        # Plausible's UI is Phoenix LiveView — account creation, the
+        # dashboard, etc. run over a WebSocket, not plain HTTP requests.
+        # Without these, nginx proxies as HTTP/1.0 with Connection: close,
+        # so the LiveView socket handshake never completes and the page
+        # just hangs (e.g. "Create my account" does nothing, no error).
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Penpot ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name penpot.${DOMAIN};
     location / {
         set $upstream http://penpot-frontend:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Coolify ───────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name coolify.${DOMAIN};
+
+    # coolify-realtime (Soketi/Pusher-protocol WS server) — the app's own
+    # frontend JS connects here directly for live deploy logs,
+    # notifications, etc. (see PUSHER_HOST/PUSHER_PORT in compose.yml).
+    # Without this route the browser has nowhere reachable to open that
+    # WebSocket to, since coolify-realtime is otherwise only Docker-
+    # network-internal (or loopback-only in prod mode).
+    location /app/ {
+        set $upstream http://coolify-realtime:6001;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+
+    # The terminal (server + container) is a *separate* WS process from
+    # the Soketi one above — a second listener inside the coolify-realtime
+    # container, on port 6002 not 6001. Coolify's frontend JS defaults to
+    # wss://<this host>/terminal/ws when TERMINAL_HOST/PORT/PROTOCOL are
+    # unset (auto-derived from the page's own URL — see terminalConfig in
+    # app-*.js), so no compose.yml env vars are needed, only this route.
+    location /terminal/ws {
+        set $upstream http://coolify-realtime:6002;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+
     location / {
         set $upstream http://coolify:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Supabase ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name supabase.${DOMAIN};
     location / {
         set $upstream http://supabase-kong:8000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Audiobookshelf ────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name audiobookshelf.${DOMAIN};
     location / {
         set $upstream http://audiobookshelf:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 3600s;
     }
 }
@@ -566,13 +1042,14 @@ server {
 # ── Nextcloud ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name nextcloud.${DOMAIN};
     location / {
         set $upstream http://nextcloud:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 10G;
         proxy_read_timeout 300s;
@@ -582,17 +1059,18 @@ server {
 # ── Immich ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name immich.${DOMAIN} photos.${DOMAIN};
     location / {
         set $upstream http://immich-server:2283;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         client_max_body_size 10G;
         proxy_read_timeout 600s;
     }
@@ -601,17 +1079,18 @@ server {
 # ── Jellyfin ──────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name jellyfin.${DOMAIN};
     location / {
         set $upstream http://jellyfin:8096;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 600s;
     }
 }
@@ -619,30 +1098,32 @@ server {
 # ── Vaultwarden ───────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name vaultwarden.${DOMAIN};
     location / {
         set $upstream http://vaultwarden:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Paperless ─────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name paperless.${DOMAIN};
     location / {
         set $upstream http://paperless:8000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 100M;
     }
@@ -651,13 +1132,14 @@ server {
 # ── Stirling PDF Lite ─────────────────────────────────────────────────────────
 server {
     listen 80;
-    server_name stirling-pdf.${DOMAIN};
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name stirling-pdf-lite.${DOMAIN};
     location / {
         set $upstream http://stirling-pdf-lite:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 500M;
     }
@@ -666,13 +1148,14 @@ server {
 # ── Stirling PDF Full ─────────────────────────────────────────────────────────
 server {
     listen 80;
-    server_name stirling-pdf-full.${DOMAIN};
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name stirling-pdf.${DOMAIN};
     location / {
         set $upstream http://stirling-pdf:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 500M;
     }
@@ -681,18 +1164,19 @@ server {
 # ── Guacamole (Remote Desktop Gateway) ────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name guacamole.${DOMAIN};
     location / {
         set $upstream http://guacamole:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         # Guacamole's client/server tunnel runs over WebSocket
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 3600s;
     }
 }
@@ -700,59 +1184,134 @@ server {
 # ── Mealie ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name mealie.${DOMAIN};
     location / {
         set $upstream http://mealie:9000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# ── HomeBox ───────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name homebox.${DOMAIN};
+    location / {
+        set $upstream http://homebox:7745;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 86400;
     }
 }
 
 # ── Open WebUI ──────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name open-webui.${DOMAIN};
     location / {
         set $upstream http://open-webui:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_http_version 1.1;
         proxy_read_timeout 300s;
+    }
+}
+
+# ── Ollama ────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name ollama.${DOMAIN};
+    location / {
+        set $upstream http://ollama:11434;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_read_timeout 300s;
+        # Authentik forward-auth — see docs/services/authentik.md. Ollama has
+        # no browser login of its own (bare API), so external/programmatic
+        # clients need a valid Authentik session cookie to reach this route;
+        # open-webui and other in-stack callers are unaffected — they talk to
+        # ollama:11434 directly over the internal network, never through here.
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @goauthentik_proxy_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
     }
 }
 
 # ── Forgejo ───────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name forgejo.${DOMAIN};
     location / {
         set $upstream http://forgejo:3000;
         proxy_pass $upstream;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
+        # Without this, nginx's 1M default rejects large git pushes over HTTP and,
+        # separately, an Actions runner's UpdateLog calls once a job's accumulated
+        # log output crosses 1M (routine for a multi-version test matrix) -- surfaces
+        # as a 413 from nginx itself (not Forgejo) and the run never gets marked done.
+        client_max_body_size 500m;
+        proxy_read_timeout 300s;
     }
 }
 
 # ── GitLab ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name gitlab.${DOMAIN};
     location / {
         set $upstream http://gitlab:80;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 500M;
         proxy_read_timeout 300s;
@@ -762,30 +1321,32 @@ server {
 # ── Uptime Kuma ───────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name uptime-kuma.${DOMAIN} status.${DOMAIN};
     location / {
         set $upstream http://uptime-kuma:3001;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Dozzle ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name dozzle.${DOMAIN};
     location / {
         set $upstream http://dozzle:8080;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         # SSE support for real-time log streaming
         proxy_set_header Connection "";
@@ -793,39 +1354,136 @@ server {
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 3600s;
+        # Authentik forward-auth — see docs/services/authentik.md
+        auth_request /outpost.goauthentik.io/auth/nginx;
+        error_page 401 = @goauthentik_proxy_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
     }
 }
 
 # ── Beszel ────────────────────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name beszel.${DOMAIN};
     location / {
         set $upstream http://beszel:8090;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
     }
 }
 
 # ── Grafana (observability) ────────────────────────────────────────────────────
 server {
     listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
     server_name grafana.${DOMAIN};
     location / {
         set $upstream http://grafana:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+# ── wg-easy (VPN Admin Panel) ──────────────────────────────────────────────
+# wg-easy uses network_mode: host (needed to bind WireGuard's UDP port
+# directly on the host's real IPv6 address — see docs/services/wg-easy.md),
+# so it isn't on the `homeserver` Docker network like other containers.
+# Reached here via the network's own bridge gateway IP (172.18.0.1), which
+# is just another host interface wg-easy's host networking already binds to.
+# This route carries ONLY the admin web UI (plain HTTP/REST) — the actual
+# WireGuard VPN tunnel traffic (UDP 51820) never touches Cloudflare at all,
+# so this does not raise the same VPN-proxying ToS concern that ruled out
+# exposing NetBird/Headscale this way earlier.
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name wg-admin.${DOMAIN};
+
+    # Authentik forward-auth — see docs/services/authentik.md
+    auth_request /outpost.goauthentik.io/auth/nginx;
+    error_page 401 = @goauthentik_proxy_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie;
+
+    location / {
+        set $upstream http://172.18.0.1:51821;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
+    }
+}
+
+# ── Docs (Docsify) ──────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name docs.${DOMAIN};
+    location / {
+        set $upstream http://docs:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
     }
 }

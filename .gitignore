@@ -9,6 +9,20 @@ service_data-test/
 .env
 *.log
 *.json
+# services.json is the single source of truth for tiers + landing-page
+# grouping (homeserver.py, services/landing/index.html both read it) — must
+# override the blanket *.json ignore above or it silently never gets committed.
+!services.json
+!.vscode/settings.json
+# Grafana's provisioned-as-code dashboards — checked in so they survive a
+# fresh clone/install instead of only existing in a running service_data/.
+# Without this override the blanket *.json ignore above silently excludes
+# them: confirmed on this repo, cadvisor.json/node-exporter-full.json were
+# on disk but had never actually been committed.
+!services/observability/grafana/provisioning/dashboards/json/*.json
+# scratch research notes (WebSearch findings, version/memory audits) —
+# working notes for building a doc, not the doc itself
+research/
 *.pem
 ._*
 *.sqlite

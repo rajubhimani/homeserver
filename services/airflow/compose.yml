@@ -1,0 +1,326 @@
+services:
+  airflow-db:
+    image: postgres:18.6-alpine
+    container_name: airflow-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - airflow-postgres-alpine:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  # One-shot: runs db migrate + creates the admin user, then exits. The other
+  # containers wait on service_completed_successfully before starting.
+  airflow-init:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: airflow-init
+    restart: "no"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
+        # Self-seeding, same "only if truly empty" guarantee as Temporal's
+        # worker/Dagster's user-code: fires once, only when nothing has
+        # ever populated dags/ yet (fresh clone, restored backup). Checked
+        # by directory contents, not per-file, so re-running airflow-init
+        # (every `up airflow`, since it's restart:no) never recreates an
+        # example DAG you deliberately deleted.
+        if [ -z "$(ls -A /opt/airflow/dags/*.py 2>/dev/null)" ]; then
+          cp /opt/airflow/dags-examples/*.py /opt/airflow/dags/
+        fi
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
+        /entrypoint airflow db migrate
+        /entrypoint airflow users create --username "${_AIRFLOW_WWW_USER_USERNAME}" --password "${_AIRFLOW_WWW_USER_PASSWORD}" --firstname Admin --lastname User --role Admin --email "${_AIRFLOW_WWW_USER_EMAIL}" || true
+        # email_on_failure/email_on_retry route through SmtpNotifier in
+        # Airflow 3, which reads this Connection, not AIRFLOW__SMTP__* config
+        # (that's the older utils.email.send_email_smtp direct-config path,
+        # still set separately for anyone wiring that up instead) — without
+        # this, every alert email fails with "conn_id smtp_default isn't
+        # defined" even with SMTP config fully set (hit this exact error
+        # building example_email_alert_on_failure.py).
+        /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "${SMTP_HOST}" --conn-port "${SMTP_PORT}" --conn-extra "{\"from_email\": \"${SMTP_FROM_EMAIL}\", \"disable_tls\": true, \"disable_ssl\": true}" || true
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+      AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+      AIRFLOW__API__SECRET_KEY: ${API_SECRET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/dags:/opt/airflow/dags
+      - ${DATA_ROOT}/logs:/opt/airflow/logs
+      - ${DATA_ROOT}/config:/opt/airflow/config
+      - ${DATA_ROOT}/plugins:/opt/airflow/plugins
+      - ./dags-examples:/opt/airflow/dags-examples:ro
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  airflow-apiserver:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: airflow-apiserver
+    restart: unless-stopped
+    # --proxy-headers + FORWARDED_ALLOW_IPS: nginx-plain is a separate
+    # container (not the same host process), so Airflow won't trust its
+    # X-Forwarded-* headers without both of these — redirects/CSRF checks
+    # silently build http:// URLs otherwise even with Proto:https set upstream.
+    command: api-server --proxy-headers
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+      AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+      AIRFLOW__API__SECRET_KEY: ${API_SECRET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      # Admin -> Configuration in the UI 403s by default ("Your Airflow
+      # administrator chose not to expose the configuration") — this is that
+      # switch. Note it moved sections between major versions: [webserver]
+      # expose_config in Airflow 2, [api] expose_config here in 3.x, since
+      # the UI's config page is now served by airflow-apiserver, not a
+      # separate webserver process. "True" still masks sensitive values
+      # (passwords/secrets/keys) automatically — it doesn't dump raw secrets.
+      AIRFLOW__API__EXPOSE_CONFIG: ${AIRFLOW_EXPOSE_CONFIG:-False}
+      AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+      FORWARDED_ALLOW_IPS: "*"
+    user: "${AIRFLOW_UID}:0"
+    # Conservative starting caps so this doesn't crowd out the rest of the
+    # stack — raise if a container gets OOM-killed under real DAG load
+    # (docker inspect <name> --format '{{.State.OOMKilled}}' after a crash).
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - ${DATA_ROOT}/dags:/opt/airflow/dags
+      - ${DATA_ROOT}/logs:/opt/airflow/logs
+      - ${DATA_ROOT}/config:/opt/airflow/config
+      - ${DATA_ROOT}/plugins:/opt/airflow/plugins
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+  airflow-scheduler:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: airflow-scheduler
+    restart: unless-stopped
+    command: scheduler
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+      AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+      AIRFLOW__API__SECRET_KEY: ${API_SECRET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+      # Points at the shared services/mailpit/ catcher (also used by other
+      # services in this stack) — this is what actually makes
+      # AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_RETRY/FAILURE (documented as a
+      # no-op default in .env.example) genuinely send mail instead of
+      # silently doing nothing. Mailpit only catches — nothing leaves this
+      # host — so this is safe as an always-on default, not just a demo
+      # toggle. See example_email_alert_on_failure.py.
+      AIRFLOW__SMTP__SMTP_HOST: ${SMTP_HOST}
+      AIRFLOW__SMTP__SMTP_PORT: ${SMTP_PORT}
+      AIRFLOW__SMTP__SMTP_MAIL_FROM: ${SMTP_FROM_EMAIL}
+      AIRFLOW__SMTP__SMTP_STARTTLS: "false"
+      AIRFLOW__SMTP__SMTP_SSL: "false"
+      # DockerOperator support — LocalExecutor runs tasks directly in this
+      # container, so this is the one that needs both the socket and the
+      # provider package to let a DAG launch its own (optionally
+      # resource-limited via DockerOperator's mem_limit/cpu_count/etc.)
+      # containers. Also installs temporalio so a DAG can start/await a
+      # Temporal workflow (see example_cross_service_pipeline.py).
+      # _PIP_ADDITIONAL_REQUIREMENTS reinstalls on every start — fine for two
+      # packages on a homelab, not how the upstream docs recommend doing this
+      # for real production use (they say build/extend the image).
+      _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-docker temporalio==1.31.0
+    # No user: override here (unlike the other airflow-* containers) — the
+    # host's docker.sock is normally root:docker mode 660, and AIRFLOW_UID:0
+    # (group 0 = root, not docker) can't open it by default. The fix is
+    # group_add below, deliberately NOT user: "0:0" — tried that first and
+    # it breaks this exact container in a much worse way: Apache's official
+    # image ships a guard script at /root/bin/pip (shadows the real pip,
+    # first on PATH only when $HOME=/root i.e. only as UID 0) that hard
+    # `exit 1`s any pip invocation run as root, specifically to stop people
+    # doing what _PIP_ADDITIONAL_REQUIREMENTS below does. With user: "0:0",
+    # apache-airflow-providers-docker/temporalio silently fail to install on
+    # every container start and the scheduler crash-loops with no traceback
+    # — confirmed by reproducing standalone: `docker run --user 0:0
+    # apache/airflow:3.3.1 pip install ...` prints only the guard script's
+    # two-line warning and exits 1, nothing else, regardless of any mounts.
+    # group_add (a supplementary group, not a UID/GID swap) sidesteps that
+    # entirely: stays the image's normal UID 50000 (pip installs fine, same
+    # as every other airflow-* container), just also joins the group that
+    # owns the socket. DOCKER_SOCKET_GID isn't portable to hardcode (differs
+    # per host/distro) — see .env.example for the one-time lookup command.
+    #
+    # This memory cap is for the scheduler process itself — containers a DAG
+    # launches via DockerOperator are separate sibling containers with their
+    # own mem_limit/cpuset_cpus params (see docs/services/airflow/airflow.md), not
+    # counted against this cap.
+    group_add:
+      - "${DOCKER_SOCKET_GID}"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    volumes:
+      - ${DATA_ROOT}/dags:/opt/airflow/dags
+      - ${DATA_ROOT}/logs:/opt/airflow/logs
+      - ${DATA_ROOT}/config:/opt/airflow/config
+      - ${DATA_ROOT}/plugins:/opt/airflow/plugins
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$$HOSTNAME"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+  airflow-dag-processor:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: airflow-dag-processor
+    restart: unless-stopped
+    command: dag-processor
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+      AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+      AIRFLOW__API__SECRET_KEY: ${API_SECRET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
+      AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+    user: "${AIRFLOW_UID}:0"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - ${DATA_ROOT}/dags:/opt/airflow/dags
+      - ${DATA_ROOT}/logs:/opt/airflow/logs
+      - ${DATA_ROOT}/config:/opt/airflow/config
+      - ${DATA_ROOT}/plugins:/opt/airflow/plugins
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$$HOSTNAME"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+  airflow-triggerer:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: airflow-triggerer
+    restart: unless-stopped
+    command: triggerer
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+      AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
+      AIRFLOW__API__SECRET_KEY: ${API_SECRET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${LOAD_EXAMPLES}
+      AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+      # Deferrable operators serialize their Trigger's classpath as a bare
+      # module name (e.g. "example_deferrable_sensor.MarkerFileTrigger") and
+      # the triggerer resolves it with plain import_string — unlike the
+      # scheduler/dag-processor, which add each DAG file's own directory to
+      # sys.path while parsing it, the triggerer never does that, so a
+      # trigger class living in a DAG file is otherwise unimportable here.
+      PYTHONPATH: /opt/airflow/dags
+    user: "${AIRFLOW_UID}:0"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - ${DATA_ROOT}/dags:/opt/airflow/dags
+      - ${DATA_ROOT}/logs:/opt/airflow/logs
+      - ${DATA_ROOT}/config:/opt/airflow/config
+      - ${DATA_ROOT}/plugins:/opt/airflow/plugins
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$$HOSTNAME"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - homeserver
+
+volumes:
+  airflow-postgres-alpine:
+
+networks:
+  homeserver:
+    external: true

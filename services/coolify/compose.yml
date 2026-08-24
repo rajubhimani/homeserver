@@ -1,6 +1,6 @@
 services:
   coolify-db:
-    image: postgres:18.4-alpine
+    image: postgres:18.6-alpine
     container_name: coolify-db
     restart: unless-stopped
     env_file: .env
@@ -39,10 +39,26 @@ services:
       - homeserver
 
   coolify-realtime:
-    image: coollabsio/coolify-realtime:1.0.16
+    image: coollabsio/coolify-realtime:1.0.17
     container_name: coolify-realtime
     restart: unless-stopped
     env_file: .env
+    # Needed for the terminal feature specifically: coolify-realtime SSHes
+    # into whatever IP/host the "localhost" server is configured with
+    # (host.docker.internal in this stack's setup docs) to spawn the shell.
+    # Missing this while `coolify` itself already has it caused "Could not
+    # resolve hostname host.docker.internal" inside terminal sessions even
+    # though the WebSocket connection itself worked fine.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Same SSH keys volume as `coolify` itself (confirmed against
+    # upstream's own docker-compose.prod.yml, which mounts this into both
+    # containers identically) — terminal-server.js reads the private key
+    # directly from disk to open the SSH session. Named volume, not a
+    # service_data/ bind mount — see the comment on `coolify`'s own ssh
+    # mount below for why.
+    volumes:
+      - coolify-ssh-keys:/var/www/html/storage/app/ssh
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9601/usage"]
       interval: 30s
@@ -53,13 +69,7 @@ services:
       - homeserver
 
   coolify:
-    # No stable version tags are published on Docker Hub right now (apparent
-    # upstream release-pipeline issue as of this writing — only edge/next/
-    # feature-branch tags exist). Pinned to "edge" as a deliberate, documented
-    # exception to this stack's usual "pin a real stable release" rule — see
-    # docs/services/coolify.md and TODO.md. Switch to a real version tag the
-    # moment one is published.
-    image: coollabsio/coolify:edge
+    image: coollabsio/coolify:4.3.9
     container_name: coolify
     restart: unless-stopped
     env_file: .env
@@ -77,15 +87,46 @@ services:
       PUSHER_APP_ID: ${PUSHER_APP_ID}
       PUSHER_APP_KEY: ${PUSHER_APP_KEY}
       PUSHER_APP_SECRET: ${PUSHER_APP_SECRET}
-      PUSHER_HOST: coolify-realtime
-      PUSHER_PORT: 6001
+      # PUSHER_HOST/PORT are rendered directly into the browser's own JS
+      # (the terminal/live-deploy-logs WebSocket config) — must be a
+      # publicly reachable host, not the Docker-internal container name.
+      # Routed through nginx-plain's /app/ location on this same vhost
+      # (see default.conf.template) rather than exposing coolify-realtime
+      # on its own port, so it works identically on LAN and via cloudflared.
+      PUSHER_HOST: coolify.${DOMAIN}
+      PUSHER_PORT: 443
+      # Backend (Laravel -> coolify-realtime) stays on the fast internal
+      # Docker connection — these already default to the same values, set
+      # explicitly so the front/back split is obvious at a glance.
+      PUSHER_BACKEND_HOST: coolify-realtime
+      PUSHER_BACKEND_PORT: 6001
+    # All six of these previously mounted to /data/coolify/... — a path
+    # this image doesn't use at all (verified: it exists on disk inside
+    # the container but is dead/unused). The actual Laravel storage root
+    # is /var/www/html/storage/app/ — confirmed against Coolify's own
+    # official docker-compose.prod.yml. The old wrong paths meant every
+    # SSH private key, deployed-application config, one-click database,
+    # backup, and one-click-service config was silently ephemeral —
+    # wiped on every container recreation, not actually persisted.
+    #
+    # ssh specifically is a *named volume*, not a service_data/ bind
+    # mount like the other five — service_data/ lives on an NTFS drive
+    # (fuseblk/ntfs-3g on this host), which cannot store real Unix
+    # permissions/ownership at all: chmod/chown against it silently
+    # no-op forever. OpenSSH refuses to load a private key unless its
+    # file mode is actually 0600, so SSH-based features (the terminal)
+    # would never work with the key sitting there. Named volumes live in
+    # Docker's own storage (btrfs on this host — confirmed with
+    # `df -T /var/lib/docker`), which supports real permissions, same
+    # reasoning as this stack's database-data-as-named-volume rule (see
+    # the homeserver-postgres skill).
     volumes:
-      - ${DATA_ROOT}/data:/data/coolify/source/storage/app
-      - ${DATA_ROOT}/ssh:/data/coolify/ssh
-      - ${DATA_ROOT}/applications:/data/coolify/applications
-      - ${DATA_ROOT}/databases:/data/coolify/databases
-      - ${DATA_ROOT}/backups:/data/coolify/backups
-      - ${DATA_ROOT}/services:/data/coolify/services
+      - coolify-ssh-keys:/var/www/html/storage/app/ssh
+      - ${DATA_ROOT}/applications:/var/www/html/storage/app/applications
+      - ${DATA_ROOT}/databases:/var/www/html/storage/app/databases
+      - ${DATA_ROOT}/services:/var/www/html/storage/app/services
+      - ${DATA_ROOT}/backups:/var/www/html/storage/app/backups
+      - ${DATA_ROOT}/images:/var/www/html/storage/app/images
       - ${DOCKER_SOCKET}:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -108,6 +149,7 @@ services:
 volumes:
   coolify-postgres-alpine:
   coolify-redis-alpine:
+  coolify-ssh-keys:
 
 networks:
   homeserver:

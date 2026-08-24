@@ -9,7 +9,7 @@
 
 ## The heaviest service in this stack
 
-12 containers: `supabase-db` (Postgres), `supabase-auth` (GoTrue), `supabase-rest` (PostgREST), `supabase-realtime`, `supabase-storage`, `supabase-imgproxy`, `supabase-meta` (schema API used by Studio), `supabase-functions` (Deno edge runtime), `supabase-studio` (dashboard), `supabase-kong` (API gateway — the single entry point everything else sits behind), `supabase-pooler` (Supavisor, connection pooling). This is genuinely on the same scale as running a small platform, not a single app — expect noticeably higher combined memory/CPU than anything else in this stack.
+11 containers: `supabase-db` (Postgres), `supabase-auth` (GoTrue), `supabase-rest` (PostgREST), `supabase-realtime`, `supabase-storage`, `supabase-imgproxy`, `supabase-meta` (schema API used by Studio), `supabase-functions` (Deno edge runtime), `supabase-studio` (dashboard), `supabase-kong` (API gateway — the single entry point everything else sits behind), `supabase-pooler` (Supavisor, connection pooling). This is genuinely on the same scale as running a small platform, not a single app — expect noticeably higher combined memory/CPU than anything else in this stack.
 
 ## Setup
 
@@ -23,6 +23,10 @@ uv run homeserver.py dev up supabase
 ```
 
 Open `https://supabase.<domain>/` (or `http://<host>:8133` in dev). The root path is Studio's dashboard, gated by `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` (HTTP basic auth, enforced by Kong) — not open self-registration like most services here. API access (REST/GraphQL/Auth/Storage/Realtime) uses the `ANON_KEY`/`SERVICE_ROLE_KEY` JWTs instead.
+
+## Using it day to day
+
+This is a backend platform for building *your own* apps against, not an end-user app itself — there's no device/client to "connect" beyond whatever app you write using a Supabase client SDK (`ANON_KEY`/`SERVICE_ROLE_KEY` from `.env`, endpoint `https://supabase.${DOMAIN}`). Day-to-day interaction with the platform itself happens in **Studio** (the dashboard at the root path): browse/edit table data directly, write and save SQL in the SQL Editor, manage Auth users, inspect Storage buckets, and view API logs — all without touching a client library.
 
 ## Registration
 

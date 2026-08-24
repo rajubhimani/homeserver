@@ -31,6 +31,15 @@ Self-registration is on by default. Add `disable-registration` to `PENPOT_FLAGS`
 
 Two services from the official upstream compose are deliberately **not** included: `penpot-mcp` (Model Context Protocol server for AI tool integration — opt-in, not needed for normal use) and `penpot-mailcatch` (a dev-only SMTP-catching tool for testing emails without a real mail server — replaced here by real `PENPOT_SMTP_*` settings in `.env`).
 
+## Using it day to day
+
+No confirmed official mobile app as of this check (a mobile app has been a long-standing community feature request, not something shipped) — `https://penpot.${DOMAIN}` in a browser is the primary way in on any platform. A community plugin, **Mockup Mirror**, pairs with a companion Android app to preview a design live on a physical device during design work, if that specific workflow is wanted.
+
+- **Teams → Projects → Files** is the hierarchy — a Team is the collaboration boundary (who can see what), Projects group related Files within a team.
+- **Real-time collaborative editing** — multiple people editing the same file see each other's cursors/selections live.
+- **Components and design tokens** let a reusable element (a button, a color) update everywhere it's used from one edit, same concept as Figma's components.
+- **Export/prototyping**: `penpot-exporter` (a separate container in this stack) handles PDF/PNG export and prototype-flow rendering — if exports fail while everything else works, check that container specifically (see "Architecture" above, it needs `PENPOT_SECRET_KEY` set too).
+
 ## Notes
 
 - `PENPOT_SECRET_KEY` derives every other internal key — losing or changing it invalidates every active session and pending invitation. **Both `penpot-backend` and `penpot-exporter` need it set**, not just the backend — the exporter crash-loops with a `missing-key :secret-key` schema error otherwise (confirmed while verifying this setup).

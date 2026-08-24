@@ -150,15 +150,31 @@ only accepts a bcrypt hash in its Secret, so the script hashes it (via
 
 ## Current status
 
-7 of 8 `SERVICES_CORE` and 37 of 39 `SERVICES_EXTRA` are ported, plus all
-3 of `SERVICES_MANUAL` that have a real Kubernetes equivalent (gitlab,
-stirling-pdf full, photoprism — see `kubernetes/apps/gitlab/`,
-`kubernetes/apps/stirling-pdf/`, `kubernetes/apps/photoprism/`). They're
-`SERVICES_MANUAL` here for the same reason as on the Compose side —
-redundant with forgejo/stirling-pdf-lite/immich, never auto-started by any
-tier — not because anything about them is k8s-incompatible.
+This repo's Compose side was restructured after this pilot was last brought
+up to date (tiers renamed/expanded to `min`/`core`/`daily`/`office`/
+`automation-ai`/`extra`/`manual`, ~19 new services added — see
+[`docs/11-services-reference.md`](../docs/11-services-reference.md) for the
+current tier lists). Counts below are against that current tier structure,
+not the older `SERVICES_CORE`/`SERVICES_EXTRA`/`SERVICES_MANUAL` naming
+this section used to use.
 
-Not ported, deliberately:
+49 of 70 Compose services are ported: `min` 3/6 (beszel, cloudflared,
+landing), `core` 20/20 beyond `min` (all ported except `mailpit`, which is
+still missing), `daily` 7/15, `office` 8/8, `automation-ai` 3/6, `extra`
+14/19, `manual` 1/1 (gitlab). The cluster foundation (namespaces, Traefik,
+the shared Gateway, MetalLB, shared Postgres/MariaDB) is ArgoCD-managed
+too, see `kubernetes/argocd-apps/cluster-*.yaml`.
+
+Missing but portable, no known blocker (not yet done, just not gotten to):
+`docs`, `mailpit`, the 6 remote-browser services (firefox, chromium,
+ungoogled-chromium, brave, mullvad-browser, browser-hub), `homebox`, and
+the 6 heavier multi-container platforms — `airflow`, `temporal`,
+`dagster`, `mattermost`, `rocketchat`, `zulip` — each needs its own
+Postgres/Mongo/Redis-backed StatefulSet(s), same pattern as `supabase`
+below but not yet done.
+
+Not ported, deliberately — same reasoning as before, unaffected by the
+tier rename:
 
 - **`nginx-plain`** — its one job, routing, is already covered by
   Traefik/Gateway API in this cluster; porting it too would just be two
@@ -168,14 +184,9 @@ Not ported, deliberately:
   itself via `/var/run/docker.sock` (container/stack management, live log
   tailing, deploying other containers) — there's no Kubernetes-native
   version of "manage Docker," so a manifest that starts but can never
-  actually do its job isn't worth carrying. `SERVICES_MIN` is down to 3 of
-  5 ported (dozzle removed, beszel + cloudflared + landing remain);
-  `SERVICES_CORE` is 7 of 8 (portainer removed).
-
-3 of 5 `SERVICES_MIN` are ported (beszel, cloudflared, landing); the
-cluster foundation (namespaces, Traefik, the shared Gateway, MetalLB,
-shared Postgres/MariaDB) is ArgoCD-managed too, see
-`kubernetes/argocd-apps/cluster-*.yaml`.
+  actually do its job isn't worth carrying. `portainer` moved into the
+  `min` tier in the Compose-side reshuffle above, but the reasoning for
+  excluding it here hasn't changed.
 
 Manifests exist and are internally consistent (every Secret reference has a
 matching `apply-secrets.sh` entry, every YAML file parses) but **have not

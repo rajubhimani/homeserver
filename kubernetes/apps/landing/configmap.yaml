@@ -531,7 +531,6 @@ data:
       { slug: "appflowy", name: "AppFlowy", category: "productivity", subcategory: "notes", icon: "blue", svg: "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"2\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M5 7 L13 7 M5 10 L10 10\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M9 3 L9 1 M12 3 L12 1 M6 3 L6 1\" stroke=\"#1565C0\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>", desc: "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools." },
       { slug: "forgejo", name: "Forgejo", category: "dev", subcategory: "git", icon: "teal", svg: "<circle cx=\"9\" cy=\"9\" r=\"7\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M6 5 Q6 9 9 9 Q12 9 12 13 M9 9 L7 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>", desc: "Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage." },
       { slug: "orangehrm", name: "OrangeHRM", category: "productivity", subcategory: "finance", icon: "orange", svg: "<circle cx=\"9\" cy=\"6\" r=\"2.5\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M4 15 c0 -3 2.2 -5 5 -5 s5 2 5 5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Open-source HR management — employee records, leave, time tracking, recruitment." },
-      { slug: "photoprism", name: "PhotoPrism", category: "storage", icon: "yellow", svg: "<rect x=\"2.5\" y=\"4\" width=\"13\" height=\"10\" rx=\"1.5\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"9\" r=\"2.5\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M6 4 L7 2.5 L11 2.5 L12 4\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>", desc: "AI-powered photo library, self-hosted (manual-only — redundant with Immich, start deliberately)." },
       { slug: "gitlab", name: "GitLab", category: "dev", subcategory: "git", icon: "teal", svg: "<path d=\"M9 14 L3 6 L5.5 6 L9 12 L12.5 6 L15 6 Z\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <path d=\"M3 6 L2 9 L9 14 L16 9 L15 6\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/>", desc: "Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking." },
       { slug: "authentik", name: "Authentik", category: "dev", subcategory: "identity", icon: "blue", svg: "<circle cx=\"9\" cy=\"7\" r=\"3\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M3 16 C3 13 5.7 11 9 11 C12.3 11 15 13 15 16\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Single sign-on for all your services. One login, one identity, full access control." },
       { slug: "vaultwarden", name: "Vaultwarden", category: "dev", subcategory: "identity", icon: "blue", svg: "<rect x=\"4\" y=\"3\" width=\"10\" height=\"13\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M7 7 L7 11 M9 6 L9 12 M11 8 L11 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>", desc: "Self-hosted password manager. Bitwarden-compatible — use any Bitwarden app to sync passwords." },
@@ -965,13 +964,6 @@ data:
         location /health/adguard-home {
             set $upstream http://adguard-home:3000;
             proxy_pass $upstream/;
-            proxy_connect_timeout 3s;
-            proxy_read_timeout 5s;
-        }
-
-        location /health/photoprism {
-            set $upstream http://photoprism:2342;
-            proxy_pass $upstream/api/v1/status;
             proxy_connect_timeout 3s;
             proxy_read_timeout 5s;
         }

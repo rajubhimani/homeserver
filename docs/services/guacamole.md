@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Clientless remote desktop gateway — access VNC/RDP/SSH machines from any browser, no client app required.
-**Port:** `8107` (host) → `8080` (container) | **Data:** `service_data/data/guacamole/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; webapp/guacd: no hard limit set; measured idle ~254MB total (webapp 206 + guacd 10 + db 38 — the Tomcat webapp is the heavy part)
+**Port:** `8107` (host) → `8080` (container) | **Data:** `service_data/data/guacamole/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; webapp/guacd: no hard limit set; measured idle ~217MB total (webapp 124 + guacd 77 + db 15 — the Tomcat webapp is the heavy part)
 
 ---
 
@@ -82,6 +82,17 @@ Apple's built-in Screen Sharing uses proprietary ARD authentication that Guacamo
 ### Windows target
 
 Not yet tested in this deployment, but standard Guacamole usage: enable Remote Desktop in Windows Settings → System → Remote Desktop (RDP is built in), then add a Guacamole connection with **Protocol: RDP**, port `3389`.
+
+## Using it day to day
+
+Once a connection exists, everything below happens inside that connection's own browser tab — there's no separate client app or device-pairing step, the "device" is just the browser you're already in:
+
+- **Open the Guacamole menu:** `Ctrl+Alt+Shift` on desktop, or swipe in from the left edge of the screen on a touchscreen. Clipboard, file transfer, connection switching, and the on-screen keyboard all live here.
+- **Clipboard:** the menu has a "clipboard" text area — text copied inside the remote session shows up there, and anything typed or pasted into it gets pushed to the remote side. This box *is* the clipboard bridge; the browser's own clipboard isn't shared with the remote session automatically.
+- **File transfer:** drag a file straight onto the browser window to upload it into the session. RDP connections also expose a virtual drive that appears as a network location inside the Windows session for two-way transfer. For SSH, use the bundled `guacctl` helper from inside the remote shell to move files through the same tunnel.
+- **Multiple connections at once:** click the connection name at the top of the menu to switch between open connections, or check several boxes there to tile them as equal-size panes — hold `Ctrl` or `Shift` while a tile is focused to broadcast keystrokes to every focused tile simultaneously.
+- **Sharing a connection with someone else** (if sharing is enabled on that connection): the menu's "Share" option generates a temporary link giving another person live access with no Guacamole account of their own — the link stops working as soon as you disconnect.
+- **On-screen keyboard:** menu → keyboard icon. Needed both for key combos the local OS would otherwise intercept (e.g. sending `Ctrl+Alt+Del` into a Windows session) and for typing from a touch device without its own physical keyboard.
 
 ## Troubleshooting
 

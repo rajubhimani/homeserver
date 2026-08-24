@@ -2,22 +2,64 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|all|running|service...> [--profile <name>] [--no-backup] [--no-ml] [--snapshot <ts>]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
+
+  Any command targeting a tier keyword (min/core/daily/all/running),
+  'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
+  resolved service list and asks for confirmation before acting — pass
+  --yes/-y to skip the prompt (e.g. non-interactive/cron use). Naming
+  explicit service(s) directly (e.g. 'up nextcloud vaultwarden') never
+  prompts — you already said exactly what you want.
   python homeserver.py <env> -r <service...>   (shorthand for restart)
+  python homeserver.py <env> up group:notes    start every service in category/subcategory
+                                                'notes' (or any other group — see services.json's
+                                                'category'/'subcategory' fields for valid names).
+                                                Works with every action, same as min/core/all.
+  python homeserver.py <env> precreate <min|core|all|service...>
+                                                create containers without starting them, so a
+                                                never-started service shows up as a stack in
+                                                Portainer (auto-detected by its labels) and can be
+                                                started from there later — skips anything that
+                                                already has containers. Manual-tier services aren't
+                                                included in 'all' here either — list them by name
+                                                alongside 'all' if you want them too.
   python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
   python homeserver.py orphaned-volumes [service|all] [--yes]
                                                 list/remove volumes not declared in a service's current compose.yml
+  python homeserver.py status (or ps)          list every known service, tier by tier, marking which are running,
+                                                plus every group and exactly which services 'group:<name>' resolves to
 
 Service tiers:
-  min    — bare minimum to run the server (dozzle, nginx-plain, landing)
-  core   — full default stack, includes min (starts with 'up core' or 'up all')
-  all    — core + extra (everything); down all always stops everything
+  min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, docs, portainer)
+  core   — full default stack, includes min. 'up core' bootstraps any of min
+           NOT already running (idempotent otherwise); 'down core' stops
+           ONLY core, min is left running — 'down all' is the only command
+           that also stops min.
+  daily  — apps used regularly but not core infra; opt-in, NOT included by
+           'up core'. 'up daily' bootstraps any of min/core NOT already
+           running, then starts daily; 'down daily' stops ONLY daily, min/core
+           are left running. You flip this tier on/off yourself as needed.
+  office — firm/business apps (calcom, listmonk, plane, vikunja, appflowy,
+           stirling-pdf-lite, stirling-pdf); opt-in, same idiom as daily but
+           bootstraps min/core/daily first.
+  automation-ai — workflow/automation/AI apps (ollama, open-webui, n8n,
+           airflow, temporal, dagster); opt-in, bootstraps
+           min/core/daily/office first.
+  all    — core + daily + office + automation-ai + extra (everything)
+
+  Every `down` target (a service, group, tier, or all) also stops containers
+  from every optional Compose profile declared by the selected service.
   extra  — optional services, started with 'up all' or individually
   manual — never auto-started by any tier (VPN services, gitlab, stirling-pdf
            full) — start individually with 'up <service>'
 
 IMPORTANT: When adding a new service —
   - Add to SERVICES_CORE if it should auto-start with 'up core'
+  - Add to SERVICES_DAILY if it's used regularly but shouldn't auto-start
+    with core — the user turns it on/off explicitly with 'up/down daily'
+  - Add to SERVICES_OFFICE/SERVICES_AUTOMATION_AI if it fits one of those
+    opt-in groupings (firm/business apps, or workflow/automation/AI apps)
+    instead of general-purpose daily
   - Add to SERVICES_EXTRA if it is optional/manual
   - Add to SERVICES_MANUAL if it duplicates another always-on service at much
     higher cost, or should only ever start deliberately (VPN)
@@ -43,6 +85,7 @@ shell at all, so none of that applies here — no workarounds needed.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -89,6 +132,19 @@ def load_env_file(path: Path) -> dict[str, str]:
     return result
 
 
+def load_services_json(path: Path) -> dict:
+    """services.json is the single source of truth for both tier membership
+    (this file) and landing-page grouping (services/landing/index.html,
+    fetched at page load) — one entry per service instead of two hand-synced
+    lists. See the homeserver-add-service skill for the schema. Called at
+    module load time, before the colored-output helpers below exist yet —
+    plain stderr on failure, not error()/warn()."""
+    if not path.is_file():
+        print(f"{path} not found — this repo can't run without it (services/tiers are defined there).", file=sys.stderr)
+        sys.exit(1)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
@@ -114,41 +170,115 @@ if os.path.exists(DOCKER_SOCKET):
 
 # ── Service tiers (additive: each tier builds on the previous) ─────
 #
-#   up min  = MIN
-#   up core = MIN + CORE
-#   up all  = MIN + CORE + EXTRA
+#   up min           = MIN
+#   up core          = bootstrap any of MIN not already running, + CORE
+#   up daily         = bootstrap any of MIN/CORE not already running, + DAILY
+#                      (opt-in — never implied by 'up core')
+#   up office        = bootstrap any of MIN/CORE/DAILY not already running,
+#                      + OFFICE (opt-in — never implied by 'up daily')
+#   up automation-ai = bootstrap any of MIN/CORE/DAILY/OFFICE not already
+#                      running, + AUTOMATION_AI (opt-in)
+#   up all           = MIN + CORE + DAILY + OFFICE + AUTOMATION_AI + EXTRA,
+#                      always (full cascade)
 #
-#   down min/core/all = same sets, reversed
+#   every down target  = selected services, reversed when tier/group/all;
+#                        includes every Compose profile in each service
+#
+# 'up core'/'up daily' rely on do_up's own idempotency (plain `compose up -d`,
+# no force_recreate) plus an explicit running-check (get_running_services())
+# so an already-running lower tier is left untouched rather than re-listed —
+# that running-check specifically avoids nginx-plain/landing's unconditional
+# force-restart-on-every-up (see do_up) firing just because MIN was
+# unconditionally bundled into the list.
+#
+# Derived from services.json (the single source of truth for tier membership
+# AND landing-page grouping — see the homeserver-add-service skill) rather
+# than hand-maintained here, so this file and the landing page can never
+# drift out of sync with each other. Order is preserved from the JSON array,
+# which is what actually matters (startup sequencing) — grouped by tier
+# there for the same reason it was grouped here before.
+#   - manual-only (SERVICES_MANUAL): never started by 'up min/core/all' (or
+#     their down/restart/update/backup/restore equivalents) — start
+#     individually with 'up <service>'. Currently gitlab/stirling-pdf,
+#     each redundant with an always-on equivalent (forgejo,
+#     stirling-pdf-lite) at meaningfully higher resource cost — see
+#     each one's "tier" comment in services.json for specifics.
 
-SERVICES_MIN = ["dozzle", "beszel", "cloudflared", "nginx-plain", "landing"]
+_SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
 
-SERVICES_CORE = ["nextcloud", "vaultwarden", "forgejo", "firefly", "immich", "jellyfin", "guacamole", "portainer"]
+# Landing-page entries can have a tier without being independently managed
+# Compose stacks. For example, Firefly Importer is a card and container in
+# Firefly's compose.yml, while Browser Hub is a virtual card for a bundle.
+# Only entries with their own services/<slug>/ directory belong in lifecycle
+# commands; the landing page still renders every entry from services.json.
+def is_managed_service(entry: dict) -> bool:
+    return bool(entry.get("tier")) and not entry.get("virtual") and (SERVICES_DIR / entry["slug"]).is_dir()
 
-SERVICES_EXTRA = [
-    "dockge", "uptime-kuma", "openproject", "paperless",
-    "stirling-pdf-lite", "mealie",
-    "syncthing", "authentik", "miniflux", "audiobookshelf",
-    "invoiceshelf", "appflowy", "plane", "ollama", "open-webui", "vikunja",
-    "trilium", "silverbullet", "outline", "bookstack", "excalidraw", "karakeep",
-    "ntfy", "it-tools", "n8n", "crowdsec", "wallabag", "atuin", "adguard-home",
-    "orangehrm", "nocodb", "listmonk", "documenso", "calcom", "plausible",
-    "penpot", "coolify", "supabase", "observability",
-]
 
-# Manual-only — never started by 'up min/core/all' (or their down/restart/
-# update/backup/restore equivalents). Start individually with 'up <service>'.
-#   - gitlab: redundant with forgejo (same git-hosting role) at far higher
-#     memory cost — forgejo is the default; start gitlab only when actually
-#     needed for something forgejo doesn't cover
-#   - stirling-pdf (full): redundant with stirling-pdf-lite (same PDF
-#     toolset) at ~2x the memory (OCR/LibreOffice extras) — lite is the
-#     default; start the full image only when those extras are actually needed
-#   - photoprism: redundant with immich (same AI photo-management role) at
-#     extra memory/maintenance cost from running a second photo library
-#     stack — immich is the default; start photoprism only if its specific
-#     feature set (e.g. its different face-recognition/tagging approach) is
-#     actually needed
-SERVICES_MANUAL = ["gitlab", "stirling-pdf", "photoprism"]
+SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and is_managed_service(s)]
+SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and is_managed_service(s)]
+SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "daily" and is_managed_service(s)]
+SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "office" and is_managed_service(s)]
+SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "automation-ai" and is_managed_service(s)]
+SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and is_managed_service(s)]
+SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual" and is_managed_service(s)]
+
+# category/subcategory -> ordered list of slugs, e.g. SERVICE_GROUPS["notes"]
+# or SERVICE_GROUPS["productivity"] — powers 'up group:<name>' (and every
+# other tier-aware action) the same way SERVICES_MIN/CORE/EXTRA do. Only
+# entries with an independent tier are groupable — a group is something you
+# can start/stop, and firefly-importer (no tier, rides along with firefly)
+# isn't independently startable.
+SERVICE_GROUPS: dict[str, list[str]] = {}
+# category -> its subcategories (sorted), e.g. CATEGORY_SUBGROUPS["dev"] ==
+# ["automation", "git", "identity", "tools"] — only dev/productivity split
+# further; storage/system have no subcategory, so they're already the
+# smallest group for those areas. Purely for 'status'/'ps' to render the
+# category/subcategory nesting instead of one flat list.
+CATEGORY_SUBGROUPS: dict[str, set[str]] = {}
+for _s in _SERVICES_DATA["services"]:
+    # Exclude landing-only cards too: group/status membership must contain
+    # only independently startable services.
+    if not is_managed_service(_s):
+        continue
+    for _key in ("category", "subcategory"):
+        _val = _s.get(_key)
+        if _val:
+            SERVICE_GROUPS.setdefault(_val, []).append(_s["slug"])
+    _cat, _sub = _s.get("category"), _s.get("subcategory")
+    if _cat and _sub:
+        CATEGORY_SUBGROUPS.setdefault(_cat, set()).add(_sub)
+del _s, _key, _val, _cat, _sub
+
+# "bundle" groups multiple independently-deployed service directories under
+# one startable name — a hub-of-containers (Browser Hub's five browser
+# containers behind one shared login, see docs/services/browser-hub.md) that
+# isn't a category/subcategory grouping. A member declares "bundle": "<hub
+# slug>"; the hub's own (virtual) entry can declare "requires": [...] for
+# extra infra it needs that isn't itself a member (nginx-plain, in that
+# example). Fully data-driven — a future bundle needs zero changes here, just
+# "bundle"/"requires" fields in services.json. BUNDLE_MEMBERS' keys double as
+# the set of bare tokens ('up <bundle>', not 'up group:<bundle>') the CLI
+# expands — see the bare-token handling below.
+#
+# "requires" is deliberately kept OUT of SERVICE_GROUPS/BUNDLE_MEMBERS and
+# only spliced in for up-family actions (see the action check below) — never
+# for down/restart/update/backup/restore/dump. nginx-plain is exactly why:
+# it's shared infra for the WHOLE stack, not something 'browser' owns, so
+# 'down browser' must never stop it just because 'up browser' needs it
+# running. (Confirmed real incident: this bug shipped once and 'down
+# browser' took nginx-plain down with it, before this split existed.)
+BUNDLE_MEMBERS: dict[str, list[str]] = {}
+BUNDLE_REQUIRES: dict[str, list[str]] = {}
+for _s in _SERVICES_DATA["services"]:
+    _bundle = _s.get("bundle")
+    if _bundle:
+        BUNDLE_MEMBERS.setdefault(_bundle, []).append(_s["slug"])
+for _s in _SERVICES_DATA["services"]:
+    if _s["slug"] in BUNDLE_MEMBERS:
+        BUNDLE_REQUIRES[_s["slug"]] = _s.get("requires", [])
+        SERVICE_GROUPS[_s["slug"]] = BUNDLE_MEMBERS[_s["slug"]]
+del _s, _bundle
 
 # nginx-plain and nginx (NPM) both bind to ports 80/443 — only one can run at
 # a time. nginx-plain is the default (always in MIN). nginx (NPM) is
@@ -253,6 +383,13 @@ class DockerBackend(ABC):
         used for the roles dump above, where 'role already exists' for
         roles the fresh cluster's own initdb already created is expected
         and harmless). Returns (success, stderr_text)."""
+
+    @abstractmethod
+    def compose_create(self, files: list[Path], env: dict[str, str], profile: str | None) -> tuple[bool, str]:
+        """docker compose create — makes containers (pulls images, wires
+        networks/volumes) without starting them. Used by 'precreate' so a
+        service becomes visible/startable from Portainer's own UI without
+        actually running it yet. Returns (success, combined output)."""
 
     @abstractmethod
     def compose_down(self, files: list[Path], env: dict[str, str], profile: str | None) -> bool: ...
@@ -393,6 +530,10 @@ class SubprocessBackend(DockerBackend):
             input=sql, capture_output=True,
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def compose_create(self, files, env, profile):
+        proc = self._run(self._compose_args(files, profile) + ["create"], env=env)
+        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
     def compose_down(self, files, env, profile):
         proc = self._run(self._compose_args(files, profile) + ["down"], env=env)
@@ -583,6 +724,17 @@ class PythonOnWhalesBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
+    def compose_create(self, files, env, profile):
+        from python_on_whales.exceptions import DockerException  # noqa: PLC0415
+        client = self._client(files, profile)
+        try:
+            with self._env(env):
+                client.compose.create()
+            return True, ""
+        except DockerException as e:
+            out = f"{e.stderr or ''}\n{e.stdout or ''}"
+            return False, out
+
     def compose_down(self, files, env, profile):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
@@ -746,7 +898,14 @@ def base_file(service: str) -> str:
 
 def is_valid_service(service: str) -> bool:
     return service in (
-        SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + SERVICES_MANUAL + [PROXY_STANDBY]
+        SERVICES_MIN
+        + SERVICES_CORE
+        + SERVICES_DAILY
+        + SERVICES_OFFICE
+        + SERVICES_AUTOMATION_AI
+        + SERVICES_EXTRA
+        + SERVICES_MANUAL
+        + [PROXY_STANDBY]
     )
 
 
@@ -837,10 +996,65 @@ def stop_proxy_conflict(service: str, env: str) -> None:
 def get_running_services() -> list[str]:
     names = BACKEND.running_container_names()
     result = []
-    for svc in SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + SERVICES_MANUAL:
+    for svc in (
+        SERVICES_MIN
+        + SERVICES_CORE
+        + SERVICES_DAILY
+        + SERVICES_OFFICE
+        + SERVICES_AUTOMATION_AI
+        + SERVICES_EXTRA
+        + SERVICES_MANUAL
+    ):
         if any(re.match(rf"^{re.escape(svc)}(-|$)", n) for n in names):
             result.append(svc)
     return result
+
+
+def do_status() -> int:
+    running = set(get_running_services())
+    all_services = (
+        SERVICES_MIN
+        + SERVICES_CORE
+        + SERVICES_DAILY
+        + SERVICES_OFFICE
+        + SERVICES_AUTOMATION_AI
+        + SERVICES_EXTRA
+        + SERVICES_MANUAL
+    )
+
+    def show_tier(label: str, services: list[str]) -> None:
+        if not services:
+            return
+        print(f"  {BOLD}{label}:{RESET}")
+        for s in services:
+            marker = f"{GREEN}●{RESET}" if s in running else "○"
+            print(f"    {marker} {s}")
+        print()
+
+    header("Service status (● running, ○ stopped):")
+    show_tier("MIN", SERVICES_MIN)
+    show_tier("CORE", SERVICES_CORE)
+    show_tier("DAILY", SERVICES_DAILY)
+    show_tier("OFFICE", SERVICES_OFFICE)
+    show_tier("AUTOMATION-AI", SERVICES_AUTOMATION_AI)
+    show_tier("EXTRA", SERVICES_EXTRA)
+    show_tier("MANUAL", SERVICES_MANUAL)
+    success(f"{len(running)}/{len(all_services)} service(s) running")
+
+    def show_group(name: str, indent: int) -> None:
+        members = SERVICE_GROUPS[name]
+        up = sum(1 for s in members if s in running)
+        print(f"{'  ' * indent}{BOLD}{name}{RESET} ({up}/{len(members)} running): {' '.join(members)}")
+
+    print()
+    print(f"  {BOLD}Groups ({len(SERVICE_GROUPS)} — 'up group:<name>' / 'precreate group:<name>' starts exactly these):{RESET}")
+    categories = {s.get("category") for s in _SERVICES_DATA["services"] if s.get("tier") and s.get("category")}
+    for cat in sorted(categories):
+        show_group(cat, indent=2)
+        for sub in sorted(CATEGORY_SUBGROUPS.get(cat, [])):
+            show_group(sub, indent=3)
+
+    return 0
 
 
 # ── Wait for healthy ─────────────────────────────────────────────────
@@ -1003,11 +1217,27 @@ def do_snapshots(service: str) -> None:
 # ── Actions ──────────────────────────────────────────────────────────
 
 
-def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None) -> bool:
+def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None, fresh: bool = False) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
+
+    if not fresh:
+        service_data_dir = SERVICE_DATA_ROOT / service
+        # Cheap dir check first — only pay for the docker-volume-ls call when
+        # the dir is already missing ('and' short-circuits), so a routine up
+        # on an already-live service skips the subprocess call entirely.
+        # do_restore is defined later in the file but that's fine — resolved
+        # at call time, not def time. Its own was_running branch may call
+        # back into do_up once if a live container's volume was deleted out
+        # from under it — safe, terminates because restored state is no
+        # longer "fresh" on that second pass.
+        if not service_data_dir.is_dir() and not BACKEND.volumes_for_project(service):
+            snaps = list_snapshots(service)
+            if snaps:
+                info(f"{service} has no live volumes or data on disk — restoring latest snapshot ({snaps[-1].name}) before starting (pass --fresh to start blank instead)...")
+                do_restore(service, env, profile)
 
     stop_proxy_conflict(service, env)
     # Landing bakes env vars into HTML at startup; nginx-plain runs envsubst
@@ -1050,6 +1280,42 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
             warn("Podman dependency tracking error — checking container status...")
 
     return wait_healthy(service)
+
+
+def do_precreate(service: str, env: str, profile: str | None) -> bool:
+    """Creates a service's containers without starting them — so it shows
+    up as a stack in Portainer (which auto-detects any compose project by
+    its container labels, running or not) and can be started from there
+    later, without ever needing Portainer's own API/credentials. Skips
+    services that already have containers (running or previously started)
+    so this never touches/recreates anything already in use."""
+    d = SERVICES_DIR / service
+    if not d.is_dir():
+        error(f"Service '{service}' not found")
+        return False
+
+    all_names = BACKEND.all_container_names()
+    if any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in all_names):
+        info(f"{service} already has containers — skipping (use 'up' to start it)")
+        return True
+
+    files = compose_files(service, env)
+    cenv = compose_env(service)
+    # Precreate everything a service defines, including profile-gated
+    # containers (e.g. GitLab's runner profile) — the point is
+    # making the whole thing visible/startable in Portainer, not
+    # replicating 'up's normal profile-gating.
+    cenv.setdefault("COMPOSE_PROFILES", "*")
+
+    if profile:
+        info(f"Pre-creating {service} ({env}) --profile {profile}...")
+    else:
+        info(f"Pre-creating {service} ({env})...")
+
+    ok, out = BACKEND.compose_create(files, cenv, profile)
+    if out:
+        print(out)
+    return ok
 
 
 def do_down(service: str, env: str, profile: str | None, no_backup: bool = False) -> bool:
@@ -1544,7 +1810,15 @@ def do_orphaned_volumes(target: str, assume_yes: bool) -> int:
     header("Checking for orphaned Docker volumes...")
 
     if target == "all":
-        services = SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + SERVICES_MANUAL
+        services = (
+            SERVICES_MIN
+            + SERVICES_CORE
+            + SERVICES_DAILY
+            + SERVICES_OFFICE
+            + SERVICES_AUTOMATION_AI
+            + SERVICES_EXTRA
+            + SERVICES_MANUAL
+        )
     else:
         if not is_valid_service(target):
             error(f"Service '{target}' not found")
@@ -1600,30 +1874,48 @@ def show_help() -> None:
     print("    python homeserver.py <env> -u <service...>                     (up shorthand)")
     print("    python homeserver.py <env> -d <service...>                     (down shorthand)")
     print("    python homeserver.py <env> -r <service...>                     (restart shorthand)")
+    print("    python homeserver.py <env> precreate <tier|service...>          create without starting (visible in Portainer)")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
+    print("    python homeserver.py status (or ps)                             list every service + every group (tier by tier, marking which are running)")
     print()
     print(f"  {BOLD}Environments:{RESET}")
     print("    dev    ports on all interfaces (direct access)")
     print("    prod   ports on 127.0.0.1 only (nginx proxy handles external)")
     print()
     print(f"  {BOLD}Tiers:{RESET}")
-    print("    min     bare minimum — dozzle, nginx-plain, landing")
-    print("    core    full default stack (includes min)")
-    print("    all     core + extra — starts/stops everything")
+    print("    min     bare minimum — beszel, cloudflared, nginx-plain, landing, docs, portainer")
+    print("    core    full default stack — 'up core' bootstraps min if not already running;")
+    print("            'down core' stops only core, min stays up")
+    print("    daily   apps used regularly but not core infra — opt-in, NOT included by 'core';")
+    print("            'up daily' bootstraps min/core if needed; 'down daily' stops only daily")
+    print("    office  firm/business apps — opt-in; 'up office' bootstraps min/core/daily if needed;")
+    print("            'down office' stops only office")
+    print("    automation-ai workflow/automation/AI apps — opt-in; 'up automation-ai' bootstraps")
+    print("            min/core/daily/office if needed; 'down automation-ai' stops only automation-ai")
+    print("    all     core + daily + office + automation-ai + extra — starts/stops literally everything")
     print("    running update only — currently running services")
+    print()
+    print(f"  {BOLD}Groups:{RESET}")
+    print("    group:<name>  every service in category/subcategory <name> — works with any action")
+    print(f"    valid names: {', '.join(sorted(SERVICE_GROUPS))}")
     print()
     print(f"  {BOLD}Examples:{RESET}")
     print("    python homeserver.py dev up min                      start bare minimum")
     print("    python homeserver.py dev up core                     start full default stack")
-    print("    python homeserver.py dev up all                      start everything (core + extra)")
+    print("    python homeserver.py dev up daily                    start core + the daily-use opt-in tier")
+    print("    python homeserver.py dev up office                   start core + daily + the firm/business opt-in tier")
+    print("    python homeserver.py dev up automation-ai            start core + daily + office + the automation/AI opt-in tier")
+    print("    python homeserver.py dev up all                      start everything (core + daily + office + automation-ai + extra)")
     print("    python homeserver.py dev down min                    stop minimum (reverse order)")
-    print("    python homeserver.py dev down core                   stop core (reverse order)")
-    print("    python homeserver.py dev down all                    stop everything (reverse order)")
+    print("    python homeserver.py dev down core                   stop core only, reverse order (min stays up)")
+    print("    python homeserver.py dev down daily                  stop daily only, reverse order (min/core stay up)")
+    print("    python homeserver.py dev down all                    stop everything, including optional profiles (reverse order)")
+    print("    python homeserver.py dev up all --yes                start everything, skip the confirmation prompt")
     print("    python homeserver.py dev up landing mealie           start specific services")
     print("    python homeserver.py dev down landing mealie         stop specific services")
-    print("    python homeserver.py dev up forgejo --profile runner  add CI runner to forgejo")
-    print("    python homeserver.py dev down forgejo --profile runner remove CI runner")
+    print("    python homeserver.py dev up forgejo                   start Forgejo and its CI runner")
+    print("    python homeserver.py dev down forgejo                 stop Forgejo and every optional profile")
     print("    python homeserver.py dev restart nginx-plain         restart a service (re-runs entrypoint)")
     print("    python homeserver.py dev -r nginx-plain              same, shorthand")
     print("    python homeserver.py dev logs immich                 follow logs")
@@ -1632,7 +1924,14 @@ def show_help() -> None:
     print("    python homeserver.py dev update jellyfin             update a single service")
     print("    python homeserver.py dev down mealie                 stop AND auto-snapshot (default)")
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
+    print("    python homeserver.py dev up mealie                   auto-restores the latest snapshot if data/volumes are missing")
+    print("    python homeserver.py dev up mealie --fresh           start blank even if a snapshot exists")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
+    print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
+    print("    python homeserver.py dev down group:notes            stop the same group")
+    print("    python homeserver.py dev precreate all gitlab stirling-pdf")
+    print("                                                         create every never-started service (incl. manual-tier) so")
+    print("                                                         they all show up as start-able stacks in Portainer")
     print("    python homeserver.py dev backup all                  snapshot every service now, regardless of running state")
     print("    python homeserver.py dev snapshots mealie            list available snapshots for a service")
     print("    python homeserver.py dev restore mealie              restore the latest snapshot")
@@ -1644,12 +1943,22 @@ def show_help() -> None:
     print("                                                         explicit target — required for non-official Postgres images")
     print("    python homeserver.py gc                              prune + (Windows) compact Docker Desktop's WSL2 VHDX")
     print("    python homeserver.py gc --yes                        same, skip the confirmation prompt")
+    print("    python homeserver.py status                          list every service + every group, marking which are running")
     print()
     print(f"  {BOLD}MIN (infrastructure):{RESET}")
     print(f"    {' '.join(SERVICES_MIN)}")
     print()
     print(f"  {BOLD}CORE (always-on apps, added on top of min):{RESET}")
     print(f"    {' '.join(SERVICES_CORE)}")
+    print()
+    print(f"  {BOLD}DAILY (regular-use apps, opt-in — 'up daily' or 'up all', NOT 'up core'):{RESET}")
+    print(f"    {' '.join(SERVICES_DAILY)}")
+    print()
+    print(f"  {BOLD}OFFICE (firm/business apps, opt-in — 'up office' or 'up all', NOT 'up daily'):{RESET}")
+    print(f"    {' '.join(SERVICES_OFFICE)}")
+    print()
+    print(f"  {BOLD}AUTOMATION-AI (workflow/automation/AI apps, opt-in — 'up automation-ai' or 'up all', NOT 'up office'):{RESET}")
+    print(f"    {' '.join(SERVICES_AUTOMATION_AI)}")
     print()
     print(f"  {BOLD}EXTRA (optional, started with 'up all' or individually):{RESET}")
     print(f"    {' '.join(SERVICES_EXTRA)}")
@@ -1674,16 +1983,43 @@ def ensure_network() -> None:
         success("Network 'homeserver' created")
 
 
-def run_list(action_fn, services: list[str], env: str, profile: str | None, label: str, extra=None) -> None:
+def confirm_expansion(services: list[str], assume_yes: bool) -> bool:
+    """Preview + confirm before acting on a tier keyword (min/core/daily/all/
+    running) or a group:<name>/bundle expansion — anything where one token
+    resolved into more than what was literally typed. Never called for a
+    literal list of explicitly-named services (see the call sites in main()):
+    that case needs no prompt since the user already named exactly what they
+    want. Skipped when --yes/-y was passed, or stdin isn't a TTY (scripted/
+    cron usage must never hang on an unanswerable prompt) — same pattern as
+    do_gc/do_orphaned_volumes' assume_yes."""
+    if assume_yes or not sys.stdin.isatty():
+        return True
+    print(f"\n{BOLD}This will affect {len(services)} service(s):{RESET}")
+    print(f"  {' '.join(services)}")
+    try:
+        reply = input(f"\n{BOLD}Continue? [y/N]{RESET} ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        info("Cancelled")
+        return False
+    if reply not in ("y", "yes"):
+        info("Cancelled")
+        return False
+    return True
+
+
+def run_list(action_fn, services: list[str], env: str, profile: str | None, label: str, **kwargs) -> None:
     failed: list[str] = []
     for service in services:
-        ok = action_fn(service, env, profile, extra) if extra is not None else action_fn(service, env, profile)
+        ok = action_fn(service, env, profile, **kwargs)
         if not ok:
             error(f"{service} FAILED")
             failed.append(service)
         else:
             if action_fn is do_up:
                 success(f"{service} started")
+            elif action_fn is do_precreate:
+                success(f"{service} pre-created")
             elif action_fn is do_update:
                 success(f"{service} updated")
             elif action_fn is do_backup:
@@ -1721,6 +2057,11 @@ def main() -> int:
         target = next((a for a in argv[1:] if not a.startswith("-")), "all")
         return do_orphaned_volumes(target, assume_yes="--yes" in argv or "-y" in argv)
 
+    # Same reasoning — which containers are running doesn't depend on
+    # dev/prod (only the port bindings do), so this needs no env argument.
+    if argv and argv[0] in ("status", "ps"):
+        return do_status()
+
     if len(argv) < 3:
         show_help()
         return 1
@@ -1739,11 +2080,11 @@ def main() -> int:
 
     if action not in (
         "up", "-u", "down", "-d", "restart", "-r", "logs", "update",
-        "backup", "restore", "snapshots", "dump", "migrate",
+        "backup", "restore", "snapshots", "dump", "migrate", "precreate",
     ):
         error(
             "Unknown action "
-            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, or migrate"
+            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, or precreate"
         )
         show_help()
         return 1
@@ -1752,9 +2093,12 @@ def main() -> int:
     profile: str | None = None
     no_backup = False
     no_ml = False
+    fresh = False
+    assume_yes = False
+    used_group_or_bundle = False
     snapshot: str | None = None
     image_flag: str | None = None
-    run_all = run_core = run_min = run_running = False
+    run_all = run_core = run_daily = run_office = run_automation_ai = run_min = run_running = False
 
     i = 0
     while i < len(rest):
@@ -1769,6 +2113,10 @@ def main() -> int:
             no_backup = True
         elif tok == "--no-ml":
             no_ml = True
+        elif tok == "--fresh":
+            fresh = True
+        elif tok in ("--yes", "-y"):
+            assume_yes = True
         elif tok == "--snapshot":
             i += 1
             if i >= len(rest):
@@ -1785,10 +2133,38 @@ def main() -> int:
             run_all = True
         elif tok == "core":
             run_core = True
+        elif tok == "daily":
+            run_daily = True
+        elif tok == "office":
+            run_office = True
+        elif tok == "automation-ai":
+            run_automation_ai = True
         elif tok == "min":
             run_min = True
         elif tok == "running":
             run_running = True
+        elif tok.startswith("group:"):
+            group_name = tok[len("group:"):]
+            if group_name not in SERVICE_GROUPS:
+                error(f"Unknown group '{group_name}' — valid groups: {', '.join(sorted(SERVICE_GROUPS))}")
+                return 1
+            services_to_run.extend(SERVICE_GROUPS[group_name])
+            used_group_or_bundle = True
+            # Only splice in a bundle's "requires" (e.g. nginx-plain for
+            # 'browser') on actions that bring things up — never on
+            # down/restart/update/backup/restore/dump, which must only ever
+            # touch the bundle's own members. See BUNDLE_REQUIRES above.
+            if group_name in BUNDLE_REQUIRES and action in ("up", "-u", "precreate"):
+                services_to_run.extend(BUNDLE_REQUIRES[group_name])
+        elif tok in BUNDLE_MEMBERS:
+            # Bare bundle name (e.g. 'browser', not 'group:browser') — see
+            # the BUNDLE_MEMBERS/BUNDLE_REQUIRES derivation above for why
+            # this expands instead of targeting a single (nonexistent)
+            # service directory.
+            services_to_run.extend(BUNDLE_MEMBERS[tok])
+            used_group_or_bundle = True
+            if tok in BUNDLE_REQUIRES and action in ("up", "-u", "precreate"):
+                services_to_run.extend(BUNDLE_REQUIRES[tok])
         else:
             if is_valid_service(tok):
                 services_to_run.append(tok)
@@ -1798,17 +2174,26 @@ def main() -> int:
                 return 1
         i += 1
 
-    if not (run_all or run_core or run_min or run_running) and not services_to_run:
+    # A group can overlap with another group or an explicitly named service
+    # (e.g. 'up group:notes group:productivity') — dedupe while preserving
+    # first-seen order so nothing runs twice.
+    services_to_run = list(dict.fromkeys(services_to_run))
+
+    if not (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running) and not services_to_run:
         error("No services specified")
         show_help()
         return 1
 
     if no_ml:
-        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_min or run_running:
+        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running:
             error("--no-ml is only valid with 'up immich' on its own (excludes immich-ml)")
             return 1
 
-    if action == "migrate" and (run_all or run_core or run_min or run_running):
+    if fresh and action not in ("up", "-u"):
+        error("--fresh is only valid with the up action")
+        return 1
+
+    if action == "migrate" and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running):
         error("migrate only works against explicitly named services, e.g. 'dev migrate forgejo' — no tier-wide migration")
         return 1
 
@@ -1823,49 +2208,188 @@ def main() -> int:
         ensure_network()
         exclude = ["immich-machine-learning"] if no_ml else None
         if run_all:
-            header(f"Starting all services (min + core + extra) in {env} mode...")
-            run_list(do_up, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Starting all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "All services", fresh=fresh)
         elif run_core:
-            header(f"Starting core services (min + core) in {env} mode...")
-            run_list(do_up, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN if s not in running]
+            if missing:
+                header(f"Starting core services in {env} mode (bootstrapping missing min tier: {', '.join(missing)})...")
+            else:
+                header(f"Starting core services in {env} mode (min already running, left untouched)...")
+            services = missing + SERVICES_CORE + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Core services", fresh=fresh)
+        elif run_daily:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE if s not in running]
+            if missing:
+                header(f"Starting daily services in {env} mode (bootstrapping missing min/core: {', '.join(missing)})...")
+            else:
+                header(f"Starting daily services in {env} mode (min/core already running, left untouched)...")
+            services = missing + SERVICES_DAILY + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Daily services", fresh=fresh)
+        elif run_office:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY if s not in running]
+            if missing:
+                header(f"Starting office services in {env} mode (bootstrapping missing min/core/daily: {', '.join(missing)})...")
+            else:
+                header(f"Starting office services in {env} mode (min/core/daily already running, left untouched)...")
+            services = missing + SERVICES_OFFICE + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Office services", fresh=fresh)
+        elif run_automation_ai:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE if s not in running]
+            if missing:
+                header(f"Starting automation-ai services in {env} mode (bootstrapping missing min/core/daily/office: {', '.join(missing)})...")
+            else:
+                header(f"Starting automation-ai services in {env} mode (min/core/daily/office already running, left untouched)...")
+            services = missing + SERVICES_AUTOMATION_AI + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Automation-AI services", fresh=fresh)
         elif run_min:
+            services = SERVICES_MIN + services_to_run
             header(f"Starting min services in {env} mode...")
-            run_list(do_up, SERVICES_MIN + services_to_run, env, profile, "Min services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Min services", fresh=fresh)
         else:
             header(f"Starting services in {env} mode...")
-            run_list(do_up, services_to_run, env, profile, "Services", extra=exclude)
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
+            run_list(do_up, services_to_run, env, profile, "Services", exclude=exclude, fresh=fresh)
+
+    elif action == "precreate":
+        ensure_network()
+        if run_all:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Pre-creating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "All services")
+        elif run_core:
+            services = SERVICES_MIN + SERVICES_CORE + services_to_run
+            header(f"Pre-creating core services (min + core) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Core services")
+        elif run_daily:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            header(f"Pre-creating daily services (min + core + daily) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Daily services")
+        elif run_office:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            header(f"Pre-creating office services (min + core + daily + office) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Office services")
+        elif run_automation_ai:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Pre-creating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Automation-AI services")
+        elif run_min:
+            services = SERVICES_MIN + services_to_run
+            header(f"Pre-creating min services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Min services")
+        else:
+            header(f"Pre-creating services in {env} mode...")
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
+            run_list(do_precreate, services_to_run, env, profile, "Services")
 
     elif action in ("down", "-d"):
         if run_all:
-            header("Stopping all services (reverse order)...")
-            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run))
+            header("Stopping all services and profile containers (reverse order)...")
+            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
         elif run_core:
-            header("Stopping core services (reverse order)...")
-            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + services_to_run))
+            header("Stopping core services (reverse order) — min stays running...")
+            lst = list(reversed(SERVICES_CORE + services_to_run))
+        elif run_daily:
+            header("Stopping daily services (reverse order) — min/core stay running...")
+            lst = list(reversed(SERVICES_DAILY + services_to_run))
+        elif run_office:
+            header("Stopping office services (reverse order) — min/core/daily stay running...")
+            lst = list(reversed(SERVICES_OFFICE + services_to_run))
+        elif run_automation_ai:
+            header("Stopping automation-ai services (reverse order) — min/core/daily/office stay running...")
+            lst = list(reversed(SERVICES_AUTOMATION_AI + services_to_run))
         elif run_min:
             header("Stopping min services (reverse order)...")
             lst = list(reversed(SERVICES_MIN + services_to_run))
         else:
             header("Stopping services...")
             lst = services_to_run
+        if (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or used_group_or_bundle) and not confirm_expansion(lst, assume_yes):
+            return 1
+        # A Compose profile is opt-in by default, so a plain `compose down`
+        # misses profile-only containers that were previously started (for
+        # example GitLab's CI runner). Always select every profile for any
+        # down target: stopping a service must release all of its resources,
+        # whether it was selected by name, group, tier, or `all`.
+        down_profile = "*"
         for service in lst:
-            do_down(service, env, profile, no_backup=no_backup)
+            do_down(service, env, down_profile, no_backup=no_backup)
         print()
         success("Done")
 
     elif action in ("restart", "-r"):
         ensure_network()
         if run_all:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header(f"Restarting all services in {env} mode...")
-            run_list(do_restart, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "All services")
         elif run_core:
+            services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header(f"Restarting core services in {env} mode...")
-            run_list(do_restart, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Core services")
+        elif run_daily:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            header(f"Restarting daily services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Daily services")
+        elif run_office:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            header(f"Restarting office services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Office services")
+        elif run_automation_ai:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Restarting automation-ai services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Automation-AI services")
         elif run_min:
+            services = SERVICES_MIN + services_to_run
             header(f"Restarting min services in {env} mode...")
-            run_list(do_restart, SERVICES_MIN + services_to_run, env, profile, "Min services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Min services")
         else:
             header(f"Restarting services in {env} mode...")
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
             run_list(do_restart, services_to_run, env, profile, "Services")
 
     elif action == "logs":
@@ -1876,14 +2400,41 @@ def main() -> int:
     elif action == "update":
         ensure_network()
         if run_all:
-            header(f"Updating all services (min + core + extra) in {env} mode...")
-            run_list(do_update, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Updating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "All services")
         elif run_core:
+            services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header(f"Updating core services (min + core) in {env} mode...")
-            run_list(do_update, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Core services")
+        elif run_daily:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            header(f"Updating daily services (min + core + daily) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Daily services")
+        elif run_office:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            header(f"Updating office services (min + core + daily + office) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Office services")
+        elif run_automation_ai:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Updating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Automation-AI services")
         elif run_min:
+            services = SERVICES_MIN + services_to_run
             header(f"Updating min services in {env} mode...")
-            run_list(do_update, SERVICES_MIN + services_to_run, env, profile, "Min services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Min services")
         elif run_running:
             header(f"Updating running services in {env} mode...")
             lst = get_running_services()
@@ -1892,42 +2443,104 @@ def main() -> int:
                 return 0
             info(f"Detected running services: {' '.join(lst)}")
             print()
+            if not confirm_expansion(lst, assume_yes):
+                return 1
             run_list(do_update, lst, env, profile, "Running services")
         else:
             header(f"Updating services in {env} mode...")
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
             run_list(do_update, services_to_run, env, profile, "Services")
 
     elif action == "backup":
         if run_all:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Backing up all services (named volumes + service_data) to service_data/backup/...")
-            run_list(do_backup, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "All services")
         elif run_core:
+            services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header("Backing up core services...")
-            run_list(do_backup, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Core services")
+        elif run_daily:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            header("Backing up daily services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Daily services")
+        elif run_office:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            header("Backing up office services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Office services")
+        elif run_automation_ai:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header("Backing up automation-ai services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Automation-AI services")
         elif run_min:
+            services = SERVICES_MIN + services_to_run
             header("Backing up min services...")
-            run_list(do_backup, SERVICES_MIN + services_to_run, env, profile, "Min services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Min services")
         else:
             header("Backing up services...")
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
             run_list(do_backup, services_to_run, env, profile, "Services")
 
     elif action == "restore":
         ensure_network()
-        if snapshot and (run_all or run_core or run_min):
+        if snapshot and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min):
             error("--snapshot only works when restoring a single named service")
             return 1
         if run_all:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Restoring all services from service_data/backup/...")
-            run_list(do_restore, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "All services")
         elif run_core:
+            services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header("Restoring core services...")
-            run_list(do_restore, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Core services")
+        elif run_daily:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            header("Restoring daily services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Daily services")
+        elif run_office:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            header("Restoring office services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Office services")
+        elif run_automation_ai:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header("Restoring automation-ai services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Automation-AI services")
         elif run_min:
+            services = SERVICES_MIN + services_to_run
             header("Restoring min services...")
-            run_list(do_restore, SERVICES_MIN + services_to_run, env, profile, "Min services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Min services")
         else:
             header("Restoring services...")
-            run_list(do_restore, services_to_run, env, profile, "Services", extra=snapshot)
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
+            run_list(do_restore, services_to_run, env, profile, "Services", snapshot=snapshot)
 
     elif action == "snapshots":
         if not services_to_run:
@@ -1938,22 +2551,51 @@ def main() -> int:
 
     elif action == "dump":
         if run_all:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Dumping all running services' databases to service_data/db_dump/...")
-            run_list(do_dump, SERVICES_MIN + SERVICES_CORE + SERVICES_EXTRA + services_to_run, env, profile, "All services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "All services")
         elif run_core:
+            services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header("Dumping core services' databases...")
-            run_list(do_dump, SERVICES_MIN + SERVICES_CORE + services_to_run, env, profile, "Core services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Core services")
+        elif run_daily:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            header("Dumping daily services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Daily services")
+        elif run_office:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            header("Dumping office services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Office services")
+        elif run_automation_ai:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header("Dumping automation-ai services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Automation-AI services")
         elif run_min:
+            services = SERVICES_MIN + services_to_run
             header("Dumping min services' databases...")
-            run_list(do_dump, SERVICES_MIN + services_to_run, env, profile, "Min services")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Min services")
         else:
             header("Dumping databases...")
+            if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
+                return 1
             run_list(do_dump, services_to_run, env, profile, "Services")
 
     elif action == "migrate":
         ensure_network()
         header(f"Migrating database{' to ' + image_flag if image_flag else ' to postgres-alpine'}...")
-        run_list(do_migrate, services_to_run, env, profile, "Services", extra=image_flag)
+        run_list(do_migrate, services_to_run, env, profile, "Services", image_override=image_flag)
 
     return 0
 

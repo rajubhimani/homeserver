@@ -22,56 +22,72 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 
 | Service | Doc |
 | --- | --- |
+| Beszel | [docs/services/beszel.md](services/beszel.md) |
+| Portainer CE | [docs/services/portainer.md](services/portainer.md) |
+| Docs | [docs/services/docs.md](services/docs.md) |
 | Nextcloud | [docs/services/nextcloud.md](services/nextcloud.md) |
 | Immich | [docs/services/immich.md](services/immich.md) |
 | Jellyfin | [docs/services/jellyfin.md](services/jellyfin.md) |
 | Vaultwarden | [docs/services/vaultwarden.md](services/vaultwarden.md) |
-| Paperless-ngx | [docs/services/paperless.md](services/paperless.md) |
-| Stirling PDF (Lite + Full) | [docs/services/stirling-pdf.md](services/stirling-pdf.md) |
-| Mealie | [docs/services/mealie.md](services/mealie.md) |
 | Forgejo | [docs/services/forgejo.md](services/forgejo.md) |
-| GitLab CE | [docs/services/gitlab.md](services/gitlab.md) |
-| Uptime Kuma | [docs/services/uptime-kuma.md](services/uptime-kuma.md) |
-| Dozzle | [docs/services/dozzle.md](services/dozzle.md) |
-| Syncthing | [docs/services/syncthing.md](services/syncthing.md) |
 | Authentik | [docs/services/authentik.md](services/authentik.md) |
-| Miniflux | [docs/services/miniflux.md](services/miniflux.md) |
-| Audiobookshelf | [docs/services/audiobookshelf.md](services/audiobookshelf.md) |
-| OpenProject | [docs/services/openproject.md](services/openproject.md) |
-| Plane | [docs/services/plane.md](services/plane.md) |
-| InvoiceShelf | [docs/services/invoiceshelf.md](services/invoiceshelf.md) |
-| AppFlowy | [docs/services/appflowy.md](services/appflowy.md) |
 | Firefly III (+ Data Importer) | [docs/services/firefly.md](services/firefly.md) |
-| Beszel | [docs/services/beszel.md](services/beszel.md) |
 | Guacamole | [docs/services/guacamole.md](services/guacamole.md) |
-| Portainer CE | [docs/services/portainer.md](services/portainer.md) |
-| Dockge | [docs/services/dockge.md](services/dockge.md) |
-| Ollama + Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
+| IT-Tools | [docs/services/it-tools.md](services/it-tools.md) |
+| Mailpit | [docs/services/mailpit.md](services/mailpit.md) |
+| Atuin | [docs/services/atuin.md](services/atuin.md) |
+| Plausible | [docs/services/plausible.md](services/plausible.md) |
+| Observability (Grafana + Prometheus + Loki) | [docs/services/observability.md](services/observability.md) |
+| Stirling PDF (Lite + Full) | [docs/services/stirling-pdf.md](services/stirling-pdf.md) |
+| HomeBox | [docs/services/homebox.md](services/homebox.md) |
+| Uptime Kuma | [docs/services/uptime-kuma.md](services/uptime-kuma.md) |
+| Syncthing | [docs/services/syncthing.md](services/syncthing.md) |
+| Miniflux | [docs/services/miniflux.md](services/miniflux.md) |
+| Plane | [docs/services/plane.md](services/plane.md) |
+| AppFlowy | [docs/services/appflowy.md](services/appflowy.md) |
+| Browser Hub | [docs/services/browser-hub.md](services/browser-hub.md) |
+| Firefox | [docs/services/firefox.md](services/firefox.md) |
+| Chromium | [docs/services/chromium.md](services/chromium.md) |
+| Ungoogled Chromium | [docs/services/ungoogled-chromium.md](services/ungoogled-chromium.md) |
+| Brave | [docs/services/brave.md](services/brave.md) |
+| Mullvad Browser | [docs/services/mullvad-browser.md](services/mullvad-browser.md) |
+| Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
+| Ollama | [docs/services/ollama.md](services/ollama.md) |
 | Vikunja | [docs/services/vikunja.md](services/vikunja.md) |
 | Trilium Notes | [docs/services/trilium.md](services/trilium.md) |
 | SilverBullet | [docs/services/silverbullet.md](services/silverbullet.md) |
-| Outline | [docs/services/outline.md](services/outline.md) |
-| BookStack | [docs/services/bookstack.md](services/bookstack.md) |
 | Excalidraw | [docs/services/excalidraw.md](services/excalidraw.md) |
 | Karakeep | [docs/services/karakeep.md](services/karakeep.md) |
-| ntfy | [docs/services/ntfy.md](services/ntfy.md) |
-| IT-Tools | [docs/services/it-tools.md](services/it-tools.md) |
 | n8n | [docs/services/n8n.md](services/n8n.md) |
-| CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
+| Airflow | [docs/services/airflow/airflow.md](services/airflow/airflow.md) |
+| Temporal | [docs/services/temporal/temporal.md](services/temporal/temporal.md) |
+| Dagster | [docs/services/dagster/dagster.md](services/dagster/dagster.md) |
 | Wallabag | [docs/services/wallabag.md](services/wallabag.md) |
-| Atuin | [docs/services/atuin.md](services/atuin.md) |
 | AdGuard Home | [docs/services/adguard-home.md](services/adguard-home.md) |
-| PhotoPrism | [docs/services/photoprism.md](services/photoprism.md) |
+| Listmonk | [docs/services/listmonk.md](services/listmonk.md) |
+| Cal.com | [docs/services/calcom.md](services/calcom.md) |
+| Coolify | [docs/services/coolify.md](services/coolify.md) |
+| Paperless-ngx | [docs/services/paperless.md](services/paperless.md) |
+| Mealie | [docs/services/mealie.md](services/mealie.md) |
+| Dozzle | [docs/services/dozzle.md](services/dozzle.md) |
+| Audiobookshelf | [docs/services/audiobookshelf.md](services/audiobookshelf.md) |
+| OpenProject | [docs/services/openproject.md](services/openproject.md) |
+| InvoiceShelf | [docs/services/invoiceshelf.md](services/invoiceshelf.md) |
+| Dockge | [docs/services/dockge.md](services/dockge.md) |
+| Outline | [docs/services/outline.md](services/outline.md) |
+| BookStack | [docs/services/bookstack.md](services/bookstack.md) |
+| ntfy | [docs/services/ntfy.md](services/ntfy.md) |
+| Mattermost | [docs/services/mattermost.md](services/mattermost.md) |
+| Rocket.Chat | [docs/services/rocketchat.md](services/rocketchat.md) |
+| Zulip | [docs/services/zulip.md](services/zulip.md) |
+| CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
 | OrangeHRM | [docs/services/orangehrm.md](services/orangehrm.md) |
 | NocoDB | [docs/services/nocodb.md](services/nocodb.md) |
-| Listmonk | [docs/services/listmonk.md](services/listmonk.md) |
 | Documenso | [docs/services/documenso.md](services/documenso.md) |
-| Cal.com | [docs/services/calcom.md](services/calcom.md) |
-| Plausible | [docs/services/plausible.md](services/plausible.md) |
 | Penpot | [docs/services/penpot.md](services/penpot.md) |
-| Coolify | [docs/services/coolify.md](services/coolify.md) |
 | Supabase | [docs/services/supabase.md](services/supabase.md) |
-| Observability (Grafana + Prometheus + Loki) | [docs/services/observability.md](services/observability.md) |
+| GitLab CE | [docs/services/gitlab.md](services/gitlab.md) |
+| wg-easy | [docs/services/wg-easy.md](services/wg-easy.md) |
 
 ---
 

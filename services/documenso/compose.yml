@@ -1,6 +1,6 @@
 services:
   documenso-db:
-    image: postgres:18.4-alpine
+    image: postgres:18.6-alpine
     container_name: documenso-db
     restart: unless-stopped
     env_file: .env
@@ -24,7 +24,7 @@ services:
       - homeserver
 
   documenso:
-    image: documenso/documenso:v2.16.0
+    image: documenso/documenso:v2.17.0
     container_name: documenso
     restart: unless-stopped
     env_file: .env

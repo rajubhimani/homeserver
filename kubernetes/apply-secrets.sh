@@ -377,16 +377,6 @@ kubectl create secret generic supabase-credentials -n apps \
   --dry-run=client -o yaml | kubectl apply -f -
 echo "supabase-db-credentials + supabase-credentials applied"
 
-# ── PhotoPrism's own dedicated MariaDB + admin account ────────────────
-kubectl create secret generic photoprism-db-credentials -n apps \
-  --from-literal=root-password="$PHOTOPRISM_DB_ROOT_PASSWORD" \
-  --from-literal=password="$PHOTOPRISM_DB_PASSWORD" \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl create secret generic photoprism-credentials -n apps \
-  --from-literal=admin-password="$PHOTOPRISM_ADMIN_PASSWORD" \
-  --dry-run=client -o yaml | kubectl apply -f -
-echo "photoprism-db-credentials + photoprism-credentials applied"
-
 # ── ArgoCD admin password ────────────────────────────────────────────
 # ArgoCD only accepts a bcrypt hash in its Secret, never plaintext — hash it
 # here via uv (repo already uses uv for homeserver.py; --with bcrypt pulls

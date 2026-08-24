@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Collaborative fail2ban replacement — parses logs for attack patterns and builds ban decisions from a shared community threat feed.
-**Port:** none exposed (see below) | **Data:** `service_data/data/crowdsec/config/` | **Requires:** Docker socket read access (to read nginx-plain's logs via the Docker log API)
+**Port:** none exposed (see below) | **Data:** `service_data/data/crowdsec/config/` | **Requires:** Docker socket read access (to read nginx-plain's logs via the Docker log API) | **Memory:** no hard limit set; measured idle ~80MB
 
 ## ⚠ Detection-only in this setup — nothing is actually blocked yet
 
@@ -33,6 +33,10 @@ docker exec -it crowdsec cscli collections list # installed detection scenarios
 Rather than mounting nginx's log files (which the standard official `nginx` image symlinks to `/dev/stdout`, making file-based acquisition unreliable in Docker), this setup uses CrowdSec's **Docker log acquisition source** (`services/crowdsec/acquis.yaml`, `source: docker` + `use_container_labels: true`): CrowdSec reads container logs directly via the Docker API for any container labeled `crowdsec.enable: "true"`, and takes the parser/collection to apply from that same container's `crowdsec.labels.type` label. `services/nginx-plain/compose.yml` carries both labels — see the `labels:` block there.
 
 This requires read access to the Docker socket (`${DOCKER_SOCKET}` mounted read-only) — the same socket-access pattern already used by `dozzle`, `portainer`, `dockge`, `forgejo`, and `guacamole` in this stack.
+
+## Health endpoint
+
+`services/crowdsec/compose.yml`'s healthcheck runs `cscli lapi status` (a CLI subcommand against the local API, not an HTTP path) — confirms the engine itself is up and its local API is reachable.
 
 ## Notes
 

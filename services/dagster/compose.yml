@@ -1,0 +1,129 @@
+services:
+  dagster-db:
+    image: postgres:18.6-alpine
+    container_name: dagster-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - dagster-postgres-alpine:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DAGSTER_POSTGRES_USER} -d ${DAGSTER_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  # gRPC server exposing your pipeline code to both dagster-webserver and
+  # dagster-daemon. DAGSTER_CURRENT_IMAGE tells the run launcher which image
+  # to use when it launches a run as its own new container — must match
+  # this service's own `image:` tag below.
+  dagster-user-code:
+    build: ./user-code
+    image: homeserver/dagster-user-code:1.13.18
+    container_name: dagster-user-code
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+      DAGSTER_CURRENT_IMAGE: homeserver/dagster-user-code:1.13.18
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    # definitions.py is bind-mounted, not baked into the image (see
+    # user-code/Dockerfile and docs/services/dagster/dagster.md's "Where your
+    # pipeline code actually lives"). Sensor/asset code (marker_file_sensor,
+    # the io_manager base_dir) also runs here via gRPC, not in
+    # dagster-daemon — needs the same shared storage mount or
+    # marker_file_sensor can never see the file dagster-daemon (or you)
+    # creates.
+    volumes:
+      - ${DATA_ROOT}/user-code:/opt/dagster/app
+      - dagster-io-manager-storage:/tmp/io_manager_storage
+    networks:
+      - homeserver
+
+  dagster-webserver:
+    build: ./webserver-daemon
+    image: homeserver/dagster:1.13.18
+    container_name: dagster-webserver
+    restart: unless-stopped
+    entrypoint: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    env_file: .env
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    # Docker client access so the webserver can launch/terminate run
+    # containers (DockerRunLauncher) — see dagster.yaml's container_kwargs
+    # for the per-run resource caps this mount enables.
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - dagster-io-manager-storage:/tmp/io_manager_storage
+    healthcheck:
+      # python:3.13-slim has no curl — use urllib instead of adding a package.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/server_info', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      dagster-db:
+        condition: service_healthy
+      dagster-user-code:
+        condition: service_started
+    networks:
+      - homeserver
+
+  # Runs scheduled/sensor-triggered jobs and dequeues runs the webserver
+  # submitted to QueuedRunCoordinator.
+  dagster-daemon:
+    build: ./webserver-daemon
+    image: homeserver/dagster:1.13.18
+    container_name: dagster-daemon
+    restart: unless-stopped
+    entrypoint: ["dagster-daemon", "run"]
+    env_file: .env
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - dagster-io-manager-storage:/tmp/io_manager_storage
+    depends_on:
+      dagster-db:
+        condition: service_healthy
+      dagster-user-code:
+        condition: service_started
+    networks:
+      - homeserver
+
+volumes:
+  dagster-postgres-alpine:
+  dagster-io-manager-storage:
+
+networks:
+  homeserver:
+    external: true

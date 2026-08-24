@@ -1,0 +1,7 @@
+{
+    // uv resolves .venv itself (uv run/uv sync) — no shell activation needed.
+    // Auto-activation caches the venv's absolute path per terminal, which goes
+    // stale (VIRTUAL_ENV warning) whenever this repo's drive gets remounted at
+    // a different path. Off entirely avoids that class of warning for good.
+    "python.terminal.activateEnvironment": false
+}

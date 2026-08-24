@@ -33,6 +33,15 @@ uv run homeserver.py dev restore <service> --snapshot 20260710-160628
 
 Snapshots beyond `BACKUP_RETENTION` (root `.env`, default 5) are auto-pruned oldest-first after each backup; set `BACKUP_RETENTION=-1` for unlimited history (manual cleanup only).
 
+`up` mirrors this from the other direction: if a service's named volumes and its `service_data/data/<service>/` dir are **both** missing (deleted, or a fresh host that never got `service_data/` copied over), `up` auto-restores the latest snapshot before starting the container — so a service never silently comes back up empty when a backup exists. Pass `--fresh` to skip this and start genuinely blank instead (e.g. deliberately resetting a service). This never fires on partial loss (volume present but data dir missing, or vice versa) — only when a service is fully wiped — so it can never restore over data that's still partially live.
+
+```bash
+# up auto-restores if (and only if) both the volume(s) and data dir are
+# missing entirely, and a snapshot exists — otherwise this is a normal start
+uv run homeserver.py dev up <service>
+uv run homeserver.py dev up <service> --fresh    # force a blank start, skip the check
+```
+
 ## Orphaned volumes
 
 `backup_service()` matches volumes by Docker's own `<service>_*` naming prefix (live `docker volume ls`, not `compose.yml`), deliberately — see the comment on `volumes_for_project()`. That means a volume Docker still has on disk gets backed up even if `compose.yml` no longer declares it (e.g. after switching a DB image between a plain and `-alpine` tag, which also renames the volume — the old one doesn't get deleted automatically, it just stops being referenced). Every `backup`/`down` now warns when this happens:
