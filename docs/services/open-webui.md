@@ -49,9 +49,11 @@ or containerized, is never exposed publicly).
    container.
 3. Pull a model into the container: `docker exec -it ollama ollama pull llama3.2` (or any model
    from the [Ollama library](https://ollama.com/library)).
-4. Open `https://open-webui.yourdomain.com` (or `http://localhost:8109` in dev) and create the first
-   account — it becomes the admin automatically. Set `ENABLE_SIGNUP=false` in `services/open-webui/.env`
-   once your account exists if you don't want further public signups.
+4. `ENABLE_SIGNUP` defaults to `false` in this repo — set it to `true` first, `up`/restart, then open
+   `https://open-webui.yourdomain.com` (or `http://localhost:8109` in dev) and create the first
+   account (it becomes the admin automatically), then set it back to `false` and restart. To add
+   more accounts later without reopening public signup, use the admin panel instead:
+   **Admin Panel → Users → Add User** (logged in as the admin).
 
 ## Using a native host Ollama instead
 

@@ -30,7 +30,7 @@ This is a backend platform for building *your own* apps against, not an end-user
 
 ## Registration
 
-There's no end-user "registration" concept at the platform level — `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` gate the Studio dashboard (effectively single-admin), while `DISABLE_SIGNUP` in `.env` controls whether **your own app's end users** can sign up through Supabase Auth (default `false` — open, since that's normal for a backend platform whose whole job is serving your application's users).
+There's no end-user "registration" concept at the platform level — `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` gate the Studio dashboard (effectively single-admin), while `DISABLE_SIGNUP` in `.env` controls whether **your own app's end users** can sign up through Supabase Auth (default `true` in this repo — closed; a backend platform's whole job is normally serving public end-user signups, but that's opt-in here rather than assumed). Set it to `false` once an actual app is pointed at this instance and needs open signup. Regardless of this setting, an admin can always create a user directly from **Studio → Authentication → Users → Add User** — that path goes through the service-role API, not the public signup flow `DISABLE_SIGNUP` gates.
 
 ## Architecture — why so many pieces
 

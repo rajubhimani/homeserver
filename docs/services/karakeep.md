@@ -32,7 +32,7 @@ Once connected, the mobile app's share-sheet ("Share → Karakeep" from any othe
 
 ## Registration
 
-`DISABLE_SIGNUPS` in `.env`, default `false`. Set to `true` once your account exists to close the instance to new signups.
+`DISABLE_SIGNUPS` in `.env`, default `true` (closed) — create your own account first, before setting this. Karakeep has no admin "create user" panel; to add another account later, temporarily set this back to `false`, have them sign up, then set it back to `true`.
 
 ## Architecture — three containers
 

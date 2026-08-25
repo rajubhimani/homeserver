@@ -62,7 +62,7 @@ No client ID/secret needed for the official apps — after the connection test p
 
 ## Registration
 
-`SYMFONY__ENV__FOSUSER_REGISTRATION` in `.env`, default `true`. Set to `false` once accounts exist to close the instance to new signups.
+`SYMFONY__ENV__FOSUSER_REGISTRATION` in `.env`, default `false` (closed). Create your own account first (see Default credentials above), before this matters. To add another account later without reopening public registration, use the admin panel instead: logged in as an admin, **Settings → Users tab → Create a new user**.
 
 ## Notes
 

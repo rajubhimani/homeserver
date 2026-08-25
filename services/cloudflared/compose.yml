@@ -23,7 +23,7 @@ services:
   # the incident this covers). This probes the real public URL and restarts
   # cloudflared when the tunnel is stale but the origin is confirmed fine.
   cloudflared-watchdog:
-    image: curlimages/curl:8.11.1
+    image: curlimages/curl:8.21.0
     container_name: cloudflared-watchdog
     restart: unless-stopped
     # curlimages/curl drops to a non-root user by default, which can't reach the

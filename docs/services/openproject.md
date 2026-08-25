@@ -35,6 +35,10 @@ OpenProject forces a password change screen on first login either way.**
 Setting it to `false` in `.env` (fresh installs only, same caveat as
 above) skips that prompt and lets the seeded password be used as-is.
 
+## Registration
+
+`SELF_REGISTRATION` in `.env`, default `0` (disabled) — the seeded `admin` account above means public self-registration is never needed to get started. Add more accounts as `admin` instead: **Administration → Users → New user**, works regardless of `SELF_REGISTRATION`. Other accepted values if open registration is ever wanted: `2` (email activation required), `3` (manual admin approval), `4` (automatic — anyone who signs up is active immediately).
+
 ## Connecting the mobile app (Android — beta)
 
 OpenProject Mobile (beta, [Google Play](https://play.google.com/store/apps/details?id=org.openproject.app)) connects to any on-premises instance with API access enabled — on first launch, choose a self-hosted server and enter `https://openproject.${DOMAIN}`, then log in with the same account used on the web. Covers work packages (create/edit/comment/attach files/log time), with direct camera capture and local notifications. Still beta as of this check (last Android update mid-2026) — expect rough edges. No separate iOS listing was confirmed at time of writing; check the [OpenProject mobile app guide](https://www.openproject.org/docs/mobile-app-guide/) for current platform availability before assuming iOS support.

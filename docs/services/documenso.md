@@ -34,7 +34,7 @@ Open `https://documenso.<domain>/` (or `http://<host>:8128` in dev) and create t
 
 ## Registration
 
-Self-registration is on by default (`NEXT_PUBLIC_DISABLE_SIGNUP=false` in `.env.example`). Set it to `true` to close the instance to new signups.
+`NEXT_PUBLIC_DISABLE_SIGNUP`, default `true` (closed) — create your own account before this ever matters, then leave it closed. Documenso's self-hosted CE has no admin "create user" panel; to add another account later, temporarily set this back to `false`, have them sign up, then set it back to `true`.
 
 ## Using it day to day
 

@@ -3,9 +3,18 @@
 /._immich
 /._nextcloud
 /._setup.md
-service_data/
+service_data
 # k8s pilot's placeholder test data (see kubernetes/README.md) — never real data
 service_data-test/
+# Moved out of the repo tree to /mnt/mydata/homeserver-local/ (symlinked back)
+# so the repo dir can be relocated/deleted without touching these — same
+# reasoning as service_data above. No trailing slash on .claude/.agents:
+# a slash only matches real directories, not the symlinks these now are.
+CLAUDE.md
+AGENTS.md
+TODO.md
+.claude
+.agents
 .env
 *.log
 *.json

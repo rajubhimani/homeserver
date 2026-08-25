@@ -21,6 +21,10 @@ uv run homeserver.py dev up forgejo
 docker exec -it forgejo forgejo admin user create --username admin --password yourpassword --email admin@example.com --admin
 ```
 
+## Registration
+
+`DISABLE_REGISTRATION` in `.env`, default `true` (closed) — `.env`'s `RUNNER_REGISTRATION_TOKEN` name is unrelated (that's the CI runner's own registration, not user signup). Create every account with the same CLI command as above (drop `--admin` for a regular user), or from the web UI: **Site Administration → Users → Create User Account**. Set to `false` only if open public self-signup is actually wanted.
+
 ## Connecting your git client
 
 The web UI alone doesn't let you actually push code — a real git client needs to be pointed at this server first, over SSH or HTTPS. Confirmed against Forgejo's own current user documentation, not assumed from memory.
@@ -47,7 +51,7 @@ Confirmed against Forgejo's own current user documentation, not assumed from mem
 
 ## Notes
 
-- Image: `codeberg.org/forgejo/forgejo:16.0.2`
+- Image: `codeberg.org/forgejo/forgejo:16.0.3`
 - Config env vars use the `FORGEJO__` prefix
 - Setup wizard is skipped via `FORGEJO__security__INSTALL_LOCK=true`
 - `FORGEJO__server__ROOT_URL` must be `https://forgejo.${DOMAIN}` (not `http`) since Cloudflare always terminates TLS
@@ -98,7 +102,7 @@ Confirmed working: user count, table count, and a real `/api/v1/users/search` re
 2. Set `RUNNER_REGISTRATION_TOKEN` (and optionally `RUNNER_NAME`/`RUNNER_LABELS`) in `services/forgejo/.env`.
 3. `uv run homeserver.py dev up forgejo`
 
-The container registers itself on first boot (writing `${DATA_ROOT}/runner-data/.runner`) and then runs `forgejo-runner daemon`; on later boots it finds `.runner` already there and skips straight to `daemon`. If `RUNNER_REGISTRATION_TOKEN` is unset and no `.runner` file exists yet, the container logs an error and exits instead of crash-looping silently — check `docker logs forgejo-runner`.
+The container registers itself on first boot (writing `${FORGEJO_RUNNER_DATA_ROOT}/.runner`) and then runs `forgejo-runner daemon`; on later boots it finds `.runner` already there and skips straight to `daemon`. If `RUNNER_REGISTRATION_TOKEN` is unset and no `.runner` file exists yet, the container logs an error and exits instead of crash-looping silently — check `docker logs forgejo-runner`.
 
 The image's own default command (`forgejo-runner` with no subcommand) just prints help text and exits 0, which `restart: unless-stopped` loops forever without ever registering — this is why `compose.yml` overrides `command:` with the register-then-daemon script above instead of relying on the image default.
 
@@ -106,89 +110,38 @@ The image's own default command (`forgejo-runner` with no subcommand) just print
 
 **Labels only take effect at registration time.** Changing `RUNNER_LABELS` in `.env` after the runner has already registered has no effect until you force it to re-register: `docker exec forgejo-runner rm -f /data/.runner` then `uv run homeserver.py dev up forgejo`.
 
-**A workflow step running `docker build`/`docker push` uses an isolated `forgejo-docker` sidecar, not this host's real Docker.** Each CI job runs in its own separate sibling container, which needs *some* Docker daemon reachable inside it for `docker build`/`push` to work. Rather than automounting this host's own `docker.sock` (`container.docker_host: automount` — the simpler option, but it hands every CI job root-equivalent access to the host engine, and every image layer it builds lands on the OS drive under `/var/lib/docker`), `compose.yml` instead runs a dedicated `docker:28-dind` container (`forgejo-docker`) and points the runner's generated `config.yaml` at it over the internal network: `docker_host: "tcp://forgejo-docker:2375"`. This is unconditional — active whenever Forgejo is up, no toggle, no config:
+**`RUNNER_CAPACITY` controls how many jobs run at once — default `1`, strictly sequential.** Unlike labels, this takes effect on every restart, no re-registration needed. A workflow's matrix (e.g. `check`'s 4 Python versions) still only runs one leg at a time at the default; raising `RUNNER_CAPACITY` (e.g. to `4`, matching that matrix) lets independent jobs actually run in parallel, at the cost of proportionally more simultaneous CPU/memory/disk I/O.
+
+**Tried and reverted: `RUNNER_CAPACITY=4` on Forgejo 16.0.3 — a real server-side bug, not a config problem.** Two matrix jobs finishing their status update in the same instant triggered `500 Internal Server Error` from Forgejo's own `UpdateTask` API endpoint (confirmed in `forgejo`'s own logs), instantly failing one of them — matches known upstream reports of Actions status-update races under concurrent runner load (e.g. [go-gitea/gitea#38001](https://github.com/go-gitea/gitea/issues/38001)). Separately, `check`'s `postgres`/`redis` services also collided on their fixed host ports (`5432`/`6379` published on `0.0.0.0`) when two jobs ran at once — a second, independent problem with any capacity above `1` given this workflow's current service port config. Neither is fixable from this repo's side; stayed at `RUNNER_CAPACITY=1` until Forgejo/Gitea fixes the race (and any workflow wanting real matrix parallelism would also need its services to use random/ephemeral host ports instead of fixed ones).
+
+**A workflow step running `docker build`/`docker push` uses this host's real Docker, automounted into the job container.** `compose.yml` sets `container.docker_host: automount` — `forgejo-runner`'s own purpose-built setting that bind-mounts whatever Docker host the runner itself uses into every job container at `/var/run/docker.sock`. This is Forgejo's own documented "simplest" option (of three: automount, an isolated Docker-in-Docker sidecar, or LXC job containers) and the one actually proven reliable here after testing the alternative:
 
 ```mermaid
 flowchart LR
-    subgraph unchanged["① Unchanged — this host's own Docker"]
-        direction TB
-        WS["Your workstation<br/>docker build / docker pull"] -->|"local docker.sock"| HD["Host Docker daemon<br/>(what 'docker ps' shows you)"]
-        HD -->|"writes images, containers,<br/>volumes, build cache"| OSD[("OS drive<br/>/var/lib/docker")]
-    end
+    WS["Your workstation<br/>docker build / docker pull"] -->|"local docker.sock"| HD["Host Docker daemon<br/>(what 'docker ps' shows you)"]
+    CI["forgejo-runner<br/>runs each CI job"] -->|"automount: bind-mounts<br/>the runner's own docker host"| HD
+    JOB["Job container<br/>docker build/push steps"] -->|"/var/run/docker.sock<br/>(bind-mounted by automount)"| HD
+    HD -->|"writes images, containers,<br/>volumes, build cache"| OSD[("OS drive<br/>/var/lib/docker")]
 
-    subgraph isolated["② New — Forgejo's own isolated daemon"]
-        direction TB
-        CI["forgejo-runner<br/>runs each CI job"] -->|"tcp://forgejo-docker:2375<br/>(internal homeserver network)"| FD["forgejo-docker<br/>dind sidecar, privileged: true"]
-        FD -->|"writes CI's images and<br/>build cache only"| SEC[("Secondary disk<br/>DATA_ROOT/docker-data")]
-    end
-
-    CI -.->|"✕ docker.sock — removed,<br/>no longer mounted here"| HD
-    DR["DATA_ROOT<br/>set in services/forgejo/.env"] -.->|resolves to| SEC
-
-    classDef unchangedStyle fill:#eef2f6,stroke:#7a94a8,color:#1c2b36,stroke-width:1px;
-    classDef isolatedStyle fill:#fdecdf,stroke:#c1571b,color:#5c2a0c,stroke-width:1.5px;
-    classDef diskStyle stroke-width:1.5px;
-    classDef noteStyle fill:none,stroke:#94a3b8,stroke-dasharray: 3 3,color:#475569;
-    class WS,HD unchangedStyle;
-    class CI,FD isolatedStyle;
-    class OSD unchangedStyle,diskStyle;
-    class SEC isolatedStyle,diskStyle;
-    class DR noteStyle;
+    classDef normalStyle fill:#eef2f6,stroke:#7a94a8,color:#1c2b36,stroke-width:1px;
+    class WS,HD,CI,JOB,OSD normalStyle;
 ```
 
-Solid arrows are what's active right now, unconditionally, the moment the `runner` profile is up. The dashed ✕ arrow is the connection that *used to* exist (`container.docker_host: automount`) and has been deliberately removed — a CI job today has no path to this host's real Docker at all, only to `forgejo-docker`.
+**Consequence: every CI job has root-equivalent access to this host's real Docker engine, and its image layers/build cache land on the OS drive.** Acceptable for a single trusted user's own repos on this instance — the alternative (an isolated Docker-in-Docker sidecar) was tried and reverted, documented below because the failure mode is worth knowing before re-attempting it.
 
-Consequences:
+### Tried and reverted: an isolated `forgejo-docker` Docker-in-Docker sidecar
 
-- This host's own Docker (whatever runs `docker ps` when you SSH in) is never touched by a CI job — completely separate daemon, separate storage.
-- `forgejo-docker`'s storage lives at `${DATA_ROOT}/docker-data` — i.e. wherever `service_data/data/forgejo/` actually is on this machine (see the top of this doc), not necessarily the OS drive. CI image layers/build cache accumulate there, independent of anything the host's own Docker is doing.
-- `forgejo-docker` needs `privileged: true` (a dind requirement) and has no TLS (`DOCKER_TLS_CERTDIR: ""`) — safe here specifically because it's reachable only over the internal `homeserver` bridge network, never published to a host port.
-- Nothing about this is workflow-controllable — it's set once in `compose.yml`/the runner's generated `config.yaml`, not something a `.forgejo/workflows/*.yml` file can override.
-- `forgejo-docker`'s own storage isn't part of a normal Forgejo restore — if you ever need to reclaim disk from stale CI image layers, it's safe to stop the `runner` profile and delete `service_data/data/forgejo/docker-data/` entirely; it's pure build cache, nothing CI can't regenerate.
+The goal was to keep CI's Docker usage on a completely separate daemon and storage from this host's real Docker — a dedicated `docker:28-dind` container (`forgejo-docker`), with `container.docker_host: "tcp://forgejo-docker:2375"` pointing the runner at it instead of `automount`. It **partly worked**: `forgejo-runner` uses `docker_host` to create every job's own container regardless of which mode is set, and that part worked fine over TCP to `forgejo-docker` — `gate`/`check` jobs ran correctly. It broke specifically for a job that itself needs `docker build`/`push` (`publish`), for two separate, sequentially-discovered reasons:
 
-**This is not the same thing as `docker/docker-limits.py relocate-data-root`, and the two are not equal choices:**
+1. **`forgejo-docker`'s storage must be on a native filesystem, not a FUSE-mounted one (NTFS/exFAT via `ntfs-3g` etc.)** — `overlay2` cannot mount on FUSE at all (dockerd's own log: `failed to mount overlay: invalid argument`), silently falling back to the `vfs` driver (full layer copies per container, no copy-on-write). Confirmed to cause CI jobs to hang indefinitely with zero visible activity rather than just run slow — the exact same runner pointed at the host's own Docker (`overlay2` on SSD) finished a job that had been stuck 6+ minutes in 3 seconds. Separately, a FUSE mount also reports every file as root-owned regardless of which UID wrote it, which broke `forgejo-runner`'s own `actions/checkout` cache (Git's "detected dubious ownership" check) the same way — this is *why* `FORGEJO_RUNNER_DATA_ROOT` below is a native-filesystem path outside `service_data/`, even though the sidecar itself is gone. If `service_data/` ever resolves to a FUSE mount again on this or another host, verify before pointing anything Docker-related at it:
 
-| | Isolate Forgejo (this section) | Relocate everything (`docker/`) |
-| --- | --- | --- |
-| Runs automatically? | Yes — no toggle, no config | No — only if you invoke it |
-| Scope | Only Forgejo's CI jobs | Every container on this host |
-| Host Docker | Untouched — separate daemon | Repointed in place |
-| Disruption if used | Restarts only the `runner` profile | Restarts Docker — every running container |
+   ```bash
+   findmnt -T <path>   # fstype must NOT be fuseblk/ntfs/exfat
+   ```
 
-See `docker/README.md`'s "Two independent knobs" section for the full writeup of the opt-in tool — it's unrelated to Forgejo specifically and not needed unless the OS drive is tight for reasons beyond CI.
+2. **Even once storage was fixed, `publish`'s own `docker build`/`push` still couldn't work against the sidecar.** Job containers created via `forgejo-docker` live entirely inside its own nested Docker engine; `forgejo-docker`'s hostname only resolves on the outer `homeserver` network, not from inside a job container (`DOCKER_HOST` pointed at it directly failed with `lookup forgejo-docker: no such host`). The standard fix for that — the same per-job Docker-in-Docker **service** mechanism this repo's own `check` jobs already use for `postgres`/`redis` — turned out to mean running `docker:28-dind` as a *third* nested level (host → `forgejo-docker` → job → service). It crashed on startup every time (confirmed via `forgejo-docker`'s own logs: the service container died within seconds of creation, before any build step could run) — a known fragility of deeply nested DinD, not a config mistake.
 
-**Isolation ≠ speed — it only guarantees the OS drive can't fill up.** Neither mechanism above makes Docker faster; both just choose which physical disk absorbs the I/O. `forgejo-docker` writes to whatever disk `DATA_ROOT` resolves to, which may or may not be the same speed class as the OS drive. Check with `lsblk -d -o NAME,ROTA,MODEL,TRAN` (`ROTA=0` = SSD/NVMe, `ROTA=1` = spinning HDD) before assuming either direction helps:
-
-```mermaid
-flowchart LR
-    subgraph disks[" "]
-        direction TB
-        OSD[("OS drive<br/>e.g. SSD/NVMe — fast<br/>(check: lsblk ROTA=0)")]
-        SEC[("Secondary disk<br/>e.g. spinning HDD — slower<br/>(check: lsblk ROTA=1)")]
-    end
-
-    Other["Every other service<br/>+ your local docker build/pull"] -->|"always, unaffected"| OSD
-    CIJ["Forgejo CI"] -->|"by default, always"| SEC
-    Whole["docker-limits.py<br/>relocate-data-root"] -.->|"only if you opt in —<br/>then everything moves here"| SEC
-
-    classDef fastDisk fill:#eef2f6,stroke:#7a94a8,color:#1c2b36,stroke-width:1.5px;
-    classDef slowDisk fill:#fdecdf,stroke:#c1571b,color:#5c2a0c,stroke-width:1.5px;
-    classDef client fill:none,stroke:#94a3b8,color:#334155;
-    classDef optIn fill:none,stroke:#94a3b8,stroke-dasharray: 3 3,color:#64748b;
-    class OSD fastDisk;
-    class SEC slowDisk;
-    class Other,CIJ client;
-    class Whole optIn;
-```
-
-Read the arrows literally: solid = happens today, unconditionally. Dashed = happens only if you go out of your way to set `DOCKER_DATA_ROOT` and run `relocate-data-root` yourself — and notice it points at the *same* disk CI already uses, it doesn't add a third location.
-
-| | Stays on the OS drive | Moves to the secondary disk |
-| --- | --- | --- |
-| Always, no action needed | Every other service, your local `docker build`/`pull` | Forgejo CI's images + build cache |
-| Only if you opt in | — | Literally everything Docker stores, host-wide |
-
-What's fixed regardless of which physical disk ends up where: CI can never fill the OS drive. What varies with the hardware: how fast CI builds actually run — that's purely a property of whichever disk `DATA_ROOT` points at. Point it at a faster disk later (e.g. add an SSD, edit `DATA_ROOT` in `services/forgejo/.env`) and CI speed follows automatically; no mechanism here changes, only which physical disk sits behind the same bind mount.
+Given `publish` needs to actually work, and there was no remaining path to isolate it from the host without either breaking `check`'s existing service-container pattern (switching every job to `network_mode: host`) or relying on a proven-fragile triple-nested DinD, the whole runner reverted to `automount`. If revisiting this later, the more robust path for a genuinely isolated build/push step is likely a rootless builder that doesn't need privileged DinD at all (e.g. Kaniko), not another attempt at nested `docker:dind`.
 
 See `docs/services/forgejo-examples/` for a matching CI workflow template and registry usage guide.
 

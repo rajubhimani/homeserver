@@ -248,6 +248,24 @@ Full-tunnel routing adds a real, unavoidable extra hop: `device ↔ mobile/other
 **`iptables v1.8.13 (legacy): can't initialize iptables table 'nat': Table does not exist (do you need to insmod?)`**
 The `iptable_nat` (and separately, `ip6table_nat`) kernel modules aren't loaded on the host. `modprobe` them (see Prerequisites above) — note these are two *separate* modules; loading one doesn't load the other.
 
+**Admin UI client list is empty / stuck loading, with no obvious error visible in the UI itself**
+This is a *downstream symptom* of the NAT-module gotcha above, not a separate bug — but it's easy to miss the connection because the error you actually see (in the browser network tab or `docker logs wg-easy`) doesn't mention NAT or iptables at all:
+
+```
+[request error] [unhandled] [GET] .../api/client?sort=asc
+ H3Error: Command failed: wg show wg0 dump
+Unable to access interface: No such device
+```
+
+This just means the `wg0` interface doesn't exist, so every API call that shells out to `wg show wg0 ...` 500s — including the one that populates the client list. It doesn't say *why* `wg0` is missing. **Debug it in this order:**
+
+1. Confirm the interface really is missing: `ip link show wg0` on the host (not inside the container — with `network_mode: host` they share one network namespace, so either works, but checking the host directly rules out a container-vs-host confusion). `Device "wg0" does not exist` confirms it.
+2. Don't just look at the tail of `docker logs wg-easy` — the "Unable to access interface" lines repeat forever (once per API poll) and will bury the one-time startup error above them. Look further back, at the container's actual *start* (`docker logs wg-easy --since <container start time>`, from `docker inspect wg-easy --format '{{.State.StartedAt}}'`), for the real `wg-quick up wg0` failure — e.g. the NAT-table error above, or something else entirely (a stale interface left by another tool, per the "no IP address at all" entry below).
+3. Once you see *why* `wg-quick up` failed at startup, that's your actual root cause — fix that (NAT modules, stale interface, etc.), then recreate the container so it retries bringing `wg0` up cleanly.
+4. Confirm the fix: `docker exec wg-easy wg show wg0 dump` should print one line per configured peer (their public key, IP, handshake stats) instead of erroring — at that point the admin UI's client list will populate correctly on next load.
+
+**Why this can happen on a host that already "has NAT working"**: a Fedora (or other nftables-default) host doesn't need `iptable_nat`/`ip6table_nat` loaded for its own `iptables` command — `iptables` there is actually `iptables-nft` (check with `update-alternatives --display iptables`), a compatibility shim over the nftables backend, which uses different kernel modules (`nft_chain_nat`, etc.) that may already be loaded for unrelated reasons (Docker itself, firewalld). wg-easy's container ships the **legacy** `iptables`/`ip6tables` binaries internally (note the `(legacy)` in its error output), which specifically require the older `iptable_nat`/`ip6table_nat` modules — loaded independently of whatever the host's own `iptables` command uses. Loading one does not imply the other is loaded; check both explicitly with `lsmod | grep -w iptable_nat` and `lsmod | grep -w ip6table_nat`.
+
 **`You can't log in with an insecure connection. Use HTTPS.`**
 wg-easy v15 refuses admin login over plain HTTP by default. Since this admin UI is intentionally LAN-only (never exposed via HTTPS/Cloudflare), set `INSECURE: "true"` in the container's environment to allow HTTP login.
 

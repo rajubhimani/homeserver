@@ -34,8 +34,13 @@
       "tier": "min"
     },
     {
-      "slug": "landing",
-      "tier": "min"
+      "slug": "portainer",
+      "tier": "min",
+      "name": "Portainer",
+      "category": "system",
+      "icon": "blue",
+      "svg": "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <circle cx=\"6\" cy=\"9\" r=\"1.5\" fill=\"#185FA5\"/> <path d=\"M9 7 L9 11 M12 7 L12 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Docker container management UI. Inspect, start/stop, and manage all containers from the browser."
     },
     {
       "slug": "docs",
@@ -48,56 +53,29 @@
       "replaces": "Read the Docs"
     },
     {
-      "slug": "portainer",
-      "tier": "min",
-      "name": "Portainer",
-      "category": "system",
-      "icon": "blue",
-      "svg": "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <circle cx=\"6\" cy=\"9\" r=\"1.5\" fill=\"#185FA5\"/> <path d=\"M9 7 L9 11 M12 7 L12 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Docker container management UI. Inspect, start/stop, and manage all containers from the browser."
+      "slug": "landing",
+      "tier": "min"
     },
     {
-      "slug": "observability",
+      "slug": "adguard-home",
       "tier": "core",
-      "name": "Grafana",
+      "name": "AdGuard Home",
       "category": "system",
-      "icon": "orange",
-      "svg": "<path d=\"M3 14 L3 4 M3 14 L15 14\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5 12 L8 8 L10.5 10.5 L14 5\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Dashboards showing how healthy and busy every service in this stack is - CPU, memory, and searchable logs in one place, powered by Grafana.",
-      "replaces": "Datadog / Grafana Cloud",
-      "sub": "grafana"
-    },
-    {
-      "slug": "plausible",
-      "tier": "core",
-      "name": "Plausible",
-      "category": "dev",
-      "subcategory": "tools",
       "icon": "green",
-      "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "See how many people visit your websites and what they click on, without tracking cookies - a privacy-friendly alternative to Google Analytics.",
-      "replaces": "Google Analytics"
+      "svg": "<path d=\"M9 2 L15 4.5 V9 c0 4 -2.5 6.5 -6 7 c-3.5 -0.5 -6 -3 -6 -7 V4.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 9 L8.2 10.7 L11.5 7\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) - this links to the admin panel.",
+      "replaces": "Pi-hole"
     },
     {
-      "slug": "mailpit",
+      "slug": "authentik",
       "tier": "core",
-      "name": "Mailpit",
+      "name": "Authentik",
       "category": "dev",
-      "subcategory": "tools",
-      "icon": "yellow",
-      "svg": "<path d=\"M2.5 4.5 h13 a1 1 0 0 1 1 1 v7 a1 1 0 0 1 -1 1 h-13 a1 1 0 0 1 -1 -1 v-7 a1 1 0 0 1 1 -1 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M2 5 l7 5.5 L16 5\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/>",
-      "desc": "SMTP catcher for the whole stack - point any service at it and see the email it would have sent, nothing ever actually delivered.",
-      "replaces": "Mailtrap"
-    },
-    {
-      "slug": "nextcloud",
-      "tier": "core",
-      "name": "Nextcloud",
-      "category": "storage",
+      "subcategory": "identity",
       "icon": "blue",
-      "svg": "<path d=\"M3 5 L3 14 Q3 15 4 15 L14 15 Q15 15 15 14 L15 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M2 5 L9 2 L16 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M7 15 L7 10 L11 10 L11 15\" stroke=\"#185FA5\" stroke-width=\"1.4\"/>",
-      "desc": "Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more.",
-      "replaces": "Google Drive"
+      "svg": "<circle cx=\"9\" cy=\"7\" r=\"3\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M3 16 C3 13 5.7 11 9 11 C12.3 11 15 13 15 16\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Single sign-on for all your services. One login, one identity, full access control.",
+      "replaces": "Okta / Auth0"
     },
     {
       "slug": "vaultwarden",
@@ -109,17 +87,6 @@
       "svg": "<rect x=\"4\" y=\"3\" width=\"10\" height=\"13\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M7 7 L7 11 M9 6 L9 12 M11 8 L11 11\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
       "desc": "Self-hosted password manager. Bitwarden-compatible - use any Bitwarden app to sync passwords.",
       "replaces": "1Password / LastPass"
-    },
-    {
-      "slug": "forgejo",
-      "tier": "core",
-      "name": "Forgejo",
-      "category": "dev",
-      "subcategory": "git",
-      "icon": "teal",
-      "svg": "<circle cx=\"9\" cy=\"9\" r=\"7\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M6 5 Q6 9 9 9 Q12 9 12 13 M9 9 L7 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage.",
-      "replaces": "GitHub"
     },
     {
       "slug": "firefly",
@@ -154,6 +121,16 @@
       "replaces": "Google Photos"
     },
     {
+      "slug": "nextcloud",
+      "tier": "core",
+      "name": "Nextcloud",
+      "category": "storage",
+      "icon": "blue",
+      "svg": "<path d=\"M3 5 L3 14 Q3 15 4 15 L14 15 Q15 15 15 14 L15 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M2 5 L9 2 L16 5\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M7 15 L7 10 L11 10 L11 15\" stroke=\"#185FA5\" stroke-width=\"1.4\"/>",
+      "desc": "Personal file storage, sync, and sharing. Google Drive alternative with calendar, contacts, and more.",
+      "replaces": "Google Drive"
+    },
+    {
       "slug": "jellyfin",
       "tier": "core",
       "name": "Jellyfin",
@@ -162,6 +139,39 @@
       "svg": "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M6 9 L8 11 L12 7\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M9 2 L9 4\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
       "desc": "Stream movies, TV shows, and music from your own server. Netflix alternative with no subscriptions.",
       "replaces": "Netflix / Plex"
+    },
+    {
+      "slug": "forgejo",
+      "tier": "core",
+      "name": "Forgejo",
+      "category": "dev",
+      "subcategory": "git",
+      "icon": "teal",
+      "svg": "<circle cx=\"9\" cy=\"9\" r=\"7\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M6 5 Q6 9 9 9 Q12 9 12 13 M9 9 L7 11\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Self-hosted Git with repos, issues, pull requests, and CI/CD actions. Open governance, low resource usage.",
+      "replaces": "GitHub"
+    },
+    {
+      "slug": "wg-easy",
+      "tier": "core",
+      "name": "wg-easy",
+      "sub": "wg-admin",
+      "category": "system",
+      "icon": "purple",
+      "svg": "<path d=\"M9 2 C10.66 2 12 3.34 12 5 V7 H13 C13.55 7 14 7.45 14 8 V15 C14 15.55 13.55 16 13 16 H5 C4.45 16 4 15.55 4 15 V8 C4 7.45 4.45 7 5 7 H6 V5 C6 3.34 7.34 2 9 2 Z M9 3.5 C8.17 3.5 7.5 4.17 7.5 5 V7 H10.5 V5 C10.5 4.17 9.83 3.5 9 3.5 Z\" stroke=\"#6A4C93\" stroke-width=\"1.1\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "Self-hosted WireGuard VPN with a web UI. Full-tunnel or split-tunnel client profiles, works around ISP CGNAT over IPv6 with zero router port forwarding.",
+      "replaces": "Tailscale"
+    },
+    {
+      "slug": "atuin",
+      "tier": "core",
+      "name": "Atuin",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "gray",
+      "svg": "<path d=\"M3 9 a6 6 0 1 1 3 5.2\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M3 9 L3 12.5 L6.5 12.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Sync your command-line history across all your machines and search it with context (folder, exit code) - like browser history, but for your terminal.",
+      "replaces": "plain bash/zsh history file"
     },
     {
       "slug": "guacamole",
@@ -185,36 +195,134 @@
       "replaces": "assorted sketchy websites"
     },
     {
-      "slug": "authentik",
+      "slug": "mailpit",
       "tier": "core",
-      "name": "Authentik",
-      "category": "dev",
-      "subcategory": "identity",
-      "icon": "blue",
-      "svg": "<circle cx=\"9\" cy=\"7\" r=\"3\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M3 16 C3 13 5.7 11 9 11 C12.3 11 15 13 15 16\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Single sign-on for all your services. One login, one identity, full access control.",
-      "replaces": "Okta / Auth0"
-    },
-    {
-      "slug": "atuin",
-      "tier": "core",
-      "name": "Atuin",
+      "name": "Mailpit",
       "category": "dev",
       "subcategory": "tools",
-      "icon": "gray",
-      "svg": "<path d=\"M3 9 a6 6 0 1 1 3 5.2\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M3 9 L3 12.5 L6.5 12.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Sync your command-line history across all your machines and search it with context (folder, exit code) - like browser history, but for your terminal.",
-      "replaces": "plain bash/zsh history file"
+      "icon": "yellow",
+      "svg": "<path d=\"M2.5 4.5 h13 a1 1 0 0 1 1 1 v7 a1 1 0 0 1 -1 1 h-13 a1 1 0 0 1 -1 -1 v-7 a1 1 0 0 1 1 -1 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M2 5 l7 5.5 L16 5\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "SMTP catcher for the whole stack - point any service at it and see the email it would have sent, nothing ever actually delivered.",
+      "replaces": "Mailtrap"
     },
     {
-      "slug": "adguard-home",
+      "slug": "observability",
       "tier": "core",
-      "name": "AdGuard Home",
+      "name": "Grafana",
       "category": "system",
+      "icon": "orange",
+      "svg": "<path d=\"M3 14 L3 4 M3 14 L15 14\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5 12 L8 8 L10.5 10.5 L14 5\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Dashboards showing how healthy and busy every service in this stack is - CPU, memory, and searchable logs in one place, powered by Grafana.",
+      "replaces": "Datadog / Grafana Cloud",
+      "sub": "grafana"
+    },
+    {
+      "slug": "plausible",
+      "tier": "core",
+      "name": "Plausible",
+      "category": "dev",
+      "subcategory": "tools",
       "icon": "green",
-      "svg": "<path d=\"M9 2 L15 4.5 V9 c0 4 -2.5 6.5 -6 7 c-3.5 -0.5 -6 -3 -6 -7 V4.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 9 L8.2 10.7 L11.5 7\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Network-wide DNS ad/tracker blocking. DNS itself is LAN-only (port 53) - this links to the admin panel.",
-      "replaces": "Pi-hole"
+      "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "See how many people visit your websites and what they click on, without tracking cookies - a privacy-friendly alternative to Google Analytics.",
+      "replaces": "Google Analytics"
+    },
+    {
+      "slug": "brave",
+      "tier": "daily",
+      "bundle": "browser",
+      "name": "Brave",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "red",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A83535\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A83535\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "brave/",
+      "desc": "Privacy-focused, ad-blocking-by-default remote browser. Part of the Browser Hub, one login for all five browsers here."
+    },
+    {
+      "slug": "chromium",
+      "tier": "daily",
+      "bundle": "browser",
+      "name": "Chromium",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "blue",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#1565C0\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#1565C0\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "chromium/",
+      "desc": "Remote Chromium - for sites/tools that specifically need Chrome/Chromium. Part of the Browser Hub, one login for all five browsers here."
+    },
+    {
+      "slug": "coolify",
+      "tier": "daily",
+      "name": "Coolify",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "blue",
+      "svg": "<path d=\"M9 2 L15 5.5 L15 12.5 L9 16 L3 12.5 L3 5.5 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 8.5 L8 10 L11.5 6.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Deploy your own apps and websites from a Git repo with one click - a self-hosted alternative to Vercel or Heroku.",
+      "replaces": "Vercel / Heroku"
+    },
+    {
+      "slug": "uptime-kuma",
+      "tier": "daily",
+      "name": "Uptime Kuma",
+      "category": "system",
+      "icon": "yellow",
+      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <circle cx=\"9\" cy=\"12\" r=\"1\" fill=\"#8A7A04\"/>",
+      "desc": "Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking.",
+      "replaces": "Pingdom"
+    },
+    {
+      "slug": "excalidraw",
+      "tier": "daily",
+      "name": "Excalidraw",
+      "category": "productivity",
+      "subcategory": "notes",
+      "icon": "purple",
+      "svg": "<path d=\"M3 14 L6 14.5 L13.5 7 a1.2 1.2 0 0 0 0 -1.7 l-0.8 -0.8 a1.2 1.2 0 0 0 -1.7 0 L3.5 12 Z\" stroke=\"#6B35B5\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>",
+      "desc": "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage.",
+      "replaces": "draw.io / Miro"
+    },
+    {
+      "slug": "firefox",
+      "tier": "daily",
+      "bundle": "browser",
+      "name": "Firefox",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "orange",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A85C04\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A85C04\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "firefox/",
+      "desc": "General-purpose remote Firefox - part of the Browser Hub, one login for all five browsers here."
+    },
+    {
+      "slug": "ungoogled-chromium",
+      "tier": "daily",
+      "bundle": "browser",
+      "name": "Ungoogled Chromium",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "green",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#2E7D32\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#2E7D32\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "ungoogled-chromium/",
+      "desc": "Chromium with Google's tracking and telemetry stripped out. Part of the Browser Hub, one login for all five browsers here."
+    },
+    {
+      "slug": "mullvad-browser",
+      "tier": "daily",
+      "bundle": "browser",
+      "name": "Mullvad Browser",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "teal",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#0F6E56\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#0F6E56\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "mullvad-browser/",
+      "desc": "Hardened, anti-fingerprinting Firefox fork built with the Tor Project - does not itself route traffic through the Tor network. Part of the Browser Hub, one login for all five browsers here."
     },
     {
       "slug": "browser",
@@ -231,79 +339,37 @@
       "desc": "One login, then pick from five real browsers (Firefox, Chromium, Ungoogled Chromium, Brave, Mullvad Browser) running on the server and controlled from any device - the page loads and the traffic goes out from your server, so it reaches sites your local connection can't. Each browser only exists at its own /path/ here, not its own web address."
     },
     {
-      "slug": "firefox",
+      "slug": "karakeep",
       "tier": "daily",
-      "bundle": "browser",
-      "name": "Firefox",
-      "category": "system",
-      "subcategory": "browsers",
-      "icon": "orange",
-      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A85C04\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A85C04\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
-      "sub": "browser",
-      "path": "firefox/",
-      "desc": "General-purpose remote Firefox - part of the Browser Hub, one login for all five browsers here."
-    },
-    {
-      "slug": "chromium",
-      "tier": "daily",
-      "bundle": "browser",
-      "name": "Chromium",
-      "category": "system",
-      "subcategory": "browsers",
-      "icon": "blue",
-      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#1565C0\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#1565C0\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
-      "sub": "browser",
-      "path": "chromium/",
-      "desc": "Remote Chromium - for sites/tools that specifically need Chrome/Chromium. Part of the Browser Hub, one login for all five browsers here."
-    },
-    {
-      "slug": "ungoogled-chromium",
-      "tier": "daily",
-      "bundle": "browser",
-      "name": "Ungoogled Chromium",
-      "category": "system",
-      "subcategory": "browsers",
-      "icon": "green",
-      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#2E7D32\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#2E7D32\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
-      "sub": "browser",
-      "path": "ungoogled-chromium/",
-      "desc": "Chromium with Google's tracking and telemetry stripped out. Part of the Browser Hub, one login for all five browsers here."
-    },
-    {
-      "slug": "brave",
-      "tier": "daily",
-      "bundle": "browser",
-      "name": "Brave",
-      "category": "system",
-      "subcategory": "browsers",
-      "icon": "red",
-      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A83535\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A83535\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
-      "sub": "browser",
-      "path": "brave/",
-      "desc": "Privacy-focused, ad-blocking-by-default remote browser. Part of the Browser Hub, one login for all five browsers here."
-    },
-    {
-      "slug": "mullvad-browser",
-      "tier": "daily",
-      "bundle": "browser",
-      "name": "Mullvad Browser",
-      "category": "system",
-      "subcategory": "browsers",
-      "icon": "teal",
-      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#0F6E56\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#0F6E56\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
-      "sub": "browser",
-      "path": "mullvad-browser/",
-      "desc": "Hardened, anti-fingerprinting Firefox fork built with the Tor Project - does not itself route traffic through the Tor network. Part of the Browser Hub, one login for all five browsers here."
-    },
-    {
-      "slug": "uptime-kuma",
-      "tier": "daily",
-      "name": "Uptime Kuma",
-      "category": "system",
+      "name": "Karakeep",
+      "category": "productivity",
+      "subcategory": "notes",
       "icon": "yellow",
-      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6\" stroke=\"#8A7A04\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <circle cx=\"9\" cy=\"12\" r=\"1\" fill=\"#8A7A04\"/>",
-      "desc": "Monitor all your services and get alerted when something goes down. Self-hosted uptime tracking.",
-      "replaces": "Pingdom"
+      "svg": "<path d=\"M5 2.5 h8 v13 l-4 -3 l-4 3 Z\" stroke=\"#8A6D00\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
+      "desc": "Bookmark manager with AI auto-tagging and full-text search of saved pages.",
+      "replaces": "Pocket / Raindrop"
+    },
+    {
+      "slug": "homebox",
+      "tier": "daily",
+      "name": "HomeBox",
+      "category": "productivity",
+      "subcategory": "home",
+      "icon": "orange",
+      "svg": "<rect x=\"3\" y=\"6\" width=\"12\" height=\"9\" rx=\"1\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M3 6 L9 2.5 L15 6\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M9 6 L9 15\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
+      "desc": "Home inventory tracker with QR labels. Log what's in every box, drawer, and closet, then scan to find it.",
+      "replaces": "Sortly"
+    },
+    {
+      "slug": "silverbullet",
+      "tier": "daily",
+      "name": "SilverBullet",
+      "category": "productivity",
+      "subcategory": "notes",
+      "icon": "gray",
+      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\"/> <path d=\"M9 5.5 L9 9 L11.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Markdown notes with a query language over your own space. Lightweight, single space.",
+      "replaces": "Obsidian (self-hosted)"
     },
     {
       "slug": "syncthing",
@@ -327,39 +393,6 @@
       "replaces": "Personal wiki / Evernote"
     },
     {
-      "slug": "silverbullet",
-      "tier": "daily",
-      "name": "SilverBullet",
-      "category": "productivity",
-      "subcategory": "notes",
-      "icon": "gray",
-      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\"/> <path d=\"M9 5.5 L9 9 L11.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Markdown notes with a query language over your own space. Lightweight, single space.",
-      "replaces": "Obsidian (self-hosted)"
-    },
-    {
-      "slug": "excalidraw",
-      "tier": "daily",
-      "name": "Excalidraw",
-      "category": "productivity",
-      "subcategory": "notes",
-      "icon": "purple",
-      "svg": "<path d=\"M3 14 L6 14.5 L13.5 7 a1.2 1.2 0 0 0 0 -1.7 l-0.8 -0.8 a1.2 1.2 0 0 0 -1.7 0 L3.5 12 Z\" stroke=\"#6B35B5\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>",
-      "desc": "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage.",
-      "replaces": "draw.io / Miro"
-    },
-    {
-      "slug": "karakeep",
-      "tier": "daily",
-      "name": "Karakeep",
-      "category": "productivity",
-      "subcategory": "notes",
-      "icon": "yellow",
-      "svg": "<path d=\"M5 2.5 h8 v13 l-4 -3 l-4 3 Z\" stroke=\"#8A6D00\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
-      "desc": "Bookmark manager with AI auto-tagging and full-text search of saved pages.",
-      "replaces": "Pocket / Raindrop"
-    },
-    {
       "slug": "wallabag",
       "tier": "daily",
       "name": "Wallabag",
@@ -369,28 +402,6 @@
       "svg": "<path d=\"M4 3 h10 v11 l-5 -2.5 l-5 2.5 Z\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
       "desc": "Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles.",
       "replaces": "Pocket"
-    },
-    {
-      "slug": "coolify",
-      "tier": "daily",
-      "name": "Coolify",
-      "category": "dev",
-      "subcategory": "tools",
-      "icon": "blue",
-      "svg": "<path d=\"M9 2 L15 5.5 L15 12.5 L9 16 L3 12.5 L3 5.5 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M6.5 8.5 L8 10 L11.5 6.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Deploy your own apps and websites from a Git repo with one click - a self-hosted alternative to Vercel or Heroku.",
-      "replaces": "Vercel / Heroku"
-    },
-    {
-      "slug": "homebox",
-      "tier": "daily",
-      "name": "HomeBox",
-      "category": "productivity",
-      "subcategory": "home",
-      "icon": "orange",
-      "svg": "<rect x=\"3\" y=\"6\" width=\"12\" height=\"9\" rx=\"1\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M3 6 L9 2.5 L15 6\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M9 6 L9 15\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
-      "desc": "Home inventory tracker with QR labels. Log what's in every box, drawer, and closet, then scan to find it.",
-      "replaces": "Sortly"
     },
     {
       "slug": "stirling-pdf-lite",
@@ -415,15 +426,15 @@
       "replaces": "Adobe Acrobat"
     },
     {
-      "slug": "miniflux",
+      "slug": "vikunja",
       "tier": "office",
-      "name": "Miniflux",
+      "name": "Vikunja",
       "category": "productivity",
-      "subcategory": "reading",
-      "icon": "orange",
-      "svg": "<path d=\"M3 5 L15 5 M3 9 L12 9 M3 13 L9 13\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms.",
-      "replaces": "Feedly"
+      "subcategory": "projects",
+      "icon": "teal",
+      "svg": "<rect x=\"2.5\" y=\"2.5\" width=\"13\" height=\"13\" rx=\"2\" stroke=\"#00695C\" stroke-width=\"1.4\"/> <path d=\"M5.5 9 L7.5 11 L12.5 6\" stroke=\"#00695C\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "To-do list and task management app. Organize projects, set due dates, and track work.",
+      "replaces": "Todoist"
     },
     {
       "slug": "appflowy",
@@ -448,15 +459,15 @@
       "replaces": "Linear / Jira"
     },
     {
-      "slug": "vikunja",
+      "slug": "calcom",
       "tier": "office",
-      "name": "Vikunja",
+      "name": "Cal.com",
       "category": "productivity",
-      "subcategory": "projects",
-      "icon": "teal",
-      "svg": "<rect x=\"2.5\" y=\"2.5\" width=\"13\" height=\"13\" rx=\"2\" stroke=\"#00695C\" stroke-width=\"1.4\"/> <path d=\"M5.5 9 L7.5 11 L12.5 6\" stroke=\"#00695C\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "To-do list and task management app. Organize projects, set due dates, and track work.",
-      "replaces": "Todoist"
+      "subcategory": "finance",
+      "icon": "green",
+      "svg": "<rect x=\"2.5\" y=\"3.5\" width=\"13\" height=\"11\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7 h13 M6 2 v3 M12 2 v3\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Share a booking page so people can schedule meetings with you automatically - a self-hosted alternative to Calendly.",
+      "replaces": "Calendly"
     },
     {
       "slug": "listmonk",
@@ -470,15 +481,45 @@
       "replaces": "Mailchimp"
     },
     {
-      "slug": "calcom",
+      "slug": "miniflux",
       "tier": "office",
-      "name": "Cal.com",
+      "name": "Miniflux",
       "category": "productivity",
-      "subcategory": "finance",
-      "icon": "green",
-      "svg": "<rect x=\"2.5\" y=\"3.5\" width=\"13\" height=\"11\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7 h13 M6 2 v3 M12 2 v3\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Share a booking page so people can schedule meetings with you automatically - a self-hosted alternative to Calendly.",
-      "replaces": "Calendly"
+      "subcategory": "reading",
+      "icon": "orange",
+      "svg": "<path d=\"M3 5 L15 5 M3 9 L12 9 M3 13 L9 13\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms.",
+      "replaces": "Feedly"
+    },
+    {
+      "slug": "airflow",
+      "tier": "automation-ai",
+      "name": "Airflow",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "teal",
+      "svg": "<circle cx=\"3.5\" cy=\"9\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"4.5\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"13.5\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"14.5\" cy=\"9\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <path d=\"M5.1 8.1 L7.4 5.6 M5.1 9.9 L7.4 12.4 M10.6 5.6 L12.9 8.1 M10.6 12.4 L12.9 9.9\" stroke=\"#0F6E56\" stroke-width=\"1.3\" stroke-linecap=\"round\"/>",
+      "desc": "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator."
+    },
+    {
+      "slug": "dagster",
+      "tier": "automation-ai",
+      "name": "Dagster",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "gray",
+      "svg": "<rect x=\"3\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"10\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"6.5\" y=\"10\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <path d=\"M5.5 8 L8.5 10.5 M12.5 8 L9.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
+      "desc": "Data orchestrator built around software-defined assets - track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline."
+    },
+    {
+      "slug": "temporal",
+      "tier": "automation-ai",
+      "name": "Temporal",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "red",
+      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9 L12 11\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Durable execution engine for reliable distributed workflows - automatic retries, state persistence, and long-running processes that survive crashes."
     },
     {
       "slug": "ollama",
@@ -513,43 +554,8 @@
       "replaces": "Zapier / Make"
     },
     {
-      "slug": "airflow",
-      "tier": "automation-ai",
-      "name": "Airflow",
-      "category": "dev",
-      "subcategory": "automation",
-      "icon": "teal",
-      "svg": "<circle cx=\"3.5\" cy=\"9\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"4.5\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"9\" cy=\"13.5\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <circle cx=\"14.5\" cy=\"9\" r=\"1.8\" stroke=\"#0F6E56\" stroke-width=\"1.3\"/> <path d=\"M5.1 8.1 L7.4 5.6 M5.1 9.9 L7.4 12.4 M10.6 5.6 L12.9 8.1 M10.6 12.4 L12.9 9.9\" stroke=\"#0F6E56\" stroke-width=\"1.3\" stroke-linecap=\"round\"/>",
-      "desc": "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator."
-    },
-    {
-      "slug": "temporal",
-      "tier": "automation-ai",
-      "name": "Temporal",
-      "category": "dev",
-      "subcategory": "automation",
-      "icon": "red",
-      "svg": "<circle cx=\"9\" cy=\"9\" r=\"6.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M9 5 L9 9 L12 11\" stroke=\"#A83535\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Durable execution engine for reliable distributed workflows - automatic retries, state persistence, and long-running processes that survive crashes."
-    },
-    {
-      "slug": "dagster",
-      "tier": "automation-ai",
-      "name": "Dagster",
-      "category": "dev",
-      "subcategory": "automation",
-      "icon": "gray",
-      "svg": "<rect x=\"3\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"10\" y=\"3\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <rect x=\"6.5\" y=\"10\" width=\"5\" height=\"5\" rx=\"1\" stroke=\"#4A4A4A\" stroke-width=\"1.3\"/> <path d=\"M5.5 8 L8.5 10.5 M12.5 8 L9.5 10.5\" stroke=\"#4A4A4A\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
-      "desc": "Data orchestrator built around software-defined assets - track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline."
-    },
-    {
-      "slug": "dozzle",
-      "tier": "extra",
-      "name": "Dozzle",
-      "category": "system",
-      "icon": "gray",
-      "svg": "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#555555\" stroke-width=\"1.4\"/> <path d=\"M5 8 L8 11 L13 7\" stroke=\"#555555\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Real-time Docker container log viewer in the browser. Quickly tail logs from any running container."
+      "slug": "crowdsec",
+      "tier": "extra"
     },
     {
       "slug": "dockge",
@@ -561,15 +567,23 @@
       "desc": "Fancy Docker Compose stack manager. Deploy and manage stacks via a clean web UI."
     },
     {
-      "slug": "openproject",
+      "slug": "ntfy",
       "tier": "extra",
-      "name": "OpenProject",
-      "category": "productivity",
-      "subcategory": "projects",
-      "icon": "blue",
-      "svg": "<rect x=\"2\" y=\"2\" width=\"14\" height=\"14\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M5 6 L13 6 M5 9 L10 9 M5 12 L8 12\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking.",
-      "replaces": "Jira / Asana"
+      "name": "ntfy",
+      "category": "system",
+      "icon": "yellow",
+      "svg": "<path d=\"M9 2.5 a3 3 0 0 0 -3 3 v2.5 l-1.5 2.5 h9 l-1.5 -2.5 v-2.5 a3 3 0 0 0 -3 -3 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7.5 12.5 a1.5 1.5 0 0 0 3 0\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Self-hosted push notifications. Scripts and services curl a message straight to your phone.",
+      "replaces": "Pushover / Pushbullet"
+    },
+    {
+      "slug": "dozzle",
+      "tier": "extra",
+      "name": "Dozzle",
+      "category": "system",
+      "icon": "gray",
+      "svg": "<rect x=\"2\" y=\"4\" width=\"14\" height=\"10\" rx=\"2\" stroke=\"#555555\" stroke-width=\"1.4\"/> <path d=\"M5 8 L8 11 L13 7\" stroke=\"#555555\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Real-time Docker container log viewer in the browser. Quickly tail logs from any running container."
     },
     {
       "slug": "paperless",
@@ -583,15 +597,15 @@
       "replaces": "Scansnap cloud"
     },
     {
-      "slug": "mealie",
+      "slug": "bookstack",
       "tier": "extra",
-      "name": "Mealie",
+      "name": "BookStack",
       "category": "productivity",
-      "subcategory": "home",
-      "icon": "pink",
-      "svg": "<path d=\"M9 2 L10.5 6.5 L15.5 6.5 L11.5 9.5 L13 14 L9 11 L5 14 L6.5 9.5 L2.5 6.5 L7.5 6.5 Z\" stroke=\"#A5356B\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
-      "desc": "Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists.",
-      "replaces": "Recipe apps"
+      "subcategory": "notes",
+      "icon": "orange",
+      "svg": "<path d=\"M4 3 h5 v12 h-5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 A1.5 1.5 0 0 1 4 3 Z\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 3 h5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
+      "desc": "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha.",
+      "replaces": "Confluence"
     },
     {
       "slug": "audiobookshelf",
@@ -604,15 +618,37 @@
       "replaces": "Audible"
     },
     {
-      "slug": "invoiceshelf",
+      "slug": "mealie",
       "tier": "extra",
-      "name": "InvoiceShelf",
+      "name": "Mealie",
       "category": "productivity",
-      "subcategory": "finance",
-      "icon": "orange",
-      "svg": "<rect x=\"3\" y=\"2\" width=\"12\" height=\"14\" rx=\"2\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M6 6 L12 6 M6 9 L12 9 M6 12 L9 12\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M10 11 L13 14 M11.5 11 L13 12.5\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
-      "desc": "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments.",
-      "replaces": "FreshBooks"
+      "subcategory": "home",
+      "icon": "pink",
+      "svg": "<path d=\"M9 2 L10.5 6.5 L15.5 6.5 L11.5 9.5 L13 14 L9 11 L5 14 L6.5 9.5 L2.5 6.5 L7.5 6.5 Z\" stroke=\"#A5356B\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
+      "desc": "Recipe manager and meal planner. Save recipes, plan your week, and generate shopping lists.",
+      "replaces": "Recipe apps"
+    },
+    {
+      "slug": "supabase",
+      "tier": "extra",
+      "name": "Supabase",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "green",
+      "svg": "<path d=\"M10 2 L4 10 L8.5 10 L8 16 L14 8 L9.5 8 Z\" stroke=\"#2E7D32\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>",
+      "desc": "Self-hosted backend for building apps - database, user logins, file storage, and live data updates in one place. A self-hosted alternative to Firebase.",
+      "replaces": "Firebase"
+    },
+    {
+      "slug": "nocodb",
+      "tier": "extra",
+      "name": "NocoDB",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "green",
+      "svg": "<rect x=\"2.5\" y=\"3\" width=\"13\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7.5 h13 M6.5 3 v12\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/>",
+      "desc": "Turn a database into an easy-to-use spreadsheet - browse, filter, and edit data without writing SQL. A self-hosted alternative to Airtable.",
+      "replaces": "Airtable"
     },
     {
       "slug": "outline",
@@ -626,15 +662,48 @@
       "replaces": "Notion / Confluence"
     },
     {
-      "slug": "bookstack",
+      "slug": "penpot",
       "tier": "extra",
-      "name": "BookStack",
+      "name": "Penpot",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "purple",
+      "svg": "<path d=\"M4 4 L14 4 L14 9 L9 14 L4 14 Z\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 9 L9 14 M9 9 L14 9\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Design app mockups, websites, and interfaces, then share them for feedback - a self-hosted alternative to Figma.",
+      "replaces": "Figma"
+    },
+    {
+      "slug": "documenso",
+      "tier": "extra",
+      "name": "Documenso",
       "category": "productivity",
-      "subcategory": "notes",
+      "subcategory": "documents",
+      "icon": "blue",
+      "svg": "<path d=\"M5 2.5 h6 l3 3 v10 h-9 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7 11.5 l1.5 1.5 l3 -3.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Sign documents electronically and collect signatures from others - a self-hosted alternative to DocuSign.",
+      "replaces": "DocuSign"
+    },
+    {
+      "slug": "invoiceshelf",
+      "tier": "extra",
+      "name": "InvoiceShelf",
+      "category": "productivity",
+      "subcategory": "finance",
       "icon": "orange",
-      "svg": "<path d=\"M4 3 h5 v12 h-5 a1.5 1.5 0 0 1 -1.5 -1.5 v-9 A1.5 1.5 0 0 1 4 3 Z\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 3 h5 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 h-5\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/>",
-      "desc": "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha.",
-      "replaces": "Confluence"
+      "svg": "<rect x=\"3\" y=\"2\" width=\"12\" height=\"14\" rx=\"2\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M6 6 L12 6 M6 9 L12 9 M6 12 L9 12\" stroke=\"#A85C04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M10 11 L13 14 M11.5 11 L13 12.5\" stroke=\"#A85C04\" stroke-width=\"1.2\" stroke-linecap=\"round\"/>",
+      "desc": "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments.",
+      "replaces": "FreshBooks"
+    },
+    {
+      "slug": "openproject",
+      "tier": "extra",
+      "name": "OpenProject",
+      "category": "productivity",
+      "subcategory": "projects",
+      "icon": "blue",
+      "svg": "<rect x=\"2\" y=\"2\" width=\"14\" height=\"14\" rx=\"2\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M5 6 L13 6 M5 9 L10 9 M5 12 L8 12\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking.",
+      "replaces": "Jira / Asana"
     },
     {
       "slug": "mattermost",
@@ -670,20 +739,6 @@
       "replaces": "Slack"
     },
     {
-      "slug": "ntfy",
-      "tier": "extra",
-      "name": "ntfy",
-      "category": "system",
-      "icon": "yellow",
-      "svg": "<path d=\"M9 2.5 a3 3 0 0 0 -3 3 v2.5 l-1.5 2.5 h9 l-1.5 -2.5 v-2.5 a3 3 0 0 0 -3 -3 Z\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7.5 12.5 a1.5 1.5 0 0 0 3 0\" stroke=\"#8A7A04\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Self-hosted push notifications. Scripts and services curl a message straight to your phone.",
-      "replaces": "Pushover / Pushbullet"
-    },
-    {
-      "slug": "crowdsec",
-      "tier": "extra"
-    },
-    {
       "slug": "orangehrm",
       "tier": "extra",
       "name": "OrangeHRM",
@@ -695,50 +750,6 @@
       "replaces": "BambooHR / Workday"
     },
     {
-      "slug": "nocodb",
-      "tier": "extra",
-      "name": "NocoDB",
-      "category": "dev",
-      "subcategory": "automation",
-      "icon": "green",
-      "svg": "<rect x=\"2.5\" y=\"3\" width=\"13\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2.5 7.5 h13 M6.5 3 v12\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/>",
-      "desc": "Turn a database into an easy-to-use spreadsheet - browse, filter, and edit data without writing SQL. A self-hosted alternative to Airtable.",
-      "replaces": "Airtable"
-    },
-    {
-      "slug": "documenso",
-      "tier": "extra",
-      "name": "Documenso",
-      "category": "productivity",
-      "subcategory": "documents",
-      "icon": "blue",
-      "svg": "<path d=\"M5 2.5 h6 l3 3 v10 h-9 Z\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M7 11.5 l1.5 1.5 l3 -3.5\" stroke=\"#1565C0\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Sign documents electronically and collect signatures from others - a self-hosted alternative to DocuSign.",
-      "replaces": "DocuSign"
-    },
-    {
-      "slug": "penpot",
-      "tier": "extra",
-      "name": "Penpot",
-      "category": "dev",
-      "subcategory": "tools",
-      "icon": "purple",
-      "svg": "<path d=\"M4 4 L14 4 L14 9 L9 14 L4 14 Z\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/> <path d=\"M9 9 L9 14 M9 9 L14 9\" stroke=\"#6B35B5\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "Design app mockups, websites, and interfaces, then share them for feedback - a self-hosted alternative to Figma.",
-      "replaces": "Figma"
-    },
-    {
-      "slug": "supabase",
-      "tier": "extra",
-      "name": "Supabase",
-      "category": "dev",
-      "subcategory": "automation",
-      "icon": "green",
-      "svg": "<path d=\"M10 2 L4 10 L8.5 10 L8 16 L14 8 L9.5 8 Z\" stroke=\"#2E7D32\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/>",
-      "desc": "Self-hosted backend for building apps - database, user logins, file storage, and live data updates in one place. A self-hosted alternative to Firebase.",
-      "replaces": "Firebase"
-    },
-    {
       "slug": "gitlab",
       "tier": "manual",
       "name": "GitLab",
@@ -748,17 +759,6 @@
       "svg": "<path d=\"M9 14 L3 6 L5.5 6 L9 12 L12.5 6 L15 6 Z\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/> <path d=\"M3 6 L2 9 L9 14 L16 9 L15 6\" stroke=\"#0F6E56\" stroke-width=\"1.4\" stroke-linejoin=\"round\" fill=\"none\"/>",
       "desc": "Full DevOps platform. Self-hosted Git with CI/CD pipelines, container registry, and issue tracking.",
       "replaces": "GitHub / GitLab.com"
-    },
-    {
-      "slug": "wg-easy",
-      "tier": "manual",
-      "name": "wg-easy",
-      "sub": "wg-admin",
-      "category": "system",
-      "icon": "purple",
-      "svg": "<path d=\"M9 2 C10.66 2 12 3.34 12 5 V7 H13 C13.55 7 14 7.45 14 8 V15 C14 15.55 13.55 16 13 16 H5 C4.45 16 4 15.55 4 15 V8 C4 7.45 4.45 7 5 7 H6 V5 C6 3.34 7.34 2 9 2 Z M9 3.5 C8.17 3.5 7.5 4.17 7.5 5 V7 H10.5 V5 C10.5 4.17 9.83 3.5 9 3.5 Z\" stroke=\"#6A4C93\" stroke-width=\"1.1\" stroke-linejoin=\"round\" fill=\"none\"/>",
-      "desc": "Self-hosted WireGuard VPN with a web UI. Full-tunnel or split-tunnel client profiles, works around ISP CGNAT over IPv6 with zero router port forwarding.",
-      "replaces": "Tailscale"
     }
   ]
 }

@@ -23,7 +23,7 @@ No admin account is created on first start. Open `https://vikunja.<domain>/` (or
 
 ## Registration
 
-`VIKUNJA_ENABLE_REGISTRATION` in `.env` (maps to `VIKUNJA_SERVICE_ENABLEREGISTRATION`) controls self-signup, default `true`. Set to `false` once accounts are provisioned to close the instance to new signups.
+`VIKUNJA_ENABLE_REGISTRATION` in `.env` (maps to `VIKUNJA_SERVICE_ENABLEREGISTRATION`) controls self-signup, default `false` (closed). Register your own first account before this matters (see First login above). Vikunja's self-hosted CE has no admin "create user" panel; to add another account later, temporarily set this back to `true`, have them register, then set it back to `false`.
 
 ## Connecting the mobile app
 
@@ -31,7 +31,7 @@ Vikunja has official native apps for [Android](https://play.google.com/store/app
 
 1. Install the app from the store above.
 2. On the login screen, enter the instance URL: `https://vikunja.${DOMAIN}` (do **not** point it at the bare host/port — the app needs the public HTTPS URL that matches `VIKUNJA_SERVICE_PUBLICURL`, or CORS rejects it).
-3. Log in with the account created in the web UI (or register from the app if `VIKUNJA_ENABLE_REGISTRATION` is `true`).
+3. Log in with the account created in the web UI.
 
 This works because `VIKUNJA_SERVICE_PUBLICURL` is already hardcoded to `https://vikunja.${DOMAIN}/` in `compose.yml` (see Notes below) — without a matching public URL, the mobile app's requests get blocked by CORS before login even gets a chance to fail on credentials.
 

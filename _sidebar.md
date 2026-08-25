@@ -114,5 +114,3 @@
   - [Overview](/kubernetes/README.md "Parallel Kubernetes port of the stack, one service at a time — not a replacement for Compose")
   - [Troubleshooting](/kubernetes/TROUBLESHOOTING.md "Every gotcha hit so far — disk-full recovery, ArgoCD bootstrap, Compose-vs-k8s semantic traps")
 
-- Research Notes
-  - [PostHog Self-Hosting](/docs/research/posthog-self-hosting.md "Deferred — why a self-hosted PostHog was ruled out for now")

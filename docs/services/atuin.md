@@ -80,7 +80,7 @@ atuin stats        # usage stats: top commands, etc.
 
 ## Registration
 
-`ATUIN_OPEN_REGISTRATION` in `.env`, default `true`. Set to `false` once your machines are registered to stop new clients from self-registering against this server.
+`ATUIN_OPEN_REGISTRATION` in `.env`, default `false` (closed) — self-registration only stays useful for the brief window while you're still enrolling your own machines. Atuin has no admin-create-user command; to register another machine later, temporarily set this back to `true`, run `atuin register` from that machine, then set it back to `false` and restart.
 
 ## Notes
 
