@@ -56,14 +56,7 @@ They compose because every command here re-detects the data-root live via
 (and `status`/`check`) automatically target the new location afterward, no
 extra config.
 
-**Not what Forgejo's CI storage uses.** Forgejo's runner already keeps its
-build/push traffic off the OS drive by default, unconditionally, via its own
-isolated Docker-in-Docker sidecar (`forgejo-docker` in
-`services/forgejo/compose.yml`) — see `docs/services/forgejo.md`. That's
-active the moment Forgejo is up; there's no toggle for it and it doesn't
-touch this folder at all. `relocate-data-root` is a separate, whole-host
-tool for if you want *everything* Docker does on this machine — not just
-Forgejo CI — living somewhere other than the OS drive.
+**Forgejo's CI does use this host's real Docker** (`container.docker_host: automount` in `services/forgejo/compose.yml` — see `docs/services/forgejo.md` for why an isolated Docker-in-Docker sidecar was tried and reverted). So unlike a fully isolated setup, `relocate-data-root`/`disk-quota` here **do** apply to Forgejo CI's image layers and build cache, the same as every other container on the host — there's no separate CI-only storage location to reason about.
 
 **Efficiency: this is a disk-speed trade, not a free win, whichever knob you
 use.** Neither mechanism makes Docker faster — both just decide *which
@@ -84,31 +77,24 @@ falls back to the `vfs` driver instead, which does a full copy of every
 image layer per container rather than overlay2's copy-on-write — this is not
 a modest slowdown, it's minutes-per-container versus seconds, and confirmed
 on this host to also cause CI job containers to hang indefinitely rather
-than just run slow. A FUSE-mounted disk also reports every file as owned by
-whichever UID the mount was set up with (commonly root) regardless of which
-process actually wrote it, which separately breaks anything that checks file
-ownership — e.g. Git's "detected dubious ownership" safety check, hit by
-Forgejo's `actions/checkout` cache. Neither `relocate-data-root` nor
-Forgejo's own `FORGEJO_DOCKER_DATA_ROOT`/`FORGEJO_RUNNER_DATA_ROOT` (see
-`docs/services/forgejo.md`) should ever point at a FUSE-mounted path for
-these reasons — confirm the target filesystem natively before relocating
-anything here, not just its rotational speed.
+than just run slow (see `docs/services/forgejo.md`'s "Tried and reverted"
+section for the full incident this was discovered from). A FUSE-mounted
+disk also reports every file as owned by whichever UID the mount was set up
+with (commonly root) regardless of which process actually wrote it, which
+separately breaks anything that checks file ownership — e.g. Git's
+"detected dubious ownership" safety check, hit by Forgejo's
+`actions/checkout` cache. Neither `relocate-data-root` nor `DOCKER_DATA_ROOT`
+should ever point at a FUSE-mounted path for these reasons — confirm the
+target filesystem natively before relocating anything here, not just its
+rotational speed.
 
-- If the OS drive is the faster disk (commonly true — SSD boot drive, HDD
-  for bulk storage) and you `relocate-data-root` onto a bigger-but-slower
-  secondary disk, every container on the host — not just CI — now does its
-  image/layer I/O against the slower disk. More headroom, less speed, for
-  everything.
-- Forgejo's isolated sidecar makes the same trade but scoped to CI only —
-  its storage sits wherever `FORGEJO_DOCKER_DATA_ROOT` points (an absolute
-  path set in `services/forgejo/.env`, deliberately outside this repo's
-  normal `service_data/` convention — see `docs/services/forgejo.md` for
-  why), so CI build/extract speed follows whatever disk that is, while the
-  OS drive and every other service are unaffected either way.
-- Nothing here is permanent: `FORGEJO_DOCKER_DATA_ROOT`/`DOCKER_DATA_ROOT`
-  are just bind mount targets. Point either one at a faster disk later (e.g.
-  add an SSD) and speed follows it automatically — the isolation/relocation
-  mechanism doesn't change, only which physical disk sits behind it.
+If the OS drive is the faster disk (commonly true — SSD boot drive, HDD for
+bulk storage) and you `relocate-data-root` onto a bigger-but-slower secondary
+disk, every container on the host — including Forgejo CI, since it now
+shares the host's Docker — does its image/layer I/O against the slower disk.
+More headroom, less speed, for everything. Nothing here is permanent:
+`DOCKER_DATA_ROOT` is just a bind mount target. Point it at a faster disk
+later (e.g. add an SSD) and speed follows automatically.
 
 **Rule of thumb:** reach for `relocate-data-root` only if the *whole host*
 is tight on OS-drive space and you're fine with every container's I/O

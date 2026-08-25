@@ -65,53 +65,14 @@ services:
     networks:
       - homeserver
 
-  # Isolated Docker-in-Docker engine used ONLY by forgejo-runner's CI jobs --
-  # keeps CI's images/containers/build-cache on a completely separate daemon
-  # and storage location from this host's real Docker (which stays on the OS
-  # drive, untouched). Storage lands under ${FORGEJO_DOCKER_DATA_ROOT}, an
-  # absolute path OUTSIDE service_data/ set in .env -- deliberately NOT the
-  # usual ${DATA_ROOT} convention, because service_data on this host is a
-  # symlink to a slow FUSE-mounted spinning HDD. overlay2 can't mount on a
-  # FUSE filesystem, so dockerd falls back to the vfs storage driver there
-  # (full layer copies per container instead of copy-on-write), which made
-  # every CI job minutes slower or hang indefinitely -- confirmed by testing
-  # the exact same runner against the host's own Docker (overlayfs on the
-  # SSD/btrfs), which ran the same job in seconds. FORGEJO_DOCKER_DATA_ROOT
-  # must point at a native-filesystem path on a fast disk; see the comment
-  # in .env for how to verify one before changing it. See
-  # docs/services/forgejo.md for the full isolation rationale.
-  forgejo-docker:
-    image: docker:28-dind
-    container_name: forgejo-docker
-    restart: unless-stopped
-    privileged: true
-    environment:
-      # Empty (not unset) disables TLS cert generation -- fine since this
-      # daemon is only reachable over the internal `homeserver` bridge
-      # network, never published to a host port.
-      DOCKER_TLS_CERTDIR: ""
-    # The dind entrypoint only auto-adds a -H flag when DOCKER_TLS_CERTDIR is
-    # set (for the TLS case); with it empty it just execs dockerd with
-    # whatever args follow, so the plaintext listener needs to be explicit.
-    command:
-      - dockerd
-      - --host=tcp://0.0.0.0:2375
-      - --host=unix:///var/run/docker.sock
-    healthcheck:
-      test: ["CMD", "docker", "info"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    volumes:
-      - ${FORGEJO_DOCKER_DATA_ROOT}:/var/lib/docker
-    networks:
-      - homeserver
-
   forgejo-runner:
     image: code.forgejo.org/forgejo/runner:13.0.0
     container_name: forgejo-runner
     restart: unless-stopped
+    # Image defaults to uid 1000, which can't reach the bind-mounted host docker.sock
+    # (owned by root:docker on the host) -- run as root like this repo's other
+    # socket-mounting services (dozzle/portainer/dockge) so `docker` exec actions work.
+    user: "0:0"
     environment:
       FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:-}
@@ -126,13 +87,13 @@ services:
       RUNNER_LABELS: ${RUNNER_LABELS:-docker:docker://catthehacker/ubuntu:act-latest,ubuntu-latest:docker://catthehacker/ubuntu:act-latest,ubuntu-24.04:docker://catthehacker/ubuntu:act-24.04,ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04}
       # How many jobs this runner executes concurrently -- default is 1
       # (strictly sequential, e.g. a 4-way matrix runs one leg at a time).
-      # Raising this lets independent jobs (including matrix legs) run in
-      # parallel, at the cost of proportionally more simultaneous CPU/
-      # memory/disk I/O on forgejo-docker, and a real isolation caveat:
-      # concurrent jobs share the same forgejo-docker daemon, so above 1
-      # they can see and `docker exec`/inspect each other's containers --
-      # fine for a single trusted user's own repos, not for untrusted
-      # multi-tenant workflows.
+      # Tried 4: hit a real Forgejo server-side bug (500 Internal Server
+      # Error from Forgejo's own UpdateTask API when two jobs' status
+      # updates land in the same instant -- matches known upstream reports,
+      # e.g. go-gitea/gitea#38001) plus service containers with fixed host
+      # ports (this repo's own check job's postgres/redis on 5432/6379)
+      # colliding across concurrent jobs. Neither is fixable from this
+      # side -- see docs/services/forgejo.md before raising this again.
       RUNNER_CAPACITY: ${RUNNER_CAPACITY:-1}
     # The image's default CMD is the bare binary with no subcommand, which just prints
     # help text and exits 0 -- with restart:unless-stopped that loops forever and the
@@ -153,51 +114,42 @@ services:
             --name "$$RUNNER_NAME" \
             --labels "$$RUNNER_LABELS"
         fi
-        # A workflow step running `docker build`/`docker push` needs a docker
-        # daemon reachable inside its job container. Rather than automounting
-        # this host's real docker.sock (which would give every CI job root-
-        # equivalent access to the host engine and dump build layers on the OS
-        # drive), point at the dedicated forgejo-docker sidecar over TCP on
-        # the internal network instead -- fully isolated daemon, and its
-        # storage now lives on a fast native-filesystem SSD path
-        # (FORGEJO_DOCKER_DATA_ROOT in .env), not the slow FUSE-mounted HDD
-        # service_data/ resolves to on this host -- see the forgejo-docker
-        # service comment above for why that distinction matters.
+        # forgejo-runner itself has the host docker.sock (below), but each job
+        # runs in its own separate sibling container that does NOT inherit it --
+        # a workflow step running `docker build`/`docker push` fails with
+        # "no such file or directory" on /var/run/docker.sock without this.
+        # docker_host: automount is the runner's own purpose-built setting for
+        # this (defaults to "-", meaning explicitly NOT mounted) -- it finds the
+        # runner's own docker host and mounts it into the job container at
+        # /var/run/docker.sock. Admin-controlled (this file), not something a
+        # workflow can request itself, so this isn't a sandbox-escape vector
+        # for untrusted workflow authors the way per-job volume options would be.
         #
-        # This only controls how forgejo-runner itself creates each job's
-        # OWN container -- it does NOT give that job container a way to run
-        # `docker build`/`push` itself. forgejo-docker is a completely
-        # separate, nested Docker engine (job containers live inside ITS
-        # containerd, not the host's or forgejo-runner's), so there is no
-        # host/hostname/socket a job container can reach back to forgejo-docker
-        # through -- confirmed live: a plain DOCKER_HOST pointed at
-        # forgejo-docker's own hostname failed inside job containers with
-        # "no such host", since that name only resolves on the outer
-        # `homeserver` network, not the per-job network living inside
-        # forgejo-docker's nested engine.
-        #
-        # Any workflow that itself needs `docker build`/`push` should declare
-        # its own per-job Docker-in-Docker SERVICE instead (see
-        # docs/services/forgejo.md) -- the same proven mechanism this repo's
-        # `check` jobs already use for their postgres/redis service
-        # containers, which forgejo-runner places on that job's own network
-        # and makes reachable by the service's alias. No runner-side config
-        # is needed for that; it's ordinary Actions YAML, portable to any
-        # Forgejo/Gitea instance.
+        # An isolated Docker-in-Docker sidecar (forgejo-docker, a separate
+        # docker:28-dind container) was tried and reverted -- it worked for
+        # every job EXCEPT one that itself needs `docker build`/`push`: such
+        # a job would need its own nested dind (job containers already live
+        # inside forgejo-docker's own nested engine), and docker:dind as a
+        # THIRD nesting level crashed on startup every time it was tried
+        # (confirmed via forgejo-docker's own logs: the service container
+        # died within seconds of creation, before any build step could run --
+        # a known fragility of deeply nested DinD, not a config mistake).
+        # automount is the simpler of Forgejo's own three documented options
+        # for this and the one proven to actually work end to end -- see
+        # docs/services/forgejo.md for the full history and trade-off.
         cat > /data/config.yaml <<-CONFIG
         runner:
           file: .runner
           capacity: $$RUNNER_CAPACITY
         container:
-          docker_host: "tcp://forgejo-docker:2375"
+          docker_host: "automount"
         CONFIG
         exec forgejo-runner daemon --config /data/config.yaml
     volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${FORGEJO_RUNNER_DATA_ROOT}:/data
     depends_on:
       forgejo:
-        condition: service_healthy
-      forgejo-docker:
         condition: service_healthy
     networks:
       - homeserver
