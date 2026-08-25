@@ -15,7 +15,7 @@ Usage:
                                                 'notes' (or any other group — see services.json's
                                                 'category'/'subcategory' fields for valid names).
                                                 Works with every action, same as min/core/all.
-  python homeserver.py <env> precreate <min|core|all|service...>
+  python homeserver.py <env> precreate <min|core|all|service...> [--update]
                                                 create containers without starting them, so a
                                                 never-started service shows up as a stack in
                                                 Portainer (auto-detected by its labels) and can be
@@ -23,6 +23,10 @@ Usage:
                                                 already has containers. Manual-tier services aren't
                                                 included in 'all' here either — list them by name
                                                 alongside 'all' if you want them too.
+                                                --update: force-recreate containers that already
+                                                exist (e.g. after an .env/compose edit) instead of
+                                                skipping them — still refuses to touch a service
+                                                that's currently running (use 'up' for that).
   python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
   python homeserver.py orphaned-volumes [service|all] [--yes]
                                                 list/remove volumes not declared in a service's current compose.yml
@@ -385,11 +389,16 @@ class DockerBackend(ABC):
         and harmless). Returns (success, stderr_text)."""
 
     @abstractmethod
-    def compose_create(self, files: list[Path], env: dict[str, str], profile: str | None) -> tuple[bool, str]:
+    def compose_create(
+        self, files: list[Path], env: dict[str, str], profile: str | None, force_recreate: bool = False,
+    ) -> tuple[bool, str]:
         """docker compose create — makes containers (pulls images, wires
         networks/volumes) without starting them. Used by 'precreate' so a
         service becomes visible/startable from Portainer's own UI without
-        actually running it yet. Returns (success, combined output)."""
+        actually running it yet. force_recreate: used by 'precreate --update'
+        to rebuild containers that already exist (e.g. after an .env change)
+        instead of leaving their stale config in place. Returns (success,
+        combined output)."""
 
     @abstractmethod
     def compose_down(self, files: list[Path], env: dict[str, str], profile: str | None) -> bool: ...
@@ -531,8 +540,11 @@ class SubprocessBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
-    def compose_create(self, files, env, profile):
-        proc = self._run(self._compose_args(files, profile) + ["create"], env=env)
+    def compose_create(self, files, env, profile, force_recreate=False):
+        args = self._compose_args(files, profile) + ["create"]
+        if force_recreate:
+            args.append("--force-recreate")
+        proc = self._run(args, env=env)
         return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
     def compose_down(self, files, env, profile):
@@ -724,12 +736,12 @@ class PythonOnWhalesBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
-    def compose_create(self, files, env, profile):
+    def compose_create(self, files, env, profile, force_recreate=False):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
         try:
             with self._env(env):
-                client.compose.create()
+                client.compose.create(force_recreate=force_recreate)
             return True, ""
         except DockerException as e:
             out = f"{e.stderr or ''}\n{e.stdout or ''}"
@@ -1282,21 +1294,29 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
     return wait_healthy(service)
 
 
-def do_precreate(service: str, env: str, profile: str | None) -> bool:
+def do_precreate(service: str, env: str, profile: str | None, update: bool = False) -> bool:
     """Creates a service's containers without starting them — so it shows
     up as a stack in Portainer (which auto-detects any compose project by
     its container labels, running or not) and can be started from there
     later, without ever needing Portainer's own API/credentials. Skips
     services that already have containers (running or previously started)
-    so this never touches/recreates anything already in use."""
+    so this never touches/recreates anything already in use — unless
+    update=True (--update), which force-recreates a not-currently-running
+    service's containers so a later .env/compose edit actually takes
+    effect. Still refuses to touch a service that's currently running —
+    use 'up' (which force-recreates on config change) for that instead."""
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
 
     all_names = BACKEND.all_container_names()
-    if any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in all_names):
-        info(f"{service} already has containers — skipping (use 'up' to start it)")
+    has_containers = any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in all_names)
+    if has_containers and not update:
+        info(f"{service} already has containers — skipping (use 'up' to start it, or 'precreate --update' to rebuild)")
+        return True
+    if has_containers and service in get_running_services():
+        warn(f"{service} is currently running — skipping (stop it first, or use 'up' to apply the new .env)")
         return True
 
     files = compose_files(service, env)
@@ -1307,12 +1327,13 @@ def do_precreate(service: str, env: str, profile: str | None) -> bool:
     # replicating 'up's normal profile-gating.
     cenv.setdefault("COMPOSE_PROFILES", "*")
 
+    verb = "Rebuilding" if (has_containers and update) else "Pre-creating"
     if profile:
-        info(f"Pre-creating {service} ({env}) --profile {profile}...")
+        info(f"{verb} {service} ({env}) --profile {profile}...")
     else:
-        info(f"Pre-creating {service} ({env})...")
+        info(f"{verb} {service} ({env})...")
 
-    ok, out = BACKEND.compose_create(files, cenv, profile)
+    ok, out = BACKEND.compose_create(files, cenv, profile, force_recreate=update)
     if out:
         print(out)
     return ok
@@ -1874,7 +1895,8 @@ def show_help() -> None:
     print("    python homeserver.py <env> -u <service...>                     (up shorthand)")
     print("    python homeserver.py <env> -d <service...>                     (down shorthand)")
     print("    python homeserver.py <env> -r <service...>                     (restart shorthand)")
-    print("    python homeserver.py <env> precreate <tier|service...>          create without starting (visible in Portainer)")
+    print("    python homeserver.py <env> precreate <tier|service...> [--update]  create without starting (visible in Portainer);")
+    print("                                                                     --update force-recreates existing (not running) containers")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
     print("    python homeserver.py status (or ps)                             list every service + every group (tier by tier, marking which are running)")
@@ -1932,6 +1954,7 @@ def show_help() -> None:
     print("    python homeserver.py dev precreate all gitlab stirling-pdf")
     print("                                                         create every never-started service (incl. manual-tier) so")
     print("                                                         they all show up as start-able stacks in Portainer")
+    print("    python homeserver.py dev precreate daily --update    rebuild daily-tier containers with the current .env (skips any that are running)")
     print("    python homeserver.py dev backup all                  snapshot every service now, regardless of running state")
     print("    python homeserver.py dev snapshots mealie            list available snapshots for a service")
     print("    python homeserver.py dev restore mealie              restore the latest snapshot")
@@ -2094,6 +2117,7 @@ def main() -> int:
     no_backup = False
     no_ml = False
     fresh = False
+    update_flag = False
     assume_yes = False
     used_group_or_bundle = False
     snapshot: str | None = None
@@ -2115,6 +2139,8 @@ def main() -> int:
             no_ml = True
         elif tok == "--fresh":
             fresh = True
+        elif tok == "--update":
+            update_flag = True
         elif tok in ("--yes", "-y"):
             assume_yes = True
         elif tok == "--snapshot":
@@ -2191,6 +2217,10 @@ def main() -> int:
 
     if fresh and action not in ("up", "-u"):
         error("--fresh is only valid with the up action")
+        return 1
+
+    if update_flag and action != "precreate":
+        error("--update is only valid with the precreate action")
         return 1
 
     if action == "migrate" and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running):
@@ -2276,42 +2306,42 @@ def main() -> int:
             header(f"Pre-creating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "All services")
+            run_list(do_precreate, services, env, profile, "All services", update=update_flag)
         elif run_core:
             services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header(f"Pre-creating core services (min + core) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Core services")
+            run_list(do_precreate, services, env, profile, "Core services", update=update_flag)
         elif run_daily:
             services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
             header(f"Pre-creating daily services (min + core + daily) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Daily services")
+            run_list(do_precreate, services, env, profile, "Daily services", update=update_flag)
         elif run_office:
             services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
             header(f"Pre-creating office services (min + core + daily + office) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Office services")
+            run_list(do_precreate, services, env, profile, "Office services", update=update_flag)
         elif run_automation_ai:
             services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header(f"Pre-creating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Automation-AI services")
+            run_list(do_precreate, services, env, profile, "Automation-AI services", update=update_flag)
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header(f"Pre-creating min services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Min services")
+            run_list(do_precreate, services, env, profile, "Min services", update=update_flag)
         else:
             header(f"Pre-creating services in {env} mode...")
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
-            run_list(do_precreate, services_to_run, env, profile, "Services")
+            run_list(do_precreate, services_to_run, env, profile, "Services", update=update_flag)
 
     elif action in ("down", "-d"):
         if run_all:
