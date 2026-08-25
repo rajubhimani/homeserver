@@ -1,4 +1,7 @@
 .DS_Store
+# FUSE artifact left behind when a file is deleted while still open, e.g. by
+# cloudflared-watchdog on the FUSE-mounted HDD (/mnt/mydata) — harmless, regenerates
+.fuse_hidden*
 /._data
 /._immich
 /._nextcloud
