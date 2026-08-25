@@ -26,6 +26,10 @@ Browse to `http://<ip>:8085` — set the `root` password on first login. To rese
 docker exec -it gitlab gitlab-rake "gitlab:password:reset[root]"
 ```
 
+## Registration
+
+`SIGNUP_ENABLED` in `.env`, default `false` (closed) — `root` already exists from first login above, so public self-registration is never needed to get started. Add more accounts as the `root` (or any admin) user instead: **Admin Area → Users → New user**, works regardless of `SIGNUP_ENABLED`.
+
 ## Notes
 
 - All config goes through `GITLAB_OMNIBUS_CONFIG` in compose (Ruby format)

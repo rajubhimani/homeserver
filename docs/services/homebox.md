@@ -18,7 +18,7 @@ cp services/homebox/.env.example services/homebox/.env
 uv run homeserver.py dev up homebox
 ```
 
-Open `https://homebox.<domain>/`, register the first (and only) account, then set `HBOX_OPTIONS_ALLOW_REGISTRATION=false` in `.env` and restart to lock out further signups — see "Registration / access model" below.
+`HBOX_OPTIONS_ALLOW_REGISTRATION` defaults to `false` (closed) — set it to `true` first, `up`/restart, register the first (and only) account at `https://homebox.<domain>/`, then set it back to `false` and restart. See "Registration / access model" below.
 
 ## Usage model
 
@@ -29,7 +29,7 @@ Open `https://homebox.<domain>/`, register the first (and only) account, then se
 
 ## Registration / access model
 
-`HBOX_OPTIONS_ALLOW_REGISTRATION=true` by default (image default), matching this stack's "toggle defaults to enabled" convention. Since this is a personal single-user inventory exposed at a public subdomain, create your own account right after first start, then set it to `false` and restart — there is no invite-only/admin-approval middle ground in HomeBox itself.
+`HBOX_OPTIONS_ALLOW_REGISTRATION` defaults to `false` in this repo (the image's own default is `true` — deliberately overridden here, since this is a personal single-user inventory exposed at a public subdomain and there's no invite-only/admin-approval middle ground in HomeBox itself). Flip it to `true` temporarily, create your account, then set it back to `false` and restart — see Setup above.
 
 ## Notes
 

@@ -15,7 +15,7 @@ cp services/vaultwarden/.env.example services/vaultwarden/.env
 uv run homeserver.py dev up vaultwarden
 ```
 
-**First login:** browse to `https://vaultwarden.${DOMAIN}` (or `http://<ip>:8200` in dev) and register the first account directly on that page — self-signup is enabled by default (`SIGNUPS_ALLOWED=true`), no invite needed. Every later visitor can self-register the same way until you turn that off (see Registration below).
+**First login:** `SIGNUPS_ALLOWED` defaults to `false` (closed) — set it to `true` first, `up`/restart, browse to `https://vaultwarden.${DOMAIN}` (or `http://<ip>:8200` in dev) and register your first account directly on that page, then set it back to `false` and restart. See Registration below for adding more accounts afterward without reopening public signup.
 
 ## Health endpoint
 
@@ -29,7 +29,7 @@ Confirmed live against the running container (`vaultwarden/server:1.37.2`): the 
 
 ## Registration
 
-`.env.example` ships with `SIGNUPS_ALLOWED=true` (self-signup enabled) — set it to `false` to invite-only via the admin panel → Users → Invite instead.
+`.env.example` ships with `SIGNUPS_ALLOWED=false` (closed) — add every account after the first via the admin panel → Users → Invite instead (see Admin panel above for the `ADMIN_TOKEN` login). Set it back to `true` only if open self-signup is actually wanted.
 
 ## Making devices actually use it
 

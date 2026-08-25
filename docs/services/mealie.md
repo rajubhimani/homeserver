@@ -21,7 +21,7 @@ uv run homeserver.py dev up mealie
 
 ## Registration
 
-Enabled by default (`ALLOW_SIGNUP=true` in `.env.example`) — set to `false` to close signups once your account exists.
+`ALLOW_SIGNUP`, default `false` (closed) — create your own account first (see Default credentials above), before this matters. To add another account later without reopening public signup, use the admin panel instead: **Settings → Users → Create User** (logged in as an admin).
 
 ## Using it on Android
 

@@ -19,7 +19,7 @@ Open `https://plausible.<domain>/` (or `http://<host>:8130` in dev) and create t
 
 ## Registration
 
-`DISABLE_REGISTRATION` in `.env`, default `invite_only` (only the first account can self-register; everyone after needs an invite from inside the app — a reasonable closed-by-default posture for a personal instance). Set to `true` to disable entirely, `false` to leave fully open.
+`DISABLE_REGISTRATION` in `.env`, default `true` — fully closed, including in-app invites. Create your own account before setting this (or temporarily set it to `invite_only`, which allows exactly one self-registered account and nothing else, then switch to `true`). **If you expect to add more accounts later, `invite_only` instead of `true` is worth considering** — it still blocks public self-registration after the first account, but keeps working **Settings → Users → Invite** available from inside the app; `true` disables that too, with no admin-panel way to add a user short of temporarily reopening registration.
 
 ## Connecting a site (the tracking snippet)
 

@@ -21,6 +21,10 @@ uv run homeserver.py dev up forgejo
 docker exec -it forgejo forgejo admin user create --username admin --password yourpassword --email admin@example.com --admin
 ```
 
+## Registration
+
+`DISABLE_REGISTRATION` in `.env`, default `true` (closed) — `.env`'s `RUNNER_REGISTRATION_TOKEN` name is unrelated (that's the CI runner's own registration, not user signup). Create every account with the same CLI command as above (drop `--admin` for a regular user), or from the web UI: **Site Administration → Users → Create User Account**. Set to `false` only if open public self-signup is actually wanted.
+
 ## Connecting your git client
 
 The web UI alone doesn't let you actually push code — a real git client needs to be pointed at this server first, over SSH or HTTPS. Confirmed against Forgejo's own current user documentation, not assumed from memory.

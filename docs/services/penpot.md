@@ -19,7 +19,7 @@ Open `https://penpot.<domain>/` (or `http://<host>:8131` in dev) and create the 
 
 ## Registration
 
-Self-registration is on by default. Add `disable-registration` to `PENPOT_FLAGS` in `.env` once accounts exist to close it — officially described as recommended for demo instances rather than hardened production use, but reasonable for a personal instance.
+`disable-registration` is already in `PENPOT_FLAGS` by default — closed from the start (officially described as recommended for demo instances rather than hardened production use, but reasonable for a personal instance). Create your first account before this matters, or briefly remove the flag to do so. To add another account later without reopening public registration, use Penpot's own team-invitation flow instead — from inside an existing team, **Members → Invite** sends an email invite that works regardless of `disable-registration` (that flag only blocks the public sign-up page, not invites to an existing team).
 
 ## Architecture — 5 containers
 
