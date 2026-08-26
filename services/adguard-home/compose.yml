@@ -15,6 +15,32 @@ services:
     networks:
       - homeserver
 
+  # adguard-home's own healthcheck only probes its local web API, which stays
+  # "healthy" even when the container's Docker network attachment itself has
+  # dropped out (see watchdog.sh for the incident this covers). This checks
+  # the actual network attachment via the Docker API and reattaches it when
+  # missing.
+  adguard-watchdog:
+    image: curlimages/curl:8.21.0
+    container_name: adguard-watchdog
+    restart: unless-stopped
+    # curlimages/curl drops to a non-root user by default, which can't reach the
+    # Docker socket regardless of its host-side group ownership (varies between
+    # Docker and rootless podman). Root bypasses that permission check entirely.
+    user: "0:0"
+    environment:
+      CHECK_INTERVAL: ${WATCHDOG_CHECK_INTERVAL:-60}
+      FAIL_THRESHOLD: ${WATCHDOG_FAIL_THRESHOLD:-2}
+      RESTART_COOLDOWN: ${WATCHDOG_RESTART_COOLDOWN:-60}
+    entrypoint: ["/bin/sh", "/watchdog.sh"]
+    volumes:
+      - ./watchdog.sh:/watchdog.sh:ro
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    networks:
+      - homeserver
+    depends_on:
+      - adguard-home
+
 networks:
   homeserver:
     external: true
