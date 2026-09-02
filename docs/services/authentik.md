@@ -58,7 +58,7 @@ Sidebar **Applications → Providers → Create**:
 - Proxy type: **Forward auth (domain level)**
 - Name: `forward-auth-domain` (or anything memorable — only one of these should exist)
 - Authorization flow: the default (`default-provider-authorization-implicit-consent`) — same as every other provider in this stack
-- Cookie domain: `${DOMAIN}` (e.g. `prajnatech.in` — no leading dot, no subdomain)
+- Cookie domain: `${DOMAIN}` (e.g. `yourdomain.com` — no leading dot, no subdomain)
 - Everything else: leave at its default
 - Save
 

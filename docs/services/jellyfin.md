@@ -125,6 +125,22 @@ Confirm the fix took by checking the ffmpeg command in `docker logs` — it shou
 
 If still direct-streaming after both prefs are set, Windows' own "HEVC Video Extensions" (Microsoft Store codec pack), if installed, can make Firefox report HEVC support independent of these prefs — uninstalling/disabling that extension is the next step, or just manually cap the stream quality/bitrate in the Jellyfin Web player's playback settings per-session as a workaround.
 
+## Troubleshooting: playback buffers/spins on home WiFi even during a plain direct-stream (no transcode)
+
+**Symptom:** the web player shows a buffering spinner repeatedly during normal viewing on the local network — no CPU transcode involved (`docker logs jellyfin` shows `-codec:v:0 copy`, a direct stream/remux), server-side CPU/memory look fine (`docker stats jellyfin`), no errors/retries in the logs.
+
+**Root cause:** this is a storage-layer bottleneck, not a Jellyfin bug. Direct-stream playback still requires continuously reading the source file to build HLS segments in real time — if `MEDIA_ROOT` sits on slow underlying storage, that read can't always keep pace, especially on a seek (forces random-access reads) or when anything else is doing I/O against the same physical disk at the same time. Two things worth checking on the host:
+
+- **Is the drive actually slow?** `lsblk -d -o NAME,ROTA,TRAN,MODEL` — `ROTA=1` means a spinning HDD, not an SSD; smaller/laptop-class (2.5") drives are typically slower than desktop (3.5") ones.
+- **Is it mounted through FUSE?** `findmnt -T <path>` — a filesystem type of `fuseblk` (common for NTFS via `ntfs-3g`, or exFAT) means every read goes through a userspace translation layer, adding real overhead a native filesystem (ext4/xfs) doesn't have.
+
+**Check for shared-disk contention too:** `lsblk` shows every mount's underlying physical disk — if `MEDIA_ROOT` and other active mounts (another service's `DATA_ROOT`, backup snapshot storage, a second external-storage mount) are partitions of the *same* physical disk, they compete for the same disk arm regardless of being logically separate paths. Anything doing a recurring scan/write against that disk — a scheduled library rescan, a backup job, a sync tool — can cause exactly this symptom even when nobody's touching the media files directly.
+
+**Mitigations, roughly in order of how real the fix is:**
+1. **Move recurring I/O off the shared disk, or reschedule it away from viewing hours** — the most reliable option; removes contention at the source instead of trying to arbitrate it live.
+2. **Docker's `blkio_weight`** can prioritize a container's I/O, but only works cleanly if the scheduler is `bfq` (`cat /sys/block/<dev>/queue/scheduler`) *and* the actual block I/O is issued from within that container's cgroup — a FUSE-mounted drive's I/O is issued by the host-level FUSE daemon instead, so weighting may not fully propagate. Worth testing, not guaranteed.
+3. **The durable fix is hardware:** an SSD, or moving the media library off a disk shared with other heavy I/O, removes the constraint outright rather than reducing contention around it.
+
 ## Fixed: `MEDIA_ROOT` was nested inside `DATA_ROOT`, so every backup archived the whole media library
 
 **Symptom:** `uv run homeserver.py dev backup jellyfin` (and any auto-snapshot on `down`) took an extremely long time and produced a huge `service_data.tar.gz`, even though `config/` + `cache/` together are only ~3.5GB.

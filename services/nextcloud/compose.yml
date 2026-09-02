@@ -95,8 +95,12 @@ services:
     # didn't pick up the new files until a manual `occ files:scan` ran. This
     # keeps that mount in sync automatically instead of needing a manual
     # rescan every time files change on disk. Dataset is small (a few dozen
-    # ISOs), so a full scan every 5 minutes is cheap.
-    entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; runuser -u www-data -- php /var/www/html/occ files:scan --all; sleep 300; done"
+    # ISOs), so a full scan every CRON_SCAN_INTERVAL_SECONDS (default 300 =
+    # 5 minutes, see .env.example) is cheap in the common case. Raise this
+    # if OS_ISO_ROOT sits on a slow/shared disk under I/O contention with
+    # something else — see "Jellyfin playback buffering" in
+    # docs/services/jellyfin.md for a worked example of exactly that.
+    entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; runuser -u www-data -- php /var/www/html/occ files:scan --all; sleep ${CRON_SCAN_INTERVAL_SECONDS:-300}; done"
     volumes:
       - nextcloud-html:/var/www/html
       - nextcloud-config:/var/www/html/config

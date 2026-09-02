@@ -17,7 +17,7 @@ green when up, red when down, rechecked every 60 seconds.
 | `docker-compose.yml` | Base config (no ports) |
 | `compose.dev.yml` | Exposes port `8080` on all interfaces |
 | `compose.prod.yml` | Exposes port `8080` on `127.0.0.1` only |
-| `.env` | `DOMAIN`, `SITE_NAME`, `TAGLINE`, `AUTHOR`, `LOCATION` |
+| `.env` | `DOMAIN`, `SITE_NAME`, `TAGLINE`, `AUTHOR`, `LOCATION`, `PLAUSIBLE_SCRIPT` |
 
 ## Dynamic configuration
 
@@ -30,7 +30,10 @@ SITE_NAME=MyServer
 TAGLINE=Your data, your hardware, your control.
 AUTHOR=Your Name
 LOCATION=Your City
+PLAUSIBLE_SCRIPT=script.js
 ```
+
+`PLAUSIBLE_SCRIPT` is the analytics script filename from your own self-hosted [Plausible](services/plausible.md) instance's site Settings → Tracking → "site installation" — the embed loads from `https://plausible.${DOMAIN}/js/${PLAUSIBLE_SCRIPT}`. Leave it blank to disable the analytics embed entirely.
 
 `entrypoint.sh` runs `sed` at container start to replace placeholders in `index.html`
 before nginx serves it.
