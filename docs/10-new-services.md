@@ -27,6 +27,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Docs | [docs/services/docs.md](services/docs.md) |
 | Nextcloud | [docs/services/nextcloud.md](services/nextcloud.md) |
 | ONLYOFFICE | [docs/services/onlyoffice.md](services/onlyoffice.md) |
+| Nextcloud Whiteboard | [docs/services/whiteboard.md](services/whiteboard.md) |
 | Immich | [docs/services/immich.md](services/immich.md) |
 | Jellyfin | [docs/services/jellyfin.md](services/jellyfin.md) |
 | Vaultwarden | [docs/services/vaultwarden.md](services/vaultwarden.md) |
