@@ -46,6 +46,7 @@
       - [Paperless-ngx](/docs/services/paperless.md "Scan, index, and archive all your documents. Full-text search with OCR — go paperless. Replaces: Scansnap cloud.")
       - [Stirling PDF](/docs/services/stirling-pdf.md "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand. Replaces: Adobe Acrobat.")
       - [Documenso](/docs/services/documenso.md "Sign documents electronically and collect signatures from others — a self-hosted alternative to DocuSign.")
+      - [ONLYOFFICE](/docs/services/onlyoffice.md "Real-time collaborative editing for Word, Excel, and PowerPoint documents stored in Nextcloud — a self-hosted Microsoft Office alternative built for native .docx/.xlsx/.pptx compatibility.")
     - Finance & Business
       - [Firefly III](/docs/services/firefly.md "Personal finance manager. Track income, expenses, budgets and accounts in one place. Replaces: YNAB / Mint.")
       - [InvoiceShelf](/docs/services/invoiceshelf.md "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments. Replaces: FreshBooks.")

@@ -8,7 +8,7 @@
 
 ## What's in the stack
 
-62 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
+63 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
 links — hover (or tap-and-hold on mobile) any name for what it does and what it replaces.
 
 ### Storage & Media
@@ -25,7 +25,7 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 
 **Project & Task Mgmt** — [Vikunja](docs/services/vikunja.md "To-do list and task management app. Organize projects, set due dates, and track work. Replaces: Todoist.") · [OpenProject](docs/services/openproject.md "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking. Replaces: Jira / Asana.") · [Plane](docs/services/plane.md "Modern open-source project management. Issues, cycles, modules and analytics. Jira alternative.")
 
-**Documents** — [Paperless-ngx](docs/services/paperless.md "Scan, index, and archive all your documents. Full-text search with OCR — go paperless. Replaces: Scansnap cloud.") · [Stirling PDF](docs/services/stirling-pdf.md "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand. Replaces: Adobe Acrobat.") · [Documenso](docs/services/documenso.md "Sign documents electronically and collect signatures from others — a self-hosted alternative to DocuSign.")
+**Documents** — [Paperless-ngx](docs/services/paperless.md "Scan, index, and archive all your documents. Full-text search with OCR — go paperless. Replaces: Scansnap cloud.") · [Stirling PDF](docs/services/stirling-pdf.md "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand. Replaces: Adobe Acrobat.") · [Documenso](docs/services/documenso.md "Sign documents electronically and collect signatures from others — a self-hosted alternative to DocuSign.") · [ONLYOFFICE](docs/services/onlyoffice.md "Real-time collaborative editing for Word, Excel, and PowerPoint documents stored in Nextcloud — a self-hosted Microsoft Office alternative built for native .docx/.xlsx/.pptx compatibility.")
 
 **Finance & Business** — [Firefly III](docs/services/firefly.md "Personal finance manager. Track income, expenses, budgets and accounts in one place. Replaces: YNAB / Mint.") · [InvoiceShelf](docs/services/invoiceshelf.md "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments. Replaces: FreshBooks.") · [Cal.com](docs/services/calcom.md "Share a booking page so people can schedule meetings with you automatically — a self-hosted alternative to Calendly.") · [OrangeHRM](docs/services/orangehrm.md "Open-source HR management — employee records, leave, time tracking, recruitment. Replaces: BambooHR / Workday.")
 
@@ -206,6 +206,7 @@ uv run homeserver.py prod up all
     ├── cloudflared/
     ├── landing/
     ├── nextcloud/
+    ├── onlyoffice/
     ├── immich/
     ├── jellyfin/
     ├── vaultwarden/
@@ -280,6 +281,7 @@ service_data/
 ├── nginx-plain/      (certs/) — browser hub login lives in services/nginx-plain/.env, not here, see docs/services/browser-hub.md
 ├── nginx/            (data/, letsencrypt/) — optional NPM proxy
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
+├── onlyoffice/       (data/, log/, lib/)
 ├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
 ├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
 ├── vaultwarden/      (data/)
