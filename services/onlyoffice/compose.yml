@@ -1,0 +1,26 @@
+services:
+  onlyoffice:
+    image: onlyoffice/documentserver:9.4.0.1
+    container_name: onlyoffice
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      JWT_ENABLED: ${JWT_ENABLED:-true}
+      JWT_SECRET: ${JWT_SECRET}
+      EXAMPLE_ENABLED: ${EXAMPLE_ENABLED:-true}
+    volumes:
+      - ${DATA_ROOT}/data:/var/www/onlyoffice/Data
+      - ${DATA_ROOT}/log:/var/log/onlyoffice
+      - ${DATA_ROOT}/lib:/var/lib/onlyoffice
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost/healthcheck | grep -q true || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

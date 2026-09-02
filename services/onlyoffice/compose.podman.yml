@@ -1,0 +1,4 @@
+services:
+  onlyoffice:
+    security_opt:
+      - label=disable

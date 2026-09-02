@@ -26,6 +26,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Portainer CE | [docs/services/portainer.md](services/portainer.md) |
 | Docs | [docs/services/docs.md](services/docs.md) |
 | Nextcloud | [docs/services/nextcloud.md](services/nextcloud.md) |
+| ONLYOFFICE | [docs/services/onlyoffice.md](services/onlyoffice.md) |
 | Immich | [docs/services/immich.md](services/immich.md) |
 | Jellyfin | [docs/services/jellyfin.md](services/jellyfin.md) |
 | Vaultwarden | [docs/services/vaultwarden.md](services/vaultwarden.md) |

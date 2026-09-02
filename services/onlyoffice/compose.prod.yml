@@ -1,0 +1,4 @@
+services:
+  onlyoffice:
+    ports:
+      - "127.0.0.1:8150:80"
