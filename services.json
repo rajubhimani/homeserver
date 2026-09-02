@@ -121,6 +121,10 @@
       "replaces": "Google Photos"
     },
     {
+      "slug": "clamav",
+      "tier": "core"
+    },
+    {
       "slug": "nextcloud",
       "tier": "core",
       "name": "Nextcloud",

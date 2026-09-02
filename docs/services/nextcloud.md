@@ -169,15 +169,24 @@ docker run --rm -v "<old-config-dir>:/from:ro" -v nextcloud_nextcloud-config:/to
 # repeat for data (nextcloud_nextcloud-data) and html (nextcloud_nextcloud-html)
 ```
 
-## Disabled: `files_antivirus` — configured for a `clamscan` binary that doesn't exist, no ClamAV service ever set up
+## Fixed: `files_antivirus` was configured for a `clamscan` binary that doesn't exist — now backed by a real [ClamAV](clamav.md) service
 
-**Symptom:** file operations that trigger an antivirus scan fail with a `500` — `Exception: RuntimeException ... files_antivirus/lib/Scanner/LocalClam.php ... The antivirus executable could not be found at /usr/bin/clamscan`. First caught via [Whiteboard](whiteboard.md)'s auto-save silently failing every 10-20s (see that doc's "Fixed: whiteboard content wasn't actually saving" entry) — this app blocks *any* scan-triggering write, not just whiteboard, so the same failure can surface anywhere.
+**Symptom:** file operations that trigger an antivirus scan failed with a `500` — `Exception: RuntimeException ... files_antivirus/lib/Scanner/LocalClam.php ... The antivirus executable could not be found at /usr/bin/clamscan`. First caught via [Whiteboard](whiteboard.md)'s auto-save silently failing every 10-20s (see that doc's "Fixed: whiteboard content wasn't actually saving" entry) — this app blocked *any* scan-triggering write, not just whiteboard.
 
-**Root cause:** `occ config:list files_antivirus` showed `av_path: /usr/bin/clamscan` — a path to a local binary expected to exist **inside the `nextcloud` container itself**, not a separate service. The stock `nextcloud` image doesn't ship ClamAV, and no separate ClamAV container has been set up anywhere in this stack — so the app was enabled but non-functional from the start, silently doing nothing (until it actively started blocking writes above).
+**Root cause:** `occ config:list files_antivirus` showed `av_path: /usr/bin/clamscan` — a path to a local binary expected to exist **inside the `nextcloud` container itself**, not a separate service. The stock `nextcloud` image doesn't ship ClamAV, and no separate ClamAV container existed anywhere in this stack — so the app was enabled but non-functional from the start.
 
-**Fix applied:** `occ app:disable files_antivirus`. It wasn't scanning anything before either, so this loses no real protection — it just stops the app from erroring out file operations it can never actually complete.
+**Interim fix (now superseded):** `occ app:disable files_antivirus` — stopped the write-blocking failures while a real backend was set up.
 
-**Follow-up planned, not yet done:** set up a real ClamAV backend as its own standalone container (same pattern as [ONLYOFFICE](onlyoffice.md)/[Whiteboard](whiteboard.md)) and reconfigure `files_antivirus` to point at it (`av_mode: daemon`, `av_host`/`av_port` instead of a local `av_path`). Don't re-enable `files_antivirus` before that's done and confirmed working — every scan-triggering write will fail the same way again otherwise.
+**Real fix:** added a standalone [ClamAV](clamav.md) service (same pattern as [ONLYOFFICE](onlyoffice.md)/[Whiteboard](whiteboard.md)) and reconfigured `files_antivirus` to daemon mode:
+
+```bash
+docker exec -u www-data nextcloud php occ app:enable files_antivirus
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_mode --value="daemon"
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_host --value="clamav"
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_port --value="3310"
+```
+
+Confirmed actually working via `occ files_antivirus:test` (not just "container healthy") — see `docs/services/clamav.md` for the full verification, the `av_infected_action=only_log` reasoning, and an important gotcha: scanning is **background/queued, not synchronous on upload** — a real EICAR test upload produced zero scan activity until `occ files_antivirus:background-scan` was run (or the regular `nextcloud-cron` job cycle reaches it), which looked like a silent failure before that was understood.
 
 ## Migrated: `nextcloud-db` from `postgres:18.4` to `postgres:18.4-alpine`
 
