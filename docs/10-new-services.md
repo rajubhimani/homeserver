@@ -83,6 +83,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Rocket.Chat | [docs/services/rocketchat.md](services/rocketchat.md) |
 | Zulip | [docs/services/zulip.md](services/zulip.md) |
 | CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
+| ClamAV | [docs/services/clamav.md](services/clamav.md) |
 | OrangeHRM | [docs/services/orangehrm.md](services/orangehrm.md) |
 | NocoDB | [docs/services/nocodb.md](services/nocodb.md) |
 | Documenso | [docs/services/documenso.md](services/documenso.md) |

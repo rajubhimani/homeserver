@@ -1,0 +1,4 @@
+services:
+  clamav:
+    ports:
+      - "8152:3310"

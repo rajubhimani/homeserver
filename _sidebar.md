@@ -110,6 +110,7 @@
     - [Cloudflare Tunnel](/docs/services/cloudflared.md "Public HTTPS access, no open ports — replaces Port forwarding")
     - [nginx-plain](/docs/04-nginx.md "Reverse proxy, default — replaces Manual nginx config")
     - [CrowdSec](/docs/services/crowdsec.md "Collaborative intrusion detection, detection-only, see TODO.md — replaces fail2ban")
+    - [ClamAV](/docs/services/clamav.md "Antivirus scanning daemon backing Nextcloud's files_antivirus app. No UI of its own.")
     - [Landing Page](/docs/07-landing.md "Service dashboard with live status")
 
 - Kubernetes Pilot (Experimental)

@@ -1,0 +1,29 @@
+services:
+  clamav:
+    image: clamav/clamav:1.5.4_base
+    container_name: clamav
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CLAMD_STARTUP_TIMEOUT: ${CLAMD_STARTUP_TIMEOUT:-1800}
+    # No persistent volumes at all — pure regenerable virus-signature cache,
+    # nothing here that isn't re-downloadable from ClamAV's own update
+    # servers, so it lives under service_data/cache/, never service_data/data/.
+    volumes:
+      - ${CACHE_ROOT}:/var/lib/clamav
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true
