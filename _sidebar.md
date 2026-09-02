@@ -38,6 +38,7 @@
       - [AppFlowy](/docs/services/appflowy.md "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools.")
       - [Excalidraw](/docs/services/excalidraw.md "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage. Replaces: draw.io / Miro.")
       - [Karakeep](/docs/services/karakeep.md "Bookmark manager with AI auto-tagging and full-text search of saved pages. Replaces: Pocket / Raindrop.")
+      - [Nextcloud Whiteboard](/docs/services/whiteboard.md "Infinite-canvas whiteboard for sketching and diagramming together in real time, built into Nextcloud — a self-hosted Miro alternative.")
     - Project & Task Mgmt
       - [Vikunja](/docs/services/vikunja.md "To-do list and task management app. Organize projects, set due dates, and track work. Replaces: Todoist.")
       - [OpenProject](/docs/services/openproject.md "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking. Replaces: Jira / Asana.")

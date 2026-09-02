@@ -8,7 +8,7 @@
 
 ## What's in the stack
 
-63 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
+64 services grouped the same way as the [landing page](docs/07-landing.md) tiles. Bare
 links — hover (or tap-and-hold on mobile) any name for what it does and what it replaces.
 
 ### Storage & Media
@@ -21,7 +21,7 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 
 ### Productivity
 
-**Notes & Knowledge** — [Trilium Notes](docs/services/trilium.md "Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid.") · [SilverBullet](docs/services/silverbullet.md "Markdown notes with a query language over your own space. Lightweight, single space. Replaces: Obsidian (self-hosted).") · [Outline](docs/services/outline.md "Polished self-hosted team wiki and docs, good search. Logs in via Authentik. Replaces: Notion / Confluence.") · [BookStack](docs/services/bookstack.md "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha. Replaces: Confluence.") · [AppFlowy](docs/services/appflowy.md "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools.") · [Excalidraw](docs/services/excalidraw.md "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage. Replaces: draw.io / Miro.") · [Karakeep](docs/services/karakeep.md "Bookmark manager with AI auto-tagging and full-text search of saved pages. Replaces: Pocket / Raindrop.")
+**Notes & Knowledge** — [Trilium Notes](docs/services/trilium.md "Hierarchical, scriptable notes with attributes and relations. A personal wiki + database hybrid.") · [SilverBullet](docs/services/silverbullet.md "Markdown notes with a query language over your own space. Lightweight, single space. Replaces: Obsidian (self-hosted).") · [Outline](docs/services/outline.md "Polished self-hosted team wiki and docs, good search. Logs in via Authentik. Replaces: Notion / Confluence.") · [BookStack](docs/services/bookstack.md "Shelves/books/chapters/pages wiki. One book per homelab service, one page per gotcha. Replaces: Confluence.") · [AppFlowy](docs/services/appflowy.md "Open-source Notion alternative. Collaborative docs, databases, kanban, and AI writing tools.") · [Excalidraw](docs/services/excalidraw.md "Hand-drawn-style whiteboard for diagrams and sketches. Local-only by default, no server-side storage. Replaces: draw.io / Miro.") · [Karakeep](docs/services/karakeep.md "Bookmark manager with AI auto-tagging and full-text search of saved pages. Replaces: Pocket / Raindrop.") · [Nextcloud Whiteboard](docs/services/whiteboard.md "Infinite-canvas whiteboard for sketching and diagramming together in real time, built into Nextcloud — a self-hosted Miro alternative.")
 
 **Project & Task Mgmt** — [Vikunja](docs/services/vikunja.md "To-do list and task management app. Organize projects, set due dates, and track work. Replaces: Todoist.") · [OpenProject](docs/services/openproject.md "Open-source project management. Gantt charts, Kanban, sprints, wikis and time tracking. Replaces: Jira / Asana.") · [Plane](docs/services/plane.md "Modern open-source project management. Issues, cycles, modules and analytics. Jira alternative.")
 
@@ -208,6 +208,7 @@ uv run homeserver.py prod up all
     ├── landing/
     ├── nextcloud/
     ├── onlyoffice/
+    ├── whiteboard/
     ├── immich/
     ├── jellyfin/
     ├── vaultwarden/
@@ -283,6 +284,7 @@ service_data/
 ├── nginx/            (data/, letsencrypt/) — optional NPM proxy
 ├── nextcloud/        (postgres/, config/, data/, custom_apps/)
 ├── onlyoffice/       (data/, log/, lib/)
+├── whiteboard/       (empty — no persistent data, no DB)
 ├── immich/           (postgres/) — photo/video library lives outside this tree, in service_data/media/immich/ (kept out of DATA_ROOT so backups don't sweep it)
 ├── jellyfin/         (config/, cache/) — media library lives outside this tree, in service_data/media/jellyfin/; downloaded poster/fanart metadata cache also outside, in service_data/cache/jellyfin/metadata/ (same reason)
 ├── vaultwarden/      (data/)

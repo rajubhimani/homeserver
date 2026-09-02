@@ -1,0 +1,30 @@
+services:
+  whiteboard:
+    # No clean numbered release tags published upstream at the time this was
+    # added (GHCR listing was a mix of beta/daily/commit-hash tags) — :stable
+    # is upstream's own documented production tag. Resolved to 1.5.9 at the
+    # time this was added (matches the Nextcloud "whiteboard" app version
+    # exactly — app and backend are versioned together), confirmed via the
+    # container's own startup log, not guessed.
+    image: ghcr.io/nextcloud-releases/whiteboard:stable
+    container_name: whiteboard
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Internal container URL, not the public domain — avoids a hairpin
+      # through cloudflared for every file read/write, same reasoning as
+      # ONLYOFFICE's "Advanced server settings" internal address.
+      NEXTCLOUD_URL: http://nextcloud
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3002/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true
