@@ -444,7 +444,16 @@ class DockerBackend(ABC):
         """Clear the volume (if it has contents) and extract archive_path into it."""
 
     @abstractmethod
-    def untar_into_dir(self, archive_path: Path, dest_dir: Path) -> bool: ...
+    def untar_into_dir(self, archive_path: Path, dest_dir: Path) -> bool:
+        """Clear dest_dir (if it has contents) and extract archive_path into
+        it -- same contract as untar_into_volume. Restoring an older snapshot
+        must always leave dest_dir as an exact copy of the snapshot, never a
+        merge with whatever was already there: for a WAL-based store
+        (Prometheus, Loki) a merge produces a directory holding segments from
+        two different points in the WAL's history, which the engine reads as
+        corruption ("segments are not sequential") rather than just stale
+        data. Confirmed as the root cause of a real incident against this
+        stack's own observability service data."""
 
     @abstractmethod
     def system_prune(self) -> tuple[bool, str]:
@@ -616,7 +625,7 @@ class SubprocessBackend(DockerBackend):
         dest_dir.mkdir(parents=True, exist_ok=True)
         args = [
             "run", "--rm", "-v", f"{dest_dir}:/to", "-v", f"{archive_path.parent}:/backup", "alpine:3.21",
-            "sh", "-c", f"tar xzf /backup/{archive_path.name} -C /to",
+            "sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to",
         ]
         return self._run(args).returncode == 0
 
@@ -852,7 +861,8 @@ class PythonOnWhalesBackend(DockerBackend):
         dest_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._docker.run(
-                "alpine:3.21", ["sh", "-c", f"tar xzf /backup/{archive_path.name} -C /to"],
+                "alpine:3.21",
+                ["sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to"],
                 volumes=[(dest_dir, "/to"), (archive_path.parent, "/backup")],
                 remove=True,
             )
