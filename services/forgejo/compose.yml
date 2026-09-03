@@ -74,9 +74,11 @@ services:
     # socket-mounting services (dozzle/portainer/dockge) so `docker` exec actions work.
     user: "0:0"
     environment:
-      FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}
-      RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:-}
-      RUNNER_NAME: ${RUNNER_NAME:-forgejo-runner}
+      # Trailing slash matters -- must match the connection's registered url
+      # exactly (Forgejo's own admin UI shows it this way).
+      FORGEJO_INSTANCE_URL: https://forgejo.${DOMAIN}/
+      RUNNER_UUID: ${RUNNER_UUID:-}
+      RUNNER_TOKEN: ${RUNNER_TOKEN:-}
       # catthehacker/ubuntu is the standard community image for act/Forgejo/Gitea
       # runners -- it emulates GitHub's runner environment (Node ABI, curl, docker
       # CLI, build tools). Plain node:20-bookworm crashes on actions/checkout@v7's
@@ -98,22 +100,27 @@ services:
     # The image's default CMD is the bare binary with no subcommand, which just prints
     # help text and exits 0 -- with restart:unless-stopped that loops forever and the
     # container never stays up long enough to `docker exec` a manual `register` into it.
-    # Register once (writes /data/.runner) using RUNNER_REGISTRATION_TOKEN, then daemon.
+    #
+    # This pin (v13.0.0) deprecated the old `register --token <pool-token>` flow --
+    # confirmed live: it logs "`register` has been deprecated; declare connections in
+    # the runner configuration instead" on every start, and Forgejo's own "Create new
+    # Runner" admin UI now generates a per-runner UUID+token pair for the
+    # server.connections config schema below instead of a reusable pool token (the
+    # kind action_runner_token/`register --token` expects) -- pointing the old flow at
+    # one of these new-style tokens fails immediately with "invalid_argument: runner
+    # registration token not found", since it was never the right kind of credential
+    # for that command at all. No more first-boot-only registration step either --
+    # this connection method doesn't persist a .runner file, so the config (including
+    # the token) gets written and the daemon started fresh on every container start.
     command:
       - /bin/sh
       - -c
       - |
-        if [ ! -f /data/.runner ]; then
-          if [ -z "$$RUNNER_REGISTRATION_TOKEN" ]; then
-            echo "forgejo-runner: /data/.runner not found and RUNNER_REGISTRATION_TOKEN is unset -- set it in services/forgejo/.env (get a token from https://forgejo.${DOMAIN}/-/admin/actions/runners, 'Create new Runner')" >&2
-            exit 1
-          fi
-          forgejo-runner register --no-interactive \
-            --instance "$$FORGEJO_INSTANCE_URL" \
-            --token "$$RUNNER_REGISTRATION_TOKEN" \
-            --name "$$RUNNER_NAME" \
-            --labels "$$RUNNER_LABELS"
+        if [ -z "$$RUNNER_UUID" ] || [ -z "$$RUNNER_TOKEN" ]; then
+          echo "forgejo-runner: RUNNER_UUID/RUNNER_TOKEN unset -- set them in services/forgejo/.env (get both from https://forgejo.${DOMAIN}/-/admin/actions/runners, 'Create new Runner')" >&2
+          exit 1
         fi
+        LABELS_YAML=$$(echo "$$RUNNER_LABELS" | tr ',' '\n' | sed 's/^/            - "/; s/$/"/')
         # forgejo-runner itself has the host docker.sock (below), but each job
         # runs in its own separate sibling container that does NOT inherit it --
         # a workflow step running `docker build`/`docker push` fails with
@@ -139,10 +146,17 @@ services:
         # docs/services/forgejo.md for the full history and trade-off.
         cat > /data/config.yaml <<-CONFIG
         runner:
-          file: .runner
           capacity: $$RUNNER_CAPACITY
+          labels:
+        $$LABELS_YAML
         container:
           docker_host: "automount"
+        server:
+          connections:
+            forgejo:
+              url: $$FORGEJO_INSTANCE_URL
+              uuid: $$RUNNER_UUID
+              token: $$RUNNER_TOKEN
         CONFIG
         exec forgejo-runner daemon --config /data/config.yaml
     volumes:
