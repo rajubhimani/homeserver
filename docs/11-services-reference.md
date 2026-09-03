@@ -15,7 +15,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
-| `core` | `uv run homeserver.py dev up core` | min + ntfy, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, observability, plausible |
+| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, observability, plausible |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + every office service below — **opt-in, never implied by `up daily`** |
 | `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + office + every automation/AI service below — **opt-in, never implied by `up office`** |
@@ -36,7 +36,7 @@ one command that stops the entire stack, in reverse order — no list to
 maintain.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
-brave, chromium, coolify, uptime-kuma, excalidraw, firefox, ungoogled-chromium,
+brave, chromium, coolify, excalidraw, firefox, ungoogled-chromium,
 mullvad-browser, browser, karakeep, homebox, silverbullet, syncthing, trilium,
 wallabag.
 
@@ -86,11 +86,11 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Mailpit | `mailpit` | 8140 | 8025 | core |
 | Observability (Grafana) | `grafana` | 8134 | 3000 | core |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
+| Uptime Kuma | `uptime-kuma` | 3001 | 3001 | core |
 | Plausible | `plausible` | 8130 | 8000 | core |
 | Brave | `brave` | 8148 | 3000 | daily |
 | Chromium | `chromium` | 8146 | 3000 | daily |
 | Coolify | `coolify` | 8132 | 8080 | daily |
-| Uptime Kuma | `uptime-kuma` | 3001 | 3001 | daily |
 | Excalidraw | `excalidraw` | 8116 | 80 | daily |
 | Firefox | `firefox` | 8145 | 3000 | daily |
 | Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | daily |
@@ -184,13 +184,13 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `mailpit.yourdomain.com` | `mailpit` | `8025` | core |
 | `atuin.yourdomain.com` | `atuin` | `8888` | core |
 | `plausible.yourdomain.com` | `plausible` | `8000` | core |
+| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | core |
+| `status.yourdomain.com` | `uptime-kuma` | `3001` | core |
 | `grafana.yourdomain.com` | `grafana` | `3000` | core |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | core |
 | `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | office |
 | `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | office |
 | `homebox.yourdomain.com` | `homebox` | `7745` | daily |
-| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | daily |
-| `status.yourdomain.com` | `uptime-kuma` | `3001` | daily |
 | `syncthing.yourdomain.com` | `syncthing` | `8384` | daily |
 | `miniflux.yourdomain.com` | `miniflux` | `8080` | office |
 | `plane.yourdomain.com` | `plane-proxy` | `80` | office |
