@@ -15,7 +15,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
-| `core` | `uv run homeserver.py dev up core` | min + adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, observability, plausible |
+| `core` | `uv run homeserver.py dev up core` | min + ntfy, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, observability, plausible |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + every office service below — **opt-in, never implied by `up daily`** |
 | `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + office + every automation/AI service below — **opt-in, never implied by `up office`** |
@@ -47,7 +47,7 @@ stirling-pdf-lite, stirling-pdf, vikunja, appflowy, plane, calcom, listmonk, min
 airflow, dagster, temporal, ollama, open-webui, n8n.
 
 **Extra services** (started with `up all` or individually):
-crowdsec, dockge, ntfy, dozzle,
+crowdsec, dockge, dozzle,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,
 documenso, invoiceshelf, openproject, mattermost,
@@ -67,6 +67,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | min |
 | Docs | `docs` | 8144 | 80 | min |
 | Landing Page | `landing` | 8080 | 80 | min |
+| ntfy | `ntfy` | 8118 | 80 | core |
 | AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | core |
 | Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | core |
 | Vaultwarden | `vaultwarden` | 8200 | 80 | core |
@@ -116,7 +117,6 @@ gitlab (redundant with forgejo at far higher memory cost).
 | n8n | `n8n` | 8120 | 5678 | automation-ai |
 | CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
-| ntfy | `ntfy` | 8118 | 80 | extra |
 | Dozzle | `dozzle` | 9999 | 8080 | extra |
 | Paperless-ngx | `paperless` | 8010 | 8000 | extra |
 | BookStack | `bookstack` | 8115 | 80 | extra |
@@ -167,6 +167,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `beszel.yourdomain.com` | `beszel` | `8090` | min |
 | `portainer.yourdomain.com` | `portainer` | `9000` | min |
 | `docs.yourdomain.com` | `docs` | `80` | min |
+| `ntfy.yourdomain.com` | `ntfy` | `80` | core |
 | `nextcloud.yourdomain.com` | `nextcloud` | `80` | core |
 | `onlyoffice.yourdomain.com` | `onlyoffice` | `80` | core |
 | `whiteboard.yourdomain.com` | `whiteboard` | `3002` | core |
@@ -219,7 +220,6 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
 | `outline.yourdomain.com` | `outline` | `3000` | extra |
 | `bookstack.yourdomain.com` | `bookstack` | `80` | extra |
-| `ntfy.yourdomain.com` | `ntfy` | `80` | extra |
 | `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |
 | `rocketchat.yourdomain.com` | `rocketchat` | `3000` | extra |
 | `zulip.yourdomain.com` | `zulip` | `80` | extra |
