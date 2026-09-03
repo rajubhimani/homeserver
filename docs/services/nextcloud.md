@@ -46,11 +46,26 @@ uv run services/nextcloud/configure-family-apps.py
 
 Installs and enables the apps a family actually uses (Files, Calendar, Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE) and wires up [ONLYOFFICE](onlyoffice.md)/[Whiteboard](whiteboard.md)/[ClamAV](clamav.md) integration automatically if those services are set up (reads their JWT secrets straight from their own `.env` files — nothing to copy-paste by hand) — unconditionally, no prompt, since that part is unambiguous setup work.
 
-It then **prints the full list** of enterprise/business-bundle apps that ship by default but add nothing for personal use (workflow automation, retention policies, LDAP/SAML, social-media sharing, the global lookup directory, etc. — see "Enterprise app cleanup" below) with a one-line reason each, and **asks for confirmation** before touching any of it — answer no, or run it non-interactively without `--yes`, and that whole step is skipped while everything else still applies. Pass `--yes`/`-y` to skip the prompt and apply the cleanup immediately. Reproduces the exact app configuration this deployment settled on after evaluating the full default app list against actual family usage (Drive + Talk + Calendar replacement, not a business/team instance).
+It then walks through the enterprise/business-bundle apps that ship by default but add nothing for personal use (workflow automation, retention policies, LDAP/SAML, social-media sharing, the global lookup directory, etc. — see "Enterprise app cleanup" below) with a one-line reason each, and asks **how** to apply the cleanup:
 
-Pass `--list`/`-l` to just print what's currently installed (grouped into Family / Enterprise-bundle-candidate / Other-core, each with live enabled/disabled state) without taking any action — useful to check current state before deciding whether to run the cleanup.
+```text
+Apply how? [a]ll at once / [o]ne by one / [n]o, skip:
+```
 
-Safe to re-run any time — every step is idempotent (install-if-missing, set-if-different, disable-if-enabled), including re-running just to reconsider the cleanup prompt later. Requires Nextcloud to already be past its own first-run setup wizard (needs a working `occ`); the script checks this itself and tells you plainly if it isn't ready yet.
+- **`a`** — every app in the list gets removed/disabled, same as the old bulk behavior.
+- **`o`** — goes through each app individually (`Remove? [y/N]:`), so you can keep something you'd actually use (e.g. `forms` for family polls) while dropping the rest.
+- **`n`** — skips this whole step, nothing touched. Everything else (family apps, ONLYOFFICE/Whiteboard/ClamAV wiring) still runs regardless of this choice.
+
+After choosing `a` or `o`, it asks `Save this selection for next time? [y/N]:` — answering yes writes it to `services/nextcloud/family-apps-selection.json` (gitignored, local to this install — matches the repo's existing blanket `*.json` rule, no `.env`-style secret in it, just per-app keep/remove decisions). Answering no just finishes, nothing written.
+
+**On a later run**, if a saved selection exists:
+- **Interactively**, it's offered first — `Reuse it, or start fresh? [r]euse / [f]resh:` — reusing applies it immediately with no further prompts.
+- **Non-interactively** (`--yes`, or no TTY at all — e.g. a scripted fresh install) it's applied **automatically**, no flags needed beyond having saved it once. This is deliberate: a saved selection means you already decided, and completing that "reproducible fresh install" loop without re-asking is the actual point of this script. With no saved selection, `--yes` falls back to the full bulk list (today's original behavior); no `--yes` and no TTY stays a safe no-op, same as before saved-selection support existed.
+- Pass **`--fresh`** to ignore any saved selection and decide from scratch (interactively) or fall back to the full bulk list (with `--yes`) — useful to force a clean reset without deleting the JSON file by hand.
+
+Pass `--list`/`-l` to just print what's currently installed (grouped into Family / Enterprise-bundle-candidate / Other-core, each with live enabled/disabled state, annotated with `(saved: keep|remove)` if a selection was saved) without taking any action — useful to check current state before deciding whether to run the cleanup.
+
+Safe to re-run any time — every step is idempotent (install-if-missing, set-if-different, disable-if-enabled, remove-if-already-removed), including re-running just to reconsider the cleanup choice later. Requires Nextcloud to already be past its own first-run setup wizard (needs a working `occ`); the script checks this itself and tells you plainly if it isn't ready yet.
 
 ### Enterprise app cleanup — what's disabled/removed and why
 

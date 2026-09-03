@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Configure Nextcloud for family Drive/Calendar/Talk use on a fresh install.
 
-Usage: uv run services/nextcloud/configure-family-apps.py   (from repo root)
-       uv run services/nextcloud/configure-family-apps.py --yes    (skip the confirmation prompt)
-       uv run services/nextcloud/configure-family-apps.py --list   (just report what's installed, no action taken)
+Usage: uv run services/nextcloud/configure-family-apps.py    (from repo root)
+       uv run services/nextcloud/configure-family-apps.py --yes     (skip prompts, apply a saved selection if one exists, else the full list)
+       uv run services/nextcloud/configure-family-apps.py --fresh   (ignore any saved selection, decide from scratch)
+       uv run services/nextcloud/configure-family-apps.py --list    (just report what's installed, no action taken)
 
 Installs and enables the apps a family actually uses (Files, Calendar,
 Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE) and wires up
@@ -11,12 +12,16 @@ ONLYOFFICE/Whiteboard/ClamAV integration from their own .env files if those
 services are set up -- unconditionally, no prompt, since that's unambiguous
 setup work.
 
-Then shows the full list of enterprise/business-bundle apps it would
-disable/remove (workflow automation, retention policies, LDAP/SAML,
+Then walks through the enterprise/business-bundle apps that add nothing for
+personal use (workflow automation, retention policies, LDAP/SAML,
 social-media sharing, the global lookup directory, etc. -- see
-docs/services/nextcloud.md for the reasoning per app) and asks for
-confirmation before touching any of them. Answer no (or run non-interactively
-without --yes) and that whole step is skipped -- everything else still runs.
+docs/services/nextcloud.md for the reasoning per app). At the confirmation
+step you choose [a]ll at once, [o]ne app at a time (keep-or-remove each),
+or [n]o/skip entirely -- and can save whatever you decided to
+family-apps-selection.json (gitignored, local to this install) so a later
+run reuses it instead of re-asking. A saved selection is applied
+automatically on --yes or non-interactive runs (no TTY) -- pass --fresh to
+ignore it and decide from scratch instead.
 
 Safe to re-run any time (idempotent -- every occ command here is itself
 idempotent: install-if-missing, enable-if-disabled, disable-if-enabled).
@@ -35,10 +40,12 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SERVICE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SERVICE_DIR.parent.parent
+SELECTION_FILE = SERVICE_DIR / "family-apps-selection.json"
 
 # Apps a family actually uses day to day -- installed/enabled unconditionally.
 FAMILY_APPS = [
@@ -124,9 +131,71 @@ def require_nextcloud_installed() -> None:
         )
 
 
-def confirm_cleanup(auto_yes: bool) -> bool:
+def load_saved_selection() -> tuple[dict[str, str], str] | None:
+    """Returns (selection, saved_at) or None if no valid saved file exists.
+
+    Apps in today's APPS_TO_REMOVE that aren't in the saved file (added to
+    the script after the file was last saved) default to "keep" -- never
+    silently start removing something the user was never actually asked
+    about."""
+    if not SELECTION_FILE.exists():
+        return None
+    try:
+        data = json.loads(SELECTION_FILE.read_text())
+        raw_selection = data["selection"]
+        saved_at = data["saved_at"]
+    except (json.JSONDecodeError, KeyError, OSError):
+        return None
+    selection = {app: raw_selection.get(app, "keep") for app in APPS_TO_REMOVE}
+    return selection, saved_at
+
+
+def save_selection(selection: dict[str, str]) -> None:
+    SELECTION_FILE.write_text(json.dumps(
+        {"saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "selection": selection},
+        indent=2,
+    ) + "\n")
+    print(f"  Saved to {SELECTION_FILE.relative_to(REPO_ROOT)}")
+
+
+def prompt_mode() -> str:
+    while True:
+        answer = input("\nApply how? [a]ll at once / [o]ne by one / [n]o, skip: ").strip().lower()
+        if answer in ("a", "all"):
+            return "a"
+        if answer in ("o", "one"):
+            return "o"
+        if answer in ("n", "no", ""):
+            return "n"
+        print("  Please answer a, o, or n.")
+
+
+def run_one_by_one() -> dict[str, str]:
+    print()
+    selection: dict[str, str] = {}
+    for app, reason in APPS_TO_REMOVE.items():
+        answer = input(f"  {app} -- {reason}\n    Remove? [y/N]: ").strip().lower()
+        selection[app] = "remove" if answer in ("y", "yes") else "keep"
+    return selection
+
+
+def apply_selection(selection: dict[str, str]) -> None:
+    to_remove = [app for app, decision in selection.items() if decision == "remove"]
+    print(f"\n== Removing {len(to_remove)} enterprise/business-bundle app(s) ==")
+    for app in to_remove:
+        occ("app:remove", app, check=False)
+
+    print("== Attempting to disable shipped/core apps (expected to fail, kept for visibility) ==")
+    for app in sorted(SHIPPED_CANNOT_DISABLE):
+        occ("app:disable", app, check=False)
+
+    print("== Disabling the global lookup directory (privacy) ==")
+    occ("config:system:set", "lookup_server", "--value", "")
+
+
+def confirm_cleanup(auto_yes: bool, fresh: bool) -> dict[str, str] | None:
     print("\nThe following apps are enterprise/business-bundle features with no")
-    print("value for personal/family use. They'll be disabled (and removed where")
+    print("value for personal/family use. They can be disabled (and removed where")
     print("Nextcloud allows it), plus the global lookup directory turned off:\n")
     for app, reason in APPS_TO_REMOVE.items():
         print(f"  - {app}: {reason}")
@@ -134,14 +203,40 @@ def confirm_cleanup(auto_yes: bool) -> bool:
     print("  - config: lookup_server set empty (stops publishing profile fields to")
     print("    Nextcloud's global public user directory)")
 
-    if auto_yes:
-        print("\n--yes passed, proceeding without prompting.")
-        return True
-    if not sys.stdin.isatty():
-        print("\nNot running interactively and --yes wasn't passed -- skipping this step.")
-        return False
-    answer = input("\nDisable/remove these now? [y/N]: ").strip().lower()
-    return answer in ("y", "yes")
+    saved = None if fresh else load_saved_selection()
+
+    non_interactive = auto_yes or not sys.stdin.isatty()
+    if non_interactive:
+        if saved:
+            selection, saved_at = saved
+            reason = "--yes passed" if auto_yes else "not running interactively"
+            print(f"\n{reason} -- a saved selection exists (from {saved_at}), applying it.")
+            return selection
+        if auto_yes:
+            print("\n--yes passed, no saved selection -- proceeding with the full list.")
+            return {app: "remove" for app in APPS_TO_REMOVE}
+        print("\nNot running interactively, --yes wasn't passed, and no saved selection exists -- skipping this step.")
+        return None
+
+    if saved:
+        selection, saved_at = saved
+        n_remove = sum(1 for d in selection.values() if d == "remove")
+        n_keep = len(selection) - n_remove
+        print(f"\nFound a saved selection from {saved_at}: {n_remove} to remove, {n_keep} to keep.")
+        answer = input("Reuse it, or start fresh? [r]euse / [f]resh: ").strip().lower()
+        if answer in ("r", "reuse"):
+            return selection
+
+    mode = prompt_mode()
+    if mode == "n":
+        return None
+    selection = {app: "remove" for app in APPS_TO_REMOVE} if mode == "a" else run_one_by_one()
+
+    answer = input("\nSave this selection for next time? [y/N]: ").strip().lower()
+    if answer in ("y", "yes"):
+        save_selection(selection)
+
+    return selection
 
 
 def get_app_states() -> dict[str, str]:
@@ -170,6 +265,7 @@ def list_installed_apps() -> None:
     anything neither list knows about ('Other / core'). Takes no action."""
     states = get_app_states()
     known = set(FAMILY_APPS) | set(APPS_TO_REMOVE) | SHIPPED_CANNOT_DISABLE
+    saved = load_saved_selection()
 
     print("Family apps:")
     for app in FAMILY_APPS:
@@ -177,10 +273,14 @@ def list_installed_apps() -> None:
             print(f"  [{states[app]:^10}] {app}")
 
     print("\nEnterprise/business-bundle apps (candidates for the cleanup step):")
+    if saved:
+        print(f"  (saved selection from {saved[1]} shown below)")
     for app in list(APPS_TO_REMOVE) + sorted(SHIPPED_CANNOT_DISABLE):
-        if app in states:
-            reason = APPS_TO_REMOVE.get(app, "shipped/core, can't be disabled or removed")
-            print(f"  [{states[app]:^10}] {app} -- {reason}")
+        if app not in states:
+            continue
+        reason = APPS_TO_REMOVE.get(app, "shipped/core, can't be disabled or removed")
+        tag = f" (saved: {saved[0][app]})" if saved and app in saved[0] else ""
+        print(f"  [{states[app]:^10}] {app} -- {reason}{tag}")
 
     other_enabled = sorted(a for a, s in states.items() if s == "enabled" and a not in known)
     other_disabled = sorted(a for a, s in states.items() if s == "disabled" and a not in known)
@@ -221,7 +321,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--yes", "-y", action="store_true",
-        help="Skip the confirmation prompt and proceed with the enterprise-app cleanup.",
+        help="Skip prompts: apply a saved selection if one exists, otherwise the full cleanup list.",
+    )
+    parser.add_argument(
+        "--fresh", action="store_true",
+        help="Ignore any saved selection and decide from scratch.",
     )
     parser.add_argument(
         "--list", "-l", action="store_true",
@@ -270,18 +374,10 @@ def main() -> int:
     else:
         print("== Skipping files_antivirus wiring (services/clamav/ not set up) ==")
 
-    cleanup_applied = confirm_cleanup(args.yes)
+    selection = confirm_cleanup(args.yes, args.fresh)
+    cleanup_applied = selection is not None
     if cleanup_applied:
-        print("\n== Removing enterprise/business-bundle apps ==")
-        for app in APPS_TO_REMOVE:
-            occ("app:remove", app, check=False)
-
-        print("== Attempting to disable shipped/core apps (expected to fail, kept for visibility) ==")
-        for app in sorted(SHIPPED_CANNOT_DISABLE):
-            occ("app:disable", app, check=False)
-
-        print("== Disabling the global lookup directory (privacy) ==")
-        occ("config:system:set", "lookup_server", "--value", "")
+        apply_selection(selection)
     else:
         print("\nSkipped -- leaving the enterprise/business-bundle apps as they are.")
         print("Re-run this script any time (or answer yes) to apply that cleanup later.")
