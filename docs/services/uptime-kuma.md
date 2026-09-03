@@ -37,6 +37,16 @@ It's a [PEP 723](https://peps.python.org/pep-0723/) inline-metadata script — `
 
 **Alerts weren't arriving instantly at first — the fix lived in `nginx-plain`, not here.** The `ntfy` notification channel worked (a published message showed up in ntfy's own log immediately), but the phone app only picked up new alerts on a manual refresh. Root cause was `nginx-plain`'s `ntfy.${DOMAIN}` proxy block missing the WebSocket upgrade headers and `proxy_buffering off` every other websocket-using service in this stack already has — so the persistent connection ntfy's app relies on for instant push either failed its handshake or got stuck in nginx's buffer. Fixed and verified live (`101 Switching Protocols`, a message arriving on an open stream within ~1s) — full writeup in [ntfy.md](ntfy.md#notes). Worth knowing if any *other* future notification channel here (Discord, Telegram, etc.) ever needs its own long-lived connection through this proxy — same class of fix would apply.
 
+## Operational settings (tuned away from image defaults)
+
+Applied via the API (same `uptime-kuma-api` library the bulk script uses) after checking self-hosted-monitoring best practices against what this instance actually had configured:
+
+- **Data retention: 30 days** (**Settings → Monitor History → Data Retention Time**, `keepDataPeriodDays`). Unset by default, which leaves heartbeat history in the `uptime-kuma-mariadb` volume growing unbounded — with 39 monitors on a 60s interval that adds up. 30 days is enough to spot a recurring pattern without keeping data forever.
+- **Resend interval: 30 minutes, every monitor** (`resendInterval: 30` — the field is a multiplier of the monitor's own heartbeat interval, not raw minutes; at the default 60s interval, `30 → 30 × 60s = 30 min`). Default is `0` (alert once on the initial down, silence after that even if it stays down for hours) — one missed phone notification meant genuinely never finding out. Applied to all 39 monitors via a one-off loop over `edit_monitor(id, resendInterval=30)` (not part of `setup-monitors.py` itself, since it's a one-time tuning pass rather than something new monitors need repeated).
+- **Retries** (`maxretries: 1`, `retryInterval: 60s` — `add_monitor`'s own defaults, left as-is) were already sensible and didn't need changing: one retry before flipping to down avoids alerting on a single transient blip.
+
+**Known gap, not yet addressed:** the `ntfy` notification channel is itself one of the 39 monitored containers — if `ntfy` goes down, Uptime Kuma has no way to tell you, since ntfy *is* the alert path. Standard monitoring advice is at least one independent channel for exactly this case (e.g. a Discord or Telegram webhook, unrelated to anything else in this stack). Not set up yet.
+
 ## Using it day to day
 
 There's no client app or agent to install anywhere — Uptime Kuma is purely a web dashboard that reaches out to the things it's watching, not the other way round. Everything below happens in that same web UI (`https://uptime-kuma.${DOMAIN}/` in prod, `http://<ip>:3001` in dev).
