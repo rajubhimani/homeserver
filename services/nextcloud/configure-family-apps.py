@@ -2,17 +2,22 @@
 """Configure Nextcloud for family Drive/Calendar/Talk use on a fresh install.
 
 Usage: uv run services/nextcloud/configure-family-apps.py   (from repo root)
+       uv run services/nextcloud/configure-family-apps.py --yes   (skip the confirmation prompt)
 
 Installs and enables the apps a family actually uses (Files, Calendar,
-Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE), wires up
+Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE) and wires up
 ONLYOFFICE/Whiteboard/ClamAV integration from their own .env files if those
-services are set up, disables the enterprise/business-bundle apps that add
-no value for personal use (workflow automation, retention policies,
-LDAP/SAML, social-media sharing, etc.), and turns off the global lookup
-directory (privacy — nothing about a private family instance should be
-published to it).
+services are set up -- unconditionally, no prompt, since that's unambiguous
+setup work.
 
-Safe to re-run any time (idempotent — every occ command here is itself
+Then shows the full list of enterprise/business-bundle apps it would
+disable/remove (workflow automation, retention policies, LDAP/SAML,
+social-media sharing, the global lookup directory, etc. -- see
+docs/services/nextcloud.md for the reasoning per app) and asks for
+confirmation before touching any of them. Answer no (or run non-interactively
+without --yes) and that whole step is skipped -- everything else still runs.
+
+Safe to re-run any time (idempotent -- every occ command here is itself
 idempotent: install-if-missing, enable-if-disabled, disable-if-enabled).
 
 Requires Nextcloud to already be past its own first-run install (this
@@ -25,6 +30,8 @@ Background/rationale for each decision: docs/services/nextcloud.md
 
 from __future__ import annotations
 
+import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -42,38 +49,39 @@ FAMILY_APPS = [
     "onlyoffice",
 ]
 
-# Enterprise/business-bundle apps that add nothing for personal/family use --
-# see docs/services/nextcloud.md for the full reasoning per app.
-APPS_TO_REMOVE = [
-    "terms_of_service",
-    "support",
-    "socialsharing_diaspora",
-    "socialsharing_facebook",
-    "socialsharing_twitter",
-    "socialsharing_email",
-    "survey_client",
-    "files_confidential",
-    "files_retention",
-    "files_automatedtagging",
-    "files_downloadlimit",
-    "user_ldap",
-    "user_saml",
-    "webhook_listeners",
-    "nextcloud_announcements",
-    "groupfolders",
-    "circles",
-    "tables",
-    "forms",
-    "collectives",
-    "related_resources",
-    "integration_forgejo_gitea",
-]
+# Enterprise/business-bundle apps that add nothing for personal/family use,
+# with the one-line reason shown at the confirmation prompt. Full background
+# per app: docs/services/nextcloud.md's "Enterprise app cleanup" section.
+APPS_TO_REMOVE: dict[str, str] = {
+    "terms_of_service": "Enterprise ToS-acceptance onboarding flow",
+    "support": '"Buy Nextcloud GmbH enterprise support" upsell app',
+    "socialsharing_diaspora": "Social-media share button on files (Diaspora)",
+    "socialsharing_facebook": "Social-media share button on files (Facebook)",
+    "socialsharing_twitter": "Social-media share button on files (Twitter/X)",
+    "socialsharing_email": "Social-media-style share-by-email button on files",
+    "survey_client": "Sends anonymous usage telemetry back to Nextcloud",
+    "files_confidential": 'Enterprise "mark file confidential" compliance tagging',
+    "files_retention": "Auto-deletes files per a retention policy -- real data-loss risk if ever configured",
+    "files_automatedtagging": "Workflow-rule-based auto-tagging (business automation)",
+    "files_downloadlimit": "Caps download counts on share links (business use case, e.g. limiting client access)",
+    "user_ldap": "Enterprise LDAP SSO backend -- unused in this stack",
+    "user_saml": "Enterprise SAML SSO backend -- unused in this stack",
+    "webhook_listeners": "Lets other apps register webhooks off Nextcloud events (dev/automation feature)",
+    "nextcloud_announcements": "Official Nextcloud marketing broadcasts (not local admin announcements)",
+    "groupfolders": "Team/org shared-folder permissions -- more than family sharing needs",
+    "circles": "Advanced team/community sharing groups",
+    "tables": "Mini spreadsheet/database app",
+    "forms": "Survey/form builder",
+    "collectives": "Team wiki pages",
+    "related_resources": "Cross-app related-resource suggestions tied to federation/teams",
+    "integration_forgejo_gitea": "Forgejo notification/link-preview integration -- personal dev convenience, not a family feature",
+}
 
-# Nextcloud won't let these be removed (shipped/core) -- disabling is enough,
-# they're inert with no config once disabled. app:disable is attempted for
-# all of APPS_TO_REMOVE + these regardless; app:remove is only attempted for
-# APPS_TO_REMOVE, and failures there ("shipped/core, cannot be removed") are
-# expected and non-fatal.
+# Nextcloud won't let these be disabled OR removed (shipped/core) -- they stay
+# enabled no matter what. Harmless: inert with no rules/config using them once
+# the apps that would configure them (files_retention, files_automatedtagging,
+# etc.) are gone. The disable attempt is still made, purely so the failure
+# shows up in the output rather than looking silently skipped.
 SHIPPED_CANNOT_DISABLE = {"workflowengine", "cloud_federation_api"}
 
 
@@ -115,7 +123,80 @@ def require_nextcloud_installed() -> None:
         )
 
 
+def confirm_cleanup(auto_yes: bool) -> bool:
+    print("\nThe following apps are enterprise/business-bundle features with no")
+    print("value for personal/family use. They'll be disabled (and removed where")
+    print("Nextcloud allows it), plus the global lookup directory turned off:\n")
+    for app, reason in APPS_TO_REMOVE.items():
+        print(f"  - {app}: {reason}")
+    print(f"  - (shipped/core, will stay enabled -- Nextcloud won't allow disabling these) {', '.join(sorted(SHIPPED_CANNOT_DISABLE))}")
+    print("  - config: lookup_server set empty (stops publishing profile fields to")
+    print("    Nextcloud's global public user directory)")
+
+    if auto_yes:
+        print("\n--yes passed, proceeding without prompting.")
+        return True
+    if not sys.stdin.isatty():
+        print("\nNot running interactively and --yes wasn't passed -- skipping this step.")
+        return False
+    answer = input("\nDisable/remove these now? [y/N]: ").strip().lower()
+    return answer in ("y", "yes")
+
+
+def get_app_states() -> dict[str, str]:
+    """Returns {app_id: 'enabled'|'disabled'|'not installed'} from live occ app:list."""
+    result = subprocess.run(
+        ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "app:list", "--output=json"],
+        capture_output=True, text=True,
+    )
+    states: dict[str, str] = {}
+    if result.returncode != 0:
+        return states
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return states
+    for app_id in data.get("enabled", {}):
+        states[app_id] = "enabled"
+    for app_id in data.get("disabled", {}):
+        states[app_id] = "disabled"
+    return states
+
+
+def print_final_picture(cleanup_applied: bool) -> None:
+    print("\n" + "=" * 60)
+    print("FINAL PICTURE")
+    print("=" * 60)
+
+    states = get_app_states()
+
+    print("\nFamily apps:")
+    for app in FAMILY_APPS:
+        print(f"  [{states.get(app, 'not installed'):^12}] {app}")
+
+    print("\nEnterprise/business-bundle apps:")
+    if cleanup_applied:
+        for app in APPS_TO_REMOVE:
+            print(f"  [{states.get(app, 'removed'):^12}] {app}")
+        for app in sorted(SHIPPED_CANNOT_DISABLE):
+            print(f"  [{states.get(app, 'enabled'):^12}] {app}  (shipped/core -- Nextcloud won't let this be disabled or removed; stays enabled but inert, no config/rules use it)")
+        print("\n  lookup_server: cleared (not publishing to the global directory)")
+    else:
+        print("  Cleanup was skipped -- still in whatever state they were in before this run:")
+        for app in APPS_TO_REMOVE:
+            print(f"  [{states.get(app, 'not installed'):^12}] {app}")
+        print("\n  Run this script again and answer yes (or pass --yes) to apply the cleanup.")
+    print()
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--yes", "-y", action="store_true",
+        help="Skip the confirmation prompt and proceed with the enterprise-app cleanup.",
+    )
+    args = parser.parse_args()
+
     require_nextcloud_installed()
     root_env = load_env(REPO_ROOT / ".env")
     domain = root_env.get("DOMAIN")
@@ -152,18 +233,23 @@ def main() -> int:
     else:
         print("== Skipping files_antivirus wiring (services/clamav/ not set up) ==")
 
-    print("== Removing enterprise/business-bundle apps ==")
-    for app in APPS_TO_REMOVE:
-        occ("app:remove", app, check=False)
+    cleanup_applied = confirm_cleanup(args.yes)
+    if cleanup_applied:
+        print("\n== Removing enterprise/business-bundle apps ==")
+        for app in APPS_TO_REMOVE:
+            occ("app:remove", app, check=False)
 
-    print("== Disabling shipped/core apps that can't be removed ==")
-    for app in sorted(SHIPPED_CANNOT_DISABLE):
-        occ("app:disable", app, check=False)
+        print("== Attempting to disable shipped/core apps (expected to fail, kept for visibility) ==")
+        for app in sorted(SHIPPED_CANNOT_DISABLE):
+            occ("app:disable", app, check=False)
 
-    print("== Disabling the global lookup directory (privacy) ==")
-    occ("config:system:set", "lookup_server", "--value", "")
+        print("== Disabling the global lookup directory (privacy) ==")
+        occ("config:system:set", "lookup_server", "--value", "")
+    else:
+        print("\nSkipped -- leaving the enterprise/business-bundle apps as they are.")
+        print("Re-run this script any time (or answer yes) to apply that cleanup later.")
 
-    print("\nDone. `docker exec -u www-data nextcloud php occ app:list` to review the final state.")
+    print_final_picture(cleanup_applied)
     return 0
 
 
