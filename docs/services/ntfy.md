@@ -27,9 +27,11 @@ curl -u youruser -d "test message" https://ntfy.<domain>/mytopic
 
 ## `homeserver-alerts` topic — watchdog notifications
 
-Used by [ClamAV](clamav.md)'s watchdog (`clamav-watchdog`, `services/clamav/watchdog.sh`) to push a real notification when the signature database goes stale instead of that only being visible via `docker inspect`. An account (`rajubhimani`, admin role) and an access token scoped for this (`ntfy token add --label=clamav-watchdog rajubhimani`, stored as `NTFY_ALERT_TOKEN` in `services/clamav/.env`) already exist — this section is about **subscribing to actually receive** what gets published there, which only you can do (same category of thing as clicking through an OAuth consent screen — no way to do this on your behalf).
+Used by [ClamAV](clamav.md)'s watchdog (`clamav-watchdog`, `services/clamav/watchdog.sh`) to push a real notification when the signature database goes stale instead of that only being visible via `docker inspect`. An admin account (`admin`) and an access token for this (labeled `homeserver-alerts`, stored as `NTFY_ALERT_TOKEN` in `services/clamav/.env`) already exist — this section is about **subscribing to actually receive** what gets published there, which only you can do (same category of thing as clicking through an OAuth consent screen — no way to do this on your behalf).
 
-**To subscribe on your phone:** install the ntfy app (link above), tap **+**, server `https://ntfy.${DOMAIN}`, topic `homeserver-alerts`, log in with the `rajubhimani` account, **Subscribe**.
+**To subscribe on your phone:** install the ntfy app (link above), tap **+**, server `https://ntfy.${DOMAIN}`, topic `homeserver-alerts`, log in with the `admin` account, **Subscribe**.
+
+**Only one admin account exists** (`admin`) — an earlier `rajubhimani` account was created and then deliberately removed to avoid two overlapping full-access accounts on a single-person instance. If you ever add a real second person, create a dedicated non-admin account for them (`ntfy user add <name>`) rather than sharing `admin`, and grant only the specific topics they need via `ntfy access <name> <topic> <permission>`.
 
 **To subscribe in a browser instead:** `https://ntfy.${DOMAIN}/homeserver-alerts` and log in the same way.
 
