@@ -30,6 +30,35 @@ services:
     networks:
       - homeserver
 
+  # clamav's healthcheck.sh catches a silently-failing freshclam, but that
+  # only surfaces to `docker ps`/`docker inspect` -- nobody watches that
+  # proactively. This polls the Docker API for clamav's actual health status
+  # and pushes an ntfy notification when it's been unhealthy for a while.
+  # Same watchdog pattern as adguard-home's (see services/adguard-home/).
+  clamav-watchdog:
+    image: curlimages/curl:8.21.0
+    container_name: clamav-watchdog
+    restart: unless-stopped
+    # curlimages/curl drops to a non-root user by default, which can't reach
+    # the Docker socket regardless of its host-side group ownership (varies
+    # between Docker and rootless podman). Root bypasses that permission
+    # check entirely.
+    user: "0:0"
+    environment:
+      CHECK_INTERVAL: ${WATCHDOG_CHECK_INTERVAL:-300}
+      FAIL_THRESHOLD: ${WATCHDOG_FAIL_THRESHOLD:-2}
+      ALERT_COOLDOWN: ${WATCHDOG_ALERT_COOLDOWN:-21600}
+      NTFY_URL: ${NTFY_ALERT_URL}
+      NTFY_TOKEN: ${NTFY_ALERT_TOKEN}
+    entrypoint: ["/bin/sh", "/watchdog.sh"]
+    volumes:
+      - ./watchdog.sh:/watchdog.sh:ro
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    networks:
+      - homeserver
+    depends_on:
+      - clamav
+
 networks:
   homeserver:
     external: true
