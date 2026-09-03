@@ -42,6 +42,7 @@ Any future watchdog in this stack can reuse the same topic (same pattern as `adg
 - Auth database and message cache live under `service_data/data/ntfy/data/` (`auth.db`, `cache.db`).
 - Health endpoint: `/v1/health`.
 - `NTFY_BEHIND_PROXY=true` is required so ntfy trusts `X-Forwarded-For` from nginx-plain for correct rate-limiting/IP logging.
+- **Reverse proxy needs WebSocket upgrade headers and buffering disabled, or push is not instant.** Subscribers (the phone app, the web UI) hold a long-lived connection open — either a real WebSocket (`/<topic>/ws`) or a chunked JSON stream (`/<topic>/json`) — with a keepalive ping every ~30s, and only pick up new messages the moment they arrive on that connection. `nginx-plain`'s `ntfy.${DOMAIN}` block was missing `proxy_set_header Upgrade`/`Connection $connection_upgrade` (breaking the WebSocket handshake outright — confirmed live, `curl` got a hung connection instead of `101 Switching Protocols` before the fix) and `proxy_buffering off` (without it, nginx holds the streamed response in its own buffer instead of flushing it to the client immediately, so messages only show up once the app happens to reconnect — e.g. on a manual pull-to-refresh). Both fixed in the same block as the rest of nginx-plain's websocket-upgrade services; verified after the fix with a real WebSocket handshake over the public domain (`101 Switching Protocols`) and a published message arriving on an open stream within ~1s.
 
 ---
 
