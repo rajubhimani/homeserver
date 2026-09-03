@@ -40,6 +40,7 @@ services:
       UPTIME_KUMA_DB_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ${DATA_ROOT}/data:/app/data
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3001/ || exit 1"]
       interval: 60s
