@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Monitor services and alert when something goes down.
-**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** MariaDB (bundled `uptime-kuma-db` container), Docker socket (`${DOCKER_SOCKET}`, read-only — used for Docker Container monitors) | **Memory:** no hard limit set on the app; measured idle ~56MB — `uptime-kuma-db` capped at 384M
+**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** MariaDB (bundled `uptime-kuma-db` container), Docker socket (`${DOCKER_SOCKET}`, read-only — same mount pattern this stack already uses for Portainer/Dozzle/Dockge — used for Docker Container monitors) | **Memory:** no hard limit set on the app; measured idle ~56MB — `uptime-kuma-db` capped at 384M
 
 ## Setup
 
@@ -21,7 +21,7 @@ Browse to `http://<ip>:3001` — create the admin account on first launch, then 
 
 ## Bulk monitor setup (`setup-monitors.py`)
 
-Adding 30+ monitors by hand through the UI is tedious, so `services/uptime-kuma/setup-monitors.py` automates the initial pass: it lists every currently-running container on the host (`docker ps`), creates a **Docker Container** monitor for each one (excluding `uptime-kuma`/`uptime-kuma-db` themselves — if Uptime Kuma is down it can't alert about itself anyway), adds a `homeserver` Docker host (`unix:///var/run/docker.sock`, matching the read-only socket mount in `compose.yml`), and wires up an `ntfy-homeserver-alerts` notification provider reusing the same ntfy `homeserver-alerts` topic/token the ClamAV watchdog already alerts through (`services/clamav/.env`'s `NTFY_ALERT_TOKEN`, read directly rather than duplicated). Run it with:
+Adding 30+ monitors by hand through the UI is tedious, so `services/uptime-kuma/setup-monitors.py` automates the initial pass: it lists every currently-running container on the host (`docker ps`), creates a **Docker Container** monitor for each one (excluding `uptime-kuma`/`uptime-kuma-db` themselves — if Uptime Kuma is down it can't alert about itself anyway), adds a `homeserver` Docker host (`unix:///var/run/docker.sock`, matching the read-only socket mount in `compose.yml`), and wires up an `ntfy-homeserver-alerts` notification provider reusing the same ntfy `homeserver-alerts` topic/token the ClamAV watchdog already alerts through (`services/clamav/.env`'s `NTFY_ALERT_TOKEN`, read directly rather than duplicated). The notification is created with `isDefault=True`, so it's automatically attached to every monitor the script creates — no per-monitor step. First real run against this stack created 39 monitors (one per running container at the time, everything but `uptime-kuma`/`uptime-kuma-db` themselves) plus the one docker host and one notification provider; a real test push was confirmed delivered to ntfy's `homeserver-alerts` topic straight after. Run it with:
 
 ```bash
 uv run services/uptime-kuma/setup-monitors.py
