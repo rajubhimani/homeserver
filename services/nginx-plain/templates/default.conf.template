@@ -551,6 +551,18 @@ server {
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # ntfy subscribers use either a genuine WebSocket (/topic/ws, needs the
+        # Upgrade/Connection headers above) or a long-lived chunked JSON stream
+        # (/topic/json) for instant push, with a keepalive ping every ~30s on
+        # either one -- without proxy_buffering off, nginx holds that response
+        # in its buffer instead of flushing it through immediately, so the app
+        # only picks up new messages on its next reconnect/refresh.
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 3660s;
+        client_max_body_size 0;
     }
 }
 
