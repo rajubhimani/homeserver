@@ -71,7 +71,7 @@ None — HR admin creates employee accounts from inside the app after setup. No 
 
 ## Notes
 
-- `orangehrm-db` uses `mariadb:11.4`, **not** the stack-wide `mariadb:12.3.2` default every other MariaDB-backed service uses — confirmed via the web installer's own compatibility check, OrangeHRM requires MariaDB `>5` and `<12`. Don't bump this one to match the stack-wide default without re-checking that requirement first.
+- `orangehrm-db` uses `mariadb:11.4`, **not** the stack-wide `mariadb:12.3.3` default every other MariaDB-backed service uses — confirmed via the web installer's own compatibility check, OrangeHRM requires MariaDB `>5` and `<12`. Don't bump this one to match the stack-wide default without re-checking that requirement first.
 - No confirmed health/status endpoint — both the compose healthcheck and the landing-page health route just check that `/` responds.
 
 ---

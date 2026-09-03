@@ -24,7 +24,7 @@ services:
       - homeserver
 
   atuin:
-    image: ghcr.io/atuinsh/atuin:18.19.0
+    image: ghcr.io/atuinsh/atuin:18.21.0
     container_name: atuin
     restart: unless-stopped
     command: start

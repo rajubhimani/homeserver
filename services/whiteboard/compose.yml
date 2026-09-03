@@ -1,12 +1,13 @@
 services:
   whiteboard:
-    # No clean numbered release tags published upstream at the time this was
-    # added (GHCR listing was a mix of beta/daily/commit-hash tags) — :stable
-    # is upstream's own documented production tag. Resolved to 1.5.9 at the
-    # time this was added (matches the Nextcloud "whiteboard" app version
-    # exactly — app and backend are versioned together), confirmed via the
-    # container's own startup log, not guessed.
-    image: ghcr.io/nextcloud-releases/whiteboard:stable
+    # Was floating on :stable (no clean numbered release tags published
+    # upstream at the time this service was first added -- GHCR listing was
+    # a mix of beta/daily/commit-hash tags). Numbered tags exist now --
+    # pinned to v1.5.9, confirmed via matching image digest to be the exact
+    # same image :stable already resolved to (no behavior change from this
+    # pin, just removes the float). Matches the Nextcloud "whiteboard" app
+    # version exactly -- app and backend are versioned together.
+    image: ghcr.io/nextcloud-releases/whiteboard:v1.5.9
     container_name: whiteboard
     restart: unless-stopped
     env_file: .env
