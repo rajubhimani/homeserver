@@ -68,11 +68,18 @@ services:
       # Remaining vars below are image defaults — not previously set, no
       # behavior change (documents what REMOTE_IP_VALVE_ENABLED already relies on)
       GUACAMOLE_HOME: /etc/guacamole
-      LOGBACK_LEVEL: info
-      PROXY_ALLOWED_IPS_REGEX: ^(127\.0\.0\.1|172\.1[6-9]\.\d{1,3}\.\d{1,3}|172\.2[0-9]\.\d{1,3}\.\d{1,3}|172\.3[0-1]\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})$
-      PROXY_BY_HEADER: X-Forwarded-By
-      PROXY_IP_HEADER: X-Forwarded-For
-      PROXY_PROTOCOL_HEADER: X-Forwarded-Proto
+      LOG_LEVEL: info
+      # PROXY_ALLOWED_IPS_REGEX/PROXY_IP_HEADER/PROXY_PROTOCOL_HEADER and
+      # LOGBACK_LEVEL are the old names for these four -- confirmed via this
+      # image's own entrypoint.d/010-migrate-legacy-variables.sh, which auto-
+      # translates them at runtime with a deprecation warning either way, so
+      # nothing was actually broken, just stale naming. PROXY_BY_HEADER
+      # (dropped, was previously set here) never did anything at all --
+      # same script: "there is no remoteIpProxiesHeader attribute for
+      # RemoteIpValve", so it was silently ignored from day one.
+      REMOTE_IP_VALVE_INTERNAL_PROXIES: ^(127\.0\.0\.1|172\.1[6-9]\.\d{1,3}\.\d{1,3}|172\.2[0-9]\.\d{1,3}\.\d{1,3}|172\.3[0-1]\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})$
+      REMOTE_IP_VALVE_REMOTE_IP_HEADER: X-Forwarded-For
+      REMOTE_IP_VALVE_PROTOCOL_HEADER: X-Forwarded-Proto
       POSTGRESQL_SSL_MODE: prefer
     depends_on:
       guacd:
