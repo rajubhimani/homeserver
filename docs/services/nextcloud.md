@@ -38,6 +38,34 @@ uv run homeserver.py dev up nextcloud
 
 **Access:** Cloudflare path `https://nextcloud.yourdomain.com` | Tailscale path `http://100.x.x.x:8081` — login with your admin credentials.
 
+## Automated family app setup
+
+```bash
+uv run services/nextcloud/configure-family-apps.py
+```
+
+Installs and enables the apps a family actually uses (Files, Calendar, Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE), wires up [ONLYOFFICE](onlyoffice.md)/[Whiteboard](whiteboard.md)/[ClamAV](clamav.md) integration automatically if those services are set up (reads their JWT secrets straight from their own `.env` files — nothing to copy-paste by hand), disables the enterprise/business-bundle apps that ship by default but add nothing for personal use (workflow automation, retention policies, LDAP/SAML, social-media sharing, etc.), and turns off the global lookup directory for privacy. Reproduces the exact app configuration this deployment settled on after evaluating the full default app list against actual family usage (Drive + Talk + Calendar replacement, not a business/team instance) — see "Enterprise app cleanup" below for the full reasoning per app.
+
+Safe to re-run any time — every step is idempotent (install-if-missing, set-if-different, disable-if-enabled). Requires Nextcloud to already be past its own first-run setup wizard (needs a working `occ`); the script checks this itself and tells you plainly if it isn't ready yet.
+
+### Enterprise app cleanup — what's disabled/removed and why
+
+Nextcloud ships (and its app-store "bundles" install) a lot of apps aimed at businesses/teams/compliance that a family Drive+Talk+Calendar replacement has no use for. `configure-family-apps.py` removes or disables all of these — none of it is needed, and some of it is a real liability if left on unconfigured:
+
+- **`terms_of_service`, `support`** — enterprise onboarding consent flow and a "buy Nextcloud GmbH support" upsell app. Not applicable to a private instance.
+- **`socialsharing_diaspora`/`facebook`/`twitter`/`email`** — social-media share buttons on files. Irrelevant to a private instance.
+- **`survey_client`** — sends anonymous usage telemetry back to Nextcloud. Disabled for privacy, no functional loss.
+- **`lookup_server_connector`** (can't be removed/disabled, it's shipped/core) — publishes any profile field a user sets to "Published" scope to Nextcloud's **global public user directory**. Neutralized at the actual control point instead: `config:system:set lookup_server --value ""` in `config.php`, which disables the publishing behavior regardless of the app's own disable state.
+- **`files_confidential`, `files_retention`, `files_automatedtagging`, `workflowengine`** — enterprise compliance tooling (marking files "confidential," auto-deleting files by retention policy, automated tagging rules). `files_retention` specifically is worth removing rather than ignoring — a retention policy could **auto-delete family files** if one were ever configured, even accidentally. `workflowengine` itself can't be removed (shipped/core) but is inert with the rule-producing apps gone.
+- **`files_downloadlimit`** — caps download counts on share links; a business use case (limiting client access to a shared invoice), not a family one.
+- **`user_ldap`, `user_saml`** — enterprise SSO backends. Nothing in this stack uses either.
+- **`webhook_listeners`** — lets other apps register webhooks off Nextcloud events; a dev/automation feature, unused here.
+- **`nextcloud_announcements`** — official Nextcloud marketing broadcasts (distinct from `announcementcenter`, which is local/admin-authored and left enabled).
+- **`groupfolders`, `circles`, `tables`, `forms`, `collectives`, `cloud_federation_api`, `related_resources`** — team/org sharing constructs, a mini-spreadsheet app, a form builder, team wiki pages, and cross-instance federation — none of which a small family sharing files/calendars with each other needs. `cloud_federation_api` can't be disabled (shipped/core) but sits dormant since nothing federates with this instance.
+- **`integration_forgejo_gitea`** — Forgejo notification/link-preview integration. A real, working feature, but one that only benefits whoever personally uses Forgejo, not the family — removed as a deliberate scope call, not because it's broken. Re-add with `occ app:install integration_forgejo_gitea` if wanted later; nothing else depends on it.
+
+**A few apps couldn't be removed even though they're disabled** — Nextcloud marks `support`, `survey_client`, `files_downloadlimit`, `user_ldap`, `webhook_listeners`, `nextcloud_announcements`, `circles`, `related_resources` as shipped/core, so `occ app:remove` refuses (`"is a shipped/core app and cannot be removed"`). Disabled means none of their code runs — no functional or privacy exposure — just a small amount of disk space that can't be reclaimed since Nextcloud treats them as part of its own core distribution, not separately-installed apps.
+
 ## Enable External Storage
 
 ```text
