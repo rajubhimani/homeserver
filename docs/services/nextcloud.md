@@ -48,6 +48,8 @@ Installs and enables the apps a family actually uses (Files, Calendar, Contacts,
 
 It then **prints the full list** of enterprise/business-bundle apps that ship by default but add nothing for personal use (workflow automation, retention policies, LDAP/SAML, social-media sharing, the global lookup directory, etc. — see "Enterprise app cleanup" below) with a one-line reason each, and **asks for confirmation** before touching any of it — answer no, or run it non-interactively without `--yes`, and that whole step is skipped while everything else still applies. Pass `--yes`/`-y` to skip the prompt and apply the cleanup immediately. Reproduces the exact app configuration this deployment settled on after evaluating the full default app list against actual family usage (Drive + Talk + Calendar replacement, not a business/team instance).
 
+Pass `--list`/`-l` to just print what's currently installed (grouped into Family / Enterprise-bundle-candidate / Other-core, each with live enabled/disabled state) without taking any action — useful to check current state before deciding whether to run the cleanup.
+
 Safe to re-run any time — every step is idempotent (install-if-missing, set-if-different, disable-if-enabled), including re-running just to reconsider the cleanup prompt later. Requires Nextcloud to already be past its own first-run setup wizard (needs a working `occ`); the script checks this itself and tells you plainly if it isn't ready yet.
 
 ### Enterprise app cleanup — what's disabled/removed and why

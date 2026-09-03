@@ -2,7 +2,8 @@
 """Configure Nextcloud for family Drive/Calendar/Talk use on a fresh install.
 
 Usage: uv run services/nextcloud/configure-family-apps.py   (from repo root)
-       uv run services/nextcloud/configure-family-apps.py --yes   (skip the confirmation prompt)
+       uv run services/nextcloud/configure-family-apps.py --yes    (skip the confirmation prompt)
+       uv run services/nextcloud/configure-family-apps.py --list   (just report what's installed, no action taken)
 
 Installs and enables the apps a family actually uses (Files, Calendar,
 Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE) and wires up
@@ -163,6 +164,33 @@ def get_app_states() -> dict[str, str]:
     return states
 
 
+def list_installed_apps() -> None:
+    """Pure read-only report -- what's actually installed right now, grouped
+    into the same categories the rest of this script reasons about, plus
+    anything neither list knows about ('Other / core'). Takes no action."""
+    states = get_app_states()
+    known = set(FAMILY_APPS) | set(APPS_TO_REMOVE) | SHIPPED_CANNOT_DISABLE
+
+    print("Family apps:")
+    for app in FAMILY_APPS:
+        if app in states:
+            print(f"  [{states[app]:^10}] {app}")
+
+    print("\nEnterprise/business-bundle apps (candidates for the cleanup step):")
+    for app in list(APPS_TO_REMOVE) + sorted(SHIPPED_CANNOT_DISABLE):
+        if app in states:
+            reason = APPS_TO_REMOVE.get(app, "shipped/core, can't be disabled or removed")
+            print(f"  [{states[app]:^10}] {app} -- {reason}")
+
+    other_enabled = sorted(a for a, s in states.items() if s == "enabled" and a not in known)
+    other_disabled = sorted(a for a, s in states.items() if s == "disabled" and a not in known)
+    print(f"\nOther (core/uncategorized) apps: {len(other_enabled)} enabled, {len(other_disabled)} disabled")
+    if other_enabled:
+        print("  Enabled:  " + ", ".join(other_enabled))
+    if other_disabled:
+        print("  Disabled: " + ", ".join(other_disabled))
+
+
 def print_final_picture(cleanup_applied: bool) -> None:
     print("\n" + "=" * 60)
     print("FINAL PICTURE")
@@ -195,9 +223,18 @@ def main() -> int:
         "--yes", "-y", action="store_true",
         help="Skip the confirmation prompt and proceed with the enterprise-app cleanup.",
     )
+    parser.add_argument(
+        "--list", "-l", action="store_true",
+        help="Just print what's currently installed, grouped by category. Takes no action.",
+    )
     args = parser.parse_args()
 
     require_nextcloud_installed()
+
+    if args.list:
+        list_installed_apps()
+        return 0
+
     root_env = load_env(REPO_ROOT / ".env")
     domain = root_env.get("DOMAIN")
 
