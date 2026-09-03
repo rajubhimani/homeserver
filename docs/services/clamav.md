@@ -66,6 +66,20 @@ docker exec -u www-data nextcloud php occ files_antivirus:background-scan
 
 With `av_infected_action=only_log`, an infected file stays in place but the detection is logged — check `nextcloud.log` (or the Nextcloud admin notifications) for an `files_antivirus` entry naming the file, not a blocked upload.
 
+## Detecting a silently-failing signature update
+
+**The real risk here isn't `clamd` crashing — it's `freshclam` failing quietly.** If the daily update check fails (network issue, DNS, upstream rate-limiting), nothing crashes: `clamd` keeps running and scanning fine with whatever signatures it already has. Confirmed directly from the image's own healthcheck script (`clamdcheck.sh`) before this was fixed: it only pings `clamd` on port 3310 and checks for a `PONG` — it says nothing about signature freshness. A container could sit at `healthy` in `docker ps` for months with stale signatures and nothing would ever say otherwise.
+
+**Fixed via a custom healthcheck** (`healthcheck.sh`, bind-mounted over the image's default, `compose.yml`) that does both checks:
+1. The original `clamd` ping.
+2. `find`s `/var/lib/clamav/daily.cvd` **and** `/var/lib/clamav/daily.cld` for an mtime within `CLAMAV_MAX_SIGNATURE_AGE_DAYS` (default `3`, `.env`). If neither exists or both are older than that, the healthcheck fails — `docker ps` shows `unhealthy`, giving something real to alert on instead of a silent gap.
+
+**Checking both filenames matters — confirmed live, not assumed.** `freshclam` downloads the initial full database as `daily.cvd`, but its normal steady-state behavior is applying incremental patches on top and rewriting the result as `daily.cld` instead — `daily.cvd` stops being touched entirely once that happens. This switch was observed within the very first update cycle after this healthcheck was added; a version checking only `.cvd` would have started reporting permanently stale/missing the moment `freshclam` did its completely ordinary thing, which very nearly shipped that way before catching it via a real restart-and-check rather than trusting the logic on paper.
+
+**3 days, not 1**, gives freshclam (which checks once daily via `FRESHCLAM_CHECKS`) room for a one-off blip without alerting — the check only fires after at least two consecutive missed days.
+
+**This healthcheck status isn't surfaced anywhere proactive today** — no landing-page card (this service has none, see "Purpose" above), no push notification. Checking it currently means `docker ps` / `docker inspect clamav` by hand, or `docker logs clamav | grep -i freshclam` for the raw update-check history. Wiring an actual alert (e.g. via `ntfy`, not currently running in this stack) was considered and deliberately deferred rather than built speculatively — see the note in git history for this change if reviving that.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
