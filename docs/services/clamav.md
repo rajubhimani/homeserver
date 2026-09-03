@@ -78,7 +78,13 @@ With `av_infected_action=only_log`, an infected file stays in place but the dete
 
 **3 days, not 1**, gives freshclam (which checks once daily via `FRESHCLAM_CHECKS`) room for a one-off blip without alerting — the check only fires after at least two consecutive missed days.
 
-**This healthcheck status isn't surfaced anywhere proactive today** — no landing-page card (this service has none, see "Purpose" above), no push notification. Checking it currently means `docker ps` / `docker inspect clamav` by hand, or `docker logs clamav | grep -i freshclam` for the raw update-check history. Wiring an actual alert (e.g. via `ntfy`, not currently running in this stack) was considered and deliberately deferred rather than built speculatively — see the note in git history for this change if reviving that.
+## Proactive alerting — `clamav-watchdog`
+
+Still no landing-page card (this service has none, see "Purpose" above), but the healthcheck status no longer requires manually running `docker ps`/`docker inspect` to notice — `clamav-watchdog` (`compose.yml`, `watchdog.sh`, same pattern as `services/adguard-home/`'s watchdog) polls the Docker API every `WATCHDOG_CHECK_INTERVAL` seconds (default 300) for whether `clamav` is actually reporting `healthy`, and pushes a real push notification via [ntfy](ntfy.md) after `WATCHDOG_FAIL_THRESHOLD` consecutive misses (default 2 — at least 10 minutes of real unhealthiness, not a one-off blip), with a `WATCHDOG_ALERT_COOLDOWN` (default 6h) so it doesn't re-alert every single check interval while the problem persists.
+
+Publishes to ntfy's `homeserver-alerts` topic over the internal Docker network (`NTFY_ALERT_URL=http://ntfy/homeserver-alerts` — no reason to round-trip through Cloudflare for a container-to-container call), authenticated with a dedicated access token (`NTFY_ALERT_TOKEN`, `ntfy token add --label=clamav-watchdog <user>` — never the real account password). Verified working end-to-end with the actual production credentials, not just each piece in isolation: the watchdog's Docker-socket health query, and a real alert publish using the exact token/URL loaded inside the running `clamav-watchdog` container, both confirmed live before this shipped.
+
+**This alert is silent until you actually subscribe to it** — see [ntfy.md](ntfy.md)'s `homeserver-alerts` section for the one-time phone/browser subscription step; nothing plays that step for you.
 
 ---
 
