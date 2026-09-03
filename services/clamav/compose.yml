@@ -6,17 +6,23 @@ services:
     env_file: .env
     environment:
       CLAMD_STARTUP_TIMEOUT: ${CLAMD_STARTUP_TIMEOUT:-1800}
+      CLAMAV_MAX_SIGNATURE_AGE_DAYS: ${CLAMAV_MAX_SIGNATURE_AGE_DAYS:-3}
     # No persistent volumes at all — pure regenerable virus-signature cache,
     # nothing here that isn't re-downloadable from ClamAV's own update
     # servers, so it lives under service_data/cache/, never service_data/data/.
     volumes:
       - ${CACHE_ROOT}:/var/lib/clamav
+      - ./healthcheck.sh:/usr/local/bin/healthcheck.sh:ro
     deploy:
       resources:
         limits:
           memory: 3G
     healthcheck:
-      test: ["CMD", "clamdcheck.sh"]
+      # Overrides the image's own clamdcheck.sh (clamd ping only) with a
+      # script that also checks signature freshness — see healthcheck.sh
+      # for why: a dead freshclam doesn't crash anything, so the plain ping
+      # check alone would report "healthy" indefinitely on stale signatures.
+      test: ["CMD", "sh", "/usr/local/bin/healthcheck.sh"]
       interval: 60s
       timeout: 10s
       retries: 5
