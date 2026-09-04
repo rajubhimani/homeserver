@@ -52,9 +52,11 @@ services:
       SESSION_DOMAIN: invoiceshelf.${DOMAIN}
     volumes:
       - ${DATA_ROOT}/uploads:/var/www/html/storage
-      # Runs on every start (serversideup/php's own documented drop-in
-      # mechanism) — fixes .env's write permission for www-data. See
-      # docs/services/invoiceshelf.md and the script's own comment for why.
+      # Both run on every start (serversideup/php's own documented drop-in
+      # mechanism, /etc/entrypoint.d/*, executed in filename order before the
+      # app boots). See docs/services/invoiceshelf.md and each script's own
+      # comment for why.
+      - ./entrypoint.d/10-ensure-storage-dirs.sh:/etc/entrypoint.d/10-ensure-storage-dirs.sh:ro
       - ./entrypoint.d/99-fix-env-permissions.sh:/etc/entrypoint.d/99-fix-env-permissions.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]

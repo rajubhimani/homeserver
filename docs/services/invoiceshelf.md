@@ -9,7 +9,7 @@
 
 ## Setup
 
-`compose.yml` bind-mounts the *entire* `/var/www/html/storage` directory (`${DATA_ROOT}/uploads:/var/www/html/storage`), which hides the subdirectories Laravel needs (`framework/cache`, `framework/sessions`, `app/templates/pdf`, etc.) that the image normally ships pre-populated — the container's entrypoint doesn't recreate them, so skipping this pre-create step fails first boot with `Please provide a valid cache path` / `The "/var/www/html/storage/app/templates/pdf" directory does not exist` and a restart loop.
+`compose.yml` bind-mounts the *entire* `/var/www/html/storage` directory (`${DATA_ROOT}/uploads:/var/www/html/storage`), which hides the subdirectories Laravel needs (`framework/cache`, `framework/sessions`, `app/templates/pdf`, etc.) that the image normally ships pre-populated — the container's own entrypoint doesn't recreate them on its own. **Fixed permanently, no manual step needed**: `services/invoiceshelf/entrypoint.d/10-ensure-storage-dirs.sh` creates all ten required subdirectories (same `serversideup/php` `/etc/entrypoint.d/*` mechanism as the `.env`-permission fix below, run in filename order on every container start before the app boots) — confirmed live by wiping `service_data/data/invoiceshelf/uploads/` completely and running `up --fresh` twice in a row, both times booting clean with zero manual intervention. Before this existed, skipping a manual pre-create step failed first boot with `Please provide a valid cache path` / `The "/var/www/html/storage/app/templates/pdf" directory does not exist` and a restart loop — this is why the fix specifically targets *every* directory in that list, not only `templates/pdf` (the one that happens to fail loudly at boot; the others fail more quietly later, e.g. a broken upload, rather than blocking startup at all).
 
 **`.env` write-permission gotcha (fixed, but know why)**: `/var/www/html/.env` ships root-owned (`644`) in this image, but the process that actually handles HTTP requests runs as `www-data` (php-fpm's worker pool — the container's own top-level process is root, but that's not who serves requests). `www-data` can read `.env` but not write it, which makes the web install wizard's "database config" step fail with a generic "cannot write configuration" error — it needs to persist DB settings back into `.env`. Since `.env` isn't on a mounted volume, a one-off `docker exec chown` fix doesn't survive a recreate. Fixed permanently via `services/invoiceshelf/entrypoint.d/99-fix-env-permissions.sh`, mounted into `/etc/entrypoint.d/` — `serversideup/php` images (this one included) run every script there, in order, on **every** container start before the app boots, which is the image's own documented extension point for exactly this kind of startup fixup.
 
@@ -22,20 +22,10 @@ cp services/invoiceshelf/.env.example services/invoiceshelf/.env
 # generate: echo "base64:$(openssl rand -base64 32)" → APP_KEY
 # set MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD
 
-# Required before first `up` — see note above
-mkdir -p service_data/data/invoiceshelf/uploads/framework/cache/data
-mkdir -p service_data/data/invoiceshelf/uploads/framework/sessions
-mkdir -p service_data/data/invoiceshelf/uploads/framework/views
-mkdir -p service_data/data/invoiceshelf/uploads/framework/testing
-mkdir -p service_data/data/invoiceshelf/uploads/app/public
-mkdir -p service_data/data/invoiceshelf/uploads/app/templates/pdf
-mkdir -p service_data/data/invoiceshelf/uploads/app/estimates
-mkdir -p service_data/data/invoiceshelf/uploads/app/invoices
-mkdir -p service_data/data/invoiceshelf/uploads/app/company_logo
-mkdir -p service_data/data/invoiceshelf/uploads/app/backup
-
 uv run homeserver.py dev up invoiceshelf
 ```
+
+No manual pre-create step needed — `entrypoint.d/10-ensure-storage-dirs.sh` handles the required `storage/` subdirectories automatically on every start, including a bare `--fresh` restart later (see note above).
 
 ## First login
 
