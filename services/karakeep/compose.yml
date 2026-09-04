@@ -37,7 +37,7 @@ services:
       - homeserver
 
   karakeep:
-    image: ghcr.io/karakeep-app/karakeep:release
+    image: ghcr.io/karakeep-app/karakeep:0.33.2
     container_name: karakeep
     restart: unless-stopped
     env_file: .env

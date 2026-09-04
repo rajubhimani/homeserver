@@ -22,7 +22,7 @@ services:
       - homeserver
 
   zulip-memcached:
-    image: memcached:alpine
+    image: memcached:1.6.45-alpine
     container_name: zulip-memcached
     restart: unless-stopped
     secrets:
@@ -73,7 +73,7 @@ services:
       - homeserver
 
   zulip-redis:
-    image: redis:alpine
+    image: redis:8.10.1-alpine
     container_name: zulip-redis
     restart: unless-stopped
     secrets:

@@ -24,7 +24,7 @@ services:
       - homeserver
 
   plane-redis:
-    image: valkey/valkey:9.1-alpine
+    image: valkey/valkey:9.1.2-alpine
     container_name: plane-redis
     restart: unless-stopped
     command: valkey-server --save "" --stop-writes-on-bgsave-error no
@@ -39,7 +39,7 @@ services:
       - homeserver
 
   plane-mq:
-    image: rabbitmq:4.3-alpine
+    image: rabbitmq:4.3.5-alpine
     container_name: plane-mq
     restart: unless-stopped
     env_file: .env

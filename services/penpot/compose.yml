@@ -25,7 +25,7 @@ services:
       - homeserver
 
   penpot-redis:
-    image: valkey/valkey:9.1-alpine
+    image: valkey/valkey:9.1.2-alpine
     container_name: penpot-redis
     restart: unless-stopped
     command: valkey-server --maxmemory 128mb --maxmemory-policy allkeys-lru
@@ -38,7 +38,7 @@ services:
       - homeserver
 
   penpot-backend:
-    image: penpotapp/backend:2.17.1
+    image: penpotapp/backend:2.17.2
     container_name: penpot-backend
     restart: unless-stopped
     env_file: .env
@@ -67,7 +67,7 @@ services:
       - homeserver
 
   penpot-exporter:
-    image: penpotapp/exporter:2.17.1
+    image: penpotapp/exporter:2.17.2
     container_name: penpot-exporter
     restart: unless-stopped
     env_file: .env
@@ -82,7 +82,7 @@ services:
       - homeserver
 
   penpot-frontend:
-    image: penpotapp/frontend:2.17.1
+    image: penpotapp/frontend:2.17.2
     container_name: penpot-frontend
     restart: unless-stopped
     environment:

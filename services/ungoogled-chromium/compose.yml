@@ -5,7 +5,7 @@ services:
     # (profile lives in the /config volume), benefits from always-current
     # security patches. `uv run homeserver.py dev update ungoogled-chromium`
     # stays current.
-    image: lscr.io/linuxserver/ungoogled-chromium:latest
+    image: lscr.io/linuxserver/ungoogled-chromium:152.0.7977.64-1-ls183
     container_name: ungoogled-chromium
     restart: unless-stopped
     env_file: .env
