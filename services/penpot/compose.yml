@@ -37,6 +37,22 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # penpot's backend/frontend images run as a hardcoded "penpot" user (uid
+  # 1001, gid 1001, confirmed via /etc/passwd inside the container) with no
+  # root fallback, so neither can self-heal assets/ (shared by both, same
+  # bind mount path) if recreated root-owned (e.g. after a wipe/--fresh
+  # restart). penpot-frontend already depends_on penpot-backend, so gating
+  # only the backend on this is enough to order it before both.
+  penpot-permissions:
+    image: alpine:3.24.1
+    container_name: penpot-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/assets:/penpot-assets
+    command: sh -c "mkdir -p /penpot-assets && chown -R 1001:1001 /penpot-assets"
+
   penpot-backend:
     image: penpotapp/backend:2.17.2
     container_name: penpot-backend
@@ -63,6 +79,8 @@ services:
         condition: service_healthy
       penpot-redis:
         condition: service_healthy
+      penpot-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
