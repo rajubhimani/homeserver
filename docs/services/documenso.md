@@ -32,6 +32,8 @@ uv run homeserver.py dev up documenso
 
 Open `https://documenso.<domain>/` (or `http://<host>:8128` in dev) and create the first account.
 
+**`data/`'s ownership is handled automatically (unlike `cert.p12` above, which is a real secret only you can provide).** Documenso's image runs as a hardcoded `nodejs` user (uid `1001`, gid `65533`, confirmed via `/etc/passwd` inside the container) with no root fallback, so it could never self-heal `data/` if recreated root-owned (e.g. after a wipe/`--fresh` restart). `documenso-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it on every start, before `documenso` itself starts — verified live by wiping just `data/` and confirming a clean, correctly-owned restart.
+
 ## Registration
 
 `NEXT_PUBLIC_DISABLE_SIGNUP`, default `true` (closed) — create your own account before this ever matters, then leave it closed. Documenso's self-hosted CE has no admin "create user" panel; to add another account later, temporarily set this back to `false`, have them sign up, then set it back to `true`.

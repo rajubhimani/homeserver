@@ -23,6 +23,22 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # documenso's image runs as a hardcoded "nodejs" user (uid 1001, gid
+  # 65533, confirmed via /etc/passwd inside the container) with no root
+  # fallback, so it can never self-heal data/ if recreated root-owned
+  # (e.g. after a wipe/--fresh restart). Only touches data/, not
+  # cert.p12 -- that's a real file the user must provide (see docs/
+  # services/documenso.md), not something to mkdir a directory over.
+  documenso-permissions:
+    image: alpine:3.24.1
+    container_name: documenso-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/data:/documenso-data
+    command: sh -c "mkdir -p /documenso-data && chown -R 1001:65533 /documenso-data"
+
   documenso:
     image: documenso/documenso:v2.17.0
     container_name: documenso
@@ -48,6 +64,8 @@ services:
     depends_on:
       documenso-db:
         condition: service_healthy
+      documenso-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
