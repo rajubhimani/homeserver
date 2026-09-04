@@ -18,6 +18,8 @@ uv run homeserver.py dev up authentik
 
 `AUTHENTIK_SECRET_KEY` must be set **before** first start.
 
+**Permissions, handled automatically**: authentik's server/worker images run as a hardcoded uid 1000 (confirmed via `docker inspect ghcr.io/goauthentik/server:2026.8.0 --format '{{.Config.User}}'`) with no root fallback, so neither can self-heal `media/`/`templates/`/`certs/` if those are ever recreated root-owned. `authentik-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `mkdir -p`s and `chown`s all three to `1000:1000` on every start, before `authentik-server`/`authentik-worker` start. Verified live via a real backup + recreate of this actively-running service (not a destructive data wipe, given this is the SSO for the whole stack) — confirmed healthy afterward via `docker exec authentik-server ak healthcheck` (`"successfully checked health"`) and correct `1000:1000` ownership in place of the previous `root:root`.
+
 ## First login
 
 Browse to `http://<ip>:8088/if/admin/` — set the password for the default admin account `akadmin`.
