@@ -4,7 +4,7 @@ services:
     # rationale as services/firefox/compose.yml: internet-reachable, stateless
     # (profile lives in the /config volume), benefits from always-current
     # security patches. `uv run homeserver.py dev update chromium` stays current.
-    image: lscr.io/linuxserver/chromium:latest
+    image: lscr.io/linuxserver/chromium:d39975b5-ls51
     container_name: chromium
     restart: unless-stopped
     env_file: .env

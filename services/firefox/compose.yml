@@ -6,7 +6,7 @@ services:
     # `uv run homeserver.py dev update firefox` alone keep it current, no manual
     # tag bump needed. Every other service in this stack stays pinned; this is a
     # one-off, not a new default.
-    image: lscr.io/linuxserver/firefox:latest
+    image: lscr.io/linuxserver/firefox:1155.0build1-1xtradeb2.2404.1-ls119
     container_name: firefox
     restart: unless-stopped
     env_file: .env

@@ -4,7 +4,7 @@ services:
     # rationale as services/firefox/compose.yml: internet-reachable, stateless
     # (profile lives in the /config volume), benefits from always-current
     # security patches. `uv run homeserver.py dev update brave` stays current.
-    image: lscr.io/linuxserver/brave:latest
+    image: lscr.io/linuxserver/brave:origin-1.96.44-ls67
     container_name: brave
     restart: unless-stopped
     env_file: .env

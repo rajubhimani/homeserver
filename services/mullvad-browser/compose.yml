@@ -5,7 +5,7 @@ services:
     # (profile lives in the /config volume), benefits from always-current
     # security patches. `uv run homeserver.py dev update mullvad-browser`
     # stays current.
-    image: lscr.io/linuxserver/mullvad-browser:latest
+    image: lscr.io/linuxserver/mullvad-browser:15.0.21-ls199
     container_name: mullvad-browser
     restart: unless-stopped
     env_file: .env

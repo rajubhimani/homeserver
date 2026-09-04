@@ -26,7 +26,7 @@ services:
       - homeserver
 
   mealie:
-    image: ghcr.io/mealie-recipes/mealie:v3.23.1
+    image: ghcr.io/mealie-recipes/mealie:v3.25.0
     container_name: mealie
     restart: unless-stopped
     env_file: .env
