@@ -23,6 +23,22 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions -- vikunja's
+  # image runs as a hardcoded uid=1000,gid=0 with no root fallback, so it
+  # can never self-heal its own bind mount. Without this, a wipe/--fresh
+  # leaves files/ root-owned (whatever created the empty mount point) and
+  # vikunja fails every request with "storage validation failed: ...
+  # permission denied [process uid=1000 gid=0, dir owner uid=0 gid=0]" --
+  # confirmed live via an actual wipe-and-restart test, not assumed.
+  vikunja-permissions:
+    image: alpine:3.24.1
+    container_name: vikunja-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/files:/vikunja-files
+    command: sh -c "mkdir -p /vikunja-files && chown -R 1000:0 /vikunja-files"
+
   vikunja:
     image: vikunja/vikunja:2.6.0
     container_name: vikunja
@@ -47,6 +63,8 @@ services:
     depends_on:
       vikunja-db:
         condition: service_healthy
+      vikunja-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 

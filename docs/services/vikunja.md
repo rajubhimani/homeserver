@@ -17,6 +17,8 @@ uv run homeserver.py dev up vikunja
 
 Vikunja ships as a single combined image (frontend + API on one port, 3456) as of the 2.x releases — there's no separate frontend/api container to wire up.
 
+**Permissions, handled automatically**: Vikunja's image runs as a hardcoded `uid=1000,gid=0` with no root fallback, so it can never self-heal its own bind mount (`${DATA_ROOT}/files:/app/vikunja/files`) if it ever gets recreated root-owned (e.g. after a wipe/`--fresh` restart). `vikunja-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it to `1000:0` on every start, before `vikunja` itself starts. Confirmed live: without it, a fresh/empty `files/` dir fails every request with `storage validation failed: ... permission denied [process uid=1000 gid=0, dir owner uid=0 gid=0]` — the exact uid/gid mismatch is right there in Vikunja's own error message, which is how the required ownership was confirmed rather than guessed.
+
 ## Admin account
 
 No admin account is created on first start. Open `https://vikunja.<domain>/` (or `http://<host>:8111` in dev) and register the first account through the UI — it becomes a regular user, not an auto-promoted admin; grant admin rights from inside the app if needed.

@@ -23,6 +23,22 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/
+  # vikunja-permissions -- n8n's image runs as the baked-in "node" user
+  # (uid 1000) with no root fallback, so it can never self-heal its own
+  # bind mount. Without this, a wipe/--fresh leaves data/ root-owned and
+  # n8n crashes on boot with "EACCES: permission denied, open
+  # '/home/node/.n8n/config'" -- confirmed live via an actual
+  # wipe-and-restart test, not assumed.
+  n8n-permissions:
+    image: alpine:3.24.1
+    container_name: n8n-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/data:/n8n-data
+    command: sh -c "mkdir -p /n8n-data && chown -R 1000:1000 /n8n-data"
+
   n8n:
     image: n8nio/n8n:2.38.3
     container_name: n8n
@@ -50,6 +66,8 @@ services:
     depends_on:
       n8n-db:
         condition: service_healthy
+      n8n-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
