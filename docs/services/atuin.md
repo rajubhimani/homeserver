@@ -16,6 +16,8 @@ cp services/atuin/.env.example services/atuin/.env
 uv run homeserver.py dev up atuin
 ```
 
+No manual pre-create/chown step needed — `atuin-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s `config/` (just `server.toml`; the actual synced history lives in the `atuin-db` named Postgres volume, unaffected either way) to `1000:1000` on every start. Verified live: fully wiped `service_data/data/atuin/config/`, restarted, confirmed `server.toml` regenerated with correct ownership and all history/users tables in Postgres untouched.
+
 Browsing to `https://atuin.<domain>/` (or the health check hitting `/`) returns something like:
 
 ```json

@@ -23,6 +23,23 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # atuin's image runs as a hardcoded "atuin" user (uid 1000, gid 1000,
+  # confirmed via /etc/passwd inside the container) with no root fallback,
+  # so it can never self-heal config/ if recreated root-owned. Note: the
+  # actual synced shell history lives in the atuin-db named Postgres
+  # volume, not here -- this only covers server.toml, so the stakes of
+  # getting this wrong are low (config regenerates), but fixed anyway for
+  # consistency with the rest of this stack's now-established convention.
+  atuin-permissions:
+    image: alpine:3.24.1
+    container_name: atuin-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/config:/atuin-config
+    command: sh -c "mkdir -p /atuin-config && chown -R 1000:1000 /atuin-config"
+
   atuin:
     image: ghcr.io/atuinsh/atuin:18.21.0
     container_name: atuin
@@ -43,6 +60,8 @@ services:
     depends_on:
       atuin-db:
         condition: service_healthy
+      atuin-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
