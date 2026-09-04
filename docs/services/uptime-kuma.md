@@ -53,7 +53,25 @@ Applied via the API (same `uptime-kuma-api` library the bulk script uses) after 
 - **Resend interval: 30 minutes, every monitor** (`resendInterval: 30` — the field is a multiplier of the monitor's own heartbeat interval, not raw minutes; at the default 60s interval, `30 → 30 × 60s = 30 min`). Default is `0` (alert once on the initial down, silence after that even if it stays down for hours) — one missed phone notification meant genuinely never finding out. Applied to all 39 monitors via a one-off loop over `edit_monitor(id, resendInterval=30)` (not part of `setup-monitors.py` itself, since it's a one-time tuning pass rather than something new monitors need repeated).
 - **Retries** (`maxretries: 1`, `retryInterval: 60s` — `add_monitor`'s own defaults, left as-is) were already sensible and didn't need changing: one retry before flipping to down avoids alerting on a single transient blip.
 
-**Known gap, not yet addressed:** the `ntfy` notification channel is itself one of the 39 monitored containers — if `ntfy` goes down, Uptime Kuma has no way to tell you, since ntfy *is* the alert path. Standard monitoring advice is at least one independent channel for exactly this case (e.g. a Discord or Telegram webhook, unrelated to anything else in this stack). Not set up yet.
+**Known gap, not yet addressed:** the `ntfy` notification channel is itself one of the monitored containers — if `ntfy` goes down, Uptime Kuma has no way to tell you, since ntfy *is* the alert path. Standard monitoring advice is at least one independent channel for exactly this case. Deliberately deferred (not currently needed) — steps below for whenever it is.
+
+### Adding a second, independent notification channel (Discord or Telegram)
+
+Not built yet — this is the setup reference for whenever it's actually wanted. Either one takes a few minutes and is free; pick whichever platform is easier to reach on a phone. Field names below confirmed against this pin's own `server/notification-providers/discord.js`/`telegram.js` source, not guessed.
+
+**Discord:**
+1. In the target Discord server: **Server Settings → Integrations → Webhooks → New Webhook** (or, on a specific channel: hover it → gear icon → **Integrations → Webhooks → New Webhook**). Requires "Manage Webhooks" permission — server owners/admins have it by default.
+2. Name it, pick the channel, click **Copy Webhook URL** — looks like `https://discord.com/api/webhooks/<id>/<token>`. Treat it as a secret: anyone with the URL can post into that channel without being a server member.
+3. In Uptime Kuma: **Settings → Notifications → Set Notification** → type **Discord** → paste the URL into **Discord Webhook URL** (`discordWebhookUrl`) → optionally set **Discord Username** (`discordUsername`, defaults to "Uptime Kuma") → **Default enabled** if it should auto-apply to every monitor → **Save**, then **Test** to confirm delivery before relying on it.
+   ([Discord's own webhook guide](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks))
+
+**Telegram:**
+1. In the Telegram app, message **@BotFather** → `/newbot` → follow the prompts (pick a display name, then a unique username ending in `bot`). It replies with an API token (`telegramBotToken`) — looks like `123456789:AAExampleTokenTextGoesHere`. Keep it secret, it fully controls the bot.
+2. Get the chat ID to send to (`telegramChatID`): message **@userinfobot** (or **@GetIDsBot**) and it replies with your numeric user ID — for a DM to yourself, that's the chat ID. For a group instead: add the new bot to the group, send any message in it, then open `https://api.telegram.org/bot<token>/getUpdates` in a browser and read the `"chat":{"id": ...}` field from the JSON response (negative number for a group).
+3. In Uptime Kuma: **Settings → Notifications → Set Notification** → type **Telegram** → paste the token into **Bot Token** and the ID into **Chat ID** → **Default enabled** if wanted → **Save**, then **Test**.
+   ([Telegram Bot API docs](https://core.telegram.org/bots))
+
+Either way, the point is redundancy — don't set `ntfy` as this channel's fallback or route it back through anything ntfy-dependent, or it stops being independent.
 
 ## Using it day to day
 
