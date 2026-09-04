@@ -10,9 +10,10 @@ Full-featured team chat — channels, DMs, threads, apps/bots, webhooks. The hea
 
 ```bash
 cp services/rocketchat/.env.example services/rocketchat/.env
-mkdir -p service_data/data/rocketchat/uploads
 uv run homeserver.py dev up rocketchat
 ```
+
+No manual pre-create/chown step needed — `rocketchat-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) creates and `chown`s `uploads/` to `65533:65533` (the image's baked-in `rocketchat` user, confirmed via `/etc/passwd` inside the container) on every start, before `rocketchat` itself starts. Doesn't block boot the way some of this stack's other permission fixes do — Rocket.Chat doesn't touch `uploads/` at startup — but a real file/avatar upload against a root-owned dir (e.g. left behind by a wipe/`--fresh` restart) would fail silently, so it's fixed the same way regardless.
 
 Open `https://rocketchat.<domain>/` (or `http://<host>:8142` in dev) — first-run setup wizard creates the admin account.
 
