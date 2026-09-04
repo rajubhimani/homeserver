@@ -51,7 +51,17 @@ atuin login -u <username> -p '<password>'
 atuin sync
 ```
 
-`register` prints an encryption key on success — save it, it's required to log into any other machine (not derivable from just the username/password).
+`register` prints an encryption key on success — save it, it's required to log into any other machine (not derivable from just the username/password, and `login` needs all three — username, password, *and* key — not just the first two: the password authenticates you to the server, but the key is what encrypts/decrypts history locally, and it's never stored server-side in recoverable form).
+
+**Copying/backing up the key** — it also lives at `~/.local/share/atuin/key` (72 bytes, base64) on any machine that's currently logged in, so it's always retrievable again later, not just at the moment `register` first prints it:
+
+```bash
+atuin key                                # reprint the word-phrase form (e.g. "brick curve mouse night ...")
+cat ~/.local/share/atuin/key             # or view the raw base64 file directly
+atuin key | xclip -selection clipboard   # pipe straight to clipboard on X11 (wl-copy on Wayland)
+```
+
+Save it (the word-phrase or the raw file contents, either works for a future `-k`) somewhere that survives a reformat — a password manager entry is the natural fit, since it's just a text secret. See "Recovering from a reformatted/lost client machine" below for what happens if this step gets skipped.
 
 **Verify it actually landed on your own server**, don't just trust "Sync complete" — check this server's own state, since both failure modes above report success while silently talking to Atuin Hub instead:
 
