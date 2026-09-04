@@ -63,7 +63,7 @@ Only relevant if the database doesn't already exist yet — e.g. you're pointing
 
 ## Connecting the Android app
 
-Official **OrangeHRM Open Source** app ([Google Play](https://play.google.com/store/apps/details?id=com.orangehrm.opensource)) — needs Web Version `5.4+`; this stack pins `5.8.1` (`orangehrm/orangehrm:5.8.1`), so it clears that. On first launch, enter the instance URL `https://orangehrm.${DOMAIN}` and log in with an employee account. Requires a valid SSL certificate on the URL (Cloudflare Tunnel already provides this) — covers leave requests, attendance, and performance from the app.
+Official **OrangeHRM Open Source** app ([Google Play](https://play.google.com/store/apps/details?id=com.orangehrm.opensource)) — needs Web Version `5.4+`; this stack pins `5.9` (`orangehrm/orangehrm:5.9`), so it clears that. On first launch, enter the instance URL `https://orangehrm.${DOMAIN}` and log in with an employee account. Requires a valid SSL certificate on the URL (Cloudflare Tunnel already provides this) — covers leave requests, attendance, and performance from the app.
 
 ## Registration
 

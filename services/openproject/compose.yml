@@ -1,6 +1,6 @@
 services:
   openproject:
-    image: openproject/openproject:17.7.2
+    image: openproject/openproject:17.8.0
     container_name: openproject
     restart: unless-stopped
     env_file: .env

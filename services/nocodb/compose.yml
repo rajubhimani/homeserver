@@ -24,7 +24,7 @@ services:
       - homeserver
 
   nocodb:
-    image: nocodb/nocodb:2026.08.0
+    image: nocodb/nocodb:2026.08.2
     container_name: nocodb
     restart: unless-stopped
     env_file: .env

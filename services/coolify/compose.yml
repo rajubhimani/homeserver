@@ -39,7 +39,7 @@ services:
       - homeserver
 
   coolify-realtime:
-    image: coollabsio/coolify-realtime:1.0.17
+    image: coollabsio/coolify-realtime:1.0.18
     container_name: coolify-realtime
     restart: unless-stopped
     env_file: .env
@@ -69,7 +69,7 @@ services:
       - homeserver
 
   coolify:
-    image: coollabsio/coolify:4.3.9
+    image: coollabsio/coolify:4.3.16
     container_name: coolify
     restart: unless-stopped
     env_file: .env

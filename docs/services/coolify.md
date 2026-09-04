@@ -43,9 +43,9 @@ that no stable tag existed at all), then
 appearing between bumps — that's just Coolify comparing its own
 baked-in version string against the latest tagged release, harmless.
 
-Currently pinned to `coollabsio/coolify:4.3.9` (real semver tag,
+Currently pinned to `coollabsio/coolify:4.3.16` (real semver tag,
 confirmed compatible — Coolify's own upgrade-path check treats
-`4.3.0 → 4.3.9` as a valid forward upgrade, not a downgrade, and this
+`4.3.0 → 4.3.16` as a valid forward upgrade, not a downgrade, and this
 image previously ran as `edge` self-reporting version `4.3.0`).
 
 ## Setup — full checklist, in order

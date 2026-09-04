@@ -40,10 +40,10 @@ All services below must stay in sync. `appflowy_web` uses its own versioning sch
 
 | Service | Image | Version | Notes |
 | --- | --- | --- | --- |
-| Cloud backend | `appflowyinc/appflowy_cloud` | `0.16.5` | Pinned independently — not currently in lockstep with gotrue/admin |
-| Auth service | `appflowyinc/gotrue` | `0.17.1` | Must match admin |
-| Admin UI | `appflowyinc/admin_frontend` | `0.17.1` | Must match gotrue |
-| Web frontend | `appflowyinc/appflowy_web` | `0.16.2` | Own versioning scheme — nginx rewrite handles path differences |
+| Cloud backend | `appflowyinc/appflowy_cloud` | `0.18.3` | Pinned independently — not currently in lockstep with gotrue/admin |
+| Auth service | `appflowyinc/gotrue` | `0.17.9` | Must match admin — `admin_frontend` has no `0.18.x` release yet, capped at `0.17.9` |
+| Admin UI | `appflowyinc/admin_frontend` | `0.17.9` | Must match gotrue |
+| Web frontend | `appflowyinc/appflowy_web` | `0.17.1` | Own versioning scheme — nginx rewrite handles path differences |
 | Database | `pgvector/pgvector` | `pg16` | — |
 | Cache | `redis` | `8.10-alpine` | — |
 

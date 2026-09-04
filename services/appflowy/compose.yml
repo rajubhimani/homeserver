@@ -73,7 +73,7 @@ services:
       - homeserver
 
   appflowy-gotrue:
-    image: appflowyinc/gotrue:0.17.1
+    image: appflowyinc/gotrue:0.17.9
     container_name: appflowy-gotrue
     restart: unless-stopped
     env_file: .env
@@ -103,7 +103,7 @@ services:
       - homeserver
 
   appflowy-cloud:
-    image: appflowyinc/appflowy_cloud:0.16.5
+    image: appflowyinc/appflowy_cloud:0.18.3
     container_name: appflowy-cloud
     restart: unless-stopped
     env_file: .env
@@ -139,7 +139,7 @@ services:
       - homeserver
 
   appflowy-web:
-    image: appflowyinc/appflowy_web:0.16.2
+    image: appflowyinc/appflowy_web:0.17.1
     container_name: appflowy-web
     restart: unless-stopped
     environment:
@@ -153,7 +153,7 @@ services:
       - homeserver
 
   appflowy-admin:
-    image: appflowyinc/admin_frontend:0.17.1
+    image: appflowyinc/admin_frontend:0.17.9
     container_name: appflowy-admin
     restart: unless-stopped
     env_file: .env
