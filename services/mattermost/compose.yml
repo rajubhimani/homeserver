@@ -24,6 +24,31 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions (services/firefly/compose.yml) --
+  # mattermost's own image hardcodes uid 2000 with no root fallback (see the
+  # `user:` override below), so it can never self-heal its own bind mounts'
+  # ownership. Without this, a wipe/--fresh recreates DATA_ROOT's
+  # subdirectories root-owned (whatever created the empty mount point last),
+  # and mattermost crash-loops on permission denied -- confirmed live by
+  # actually wiping and re-testing, not assumed. Runs once (restart: "no"),
+  # chowns the whole DATA_ROOT tree, then exits; mattermost itself waits for
+  # it via depends_on below.
+  mattermost-permissions:
+    image: alpine:3.24.1
+    container_name: mattermost-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}:/mattermost-data
+    # mkdir first, not just chown -R -- otherwise this races mattermost's own
+    # six separate bind mounts (config/data/logs/plugins/client-plugins/
+    # bleve-indexes), each of which Docker creates as its own root-owned
+    # empty directory the moment the main container starts, *after* this one
+    # already ran and exited if the subdirs didn't exist yet. Confirmed live:
+    # chown -R alone left every subdirectory root-owned on a real empty-start
+    # test, this fixed it.
+    command: sh -c "mkdir -p /mattermost-data/config /mattermost-data/data /mattermost-data/logs /mattermost-data/plugins /mattermost-data/client-plugins /mattermost-data/bleve-indexes && chown -R 2000:2000 /mattermost-data"
+
   mattermost:
     image: mattermost/mattermost-team-edition:${MATTERMOST_VERSION}
     container_name: mattermost
@@ -65,6 +90,8 @@ services:
     depends_on:
       mattermost-db:
         condition: service_healthy
+      mattermost-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
