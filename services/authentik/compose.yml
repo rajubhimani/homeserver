@@ -24,6 +24,25 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # authentik's server/worker images run as a hardcoded uid 1000 (confirmed
+  # via `docker inspect ghcr.io/goauthentik/server:2026.8.0 --format
+  # '{{.Config.User}}'` -> "1000") with no root fallback, so neither can
+  # self-heal media/templates/certs if recreated root-owned. Currently safe
+  # only because these three directories already carry a permissive 777
+  # (world-writable) mode from an earlier manual/setup step -- this fix
+  # makes that no longer load-bearing, so a future full top-level wipe
+  # (not just a contents wipe, which preserves the existing 777 dir itself)
+  # can't silently break authentication for the whole stack.
+  authentik-permissions:
+    image: alpine:3.24.1
+    container_name: authentik-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}:/authentik-data
+    command: sh -c "mkdir -p /authentik-data/media /authentik-data/templates /authentik-data/certs && chown -R 1000:1000 /authentik-data/media /authentik-data/templates /authentik-data/certs"
+
   authentik-server:
     image: ghcr.io/goauthentik/server:2026.8.0
     container_name: authentik-server
@@ -49,6 +68,8 @@ services:
     depends_on:
       authentik-db:
         condition: service_healthy
+      authentik-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
@@ -73,6 +94,8 @@ services:
     depends_on:
       authentik-db:
         condition: service_healthy
+      authentik-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
