@@ -280,6 +280,8 @@ existed. All six are fixed now (five real `service_data/` bind mounts +
 further to do, just worth knowing why a `coolify` container recreation
 used to lose things that looked like they should have survived it.
 
+**Ownership on those five bind mounts is also handled automatically now.** `coolify`'s image runs as a hardcoded `www-data` (uid `9999`, confirmed via `/etc/passwd` inside the container) with no root fallback, so it could never self-heal `applications/databases/services/backups/images` if any of them got recreated root-owned (e.g. by a wipe or `--fresh` restart). `coolify-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) creates and `chown`s all five to `9999:9999` on every start, before `coolify` itself starts. Doesn't block boot — Coolify doesn't touch these paths at startup, only when actually deploying something through its UI — but confirmed live that a wipe otherwise leaves them silently unusable for a real deploy.
+
 ## Deploying your first app
 
 The whole point of this service — everything above is just getting Coolify itself running. Once logged in: create/open a **Project**, then **+ New Resource**, and pick one of:

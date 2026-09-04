@@ -17,6 +17,8 @@ uv run homeserver.py dev up penpot
 
 Open `https://penpot.<domain>/` (or `http://<host>:8131` in dev) and create the first account.
 
+**Permissions, handled automatically**: penpot-backend and penpot-frontend both run as a hardcoded `penpot` user (uid `1001`, gid `1001` — confirmed via `/etc/passwd` inside the container) with no root fallback, so neither could self-heal `assets/` (shared by both, same bind mount) if recreated root-owned (e.g. after a wipe/`--fresh` restart). `penpot-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it on every start, before `penpot-backend` starts (`penpot-frontend` already depends on `penpot-backend`, so it's covered transitively) — verified live by wiping `assets/` and confirming a clean, correctly-owned restart.
+
 ## Registration
 
 `disable-registration` is already in `PENPOT_FLAGS` by default — closed from the start (officially described as recommended for demo instances rather than hardened production use, but reasonable for a personal instance). Create your first account before this matters, or briefly remove the flag to do so. To add another account later without reopening public registration, use Penpot's own team-invitation flow instead — from inside an existing team, **Members → Invite** sends an email invite that works regardless of `disable-registration` (that flag only blocks the public sign-up page, not invites to an existing team).

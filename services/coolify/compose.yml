@@ -68,6 +68,28 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/n8n-permissions/
+  # vikunja-permissions/rocketchat-permissions -- coolify's image runs as a
+  # hardcoded www-data (uid 9999, confirmed via /etc/passwd inside the
+  # container) with no root fallback, so it can never self-heal these bind
+  # mounts. Doesn't block boot -- coolify doesn't touch these paths at
+  # startup, only when actually deploying an application/database/service
+  # through its UI -- but a real deploy against a root-owned dir (e.g. left
+  # behind by a wipe/--fresh restart) would fail silently, same latent shape
+  # as rocketchat's uploads/.
+  coolify-permissions:
+    image: alpine:3.24.1
+    container_name: coolify-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/applications:/coolify-data/applications
+      - ${DATA_ROOT}/databases:/coolify-data/databases
+      - ${DATA_ROOT}/services:/coolify-data/services
+      - ${DATA_ROOT}/backups:/coolify-data/backups
+      - ${DATA_ROOT}/images:/coolify-data/images
+    command: sh -c "mkdir -p /coolify-data/applications /coolify-data/databases /coolify-data/services /coolify-data/backups /coolify-data/images && chown -R 9999:9999 /coolify-data"
+
   coolify:
     image: coollabsio/coolify:4.3.16
     container_name: coolify
@@ -143,6 +165,8 @@ services:
         condition: service_healthy
       coolify-realtime:
         condition: service_healthy
+      coolify-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
