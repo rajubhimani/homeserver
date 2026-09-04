@@ -17,6 +17,8 @@ uv run homeserver.py dev up n8n
 
 Open `https://n8n.<domain>/` (or `http://<host>:8120` in dev) and complete the owner setup wizard on first visit.
 
+**Permissions, handled automatically**: n8n's image runs as the baked-in `node` user (uid 1000) with no root fallback, so it can never self-heal its own bind mount (`${DATA_ROOT}/data:/home/node/.n8n`) if it ever gets recreated root-owned (e.g. after a wipe/`--fresh` restart). `n8n-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it to `1000:1000` on every start, before `n8n` itself starts. Confirmed live: without it, a fresh/empty data dir crashes n8n on boot with `EACCES: permission denied, open '/home/node/.n8n/config'`.
+
 ## Registration
 
 No public self-registration — the first account becomes the instance owner, who invites additional users from inside the app (Settings → Users). No env var toggle applies.
