@@ -10,10 +10,10 @@ Slack-style team chat — channels, DMs, threads, plugins (Playbooks/Calls ship 
 
 ```bash
 cp services/mattermost/.env.example services/mattermost/.env
-mkdir -p service_data/data/mattermost/{config,data,logs,plugins,client-plugins,bleve-indexes}
-sudo chown -R 2000:2000 service_data/data/mattermost/   # container runs as uid 2000
 uv run homeserver.py dev up mattermost
 ```
+
+No manual pre-create/chown step needed — `mattermost-permissions` (a one-shot `alpine` container in `compose.yml`, same pattern as `firefly-permissions`) creates and `chown`s all six `DATA_ROOT` subdirectories to `2000:2000` on every start, before `mattermost` itself starts (`depends_on: service_completed_successfully`). The official image hardcodes `user: "2000:2000"` with no root fallback, so it can never self-heal this on its own — confirmed live by fully wiping `service_data/data/mattermost/` and running `up --fresh` twice: the first attempt (a bare `chown -R` with no `mkdir` first) still failed, because Docker creates each of the six bind-mount subdirectories root-owned *after* the permissions container had already run and exited — fixed by having the permissions container `mkdir -p` them itself first.
 
 Open `https://mattermost.<domain>/` (or `http://<host>:8141` in dev) and create the first account — it becomes System Admin automatically (first user on a fresh install always does).
 
