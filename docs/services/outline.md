@@ -60,6 +60,8 @@ uv run homeserver.py dev up outline
 
 Open `https://outline.<domain>/` (or `http://<host>:8114` in dev) and log in via the "Authentik" OIDC option.
 
+**Permissions, handled automatically**: Outline's image runs as a hardcoded `nodejs` user (uid `1001`, gid `1001` — confirmed via `/etc/passwd` inside the container, distinct from the image's *other* `node` user at uid `1000`, which isn't what the app actually runs as) with no root fallback, so it could never self-heal `data/` if recreated root-owned (e.g. after a wipe/`--fresh` restart). `outline-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it on every start, before `outline` itself starts — verified live by wiping it and confirming a clean, correctly-owned restart.
+
 ## Using it day to day
 
 Browser-only for this deployment, by design of the app rather than a limitation here — Outline's official desktop app has no way to point at a self-hosted server domain (confirmed via Outline's own community reports, not just this stack), and there's no native mobile app, only a PWA. Use `https://outline.${DOMAIN}` directly in a browser; on mobile, the browser's own "Add to Home Screen" gives a PWA-style icon.
