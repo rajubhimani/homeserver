@@ -2,6 +2,8 @@ services:
   grafana:
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-8134}:3000"
+      - "10.8.0.1:${GRAFANA_PORT:-8134}:3000"
   prometheus:
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-8135}:9090"
+      - "10.8.0.1:${PROMETHEUS_PORT:-8135}:9090"

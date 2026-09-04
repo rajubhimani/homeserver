@@ -252,17 +252,6 @@
       "replaces": "Mailtrap"
     },
     {
-      "slug": "observability",
-      "tier": "core",
-      "name": "Grafana",
-      "category": "system",
-      "icon": "orange",
-      "svg": "<path d=\"M3 14 L3 4 M3 14 L15 14\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5 12 L8 8 L10.5 10.5 L14 5\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-      "desc": "Dashboards showing how healthy and busy every service in this stack is - CPU, memory, and searchable logs in one place, powered by Grafana.",
-      "replaces": "Datadog / Grafana Cloud",
-      "sub": "grafana"
-    },
-    {
       "slug": "plausible",
       "tier": "core",
       "name": "Plausible",
@@ -592,6 +581,17 @@
     {
       "slug": "crowdsec",
       "tier": "extra"
+    },
+    {
+      "slug": "observability",
+      "tier": "extra",
+      "name": "Grafana",
+      "category": "system",
+      "icon": "orange",
+      "svg": "<path d=\"M3 14 L3 4 M3 14 L15 14\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5 12 L8 8 L10.5 10.5 L14 5\" stroke=\"#F46800\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Dashboards showing how healthy and busy every service in this stack is - CPU, memory, and searchable logs in one place, powered by Grafana.",
+      "replaces": "Datadog / Grafana Cloud",
+      "sub": "grafana"
     },
     {
       "slug": "dockge",

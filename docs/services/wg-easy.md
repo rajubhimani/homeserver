@@ -81,7 +81,11 @@ sudo firewall-cmd --reload
 
 Your router needs to allow inbound UDP on the WireGuard port over IPv6. Unlike IPv4 port-forwarding (NAT translation), this is just a firewall **allow rule** — IPv6 doesn't need NAT since addresses are already globally routable.
 
-Router UIs vary enormously. On this homeserver's router (Sercomm AOT-4221SR, an Airtel-provided ONT/router), the only available control was a coarse **Security Level: Low/Medium/High** toggle (no granular per-port IPv6 rule option existed) — setting it to **Low** was sufficient to let the WireGuard handshake through. If your router has a proper IPv6 firewall/pinhole section, use that instead to open only the specific port rather than lowering overall security.
+Router UIs vary enormously. On this homeserver's router (Sercomm AOT-4221SR, an Airtel-provided ONT/router), the only available control was a coarse **Security Level: Low/Medium/High** toggle (no granular per-port IPv6 rule option existed). If your router has a proper IPv6 firewall/pinhole section, use that instead to open only the specific port rather than lowering overall security.
+
+**Confirmed on this router: `High` silently blocks new WireGuard handshakes, `Medium` does not.** This was non-obvious to diagnose — an existing connection kept working for a while after switching to `High` (state from before the change, or a brief propagation window), which looked like success, but any *new* handshake attempt after that (phone reconnecting, a stale session needing to re-negotiate) was dropped with zero packets ever reaching the server — confirmed via `wg show wg0 dump` showing no endpoint activity and `ip -s link show wg0` showing an unchanged RX counter across multiple retries. Switching back to `Medium` fixed it immediately (fresh handshake within seconds, `wg0`'s RX counter jumped from 135 to 1861 packets on the first real page load). If you hit "VPN was working, now nothing connects, no error either side" after touching this toggle, suspect the toggle itself before anything else — check `docker exec wg-easy wg show wg0 dump` for peer endpoint/handshake activity and `ip -s link show wg0` for RX counter movement across a retry; if neither moves at all despite a client-side reconnect, it's the router silently dropping the handshake, not this host.
+
+**This coarse router toggle is only half the picture — your host's own firewall matters just as much, if not more.** A real, routable IPv6 address (which this whole setup depends on) means anything your *host* firewall allows inbound is now reachable from the internet too, regardless of the router. This exact combination (router set to Low + an unrelated, overly-broad host firewall rule) once exposed RDP and several admin panels on this deployment — see [09 — Firewall](../09-firewall.md) for the full incident and the default-deny host firewall setup every IPv6-reachable host should have, VPN or not.
 
 ## Exact Commands Run On This Host (Copy-Paste Reference)
 
@@ -173,33 +177,34 @@ This one field is what decides **what a client can reach through the tunnel** �
 | Want to grant access to... | Add this to Allowed IPs |
 |---|---|
 | Everything (full-tunnel/exit-node) | `0.0.0.0/0, ::/0` (or just leave the field empty — this is wg-easy's default) |
-| The whole home LAN | Your LAN's subnet, e.g. `192.168.1.0/24` (check `ip route show default` on the homeserver, or your router's LAN settings, for your actual subnet) |
-| Just the homeserver's Docker containers | The Docker bridge subnet, e.g. `172.18.0.0/16` (check with `docker network inspect homeserver --format '{{.IPAM.Config}}'`) |
+| The whole home LAN (other, non-Docker devices — NAS, printers, other PCs) | Your LAN's subnet, e.g. `192.168.1.0/24` (check `ip route show default` on the homeserver, or your router's LAN settings, for your actual subnet) |
 | One specific device only (e.g. just a NAS, just one server) | That device's single IP with a `/32` suffix, e.g. `192.168.1.50/32` |
 | A few specific devices/services, nothing else | List each one individually, comma-separated, each with `/32` — e.g. `192.168.1.50/32, 192.168.1.60/32` |
 
 **In practice, for a firm/team setting**, this means you decide per-person what they should reach — e.g. an accountant might only need `192.168.1.50/32` (just the finance server), while an IT admin might get the whole LAN. There's no single "correct" scope — it's your call per client, based on what that person's role actually needs.
 
-### The three example profiles used in this deployment
+> **Reaching the homeserver's own containerized services (Immich, Jellyfin, Nextcloud, etc.) no longer needs its own Allowed IPs entry at all.** Every service's `compose.prod.yml` in this stack binds to `10.8.0.1` (WireGuard's own tunnel-side address) in addition to `127.0.0.1` — see [09 — Firewall](../09-firewall.md#restoring-fast-direct-access-safely-the-10801-pattern) for the full pattern and why it's safe. Since `10.8.0.0/24` (the VPN subnet itself) is already mandatory in *every* profile, this means **any connected client can already reach every service directly** — e.g. `http://10.8.0.1:8096` for Jellyfin, `http://10.8.0.1:2283` for Immich — full port list in [11 — Services Reference](../11-services-reference.md#port-reference). This is what retired the old `myphone-docker` profile below: it existed only to route to the Docker bridge subnet (`172.18.0.0/16`) for direct container access, which is now unnecessary — the same access comes for free from the VPN subnet already in every profile.
+
+### The two client profiles used in this deployment
+
+Down from three — `myphone-docker` (see box above) is retired; its whole purpose is now covered automatically by every profile's mandatory VPN-subnet entry.
 
 | Profile | Allowed IPs | Use case |
 |---|---|---|
-| `myphone` | *(left unset — defaults to)* `0.0.0.0/0, ::/0` | Routes ALL internet traffic through home — gives your home's public IP, enables content filtering, but adds latency to every request (see Performance Notes) |
-| `myphone-lan` | `10.8.0.0/24, fdcc:ad94:bacf:61a4::/64, 192.168.1.0/24` (VPN subnet + home LAN subnet) | Reach every homeserver service + anything else on the home network, general internet stays on the device's own fast connection |
-| `myphone-docker` | `10.8.0.0/24, fdcc:ad94:bacf:61a4::/64, 172.18.0.0/16` (VPN subnet + Docker bridge subnet) | Narrower — only the homeserver's own Docker containers, not other LAN devices |
+| `myphone` | *(left unset — defaults to)* `0.0.0.0/0, ::/0` | Routes ALL internet traffic through home — gives your home's public IP, enables content filtering, but adds latency to every request (see Performance Notes). Also reaches every service directly via `10.8.0.1` (see box above), same as any profile. |
+| `myphone-lan` | `10.8.0.0/24, fdcc:ad94:bacf:61a4::/64, 192.168.1.0/24` (VPN subnet + home LAN subnet) | Reach every homeserver service (via `10.8.0.1`) **and** other LAN devices that aren't part of the Docker stack (NAS, printers, other PCs, or this host's own LAN-bound things like GNOME Remote Desktop at `192.168.1.7:3389`) — general internet stays on the device's own fast connection |
 
 **Steps per client:**
 1. Admin Panel → **New Client** → name it (e.g. `myphone-lan`) → Save
 2. Click the new client to edit it → find **Allowed IPs** field → set to whatever scope this person/device needs (see above) → Save
 3. Click the client's **QR code** icon → scan into the WireGuard app on the target device (or download the `.conf` file directly for desktop platforms)
 
-**Worked example — setting up `myphone-lan` and `myphone-docker`:**
+**Worked example — setting up `myphone-lan`:**
 1. Admin Panel → New Client → name `myphone-lan` → Save
 2. Edit it → Allowed IPs → paste: `10.8.0.0/24, fdcc:ad94:bacf:61a4::/64, 192.168.1.0/24` → Save
-3. Repeat for `myphone-docker` with: `10.8.0.0/24, fdcc:ad94:bacf:61a4::/64, 172.18.0.0/16`
-4. Get each one's QR code, scan into the WireGuard app — they appear as two additional *separate* saved tunnels alongside the original `myphone` (full-tunnel) one, so switching is just toggling which one is active
+3. Get its QR code, scan into the WireGuard app — it appears as a second saved tunnel alongside the original `myphone` (full-tunnel) one, so switching is just toggling which one is active
 
-**Verifying the config took effect** (server-side check, since the Allowed IPs field here is easy to confuse with a *different* field of the same name that serves the opposite purpose — see Troubleshooting). Actual output from this deployment, confirming both were set correctly:
+**Verifying the config took effect** (server-side check, since the Allowed IPs field here is easy to confuse with a *different* field of the same name that serves the opposite purpose — see Troubleshooting). Actual output from this deployment, confirming both were set correctly (from when `myphone-docker` still existed — the shape of the check is unchanged, just one fewer row today):
 ```bash
 docker cp wg-easy:/etc/wireguard/wg-easy.db /tmp/check.db
 python3 -c "
@@ -212,10 +217,9 @@ for row in c.fetchall(): print(row)
 ```
 ```
 (1, 'myphone', None, '[]')
-(2, 'myphone-docker', '["10.8.0.0/24","fdcc:ad94:bacf:61a4::/64","172.18.0.0/16"]', '[]')
 (3, 'myphone-lan', '["10.8.0.0/24","fdcc:ad94:bacf:61a4::/64","192.168.1.0/24"]', '[]')
 ```
-(`myphone`'s `allowed_ips` is `None` — confirms it correctly falls back to the full-tunnel default rather than being unset/broken.)
+(`myphone`'s `allowed_ips` is `None` — confirms it correctly falls back to the full-tunnel default rather than being unset/broken. If you still have an old `myphone-docker` client from before this change, it's safe to delete from the Admin Panel — nothing depends on it anymore.)
 
 ## Platform Support
 

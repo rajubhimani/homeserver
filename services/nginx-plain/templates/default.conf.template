@@ -964,6 +964,18 @@ server {
     access_log /var/log/nginx/access.log cf_combined;
     server_name coolify.${DOMAIN};
 
+    # Authentik forward-auth — see docs/services/authentik.md. Server-level,
+    # applies to every location below except the two internal outpost
+    # locations, which explicitly turn it off (required — without that, the
+    # auth-check endpoint would need to check its own auth first, an
+    # infinite loop). Defense in depth: Coolify mounts the Docker socket
+    # read-write, so an account created via its own registration screen
+    # would otherwise be enough to get root-equivalent host control.
+    auth_request /outpost.goauthentik.io/auth/nginx;
+    error_page 401 = @goauthentik_proxy_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie;
+
     # coolify-realtime (Soketi/Pusher-protocol WS server) — the app's own
     # frontend JS connects here directly for live deploy logs,
     # notifications, etc. (see PUSHER_HOST/PUSHER_PORT in compose.yml).
@@ -1010,6 +1022,27 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+    }
+
+    location /outpost.goauthentik.io {
+        internal;
+        auth_request off;
+        set $authentik_upstream http://authentik-server:9000;
+        proxy_pass $authentik_upstream$uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URL https://$http_host$request_uri;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie;
+    }
+
+    location @goauthentik_proxy_signin {
+        internal;
+        auth_request off;
+        add_header Set-Cookie $auth_cookie;
+        return 302 https://authentik.${DOMAIN}/outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
     }
 }
 

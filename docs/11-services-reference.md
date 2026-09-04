@@ -15,7 +15,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
-| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, observability, plausible |
+| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, plausible |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + every office service below — **opt-in, never implied by `up daily`** |
 | `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + office + every automation/AI service below — **opt-in, never implied by `up office`** |
@@ -139,6 +139,8 @@ gitlab (redundant with forgejo at far higher memory cost).
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
 **Next available ports:** web `8153`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+
+**In `prod` mode, every service above is also reachable at `10.8.0.1:<same port>`** over the WireGuard tunnel (whether the service is currently running or not — the binding is in `compose.prod.yml`, applied whenever it's next started) (in addition to `127.0.0.1`, not instead of it) — e.g. `10.8.0.1:2283` for Immich, `10.8.0.1:8096` for Jellyfin. See [09 — Firewall § Restoring fast direct access, safely](09-firewall.md#restoring-fast-direct-access-safely-the-10801-pattern) for why this is safe and how to add it to a new service.
 
 ---
 

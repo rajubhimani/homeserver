@@ -13,7 +13,7 @@
   - [06 — Immich](/docs/06-immich.md "Photo backup, mobile app, face recognition (optional)")
   - [07 — Landing Page](/docs/07-landing.md "Service dashboard showing live status for all services")
   - [08 — Maintenance](/docs/08-maintenance.md "Monthly updates, health checks, remote management, troubleshooting")
-  - [09 — Firewall](/docs/09-firewall.md "UFW rules, port binding strategy (dev vs prod)")
+  - [09 — Firewall](/docs/09-firewall.md "Default-deny inbound, why real public IPv6 removes NAT's accidental protection, and a real incident where a broad host firewall rule + Docker's IPv6 port publishing exposed RDP and admin panels")
   - [10 — New Services](/docs/10-new-services.md "Add any service from the stack — step-by-step for each")
   - [11 — Services Reference](/docs/11-services-reference.md "All ports, proxy config, per-service notes")
   - [12 — Orchestration Services](/docs/12-orchestration.md "Airflow vs. Temporal vs. Dagster — what each is for and how they compose")
