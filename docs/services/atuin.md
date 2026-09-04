@@ -84,6 +84,46 @@ atuin stats        # usage stats: top commands, etc.
 
 `ATUIN_OPEN_REGISTRATION` in `.env`, default `false` (closed) — self-registration only stays useful for the brief window while you're still enrolling your own machines. Atuin has no admin-create-user command; to register another machine later, temporarily set this back to `true`, run `atuin register` from that machine, then set it back to `false` and restart.
 
+## Recovering from a reformatted/lost client machine
+
+The encryption key printed by `register` (also retrievable later with `atuin key` while still logged in) lives **only** on the client — this server, like Atuin's own cloud service, never has it in a recoverable form (that's the whole point of end-to-end encryption: it only ever stores blobs it can't read). There's no "forgot key" flow, self-hosted or not. **Back the key up somewhere durable (password manager, etc.) the moment `register` prints it** — that single step is the difference between the two outcomes below.
+
+**A. Key was backed up.** A reformat is a non-event:
+
+```bash
+# reinstall the CLI (see Setup above), then:
+sed -i 's|^# sync_address = "https://api.atuin.sh"|sync_address = "https://atuin.<domain>"|' ~/.config/atuin/config.toml
+atuin login -u <username> -p '<password>' -k '<saved-key>'
+atuin sync
+```
+
+All history synced under that key before the reformat downloads and decrypts normally. Nothing on the server needs to change.
+
+**B. Key was not backed up.** It's gone for good (by design — not a bug to report). Any history already synced to this server under that account becomes permanently unreadable, since a new key can't decrypt old blobs. The account itself still exists server-side (reformatting the client never touches this server's Postgres data), so you must either delete it and re-register under the same username, or just register a new username. To reuse the same username:
+
+```bash
+# 1. Delete the old user + its now-unreadable encrypted rows (they're dead weight either way)
+docker exec atuin-db psql -U atuin -d atuin -c "SELECT id FROM users WHERE username = '<username>';"   # note the id, e.g. 1
+docker exec atuin-db psql -U atuin -d atuin -c "
+BEGIN;
+DELETE FROM store WHERE user_id = <id>;
+DELETE FROM sessions WHERE user_id = <id>;
+DELETE FROM history WHERE user_id = <id>;
+DELETE FROM records WHERE user_id = <id>;
+DELETE FROM users WHERE id = <id>;
+COMMIT;
+"
+
+# 2. Temporarily reopen registration (see Registration above), then from the reformatted machine:
+atuin register -u <username> -e <email> -p '<new-or-same-password>'
+atuin key   # SAVE THIS ONE somewhere durable — this is the step to not skip twice
+atuin sync
+```
+
+Set `ATUIN_OPEN_REGISTRATION` back to `false` and restart (`uv run homeserver.py dev restart atuin`) immediately after registering — don't leave the server open longer than the one `register` call needs.
+
+Local unsynced history (`~/.local/share/atuin/history.db`) is unencrypted and unrelated to the sync key, but it's also just a local file — a reformat wipes it regardless of which path above applies, and it's not what server sync protects against anyway.
+
 ## Notes
 
 - History itself is end-to-end encrypted client-side before syncing — the server only ever stores encrypted blobs, never plaintext commands.
