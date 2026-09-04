@@ -82,6 +82,22 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/n8n-permissions/
+  # vikunja-permissions -- rocket.chat's image runs as a hardcoded uid 65533
+  # (confirmed via /etc/passwd inside the container: "rocketchat:x:65533:65533")
+  # with no root fallback, so it can never self-heal its own bind mount.
+  # Doesn't block boot the way the others did -- rocket.chat doesn't touch
+  # uploads/ at startup -- but a real file/avatar upload would fail silently
+  # against a root-owned dir left behind by a wipe/--fresh restart.
+  rocketchat-permissions:
+    image: alpine:3.24.1
+    container_name: rocketchat-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/uploads:/rocketchat-uploads
+    command: sh -c "mkdir -p /rocketchat-uploads && chown -R 65533:65533 /rocketchat-uploads"
+
   rocketchat:
     image: registry.rocket.chat/rocketchat/rocket.chat:${ROCKETCHAT_VERSION}
     container_name: rocketchat
@@ -129,6 +145,8 @@ services:
         condition: service_completed_successfully
       nats:
         condition: service_started
+      rocketchat-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
