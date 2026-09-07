@@ -83,6 +83,32 @@ docker compose logs --tail=50 <container-name>
 sudo systemctl status cloudflared
 ```
 
+### A container looks "running healthy" but the landing page shows it offline
+
+`docker ps` / `docker inspect`'s health status only reflect the container's
+own process — they say nothing about whether it's actually reachable by
+anything else on the `homeserver` Docker network. A container can be left
+with a detached/orphaned network endpoint (its own healthcheck still passes
+since that usually only hits `localhost`, but nothing else can reach it, and
+if it depends on a sibling container for its own outbound connections —
+e.g. `atuin` -> `atuin-db` — even DNS resolution for that sibling fails
+outright). This happens whenever the `homeserver` network itself gets
+recreated (it did during the 2026-09-04 IPv6-lockdown work, see
+[09-firewall.md](09-firewall.md)) without every attached container being
+disconnected and reconnected in the same pass.
+
+**A plain `docker restart <container>` does NOT fix this** — restart reuses
+the same stale network endpoint. Run:
+
+```bash
+uv run homeserver.py fix-network          # lists affected containers, asks to confirm
+uv run homeserver.py fix-network --yes    # same, non-interactive
+```
+
+This force-recreates only the affected container(s) — via the same compose
+project/service/files each was originally started with, read back off its
+own Docker labels — leaving bind mounts and named volumes untouched.
+
 ---
 
 ## Remote Management from Mac

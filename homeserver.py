@@ -28,6 +28,9 @@ Usage:
                                                 list/remove volumes not declared in a service's current compose.yml
   python homeserver.py status (or ps)          list every known service, tier by tier, marking which are running,
                                                 plus every group and exactly which services 'group:<name>' resolves to
+  python homeserver.py fix-network [--yes]     detect + recreate any running container left detached from the
+                                                'homeserver' network (looks running/healthy but unreachable by
+                                                everything else — a plain restart does not fix this)
 
 Service tiers:
   min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, docs, portainer)
@@ -415,6 +418,20 @@ class DockerBackend(ABC):
         """'healthy', 'unhealthy', 'starting', or 'none' (no HEALTHCHECK defined)."""
 
     @abstractmethod
+    def container_info(self, name: str) -> dict:
+        """network_mode (HostConfig.NetworkMode), networks (list of network
+        names currently in NetworkSettings.Networks — empty means the
+        container has no live network endpoint, the detached/stale-network
+        symptom this stack hit twice: a container created before the
+        'homeserver' network was recreated during the 2026-09-04 IPv6-lockdown
+        work kept running but could no longer be reached by anything else on
+        it, see find_stale_network_containers), plus the compose labels
+        needed to recreate it the same way it was originally started
+        (compose_project, compose_service, config_files — a list of the
+        compose file paths recorded on com.docker.compose.project.config_files).
+        Returns {} if the container doesn't exist."""
+
+    @abstractmethod
     def volumes_for_project(self, project: str) -> list[str]: ...
 
     @abstractmethod
@@ -573,6 +590,30 @@ class SubprocessBackend(DockerBackend):
             ["inspect", "--format={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", name]
         )
         return proc.stdout.strip() or "none"
+
+    def container_info(self, name: str) -> dict:
+        fmt = (
+            '{"network_mode":{{json .HostConfig.NetworkMode}},'
+            '"networks":{{json .NetworkSettings.Networks}},'
+            '"compose_project":{{json (index .Config.Labels "com.docker.compose.project")}},'
+            '"compose_service":{{json (index .Config.Labels "com.docker.compose.service")}},'
+            '"config_files":{{json (index .Config.Labels "com.docker.compose.project.config_files")}}}'
+        )
+        proc = self._run(["inspect", f"--format={fmt}", name])
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return {}
+        try:
+            raw = json.loads(proc.stdout.strip())
+        except json.JSONDecodeError:
+            return {}
+        config_files = raw.get("config_files") or ""
+        return {
+            "network_mode": raw.get("network_mode") or "",
+            "networks": list((raw.get("networks") or {}).keys()),
+            "compose_project": raw.get("compose_project") or "",
+            "compose_service": raw.get("compose_service") or "",
+            "config_files": config_files.split(",") if config_files else [],
+        }
 
     def volumes_for_project(self, project: str) -> list[str]:
         # Match by Compose's own naming convention (<project>_<volume-name>)
@@ -793,6 +834,21 @@ class PythonOnWhalesBackend(DockerBackend):
             return c.state.health.status or "none"
         except Exception:
             return "none"
+
+    def container_info(self, name: str) -> dict:
+        try:
+            c = self._docker.container.inspect(name)
+            labels = c.config.labels or {}
+            config_files = labels.get("com.docker.compose.project.config_files") or ""
+            return {
+                "network_mode": c.host_config.network_mode or "",
+                "networks": list((c.network_settings.networks or {}).keys()),
+                "compose_project": labels.get("com.docker.compose.project") or "",
+                "compose_service": labels.get("com.docker.compose.service") or "",
+                "config_files": config_files.split(",") if config_files else [],
+            }
+        except Exception:
+            return {}
 
     def volumes_for_project(self, project: str) -> list[str]:
         # Match by Compose's own naming convention (<project>_<volume-name>)
@@ -1227,11 +1283,45 @@ def do_snapshots(service: str) -> None:
 # ── Actions ──────────────────────────────────────────────────────────
 
 
+def wg_tunnel_up() -> bool:
+    """True once wg-easy's wg0 interface actually holds 10.8.0.1 — the
+    address every prod compose.prod.yml also binds each port to (see
+    docs/09-firewall.md). Missing 'ip' (e.g. non-Linux) is treated as
+    "can't tell" rather than "not up", so the caller doesn't loop pointlessly."""
+    if not shutil.which("ip"):
+        return True
+    try:
+        out = subprocess.run(["ip", "-o", "addr", "show", "wg0"], capture_output=True, text=True, timeout=5)
+        return out.returncode == 0 and "10.8.0.1" in out.stdout
+    except Exception:
+        return True
+
+
+def ensure_wg_tunnel_ready(service: str, env: str) -> None:
+    """Every other prod service binds a second port to wg-easy's 10.8.0.1
+    tunnel address, which only exists once wg-easy has brought up wg0. On a
+    cold start (or the Docker daemon auto-restarting 'unless-stopped'
+    containers after a reboot) another service can win that race and fail
+    to bind at all. services.json's list order only protects bulk 'up
+    <tier>' calls, not a single-service 'up' — so check directly instead."""
+    if env != "prod" or service == "wg-easy" or wg_tunnel_up():
+        return
+    info("wg-easy's tunnel address (10.8.0.1) isn't up yet — starting wg-easy first...")
+    do_up("wg-easy", env, None)
+    for _ in range(30):
+        if wg_tunnel_up():
+            return
+        time.sleep(1)
+    warn("wg-easy's tunnel address (10.8.0.1) still isn't up after 30s — continuing anyway")
+
+
 def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None, fresh: bool = False) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
+
+    ensure_wg_tunnel_ready(service, env)
 
     if not fresh:
         service_data_dir = SERVICE_DATA_ROOT / service
@@ -1872,6 +1962,96 @@ def do_orphaned_volumes(target: str, assume_yes: bool) -> int:
     return 0 if ok else 1
 
 
+def find_stale_network_containers() -> list[dict]:
+    """Running containers whose HostConfig.NetworkMode names a real network
+    (not host/none/container:<id>) but whose NetworkSettings.Networks is
+    currently empty — a detached/orphaned network endpoint. The container's
+    own process never notices (it keeps running, even reporting healthy on
+    its own localhost-only healthcheck) but nothing else can reach it, and
+    anything it depends on for its own outbound connections (e.g. atuin ->
+    atuin-db) fails DNS resolution outright. Hit on this stack right after
+    the 'homeserver' network was recreated during the 2026-09-04
+    IPv6-lockdown work (docs/09-firewall.md) — atuin, then separately
+    jellyfin/guacamole/it-tools/mailpit, were all left in this state. A
+    plain `docker restart` does NOT fix it (confirmed against atuin): restart
+    reuses the same stale endpoint. Only a full recreate rebuilds it, which
+    is what do_fix_network does below."""
+    stale = []
+    for name in BACKEND.running_container_names():
+        info = BACKEND.container_info(name)
+        if not info:
+            continue
+        mode = info.get("network_mode", "")
+        if not mode or mode in ("host", "none") or mode.startswith("container:"):
+            continue
+        if info.get("networks"):
+            continue
+        stale.append({"container": name, **info})
+    return stale
+
+
+def do_fix_network(assume_yes: bool) -> int:
+    """Detect and repair containers stuck with a detached network endpoint
+    (see find_stale_network_containers) by recreating just the affected
+    container(s) — via the same compose project/service/files each was
+    originally started with, read back off its own Docker labels, so this
+    needs no <env> argument and never touches anything else in the
+    project. Bind mounts and named volumes are untouched by a recreate."""
+    header("Checking for containers detached from their Docker network...")
+    stale = find_stale_network_containers()
+    if not stale:
+        success("No stale network attachments found")
+        return 0
+
+    for s in stale:
+        warn(f"{s['container']}  (service: {s.get('compose_project') or '?'}, network mode: {s.get('network_mode')})")
+
+    print()
+    warn(f"{len(stale)} container(s) found above with no live network endpoint.")
+    warn("A plain restart will NOT fix this — each will be force-recreated (bind mounts/volumes untouched).")
+
+    if not assume_yes:
+        try:
+            reply = input(f"\n{BOLD}Recreate all {len(stale)} listed above? [y/N]{RESET} ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            info("Cancelled")
+            return 1
+        if reply not in ("y", "yes"):
+            info("Cancelled — nothing recreated")
+            return 0
+
+    print()
+    ok = True
+    for s in stale:
+        container = s["container"]
+        service = s.get("compose_project", "")
+        compose_service = s.get("compose_service", "")
+        config_files = s.get("config_files") or []
+        if not service or not is_valid_service(service):
+            error(f"  {container}: unknown/missing compose project label — recreate it manually")
+            ok = False
+            continue
+        if any("compose.prod.yml" in f for f in config_files):
+            env = "prod"
+        elif any("compose.dev.yml" in f for f in config_files):
+            env = "dev"
+        else:
+            error(f"  {container}: can't tell dev/prod from its recorded compose files — recreate it manually")
+            ok = False
+            continue
+        recreated, output = BACKEND.compose_up(
+            compose_files(service, env), compose_env(service), None,
+            force_recreate=True, only=[compose_service] if compose_service else None,
+        )
+        if recreated:
+            success(f"Recreated {container} ({service}, {env})")
+        else:
+            error(f"  Failed to recreate {container}: {output.strip()[-300:]}")
+            ok = False
+    return 0 if ok else 1
+
+
 # ── Help ─────────────────────────────────────────────────────────────
 
 
@@ -1888,6 +2068,7 @@ def show_help() -> None:
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
     print("    python homeserver.py status (or ps)                             list every service + every group (tier by tier, marking which are running)")
+    print("    python homeserver.py fix-network [--yes]                        recreate any running container detached from the 'homeserver' network")
     print()
     print(f"  {BOLD}Environments:{RESET}")
     print("    dev    ports on all interfaces (direct access)")
@@ -1954,6 +2135,8 @@ def show_help() -> None:
     print("    python homeserver.py gc                              prune + (Windows) compact Docker Desktop's WSL2 VHDX")
     print("    python homeserver.py gc --yes                        same, skip the confirmation prompt")
     print("    python homeserver.py status                          list every service + every group, marking which are running")
+    print("    python homeserver.py fix-network                     recreate any container detached from the 'homeserver' network")
+    print("    python homeserver.py fix-network --yes                same, skip the confirmation prompt")
     print()
     print(f"  {BOLD}MIN (infrastructure):{RESET}")
     print(f"    {' '.join(SERVICES_MIN)}")
@@ -2071,6 +2254,12 @@ def main() -> int:
     # dev/prod (only the port bindings do), so this needs no env argument.
     if argv and argv[0] in ("status", "ps"):
         return do_status()
+
+    # Same reasoning again — each affected container's own compose labels
+    # say which env it was started under (see do_fix_network), so this
+    # doesn't need one passed in either.
+    if argv and argv[0] == "fix-network":
+        return do_fix_network(assume_yes="--yes" in argv or "-y" in argv)
 
     if len(argv) < 3:
         show_help()
