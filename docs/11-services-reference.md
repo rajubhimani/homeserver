@@ -50,7 +50,7 @@ airflow, dagster, temporal, ollama, open-webui, n8n.
 crowdsec, dockge, dozzle,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,
-documenso, invoiceshelf, openproject, mattermost,
+documenso, invoiceshelf, erpnext, openproject, mattermost,
 rocketchat, zulip, orangehrm.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
@@ -128,6 +128,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
 | Documenso | `documenso` | 8128 | 3000 | extra |
 | InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
+| ERPNext | `erpnext` | 8153 | 8080 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
@@ -220,6 +221,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `audiobookshelf.yourdomain.com` | `audiobookshelf` | `80` | extra |
 | `openproject.yourdomain.com` | `openproject` | `80` | extra |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
+| `erpnext.yourdomain.com` | `erpnext` | `8080` | extra |
 | `outline.yourdomain.com` | `outline` | `3000` | extra |
 | `bookstack.yourdomain.com` | `bookstack` | `80` | extra |
 | `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |

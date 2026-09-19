@@ -75,6 +75,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Audiobookshelf | [docs/services/audiobookshelf.md](services/audiobookshelf.md) |
 | OpenProject | [docs/services/openproject.md](services/openproject.md) |
 | InvoiceShelf | [docs/services/invoiceshelf.md](services/invoiceshelf.md) |
+| ERPNext | [docs/services/erpnext.md](services/erpnext.md) |
 | Dockge | [docs/services/dockge.md](services/dockge.md) |
 | Outline | [docs/services/outline.md](services/outline.md) |
 | BookStack | [docs/services/bookstack.md](services/bookstack.md) |

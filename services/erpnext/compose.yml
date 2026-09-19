@@ -1,0 +1,159 @@
+x-erpnext-image: &erpnext_image
+  image: frappe/erpnext:${ERPNEXT_VERSION:-v15.60.1}
+  restart: unless-stopped
+
+x-depends-on-configurator: &depends_on_configurator
+  depends_on:
+    erpnext-configurator:
+      condition: service_completed_successfully
+
+x-bench-defaults: &bench_defaults
+  <<: [*depends_on_configurator, *erpnext_image]
+  env_file: .env
+  volumes:
+    - erpnext-sites:/home/frappe/frappe-bench/sites
+  networks:
+    - homeserver
+
+services:
+  erpnext-db:
+    image: mariadb:11.8
+    container_name: erpnext-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --innodb-buffer-pool-size=256M
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MARIADB_AUTO_UPGRADE: 1
+    volumes:
+      - erpnext-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    networks:
+      - homeserver
+
+  erpnext-redis-cache:
+    image: redis:8.6-alpine
+    container_name: erpnext-redis-cache
+    restart: unless-stopped
+    networks:
+      - homeserver
+
+  erpnext-redis-queue:
+    image: redis:8.6-alpine
+    container_name: erpnext-redis-queue
+    restart: unless-stopped
+    volumes:
+      - erpnext-redis-queue-data:/data
+    networks:
+      - homeserver
+
+  # One-shot: writes db/redis connection details into the shared `sites`
+  # volume's common_site_config.json, then exits. Every other bench
+  # container waits on it via `service_completed_successfully` (see
+  # &depends_on_configurator above) so they never race a half-written config.
+  erpnext-configurator:
+    <<: *erpnext_image
+    container_name: erpnext-configurator
+    restart: on-failure
+    env_file: .env
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host erpnext-db;
+        bench set-config -gp db_port 3306;
+        bench set-config -g redis_cache "redis://erpnext-redis-cache:6379";
+        bench set-config -g redis_queue "redis://erpnext-redis-queue:6379";
+        bench set-config -g redis_socketio "redis://erpnext-redis-queue:6379";
+        bench set-config -gp socketio_port 9000;
+    volumes:
+      - erpnext-sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      erpnext-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+  erpnext-backend:
+    <<: *bench_defaults
+    container_name: erpnext-backend
+    environment:
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+
+  erpnext-websocket:
+    <<: *bench_defaults
+    container_name: erpnext-websocket
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+
+  erpnext-queue-short:
+    <<: *bench_defaults
+    container_name: erpnext-queue-short
+    command: bench worker --queue short,default
+
+  erpnext-queue-long:
+    <<: *bench_defaults
+    container_name: erpnext-queue-long
+    command: bench worker --queue long,default,short
+
+  erpnext-scheduler:
+    <<: *bench_defaults
+    container_name: erpnext-scheduler
+    command: bench schedule
+
+  # Serves the site — this is the container fronted by nginx-plain
+  # (services/nginx-plain/templates/default.conf.template).
+  erpnext:
+    <<: *erpnext_image
+    container_name: erpnext
+    env_file: .env
+    entrypoint:
+      - nginx-entrypoint.sh
+    environment:
+      BACKEND: erpnext-backend:8000
+      SOCKETIO: erpnext-websocket:9000
+      FRAPPE_SITE_NAME_HEADER: erpnext.${DOMAIN}
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    volumes:
+      - erpnext-sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      - erpnext-backend
+      - erpnext-websocket
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/method/ping || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+    networks:
+      - homeserver
+
+volumes:
+  erpnext-sites:
+  erpnext-db-data:
+  erpnext-redis-queue-data:
+
+networks:
+  homeserver:
+    external: true
