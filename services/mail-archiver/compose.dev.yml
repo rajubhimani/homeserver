@@ -1,0 +1,4 @@
+services:
+  mail-archiver:
+    ports:
+      - "8153:5000"

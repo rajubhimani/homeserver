@@ -61,6 +61,8 @@
       - [Mattermost](/docs/services/mattermost.md "Slack-style team chat: channels, DMs, threads. Lighter self-hosted footprint than Rocket.Chat/Zulip.")
       - [Rocket.Chat](/docs/services/rocketchat.md "Full-featured team chat with channels, apps, and webhooks. Heaviest of the chat playground trio (MongoDB replica set + NATS). Replaces: Slack.")
       - [Zulip](/docs/services/zulip.md "Topic-threaded team chat, good for organized async discussion. Postgres + RabbitMQ + Redis + Memcached backing services. Replaces: Slack.")
+      - [Mail-Archiver](/docs/services/mail-archiver.md "Continuous backup of your real mailboxes (Microsoft 365 via Graph API, or any IMAP). Search, export as mbox/EML, and copy everything into a new provider when you switch. Replaces: Microsoft Purview / MailStore.")
+      - [Bichon](/docs/services/bichon.md "Lightweight email archiver with fast full-text search, tags, threads, and attachment browsing. Single container, no database - pulls from any IMAP account (OAuth2 included). Replaces: MailStore Home.")
     - AI
       - [Open WebUI](/docs/services/open-webui.md "Chat interface for AI models running entirely on your own hardware, served by Ollama — like ChatGPT, but private, offline, and free to use.")
       - [Ollama](/docs/services/ollama.md "Runs large language models locally and serves them to Open WebUI over the internal network — the actual AI engine behind the chat interface. Also reachable directly (behind login) for other tools that speak the Ollama API.")

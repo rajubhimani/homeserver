@@ -61,9 +61,9 @@ These had no login of their own at all and are the same class of risk as bucket 
 
 Firefly III, Mealie, Miniflux, Wallabag, HomeBox, Karakeep, n8n (CE: owner + members, no granular roles), Atuin (per-person history, no sharing/permission model to have roles over), Beszel.
 
-## Reference — bucket D, real RBAC (31)
+## Reference — bucket D, real RBAC (33)
 
-Nextcloud, Vaultwarden, Forgejo, Immich, Jellyfin, Guacamole, Portainer, OpenProject, Paperless-ngx, Authentik, AppFlowy, Plane, Open WebUI, Vikunja, Outline, BookStack, Mattermost, Rocket.Chat, Zulip, ntfy, Airflow, GitLab, Grafana (Observability), InvoiceShelf, OrangeHRM, NocoDB, Listmonk, Documenso, Cal.com, Penpot, Coolify.
+Nextcloud, Vaultwarden, Forgejo, Immich, Jellyfin, Guacamole, Portainer, OpenProject, Paperless-ngx, Authentik, AppFlowy, Plane, Open WebUI, Vikunja, Outline, BookStack, Mattermost, Rocket.Chat, Zulip, ntfy, Airflow, GitLab, Grafana (Observability), InvoiceShelf, OrangeHRM, NocoDB, Listmonk, Documenso, Cal.com, Penpot, Coolify, Mail-Archiver, Bichon.
 
 ---
 

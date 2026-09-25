@@ -112,6 +112,15 @@ See [`docs/12-orchestration.md`](12-orchestration.md) for what each of these is 
 
 **Notes:** the "lite"/"ultra-lite" naming previously looked misleading based on a "nearly identical idle RAM" claim — but now measured live, full (~501MB) is actually ~83% heavier than lite (~274MB), a real difference, not "nearly identical." Both are still JVM/Spring Boot apps with a large baseline heap, so this could shift with longer settle time or different load; worth treating the "nearly identical" claim as unconfirmed until re-checked rather than assuming either figure is final. The one certain functional difference is the full variant supports login (`SECURITY_ENABLELOGIN`); the lite image's build has no security module at all — if login doesn't matter, lite is both simpler and, per this session's numbers, lighter too.
 
+## Email archiving / mailbox backup
+
+| Our Service | Status | Tier | Containers | Memory | Version |
+| --- | --- | --- | --- | --- | --- |
+| **Mail-Archiver** | ○ down | extra | 2 (db + app) | **~134MB** idle, empty archive (app 84 + db 50) | 2609.1 — current |
+| **Bichon** | ○ down | extra | **1** | **~22MB** idle, empty archive | 2.0.3 — current |
+
+**Notes:** both keep a searchable copy of real mailboxes on this server; neither is an email client. They split along one line: **Mail-Archiver** is the one that gets you *off* a provider. It has a Microsoft Graph connector for M365 (no IMAP/OAuth fiddling) and a built-in "copy this whole mailbox into another account" migration. **Bichon** is the nicer place to *search and browse* (faster full-text search, tags, threads, attachment browser) at a sixth of the memory, but it's IMAP-only and its restore only goes back to the original account. Running both against the same mailbox is fine as long as neither has a server-side retention (delete) policy turned on and gives two independent copies in two different formats.
+
 ---
 
 ## Everything else — no direct competitor in this stack

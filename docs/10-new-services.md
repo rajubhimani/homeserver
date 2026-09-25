@@ -82,6 +82,8 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Mattermost | [docs/services/mattermost.md](services/mattermost.md) |
 | Rocket.Chat | [docs/services/rocketchat.md](services/rocketchat.md) |
 | Zulip | [docs/services/zulip.md](services/zulip.md) |
+| Mail-Archiver | [docs/services/mail-archiver.md](services/mail-archiver.md) |
+| Bichon | [docs/services/bichon.md](services/bichon.md) |
 | CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
 | ClamAV | [docs/services/clamav.md](services/clamav.md) |
 | OrangeHRM | [docs/services/orangehrm.md](services/orangehrm.md) |

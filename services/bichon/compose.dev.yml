@@ -1,0 +1,4 @@
+services:
+  bichon:
+    ports:
+      - "8154:15630"

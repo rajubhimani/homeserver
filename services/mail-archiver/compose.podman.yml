@@ -1,0 +1,9 @@
+services:
+  mail-archiver-db:
+    security_opt:
+      - label=disable
+  mail-archiver:
+    security_opt:
+      - label=disable
+    depends_on:
+      - mail-archiver-db

@@ -1,0 +1,73 @@
+services:
+  mail-archiver-db:
+    image: postgres:18.6-alpine
+    container_name: mail-archiver-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    # Unlike most of this stack's Postgres sidecars, this one IS the archive —
+    # Mail-Archiver stores every message body and attachment in the database,
+    # not on disk. Slightly more headroom than the usual 384M for large
+    # initial syncs / mbox imports.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - mail-archiver-postgres:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  mail-archiver:
+    image: s1t5/mailarchiver:2609.1
+    container_name: mail-archiver
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ConnectionStrings__DefaultConnection: Host=mail-archiver-db;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};
+      # Admin account (created on first start)
+      Authentication__Username: ${MAIL_ARCHIVER_ADMIN_USER}
+      Authentication__Password: ${MAIL_ARCHIVER_ADMIN_PASSWORD}
+      # Served behind nginx-plain over https — Lax keeps the session cookie
+      # on top-level navigations from other sites (upstream's own proxy advice).
+      Authentication__CookieSameSite: Lax
+      TimeZone__DisplayTimeZoneId: ${TZ}
+      # mbox/EML imports placed in ${DATA_ROOT}/import show up under
+      # Import → Local file in the UI — the web upload path is capped by
+      # Cloudflare's 100MB request limit, this one isn't.
+      LocalImport__AllowedPaths__0: /data/import
+    volumes:
+      # ASP.NET Data Protection keys — encrypt the stored mailbox credentials
+      # and M365 client secrets. Lose these and every account has to be
+      # re-entered, so they live on the backed-up data drive.
+      - ${DATA_ROOT}/data-protection-keys:/app/DataProtection-Keys
+      - ${DATA_ROOT}/import:/data/import
+    # Image ships no curl/wget — bash's /dev/tcp is the only probe available.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      mail-archiver-db:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  mail-archiver-postgres:
+
+networks:
+  homeserver:
+    external: true

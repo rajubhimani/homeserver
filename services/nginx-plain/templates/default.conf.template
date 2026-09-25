@@ -797,6 +797,46 @@ server {
     }
 }
 
+# ── Mail-Archiver ─────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name mail-archiver.${DOMAIN};
+    # mbox/EML imports through the web UI — Cloudflare still caps a single
+    # request at 100MB, so anything bigger goes via the dev port/VPN or the
+    # import/ folder (see docs/services/mail-archiver.md).
+    client_max_body_size 10G;
+    location / {
+        set $upstream http://mail-archiver:5000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        # Exports and restores stream for a long time before finishing.
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+}
+
+# ── Bichon ────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name bichon.${DOMAIN};
+    client_max_body_size 1G;
+    location / {
+        set $upstream http://bichon:15630;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+}
+
 # ── Wallabag ──────────────────────────────────────────────────────────────────
 server {
     listen 80;

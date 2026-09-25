@@ -31,7 +31,7 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 
 **Reading & Feeds** — [Miniflux](docs/services/miniflux.md "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms. Replaces: Feedly.") · [Wallabag](docs/services/wallabag.md "Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles.") · [Listmonk](docs/services/listmonk.md "Send and manage email newsletters and mailing lists — a self-hosted alternative to Mailchimp.")
 
-**Chat & Messaging** — [Mattermost](docs/services/mattermost.md "Slack-style team chat: channels, DMs, threads. Lighter self-hosted footprint than Rocket.Chat/Zulip.") · [Rocket.Chat](docs/services/rocketchat.md "Full-featured team chat with channels, apps, and webhooks. Heaviest of the chat playground trio (MongoDB replica set + NATS). Replaces: Slack.") · [Zulip](docs/services/zulip.md "Topic-threaded team chat, good for organized async discussion. Postgres + RabbitMQ + Redis + Memcached backing services. Replaces: Slack.")
+**Chat & Messaging** — [Mattermost](docs/services/mattermost.md "Slack-style team chat: channels, DMs, threads. Lighter self-hosted footprint than Rocket.Chat/Zulip.") · [Rocket.Chat](docs/services/rocketchat.md "Full-featured team chat with channels, apps, and webhooks. Heaviest of the chat playground trio (MongoDB replica set + NATS). Replaces: Slack.") · [Zulip](docs/services/zulip.md "Topic-threaded team chat, good for organized async discussion. Postgres + RabbitMQ + Redis + Memcached backing services. Replaces: Slack.") · [Mail-Archiver](docs/services/mail-archiver.md "Continuous backup of your real mailboxes (Microsoft 365 via Graph API, or any IMAP). Search, export as mbox/EML, and copy everything into a new provider when you switch. Replaces: Microsoft Purview / MailStore.") · [Bichon](docs/services/bichon.md "Lightweight email archiver with fast full-text search, tags, threads, and attachment browsing. Single container, no database - pulls from any IMAP account (OAuth2 included). Replaces: MailStore Home.")
 
 **AI** — [Open WebUI](docs/services/open-webui.md "Chat interface for AI models running entirely on your own hardware, served by Ollama — like ChatGPT, but private, offline, and free to use.") · [Ollama](docs/services/ollama.md "Runs large language models locally and serves them to Open WebUI over the internal network — the actual AI engine behind the chat interface. Also reachable directly (behind login) for other tools that speak the Ollama API.")
 
@@ -249,6 +249,8 @@ uv run homeserver.py prod up all
     ├── mattermost/
     ├── rocketchat/
     ├── zulip/
+    ├── mail-archiver/
+    ├── bichon/
     ├── docs/
     ├── crowdsec/
     ├── clamav/
@@ -325,6 +327,8 @@ service_data/
 ├── mattermost/       (config/, data/, logs/, plugins/, client-plugins/, bleve-indexes/) — DB lives in a named volume, not this tree
 ├── rocketchat/       (uploads/) — MongoDB lives in named volumes, not this tree
 ├── zulip/            (empty — Postgres/RabbitMQ/Redis/Zulip's own /data all live in named volumes)
+├── mail-archiver/    (data-protection-keys/, import/) — the archive itself is in the mail-archiver-postgres named volume
+├── bichon/           (empty — index/mail/metadata all live in the bichon-data named volume)
 ├── crowdsec/         (config/) — parsed decisions/DB live in a named volume, not this tree
 ├── clamav/           (empty — virus-signature database lives outside this tree, in service_data/cache/clamav/db/, fully regenerable so kept out of DATA_ROOT)
 ├── wallabag/         (postgres/, data/, images/)

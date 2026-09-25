@@ -51,7 +51,7 @@ crowdsec, dockge, dozzle,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,
 documenso, invoiceshelf, openproject, mattermost,
-rocketchat, zulip, orangehrm.
+rocketchat, zulip, mail-archiver, bichon, orangehrm.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
 gitlab (redundant with forgejo at far higher memory cost).
@@ -132,6 +132,8 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
 | Zulip | `zulip` | 8143 | 80 | extra |
+| Mail-Archiver | `mail-archiver` | 8153 | 5000 | extra |
+| Bichon | `bichon` | 8154 | 15630 | extra |
 | OrangeHRM | `orangehrm` | 8125 | 80 | extra |
 | GitLab CE | `gitlab` | 8085 / 2224 (SSH) | 80 / 22 | manual |
 | Nginx Proxy Manager | `nginx-proxy-manager` | 8180 / 8443 / 8181 (admin) | same | manual (optional) |
@@ -225,6 +227,8 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |
 | `rocketchat.yourdomain.com` | `rocketchat` | `3000` | extra |
 | `zulip.yourdomain.com` | `zulip` | `80` | extra |
+| `mail-archiver.yourdomain.com` | `mail-archiver` | `5000` | extra |
+| `bichon.yourdomain.com` | `bichon` | `15630` | extra |
 | `orangehrm.yourdomain.com` | `orangehrm` | `80` | extra |
 | `nocodb.yourdomain.com` | `nocodb` | `8080` | extra |
 | `documenso.yourdomain.com` | `documenso` | `3000` | extra |

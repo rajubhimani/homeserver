@@ -1,0 +1,28 @@
+services:
+  bichon:
+    image: rustmailer/bichon:2.0.3
+    container_name: bichon
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BICHON_ROOT_DIR: /data
+      BICHON_ENCRYPT_PASSWORD: ${BICHON_ENCRYPT_PASSWORD}
+      # Used in OAuth2 redirect URLs (Microsoft/Google sign-in for an
+      # account) — must be the URL your browser actually reaches Bichon on.
+      BICHON_PUBLIC_URL: https://bichon.${DOMAIN}
+    volumes:
+      # Named volume, not a service_data/ bind mount: Bichon's Tantivy index
+      # + blob store + memdb must sit on a real local filesystem (upstream
+      # warns network/odd filesystems corrupt the index), and service_data/
+      # is on an NTFS/fuseblk drive. 'down' still snapshots named volumes.
+      - bichon-data:/data
+    # Image's own HEALTHCHECK (curl /api/status) is inherited as-is.
+    networks:
+      - homeserver
+
+volumes:
+  bichon-data:
+
+networks:
+  homeserver:
+    external: true
