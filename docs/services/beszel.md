@@ -55,6 +55,47 @@ Everything happens in the hub web UI (`http://<ip>:8106`), confirmed against Bes
 - **Notification Settings (separate settings page):** where alert triggers actually get delivered — email, webhook, and a range of third-party integrations. Configure this once; alerts set on individual systems route through whatever's enabled here.
 - **Multi-user:** each user manages their own systems by default; an admin can share a system with other users if more than one person needs to see the same fleet.
 
+## Network monitors (0.20.0+)
+
+Pinned image: `henrygd/beszel:0.20.0` / `henrygd/beszel-agent:0.20.0-alpine` — hub and agent should be bumped together. 0.20.0 added **Network Monitors** ("Response time monitoring from agents"): an agent periodically probes a target and reports response time + packet loss to the hub (live, plus 1h avg/min/max rollups). The hub hides the feature for agents older than 0.20.0.
+
+**The page is empty after upgrading — that's expected, not a bug.** Nothing is auto-discovered; each monitor is added by hand: Network Monitors page (or the command palette, `Ctrl+K`) → add → pick the **system** (which agent runs the probe), **protocol** (ICMP ping / TCP / HTTP(S) / DNS), **target** (+ port for TCP), and **interval**.
+
+### Bulk setup (`setup-monitors.py`)
+
+`services/beszel/setup-monitors.py` creates a sensible starting set in one go, all probed from this host's bundled agent every 60s:
+
+- **ICMP** `1.1.1.1` (WAN reachability) and the LAN gateway (read from the host's default route).
+- **DNS** a lookup of `${DOMAIN}` via the host's resolver.
+- **HTTP** `https://${DOMAIN}`, `nextcloud.`, `immich.`, `vaultwarden.` — exercises the full Cloudflare tunnel → nginx path.
+- **TCP** `localhost:8081` / `2283` / `8200` (the same three services' published ports) — direct, bypassing the proxy; works because the agent uses `network_mode: host`.
+
+```bash
+uv run services/beszel/setup-monitors.py                 # or: python3 services/beszel/setup-monitors.py
+uv run services/beszel/setup-monitors.py --system Server --interval 30
+```
+
+Stdlib-only (PEP 723 header with no deps). Reads `DOMAIN` from the root `.env`, prompts for your Beszel login (not stored anywhere), auto-picks the system if the hub has only one (else pass `--system <name>`), and is safe to re-run — a monitor with the same protocol/target/port on that system is skipped. Edit `HTTP_SERVICES` at the top of the script to change which services get HTTP+TCP probes.
+
+It deliberately goes through the hub's REST API (`/api/collections/network_monitors/records`), not a direct write to `data.db`: the hub's `OnRecordCreate`/`OnRecordAfterCreateSuccess` hooks on `network_monitors` are what push the new monitor config to the agent, and a raw SQLite insert would bypass them.
+
+ICMP needs no extra config here: the agent runs as root with Docker's default `CAP_NET_RAW` (raw ICMP socket), and this host's `net.ipv4.ping_group_range` also permits the unprivileged-datagram fallback. This overlaps with uptime-kuma — uptime-kuma stays the alerting source; beszel's monitors are for response-time history as seen from each agent.
+
+## S.M.A.R.T. disk health
+
+The system page's S.M.A.R.T. panel ("Click on a device to view more information") shows per-disk health, temperature, power-on hours and the raw attribute table. It needs three things on `beszel-agent`, all set in `compose.yml`:
+
+- **The `:alpine` image variant** (`henrygd/beszel-agent:0.20.0-alpine`). The bare image is scratch-based with no `smartctl`, so the panel stays empty without any error. Keep the `-alpine` suffix when bumping versions.
+- **`devices:`**: each disk is passed through by its stable `/dev/disk/by-id/...` path and mapped onto an `sdX` name inside the container, so a reboot reordering `sdX` on the host can't mix up which drive is which. Pass the whole disk, never a partition (`sda`, not `sda1`). Currently mapped: WD Green 240GB SSD → `sda`, Seagate ST2000LM015 2TB → `sdb`. The USB WD My Passport 2TB is deliberately left out (see below). Find IDs for a new disk with `ls -l /dev/disk/by-id/`.
+- **`cap_add: SYS_RAWIO`** for SATA. An NVMe drive would also need `SYS_ADMIN`, and should be mapped as `/dev/nvme0n1:/dev/nvme0` (controller path in the container, namespace device on the host).
+
+Gotchas:
+
+- **A by-id name containing `:` can't be used.** Compose splits device entries on `:`, so USB-style names like `usb-WD_My_Passport_...-0:0` break the entry. Use the same drive's `ata-...` or `wwn-...` link instead.
+- **Only internal disks are mapped, on purpose.** If a mapped source device is missing, Docker refuses to create the container, so a removable USB drive would stop the whole agent (CPU, memory, network, container stats included) every time it's unplugged. The USB My Passport was tested (its bridge does pass S.M.A.R.T. through, via `-d sat`) and then removed for this reason. Check it by hand when needed with `sudo smartctl -a -d sat /dev/sdX`.
+- **Data refreshes every `SMART_INTERVAL` (`1h`)**, so it can take up to an hour after startup to appear.
+- **Rootless Podman can't do this.** It can't grant the device access or capability. It works with `RUNTIME=docker` (this host) or rootful Podman.
+
 ## Health endpoint
 
 Both containers' healthchecks were confirmed live on this host:
@@ -82,6 +123,10 @@ Because of the host-network mode, the agent's `HUB_URL` must point at the hub's 
 `TOKEN`/`KEY` are blank on first start — the agent refuses to run without them and crash-loops (`Failed to load public keys: no key provided`) until paired as above. The crash-loop is expected/harmless (`restart: unless-stopped`), not a bug.
 
 It also reports per-container Docker stats via the mounted `${DOCKER_SOCKET}` (read-only).
+
+## Troubleshooting
+
+**`update beszel` fails with `Conflict. The container name "/beszel" is already in use`:** an earlier interrupted recreate left a stray container named `<hash>_beszel` in `Created` state (never started) carrying the same compose labels, so Compose picks the wrong one to rename. Find it with `docker ps -a --filter name=beszel`, confirm it's `Created` (not the real, previously-running `beszel`), `docker rm` it, then re-run the update. Hit on 2026-09-25 during the 0.19.0 → 0.20.0 bump.
 
 ---
 

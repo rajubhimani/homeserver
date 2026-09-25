@@ -1,6 +1,6 @@
 services:
   beszel:
-    image: henrygd/beszel:0.19.0
+    image: henrygd/beszel:0.20.0
     container_name: beszel
     restart: unless-stopped
     environment:
@@ -31,10 +31,22 @@ services:
   # own virtual interface. It reaches the hub over the shared local socket
   # below, not TCP, so it has no need to resolve other containers by name.
   beszel-agent:
-    image: henrygd/beszel-agent:0.19.0
+    # :alpine variant (not the bare scratch image) because it ships smartctl,
+    # needed for the S.M.A.R.T. panel — see docs/services/beszel.md
+    image: henrygd/beszel-agent:0.20.0-alpine
     container_name: beszel-agent
     restart: unless-stopped
     network_mode: host
+    # Disks for S.M.A.R.T. data. Stable /dev/disk/by-id sources mapped onto the
+    # sdX names the agent scans, so a reboot reordering sdX on the host can't
+    # swap which drive is which. Internal disks only — Docker refuses to start
+    # the container if a source device is missing, so a removable USB drive
+    # would block the agent whenever it's unplugged.
+    devices:
+      - /dev/disk/by-id/ata-WD_Green_2.5_240GB_23410R801995:/dev/sda
+      - /dev/disk/by-id/ata-ST2000LM015-2E8174_ZDZEHTL0:/dev/sdb
+    cap_add:
+      - SYS_RAWIO # SATA S.M.A.R.T. via SG_IO (add SYS_ADMIN if an NVMe drive is ever added)
     depends_on:
       beszel:
         condition: service_healthy
