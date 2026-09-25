@@ -14,9 +14,29 @@ services:
       # Named volume, not a service_data/ bind mount: Bichon's Tantivy index
       # + blob store + memdb must sit on a real local filesystem (upstream
       # warns network/odd filesystems corrupt the index), and service_data/
-      # is on an NTFS/fuseblk drive. 'down' still snapshots named volumes.
+      # can live on an NTFS/fuseblk drive on some hosts (here /mnt/media is;
+      # /mnt/mydata is ext4). 'down' still snapshots named volumes.
       - bichon-data:/data
     # Image's own HEALTHCHECK (curl /api/status) is inherited as-is.
+    networks:
+      - homeserver
+
+  # One-shot: sets the built-in 'admin' password from BICHON_ADMIN_PASSWORD
+  # (Bichon itself always creates it as the public default 'admin@bichon').
+  # Idempotent — see init-admin.sh. Exits after running; not a service.
+  bichon-init:
+    image: curlimages/curl:8.21.0
+    container_name: bichon-init
+    restart: "no"
+    environment:
+      BICHON_URL: http://bichon:15630
+      BICHON_ADMIN_PASSWORD: ${BICHON_ADMIN_PASSWORD}
+    volumes:
+      - ./init-admin.sh:/init-admin.sh:ro
+    entrypoint: ["sh", "/init-admin.sh"]
+    depends_on:
+      bichon:
+        condition: service_healthy
     networks:
       - homeserver
 

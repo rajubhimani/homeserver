@@ -63,6 +63,7 @@ EXCLUDE_ONE_SHOT = {
     "syncthing-permissions",
     "rocketchat-mongodb-fix-permission",
     "rocketchat-mongodb-init",
+    "bichon-init",
 }
 
 

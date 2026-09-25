@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Keeps a continuously-synced copy of your real mailboxes on this server, so the mail provider becomes swappable: drop Microsoft 365 (or anyone else) whenever you like, then copy the whole history into the new provider from the same UI. Also a searchable archive in its own right.
-**Port:** `8153` (host) → `5000` (container) | **Data:** `mail-archiver-postgres` named volume (the archive itself) + `service_data/data/mail-archiver/` (encryption keys, import drop folder) | **Requires:** Postgres | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle with an empty archive ~134MB total (app 84 + db 50), will grow with mail
+**Port:** `8155` (host) → `5000` (container) | **Data:** `mail-archiver-postgres` named volume (the archive itself) + `service_data/data/mail-archiver/` (encryption keys, import drop folder) | **Requires:** Postgres | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle with an empty archive ~134MB total (app 84 + db 50), will grow with mail
 
 Upstream: [github.com/s1t5/mail-archiver](https://github.com/s1t5/mail-archiver) — docs index at [doc/Index.md](https://github.com/s1t5/mail-archiver/blob/main/doc/Index.md).
 
@@ -19,7 +19,7 @@ cp services/mail-archiver/.env.example services/mail-archiver/.env
 uv run homeserver.py dev up mail-archiver
 ```
 
-Open `https://mail-archiver.<domain>/` (or `http://<host>:8153` in dev) and log in with the admin credentials from `.env`. **The first login forces a password change** (confirmed on first bring-up) — pick the real one there.
+Open `https://mail-archiver.<domain>/` (or `http://<host>:8155` in dev) and log in with the admin credentials from `.env`. **The first login forces a password change** (confirmed on first bring-up) — pick the real one there.
 
 ## Connecting a Microsoft 365 mailbox
 
@@ -54,7 +54,7 @@ You can also export any account (or a selection) as **mbox** or **zipped EML** f
 
 ## Importing old mail
 
-**Import** accepts mbox and zipped EML. Browser uploads through `mail-archiver.<domain>` are capped at 100MB per file by Cloudflare's tunnel — for anything bigger, either upload over the dev port / VPN (`http://10.8.0.1:8153`), or drop the file into `service_data/data/mail-archiver/import/` and pick it from the UI's local-import option (`LocalImport__AllowedPaths__0=/data/import` is already wired in compose.yml).
+**Import** accepts mbox and zipped EML. Browser uploads through `mail-archiver.<domain>` are capped at 100MB per file by Cloudflare's tunnel — for anything bigger, either upload over the dev port / VPN (`http://10.8.0.1:8155`), or drop the file into `service_data/data/mail-archiver/import/` and pick it from the UI's local-import option (`LocalImport__AllowedPaths__0=/data/import` is already wired in compose.yml).
 
 ## Backups
 

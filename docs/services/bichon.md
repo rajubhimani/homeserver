@@ -15,7 +15,7 @@ Not an email client: it archives, searches and restores, but can't compose/reply
 
 ```bash
 cp services/bichon/.env.example services/bichon/.env
-# set BICHON_ENCRYPT_PASSWORD (openssl rand -hex 32) — and save a copy of it somewhere safe
+# set BICHON_ENCRYPT_PASSWORD (openssl rand -hex 32) and BICHON_ADMIN_PASSWORD — save both somewhere safe
 uv run homeserver.py dev up bichon
 ```
 
@@ -23,7 +23,15 @@ Open `https://bichon.<domain>/` (or `http://<host>:8154` in dev).
 
 ## Admin account
 
-Created automatically on first start: username `admin`, password `admin@bichon` (confirmed on first bring-up). **Change it immediately:** Settings → Profile. There's no env var to set it up front.
+Bichon always creates a built-in `admin` user with the publicly documented default password `admin@bichon`, and has no env var to set it. So compose.yml runs a one-shot **`bichon-init`** container (`curlimages/curl`, script `services/bichon/init-admin.sh`) after Bichon is healthy, on every `up`:
+
+- `BICHON_ADMIN_PASSWORD` (from `.env`) already works → nothing to do.
+- The default `admin@bichon` works → logs in with it and switches the password to `BICHON_ADMIN_PASSWORD` via Bichon's own API (`POST /api/v1/users/<id>`), then checks the default no longer works.
+- Neither works → the password was changed in the UI (Settings → Profile); it prints a warning and leaves it alone. Update `.env` to match if you want `.env` to stay the source of truth.
+
+It refuses to run with the password left as the default, or containing `"` / `\`. Check what it did with `docker logs bichon-init`. All paths were tested on 2026-09-26 against a throwaway Bichon 2.0.3.
+
+**Why this matters:** once `bichon.${DOMAIN}` is a public hostname, the default password is a full admin login for anyone. On this host the Cloudflare hostname already existed on first bring-up, so the default was live on the internet until changed.
 
 ## Adding accounts
 
@@ -45,7 +53,7 @@ Then choose OAuth2 when adding the account and sign in. **Not yet tested end to 
 
 Everything lives in the `bichon-data` named volume. `homeserver.py down bichon` snapshots it into `service_data/backup/bichon/` like any other named volume. The index, blob store and metadata DB must be backed up together, and a stopped container gives a consistent snapshot. Mail is stored compressed and deduplicated (identical bodies/attachments are stored once), so the volume is usually smaller than the mailbox.
 
-Deliberately a named volume rather than a `service_data/` bind mount: upstream warns that the index gets corrupted on network or unusual filesystems, and `service_data/` sits on an NTFS/fuseblk drive.
+Deliberately a named volume rather than a `service_data/` bind mount: upstream warns that the index gets corrupted on network or unusual filesystems, and `service_data/` can sit on an NTFS/fuseblk drive on some hosts (on this one it's ext4 on `/mnt/mydata`; only `/mnt/media` is NTFS). A named volume keeps Bichon on Docker's own storage either way.
 
 ## Gotchas
 
