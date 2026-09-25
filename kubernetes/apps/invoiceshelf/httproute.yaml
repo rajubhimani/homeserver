@@ -9,6 +9,7 @@ spec:
       namespace: infra
   hostnames:
     - "invoiceshelf.k8s.local"
+    - "invoice.k8s.local"
   rules:
     - backendRefs:
         - name: invoiceshelf

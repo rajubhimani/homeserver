@@ -9,6 +9,7 @@ spec:
       namespace: infra
   hostnames:
     - "uptime-kuma.k8s.local"
+    - "status.k8s.local"
   rules:
     - backendRefs:
         - name: uptime-kuma

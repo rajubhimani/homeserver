@@ -1,0 +1,100 @@
+# Per-container CPU/memory/network/disk metrics — needs broad host access
+# (docker internals, cgroups), same as in compose. `/var/lib/docker`
+# specifically won't exist/be meaningful on a containerd-based node (kubelet
+# uses /var/lib/containerd instead) — cadvisor will simply see nothing
+# through that particular mount and report no per-Docker-container stats
+# from it, same "gap documented, mount kept for parity" treatment as every
+# other docker.sock-family caveat in this pilot (see
+# kubernetes/TROUBLESHOOTING.md and this file's sibling comments in
+# alloy-deployment.yaml / coolify/deployment.yaml). cadvisor's cgroup-based
+# metrics (the bulk of what it reports) still work regardless, since cgroups
+# are a kernel feature, not a Docker-specific one.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cadvisor
+  namespace: apps
+  labels:
+    app: cadvisor
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cadvisor
+  template:
+    metadata:
+      labels:
+        app: cadvisor
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: cadvisor
+          image: ghcr.io/google/cadvisor:v0.60.5
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: rootfs
+              mountPath: /rootfs
+              readOnly: true
+            - name: var-run
+              mountPath: /var/run
+              readOnly: true
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+            - name: docker
+              mountPath: /var/lib/docker
+              readOnly: true
+            - name: disk
+              mountPath: /dev/disk
+              readOnly: true
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 60
+      volumes:
+        - name: rootfs
+          hostPath:
+            path: /
+        - name: var-run
+          hostPath:
+            path: /var/run
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: docker
+          hostPath:
+            path: /var/lib/docker
+        - name: disk
+          hostPath:
+            path: /dev/disk
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cadvisor
+  namespace: apps
+spec:
+  selector:
+    app: cadvisor
+  ports:
+    - port: 8080

@@ -1,0 +1,69 @@
+# Pure outbound tunnel client — mirrors cloudflared/compose.yml. No inbound
+# port, so unlike every other service in this pilot there is intentionally
+# no Service, HTTPRoute, or lan-service.yaml here: there is nothing inside
+# the cluster to route traffic *to*, only an outbound connection this pod
+# makes to Cloudflare's edge.
+#
+# Uses `args:`, not `command:`, for the tunnel invocation — Kubernetes'
+# `command:` overrides the image's ENTRYPOINT (["cloudflared"]) entirely,
+# while Compose's `command:` only overrides CMD and keeps ENTRYPOINT
+# running first. `args:` is the correct equivalent here (see
+# kubernetes/TROUBLESHOOTING.md's "`command:` means different things in
+# Compose vs Kubernetes" for the guacamole-db incident this exact mistake
+# caused elsewhere in this pilot). $(TUNNEL_TOKEN) expands from the env var
+# defined earlier in this same container's env list.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: apps
+  labels:
+    app: cloudflared
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.7.3
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --protocol
+            - http2
+            - --metrics
+            - localhost:9002
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflared-credentials
+                  key: tunnel-token
+            - name: TUNNEL_LOGLEVEL
+              value: info
+            - name: TUNNEL_RETRIES
+              value: "5"
+            - name: TUNNEL_GRACE_PERIOD
+              value: 30s
+            - name: TUNNEL_EDGE_IP_VERSION
+              value: "4"
+          readinessProbe:
+            exec:
+              command: ["cloudflared", "tunnel", "--metrics", "localhost:9002", "ready"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["cloudflared", "tunnel", "--metrics", "localhost:9002", "ready"]
+            initialDelaySeconds: 20
+            periodSeconds: 30

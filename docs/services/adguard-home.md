@@ -139,6 +139,22 @@ AdGuard for Mac is a separate product from AdGuard Home (the server this doc is 
 - Ports `80`, `443`, `853` (DoT/DoQ) and DHCP (`67`/`68`) from AdGuard's own docs are deliberately **not** published here — `80`/`443` would conflict with `nginx-plain`, which already owns those on this host; DoT/DoQ would need AdGuard's own TLS certificate configured (unlike DoH's `insecure_enabled` escape hatch, there's no equivalent for DoT/DoQ), and DHCP wasn't part of what was asked for. Revisit only if a specific need comes up.
 - No health/status API endpoint requiring auth is used for the compose healthcheck — it just checks that `/` (the web UI) responds.
 
+## Container silently loses its network attachment ("network is unreachable" in logs, healthcheck still green)
+
+Hit on 2026-08-26: `adguard-home` was `Up` and `(healthy)`, but every upstream DNS/DoH bootstrap and filter-list update was failing with errors like `dial udp 9.9.9.10:53: connect: network is unreachable`. `docker inspect adguard-home` showed `NetworkSettings.Networks` as `{}` and `docker exec adguard-home ip addr show` had no `eth0` at all — just loopback — even though `HostConfig.NetworkMode` correctly said `homeserver` and the container had started normally ~10 minutes after the `homeserver` network itself was created (so this wasn't a case of the network being recreated out from under it). Root cause wasn't confirmed — no matching event in Docker/systemd logs — but the symptom matches known Docker bridge-networking races when several containers attach to the same network in quick succession (this happened during a `dev up core` bootstrapping ~9 containers together).
+
+**The healthcheck doesn't catch this** — `wget --spider http://127.0.0.1:3000/` only proves the process is alive on loopback, which doesn't need a network interface at all.
+
+**`docker restart adguard-home` alone did NOT fix it.** What worked:
+
+```bash
+docker network connect homeserver adguard-home
+```
+
+(if the container *is* still marked as connected but broken, `docker network disconnect homeserver adguard-home --force` first, then `connect`.)
+
+**Permanent fix:** `adguard-watchdog` (added in `compose.yml`, same pattern as `cloudflared-watchdog`) polls the Docker API every `WATCHDOG_CHECK_INTERVAL` seconds (default 60s) for whether `adguard-home` actually has an `IPAddress` on the network, and runs the disconnect+connect repair automatically after `WATCHDOG_FAIL_THRESHOLD` consecutive misses (default 2). See `services/adguard-home/watchdog.sh` and the `WATCHDOG_*` vars in `.env.example`.
+
 ## Port 53 conflicts with the host's own DNS resolver — on both Windows and Linux
 
 Binding container DNS to `0.0.0.0:53` collides with whatever DNS stub resolver the host itself already runs on port 53. This has been hit on two different hosts, with two different culprits:

@@ -13,7 +13,7 @@ spec:
   sources:
     - repoURL: https://traefik.github.io/charts
       chart: traefik
-      targetRevision: 41.1.0
+      targetRevision: 41.3.0
       helm:
         valueFiles:
           - $values/kubernetes/cluster/traefik/values.yaml

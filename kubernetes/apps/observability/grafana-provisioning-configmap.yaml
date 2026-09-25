@@ -1,0 +1,27 @@
+# Mirrors observability/grafana/provisioning/datasources/datasources.yml.
+# Only one file exists under that directory tree today (no dashboards/
+# subdir yet), so a single ConfigMap mounted at the datasources/ subpath
+# covers the whole ./grafana/provisioning bind mount — if a dashboards/
+# subdir is ever added on the Compose side, add a second ConfigMap here
+# (one per provisioning subdirectory) and a matching volume/mount, same
+# reasoning as Kong's or supabase-db's per-file subPath mounts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning-datasources
+  namespace: apps
+data:
+  datasources.yml: |
+    apiVersion: 1
+
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki:3100

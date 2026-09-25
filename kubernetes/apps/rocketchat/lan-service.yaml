@@ -1,0 +1,19 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8142 matches rocketchat/compose.dev.yml exactly (container port
+# 3000, per rocketchat/compose.yml's rocketchat service). The Compose
+# version was stopped (uv run homeserver.py dev down rocketchat) to free
+# this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketchat-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: rocketchat
+  ports:
+    - name: http
+      port: 8142
+      targetPort: 3000

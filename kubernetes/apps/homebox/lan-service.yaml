@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8136 matches homebox/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down homebox) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: homebox-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: homebox
+  ports:
+    - port: 8136
+      targetPort: 7745

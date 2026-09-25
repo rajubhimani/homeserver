@@ -1,0 +1,38 @@
+# plane-migrator is `restart: "no"` in compose — a one-shot DB migration,
+# not a long-running service, so this is a Job (restartPolicy: OnFailure),
+# not a Deployment. Compose's `depends_on: {plane-db, plane-redis, plane-mq:
+# condition: service_healthy}` has no direct k8s equivalent — no
+# cross-workload readiness gate. In practice this Job should be applied
+# after the StatefulSets/Deployments it depends on are already up (same gap
+# noted in minio.yaml/deployment.yaml); backoffLimit gives it room to retry
+# if it races ahead of them.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: plane-migrator
+  namespace: apps
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: plane-migrator
+          image: makeplane/plane-backend:v1.4.0
+          # compose's `command:` overrides CMD only — args: here, not
+          # command:, same reasoning as every other container in this repo.
+          args: ["./bin/docker-entrypoint-migrator.sh"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: plane-db-credentials
+                  key: database-url
+            - name: REDIS_URL
+              value: redis://plane-redis:6379/
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plane-credentials
+                  key: secret-key

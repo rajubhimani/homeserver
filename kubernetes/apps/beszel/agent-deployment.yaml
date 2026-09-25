@@ -1,0 +1,122 @@
+# Beszel agent — mirrors beszel/compose.yml's `beszel-agent` service, which
+# uses `network_mode: host` so it reports the real host's network
+# throughput (on the shared `homeserver` bridge network it would only see
+# its own virtual interface). Kubernetes has no Deployment-level equivalent
+# of Compose's network_mode: host; the closest primitive is `hostNetwork:
+# true` on the pod, used below. Two consequences worth knowing:
+#
+# 1. hostNetwork pods default to dnsPolicy: Default, which uses the
+#    *node's* /etc/resolv.conf instead of cluster DNS — cluster Service
+#    names like "beszel" would NOT resolve without explicitly setting
+#    dnsPolicy: ClusterFirstWithHostNet below.
+# 2. Compose's HUB_URL=http://localhost:8106 only worked because the agent
+#    shared the *host's* network namespace and the hub's port was published
+#    directly on that same host. In Kubernetes the hub is a normal
+#    (non-host-network) Deployment behind a ClusterIP Service, so
+#    "localhost" from this hostNetwork pod would reach the *node*, not the
+#    hub pod. HUB_URL is pointed at the hub's in-cluster Service DNS name
+#    instead. In practice the actual hub/agent pairing happens over the
+#    shared unix socket at /beszel_socket/beszel.sock (LISTEN, below), not
+#    over HUB_URL — kept here only for env-var parity with Compose.
+#
+# Shares the beszel-socket PVC defined in deployment.yaml — see that file's
+# comment on the same-node constraint this implies. Also mounts the host
+# Docker socket read-only (CONTAINER_DETAILS: true reads per-container
+# stats) — same hostPath caveat as portainer/dozzle, see their
+# deployment.yaml comments and kubernetes/README.md's "Current status".
+#
+# BESZEL_AGENT_TOKEN/KEY start blank in Compose too, filled in after first
+# hub login (see beszel/.env.example) — modeled as optional secretKeyRefs
+# so the pod still starts before pairing happens.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beszel-agent-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beszel-agent
+  namespace: apps
+  labels:
+    app: beszel-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: beszel-agent
+  template:
+    metadata:
+      labels:
+        app: beszel-agent
+    spec:
+      enableServiceLinks: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: beszel-agent
+          image: henrygd/beszel-agent:0.18.7
+          env:
+            - name: LISTEN
+              value: /beszel_socket/beszel.sock
+            - name: HUB_URL
+              value: http://beszel:8090
+            - name: TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: beszel-credentials
+                  key: agent-token
+                  optional: true
+            - name: KEY
+              valueFrom:
+                secretKeyRef:
+                  name: beszel-credentials
+                  key: agent-key
+                  optional: true
+            - name: LOG_LEVEL
+              value: info
+            - name: SMART_INTERVAL
+              value: 1h
+            - name: SENSORS_TIMEOUT
+              value: 2s
+            - name: SKIP_GPU
+              value: "false"
+            - name: SKIP_SYSTEMD
+              value: "false"
+          volumeMounts:
+            - name: agent-data
+              mountPath: /var/lib/beszel-agent
+            - name: socket
+              mountPath: /beszel_socket
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["/agent", "health"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["/agent", "health"]
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: agent-data
+          persistentVolumeClaim:
+            claimName: beszel-agent-data
+        - name: socket
+          persistentVolumeClaim:
+            claimName: beszel-socket
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

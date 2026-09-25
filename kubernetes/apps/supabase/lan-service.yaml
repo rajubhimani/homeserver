@@ -1,0 +1,18 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8133 matches supabase/compose.dev.yml exactly (targets Kong's proxy
+# port 8000 — Kong is the only container in this service compose maps a host
+# port to). The Compose version must be stopped
+# (uv run homeserver.py dev down supabase) to free this port before applying.
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: supabase-kong
+  ports:
+    - port: 8133
+      targetPort: 8000
