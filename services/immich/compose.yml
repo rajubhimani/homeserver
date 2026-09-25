@@ -17,7 +17,10 @@ services:
       # this is Immich's officially documented escape hatch for that case
       # (see https://docs.immich.app/administration/system-integrity). Does
       # not affect actual file read/write during normal use, only this
-      # startup self-check.
+      # startup self-check. Default false (keep it that way on Linux): the
+      # check is what stops Immich starting on a read-only/unmounted upload
+      # drive — with it skipped, the container reports healthy while every
+      # upload fails with EROFS (happened 2026-09-25, see docs/services/immich.md).
       IMMICH_IGNORE_MOUNT_CHECK_ERRORS: ${IMMICH_IGNORE_MOUNT_CHECK_ERRORS:-false}
     volumes:
       - ${UPLOAD_LOCATION}:/usr/src/app/upload

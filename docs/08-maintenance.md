@@ -508,6 +508,45 @@ After reimporting, open Docker Desktop → **Settings → Resources → Advanced
 
 ---
 
+## Boot safety
+
+On a reboot, `dockerd` restarts every `restart: unless-stopped` container itself, in parallel, with no `depends_on` ordering and without going through `homeserver.py`. On this Fedora host that produced two failure modes (both hit on 2026-09-25):
+
+1. **Containers bind the empty directory under an unmounted data drive.** Both data drives are `nofail` in `/etc/fstab`, so the host boots without waiting for them — Docker started at 08:08:47, `/mnt/mydata` finished mounting at 08:08:56. Containers started in that window got bind mounts pointing at the root disk's empty `/mnt/mydata/...` underlay: data written there is on the wrong disk, and state files look missing (Beszel's agent regenerated its fingerprint → hub rejected it with `fingerprint mismatch` → "server down"; `cloudflared-watchdog` failed because an earlier race had auto-created `watchdog.sh` as a *directory* on the underlay). A `docker restart` of the affected container re-resolves the mount.
+2. **`10.8.0.1` port binds fail.** Every prod service mirrors its ports to `10.8.0.1` (wg-easy's tunnel address), but `wg0` is created by the wg-easy *container*. Anything Docker autostarts first fails with `failed to bind host port 10.8.0.1:<port>/tcp: cannot assign requested address` — and Docker never retries a container that failed during network setup, so it stays `Exited`. The failed attempt can also leave the container with no network endpoint (then `could not translate host name "<x>-db"` / `EAI_AGAIN`) — `homeserver.py fix-network --yes` repairs that.
+
+**Host fix — run once, as root:**
+
+```bash
+sudo docker/host-boot-safety.sh           # idempotent; --remove undoes it
+```
+
+It installs:
+
+- `/etc/systemd/system/docker.service.d/wait-for-data-mounts.conf` — `RequiresMountsFor=/mnt/mydata` (Docker won't start at all without the repo/`service_data` drive — better than writing to the wrong disk) and `Wants=`/`After=mnt-media.mount` (ordering only: a dead media disk shouldn't take down services that don't use it). Takes effect from the next boot.
+- `/etc/sysctl.d/90-homeserver-nonlocal-bind.conf` — `net.ipv4.ip_nonlocal_bind=1`, so docker-proxy can bind `10.8.0.1` before `wg0` exists. The firewall still gates who can reach it.
+- `homeserver-mount-watch.timer` — every 5 min, a script copied to `/usr/local/bin/` (so it still runs if `/mnt/mydata` itself is missing) checks each data drive is mounted and read-write, and alerts via ntfy's `homeserver-alerts` topic (token reused from `services/clamav/.env`, re-alerts at most every 6h). Caveat: ntfy's own data lives on `/mnt/mydata`, so a missing `/mnt/mydata` only reaches the journal (`journalctl -u homeserver-mount-watch`) — but with the drop-in above, Docker doesn't start at all in that case either.
+
+**Repo-side guard (no setup needed):** `homeserver.py up`/`update`/`restart` refuse to start a service whose `DATA_ROOT` — or any path-valued var in its own `.env` (`UPLOAD_LOCATION`, `MEDIA_ROOT`, `OS_ISO_ROOT`, …) — sits on an `/etc/fstab` mount that is unmounted or read-only. This only covers starts through `homeserver.py`, not dockerd's own autostart — hence the host fix above.
+
+**`/mnt/media` (NTFS) came up read-only.** The boot journal says `Metadata kept in Windows cache, refused to mount. Falling back to read-only mount` — Windows was last shut down with Fast Startup or hibernation, leaving the volume dirty. Permanent fix: in Windows, `powercfg /h off` (disables both), then shut down fully. To recover from Linux without booting Windows (discards any hibernated Windows session):
+
+```bash
+uv run homeserver.py prod down immich nextcloud jellyfin --no-backup
+sudo umount /mnt/media
+sudo ntfsfix -d /dev/sdb1
+sudo mount /mnt/media && findmnt -no OPTIONS /mnt/media    # should start with rw
+uv run homeserver.py prod up immich nextcloud jellyfin
+```
+
+**After any reboot, check for containers bound to the wrong disk** (compares each `/mnt/mydata` bind's device inside the container with the real one; images without `sh`, e.g. `beszel`/`portainer`, can't be checked this way):
+
+```bash
+real=$(mountpoint -d /mnt/mydata); for c in $(docker ps -q); do n=$(docker inspect $c --format '{{.Name}}'); for s in $(docker inspect $c --format '{{range .Mounts}}{{if eq .Type "bind"}}{{.Destination}}|{{.Source}} {{end}}{{end}}'); do dst=${s%%|*}; src=${s#*|}; case $src in /mnt/mydata/*) d=$(docker exec $c sh -c "grep -F ' $dst ' /proc/self/mountinfo | head -1 | cut -d' ' -f3" 2>/dev/null); [ -n "$d" ] && [ "$d" != "$real" ] && echo "BAD $n $dst dev=$d";; esac; done; done
+```
+
+---
+
 ## Troubleshooting
 
 Reactive fixes, keyed by symptom:
@@ -516,7 +555,7 @@ Reactive fixes, keyed by symptom:
 | --- | --- |
 | Container not starting | `uv run homeserver.py dev up <service>` then check `uv run homeserver.py dev logs <service>` |
 | `network homeserver not found` | `homeserver.py` auto-creates it — or run `docker network create homeserver` manually |
-| Data drive not mounted | `sudo mount -a` |
+| Data drive not mounted / read-only; `homeserver.py` says "Not starting … fix the mount first" | See [Boot safety](#boot-safety) below |
 | Tunnel not routing | `sudo systemctl restart cloudflared` → `journalctl -u cloudflared -f` |
 | Nextcloud/Postgres data directory ownership or corruption error | **Do not delete the data to "fix" this** — Postgres/MariaDB/RabbitMQ data lives in a named Docker volume (not a bind mount), so this class of error shouldn't occur under normal operation. If it does, first `uv run homeserver.py dev restore <service>` from the last snapshot rather than resetting; see the `homeserver-postgres` skill for why bind-mounting DB data is unsafe and never worth reintroducing |
 | Nextcloud trusted domain error | Should self-heal on next restart — `nextcloud/hooks/before-starting/02-configure-proxy.sh` sets `trusted_domains`/`trusted_proxies` via `occ` automatically on every startup. If it persists, check the hook actually ran: `docker exec nextcloud php occ config:system:get trusted_domains`; see [`docs/services/nextcloud.md`](services/nextcloud.md) |

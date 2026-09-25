@@ -1315,12 +1315,64 @@ def ensure_wg_tunnel_ready(service: str, env: str) -> None:
     warn("wg-easy's tunnel address (10.8.0.1) still isn't up after 30s — continuing anyway")
 
 
+def fstab_mountpoints() -> list[str]:
+    """Non-root mountpoints declared in /etc/fstab, longest first. Empty on
+    hosts without an fstab (Windows/macOS) — the mount check below then
+    becomes a no-op rather than a false alarm."""
+    fstab = Path("/etc/fstab")
+    if not fstab.is_file():
+        return []
+    mps = []
+    for line in fstab.read_text().splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and not fields[0].startswith("#") and fields[1].startswith("/") and fields[1] != "/":
+            mps.append(fields[1])
+    return sorted(set(mps), key=len, reverse=True)
+
+
+def check_data_mounts(service: str) -> bool:
+    """Refuse to start a service whose host data paths sit on an fstab mount
+    that isn't mounted, or is mounted read-only. Both data drives here are
+    'nofail', so the host boots fine without them — and a container started
+    then silently binds the empty directory *under* the mountpoint (writes
+    land on the root disk), or gets EROFS on every upload (NTFS falls back to
+    read-only after a Windows Fast Startup/hibernate). Checks DATA_ROOT plus
+    every path-valued var in the service's own .env (UPLOAD_LOCATION,
+    MEDIA_ROOT, ...), since those secondary roots aren't auto-injected."""
+    mountpoints = fstab_mountpoints()
+    if not mountpoints:
+        return True
+    svc_dir = SERVICES_DIR / service
+    paths = [SERVICE_DATA_ROOT / service]
+    for key, val in load_env_file(svc_dir / ".env").items():
+        if key != "DATA_ROOT" and val.startswith(("/", "./", "../")):
+            paths.append(svc_dir / val)
+
+    problems = set()
+    for p in paths:
+        real = os.path.realpath(p)
+        mp = next((m for m in mountpoints if real == m or real.startswith(m + "/")), None)
+        if mp is None:
+            continue
+        if not os.path.ismount(mp):
+            problems.add(f"{mp} is not mounted (needed by {real})")
+        elif os.statvfs(mp).f_flag & os.ST_RDONLY:
+            problems.add(f"{mp} is mounted read-only (needed by {real})")
+    for msg in sorted(problems):
+        error(f"{service}: {msg}")
+    if problems:
+        error(f"Not starting {service} — fix the mount first (see docs/08-maintenance.md 'Boot safety')")
+    return not problems
+
+
 def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None, fresh: bool = False) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
 
+    if not check_data_mounts(service):
+        return False
     ensure_wg_tunnel_ready(service, env)
 
     if not fresh:
@@ -1451,6 +1503,8 @@ def do_update(service: str, env: str, profile: str | None = None) -> bool:
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
+    if not check_data_mounts(service):
+        return False
 
     files = compose_files(service, env)
     cenv = compose_env(service)
@@ -1473,6 +1527,8 @@ def do_restart(service: str, env: str, profile: str | None) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
+        return False
+    if not check_data_mounts(service):
         return False
 
     files = compose_files(service, env)
