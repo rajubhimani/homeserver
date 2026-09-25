@@ -1,0 +1,4 @@
+services:
+  erpnext:
+    ports:
+      - "8153:8080"
