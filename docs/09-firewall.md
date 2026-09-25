@@ -328,6 +328,8 @@ This is safe specifically because nothing can ever reach `wg0` without first pas
 
 **Applying it to a service that doesn't have it yet:** add a second `ports:` line to that service's `compose.prod.yml`, same host port, `10.8.0.1` instead of `127.0.0.1`, then recreate it (`uv run homeserver.py prod up <service>`) — port bindings only take effect on container recreation, not a plain restart.
 
+**Prerequisite on the host: `net.ipv4.ip_nonlocal_bind=1`.** `10.8.0.1` only exists once the wg-easy *container* has brought up `wg0`, so after a reboot any service dockerd autostarts before wg-easy fails with `failed to bind host port 10.8.0.1:<port>/tcp: cannot assign requested address` and is never retried. `sudo docker/host-boot-safety.sh` sets the sysctl (plus the other reboot guards) — see [Boot safety](08-maintenance.md#boot-safety). `homeserver.py`'s own `ensure_wg_tunnel_ready()` only covers starts that go through `homeserver.py`.
+
 ---
 
 ## Optional: restoring LAN-direct access (skipping the VPN entirely)

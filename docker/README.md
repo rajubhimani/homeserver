@@ -11,6 +11,8 @@ total resource usage" section; this folder is the runnable version of
 those same commands, parameterized by `docker/.env` instead of hand-edited
 every time.
 
+Separately, `host-boot-safety.sh` (run once with `sudo`) makes reboots safe for the stack — Docker waits for the data drives, `10.8.0.1` binds work before wg-easy is up, and a timer alerts via ntfy if a data drive is unmounted/read-only. Unrelated to the resource caps below; see [`docs/08-maintenance.md`](../docs/08-maintenance.md#boot-safety)'s "Boot safety" section.
+
 ## Setup
 
 ```bash
