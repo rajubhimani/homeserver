@@ -1,0 +1,12 @@
+# MetalLB — gives every `type: LoadBalancer` Service in this cluster a real,
+# reachable IP. Needed here because this pilot runs plain `kind` on Linux,
+# not Docker-Desktop-managed kind — Docker Desktop auto-exposes LoadBalancer
+# Services on localhost with no extra setup, but plain kind has no such
+# magic. Without this, every kubernetes/apps/<service>/lan-service.yaml
+# (and Traefik's own Service, and ArgoCD's) sits at EXTERNAL-IP: <pending>
+# forever. See kubernetes/README.md's "LAN access" section.
+#
+# Chart defaults are fine as-is — controller + speaker resource requests are
+# already small. Nothing to override here today; this file exists so the
+# Application below has a real $values target to reference, same pattern as
+# cluster-traefik.yaml.

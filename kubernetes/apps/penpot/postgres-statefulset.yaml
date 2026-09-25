@@ -1,0 +1,124 @@
+# Mirrors penpot/compose.yml's penpot-db + penpot-redis. Own dedicated
+# Postgres, same reasoning as every other service in this pilot.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: penpot-db
+  namespace: apps
+spec:
+  serviceName: penpot-db
+  replicas: 0
+  selector:
+    matchLabels:
+      app: penpot-db
+  template:
+    metadata:
+      labels:
+        app: penpot-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:18.6-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: penpot
+            - name: POSTGRES_USER
+              value: penpot
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-db-credentials
+                  key: password
+          # compose's `command: postgres -c ...` overrides CMD only — args:
+          # here (not command:), same ENTRYPOINT-preserving reasoning as
+          # every other Postgres in this repo (see TROUBLESHOOTING.md).
+          args:
+            - -c
+            - shared_buffers=128MB
+            - -c
+            - max_connections=20
+            - -c
+            - work_mem=4MB
+            - -c
+            - maintenance_work_mem=64MB
+            - -c
+            - effective_cache_size=256MB
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+          resources:
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "penpot"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: penpot-db
+  namespace: apps
+spec:
+  clusterIP: None
+  selector:
+    app: penpot-db
+  ports:
+    - port: 5432
+---
+# Persistence disabled via maxmemory-policy (not `--save ""` like most other
+# valkey/redis instances in this pilot) — compose's own command line:
+# `valkey-server --maxmemory 128mb --maxmemory-policy allkeys-lru`. No
+# volume mounted in compose either way, so no PVC/emptyDir needed here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-redis
+  namespace: apps
+  labels:
+    app: penpot-redis
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: penpot-redis
+  template:
+    metadata:
+      labels:
+        app: penpot-redis
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          image: valkey/valkey:9.1-alpine
+          args: ["valkey-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: penpot-redis
+  namespace: apps
+spec:
+  selector:
+    app: penpot-redis
+  ports:
+    - port: 6379

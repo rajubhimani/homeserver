@@ -1,0 +1,18 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8141 matches mattermost/compose.dev.yml exactly (host 8141 -> the
+# image's own port 8065). Stop the Compose version
+# (uv run homeserver.py dev down mattermost) before applying this — same
+# host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: mattermost
+  ports:
+    - port: 8141
+      targetPort: 8065

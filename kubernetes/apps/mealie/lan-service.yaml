@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 9925 matches mealie/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down mealie) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mealie-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: mealie
+  ports:
+    - port: 9925
+      targetPort: 9000

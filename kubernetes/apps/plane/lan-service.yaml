@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8100 matches plane/compose.dev.yml exactly (plane-proxy is the
+# container that binds it there too). Not currently live-applied — see
+# kubernetes/README.md's "Current status".
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: plane-proxy
+  ports:
+    - port: 8100
+      targetPort: 80

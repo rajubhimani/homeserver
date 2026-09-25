@@ -252,7 +252,7 @@ realizing the env var itself was the problem).
 **Fix:** don't rely on in-manifest `$(VAR)` interpolation across two
 separate `secretKeyRef`s. Instead, pre-compose the full value (e.g. the
 whole `postgresql://user:pass@host:port/db` string) once, in
-`apply-secrets.sh`, and store it as its own single secret key. No
+`apply-secrets.py`, and store it as its own single secret key. No
 in-manifest interpolation needed at all.
 
 ### Vendor-pinned image versions aren't "just take latest"
@@ -348,7 +348,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 To set it to a chosen value instead (e.g. via this repo's `.env`
 convention), ArgoCD requires a **bcrypt hash** in `argocd-secret`'s
 `admin.password` key — it does not accept plaintext. See
-`apply-secrets.sh` for how this repo automates the hashing (via `uv run
+`apply-secrets.py` for how this repo automates the hashing (via `uv run
 --with bcrypt`, no new project dependency).
 
 ### Migrating an existing `helm install` release into ArgoCD management
@@ -453,7 +453,7 @@ to allow it):
      `argocd` namespace ArgoCD needs to install into — chicken-and-egg,
      ArgoCD can't create its own namespace before it exists).
    - Bootstrap ArgoCD itself:
-     `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml --server-side --force-conflicts`
+     `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.0/manifests/install.yaml --server-side --force-conflicts`
      — **must** use `--server-side`. Plain `kubectl apply` fails on the
      `applicationsets.argoproj.io` CRD with `annotations: Too long: may
      not be more than 262144 bytes` (ArgoCD's CRDs are too large for
@@ -474,8 +474,13 @@ to allow it):
      kubectl apply -f kubernetes/cluster/argocd/lan-service.yaml
      ```
      UI is then reachable at `http://localhost:18081` — not `https`, since
-     `server.insecure` disables TLS.
-   - Re-run `kubernetes/apply-secrets.sh` — it reuses the existing values
+     `server.insecure` disables TLS. **This localhost part was specific to
+     Docker Desktop's kind integration**, which auto-published
+     LoadBalancer Services to real `localhost`. Since this pilot moved to
+     plain `kind` (see the README's "Cluster" section), the same Service
+     instead gets a MetalLB-assigned IP — find it with `kubectl get svc -n
+     argocd argocd-server-lan` (EXTERNAL-IP column), not `localhost`.
+   - Re-run `kubernetes/apply-secrets.py` — it reuses the existing values
      already in `.env`, no need to regenerate secrets.
    - Individual service Applications (`argocd-apps/<service>.yaml`) can
      then be reapplied and tested one at a time, same as normal.
@@ -501,6 +506,133 @@ ArgoCD can auto-sync and scale a previously-0 deployment back up to git's
 declared `replicas: 1` in the few seconds before a follow-up
 `kubectl patch ... automated:null` lands — it's a race, not a guarantee.
 Check replica counts after reapplying and rescale to 0 if it won.
+
+---
+
+## Moving from Docker-Desktop-kind to plain kind (real Linux hardware)
+
+Two real problems surfaced moving this pilot off the original Windows/
+Docker-Desktop box onto real Linux hardware, both from assumptions that
+were true under Docker Desktop's kind integration but not true of plain
+`kind`.
+
+### `kind-config.yaml` had 2 control-plane nodes — worse than 1, not better
+
+A hand-written `kind-config.yaml` for this migration specified 2
+control-plane nodes ("for redundancy"). etcd, which backs the k8s control
+plane, requires an **odd** number of members to establish quorum. With
+exactly 2, losing either one loses quorum immediately — strictly worse
+fault tolerance than a single control-plane, while still paying for kind's
+HAProxy load-balancer sidecar that multi-control-plane setups require to
+front the API server. Fixed to 1 control-plane + 3 workers, matching what
+this README already documented as the target topology. Use 1 (single
+host, no real HA possible anyway) or 3 (genuine HA, needs 3 separate
+hosts) — never an even number.
+
+### LoadBalancer Services don't auto-expose on plain kind
+
+Docker Desktop's kind integration auto-publishes every `type: LoadBalancer`
+Service on `localhost` — no extra component needed. This pilot's README
+and every `lan-service.yaml` file were written assuming that behavior.
+Plain `kind` (the CLI, run directly on Linux) has **no such feature** —
+every LoadBalancer Service just sits at `EXTERNAL-IP: <pending>` forever.
+
+**Fix: MetalLB**, `kubernetes/cluster/metallb/`, installed the same way as
+Traefik (multi-source ArgoCD Application: upstream Helm chart + our
+`values.yaml` via `$values`, plus a third source pointing at
+`kubernetes/cluster/metallb/resources/` for the `IPAddressPool`/
+`L2Advertisement` CRs). L2 mode — no BGP router exists on this network, so
+MetalLB just answers ARP directly on kind's Docker bridge network.
+
+The address pool has to be a slice of whatever subnet Docker actually
+assigned the `kind` network, which is only known **after** first cluster
+creation (`docker network inspect kind`) — it's a placeholder in git until
+then, see that file's own comment for the exact command and a safe slice
+to pick.
+
+**This changes what "LAN access" means going forward**: Services get a
+real MetalLB-assigned IP (e.g. `172.18.255.20x`), not literal
+`localhost:<port>` the way Docker Desktop provided. If literal-port
+access is wanted later, layer a host-side forwarder (`socat`,
+`kubectl port-forward` as a systemd unit) on top of the stable MetalLB IP,
+one service at a time — additive, doesn't require touching the cluster.
+The reverse direction (starting from static `extraPortMappings` in
+`kind-config.yaml`, then later wanting MetalLB or just a new port) is much
+worse: `extraPortMappings` are baked in at node-container-creation time,
+so any change means a full cluster recreate — the same ArgoCD/Traefik/
+Postgres re-bootstrap dance as the disk-full recovery section above. That
+asymmetry is why MetalLB was chosen over enumerating every service's port
+statically.
+
+---
+
+## Gateway API
+
+### Traefik never claims its GatewayClass — CRD version, not just channel, has to match
+
+Confirmed on a live cluster: `cluster-gateway`'s Application stayed
+`Synced` but `Progressing` indefinitely — `homeserver-gateway`'s status
+showed both `Accepted` and `Programmed` stuck at `status: Unknown, reason:
+Pending, message: Waiting for controller`, even though `cluster-traefik`
+itself was `Healthy` and its pod was `Running`. The actual problem was
+one level up: `kubectl get gatewayclass traefik -o yaml` showed the
+**GatewayClass itself** stuck the same way — Traefik had never claimed
+it at all — and `kubectl logs` on the Traefik pod was repeating:
+
+```
+Failed to watch" err="failed to list *v1.BackendTLSPolicy: the server could not find the requested resource (get backendtlspolicies.gateway.networking.k8s.io)"
+Failed to watch" err="failed to list *v1.TLSRoute: the server could not find the requested resource (get tlsroutes.gateway.networking.k8s.io)"
+```
+
+First hypothesis — **wrong, worth recording why**: assumed `BackendTLSPolicy`/
+`TLSRoute` were experimental-channel-only, and switched
+`GATEWAY_API_CRDS_URL` from `standard-install.yaml` to
+`experimental-install.yaml` (still pinned at the same old v1.2.1). That
+CRD channel switch alone did **not** fix it — same errors, same stuck
+GatewayClass, confirmed against fresh pod logs well after the CRDs had
+settled (ruled out a startup-discovery-cache race too: the CRDs showed
+`Established: True` minutes before a freshly restarted pod hit the exact
+same errors for 3+ minutes straight).
+
+**Actual root cause**: version, not channel. This pilot's Traefik image
+was pinned at v3.7.10, which — per Traefik's own v3.7 release notes —
+expects **Gateway API v1.6.1**. The CRDs installed were v1.2.1, four
+minor releases behind; `BackendTLSPolicy` didn't even exist as a CRD at
+that version (it and `TLSRoute` were introduced/changed since). No
+channel choice fixes a genuine version gap — the resource literally
+wasn't being served at any URL Traefik would ask for.
+
+**Fix:** bump the CRDs to v1.6.1 and stay on the **standard** channel —
+verified directly against the real v1.6.1 release manifests that
+`backendtlspolicies`, `tlsroutes`, `tcproutes`, `udproutes`, and
+`grpcroutes` have all graduated to standard by this version (only 3
+unrelated `x-k8s.io` mesh-extension CRDs remain experimental-only), so
+the experimental channel was never actually needed once the version was
+right:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
+```
+
+`bootstrap.py`'s `install_gateway_api_crds()` installs this URL by
+default now. Its already-installed check looks for
+`backendtlspolicies.gateway.networking.k8s.io` specifically (present in
+v1.6.1's standard channel, absent from v1.2.1's) rather than e.g.
+`gateways.gateway.networking.k8s.io` (present at every version checked)
+— so a cluster still on the old v1.2.1 CRDs gets upgraded on a re-run
+instead of the check matching what's already there and skipping forever.
+
+**Diagnostic path that actually found this**, worth repeating for any
+future "Application stuck Progressing, controller pod Healthy" case:
+check the *actual custom resource's* `status.conditions` first
+(`kubectl get <kind> -o yaml`, not just `kubectl get application`), then
+walk one level further to whatever that condition says it's waiting on
+(here: the GatewayClass, not the Gateway itself), then the controller's
+own logs — and when logs point at a specific missing API resource, check
+whether it's a *version* mismatch (does the controller's own release
+notes say what API version it expects?) before assuming it's a missing
+CRD *channel*. ArgoCD's health status is a summary of that whole chain,
+not the place the real reason lives.
 
 ---
 

@@ -1,6 +1,6 @@
 # 11 — Services Reference
 
-[← New Services](10-new-services.md) | [Home](../setup.md)
+[← New Services](10-new-services.md) | [Home](../setup.md) | [Kubernetes Pilot (experimental) →](12-kubernetes-pilot.md)
 
 ---
 
@@ -246,4 +246,4 @@ Per-service setup, credentials, architecture, and troubleshooting now live under
 
 ---
 
-[← New Services](10-new-services.md) | [Home](../setup.md)
+[← New Services](10-new-services.md) | [Home](../setup.md) | [Kubernetes Pilot (experimental) →](12-kubernetes-pilot.md)

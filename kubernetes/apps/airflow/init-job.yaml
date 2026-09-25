@@ -1,0 +1,140 @@
+# airflow/compose.yml's dags/logs/config/plugins are 4 separate DATA_ROOT
+# bind mounts, each shared by every airflow-* container (apiserver,
+# scheduler, dag-processor, triggerer, and this init Job). One PVC here
+# with 4 subPath mounts stands in for that — same ReadWriteOnce same-node
+# risk documented elsewhere in this pilot (penpot's assets PVC, authentik's
+# server+worker, supabase's storage+imgproxy), but sharper here: 5 pods
+# reading/writing one RWO volume instead of 2. Not hit in practice yet
+# (small cluster), but the first candidate to move to a ReadWriteMany
+# StorageClass if it ever is.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+# airflow-init is `restart: "no"` in compose — one-shot db migrate + admin
+# user creation + smtp_default connection, then exits. The other airflow-*
+# containers wait on service_completed_successfully before starting; no
+# direct k8s equivalent (see kubernetes/README.md's "No depends_on
+# equivalent" section) — apply this Job and let it finish before the
+# Deployments in deployment.yaml come up healthy (they'll crash-loop on a
+# missing/unmigrated schema until it does, then recover on their own retries).
+#
+# Deliberately dropped versus compose's airflow-init:
+#   - the dags-examples copy-if-empty step: services/airflow/dags-examples/
+#     is example content, not core to the deployment (per this port's scope)
+#     — skipped rather than baked into a ConfigMap. Gap, not an oversight:
+#     drop in DAGs by hand under the airflow-data PVC's dags/ subPath instead.
+#   - AIRFLOW_UID as a configurable value: hardcoded to the image's own
+#     default (50000) below instead of threading it through as a secret —
+#     it's not sensitive, just a UID number, and 50000 is what
+#     airflow/.env.example already ships as the default.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: airflow-init
+  namespace: apps
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: airflow-init
+          image: apache/airflow:3.3.1
+          # compose's `entrypoint: /bin/bash` overrides ENTRYPOINT itself —
+          # command: here (not args:), matching that override semantics;
+          # the script itself is compose's `command:` block, so it becomes
+          # args:, same command/args split as appflowy-minio-setup.
+          command: ["/bin/bash"]
+          args:
+            - -c
+            - |
+              mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
+              chown -R 50000:0 /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
+              /entrypoint airflow db migrate
+              /entrypoint airflow users create --username "${_AIRFLOW_WWW_USER_USERNAME}" --password "${_AIRFLOW_WWW_USER_PASSWORD}" --firstname Admin --lastname User --role Admin --email "${_AIRFLOW_WWW_USER_EMAIL}" || true
+              /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "${SMTP_HOST}" --conn-port "${SMTP_PORT}" --conn-extra "{\"from_email\": \"${SMTP_FROM_EMAIL}\", \"disable_tls\": true, \"disable_ssl\": true}" || true
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW__CORE__AUTH_MANAGER
+              value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-db-credentials
+                  key: sql-alchemy-conn
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: fernet-key
+            - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+              value: http://airflow-apiserver:8080/execution/
+            - name: AIRFLOW__API_AUTH__JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: jwt-secret
+            - name: AIRFLOW__API__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: api-secret-key
+            - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+              value: "true"
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "false"
+            - name: AIRFLOW_CONFIG
+              value: /opt/airflow/config/airflow.cfg
+            - name: _AIRFLOW_WWW_USER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: admin-username
+            - name: _AIRFLOW_WWW_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: admin-password
+            - name: _AIRFLOW_WWW_USER_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: admin-email
+            # Mailpit catcher, same as airflow-scheduler in deployment.yaml —
+            # see mailpit/deployment.yaml, no auth, nothing leaves the cluster.
+            - name: SMTP_HOST
+              value: mailpit
+            - name: SMTP_PORT
+              value: "1025"
+            - name: SMTP_FROM_EMAIL
+              value: airflow@homeserver.local
+          volumeMounts:
+            - name: data
+              mountPath: /opt/airflow/dags
+              subPath: dags
+            - name: data
+              mountPath: /opt/airflow/logs
+              subPath: logs
+            - name: data
+              mountPath: /opt/airflow/config
+              subPath: config
+            - name: data
+              mountPath: /opt/airflow/plugins
+              subPath: plugins
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: airflow-data

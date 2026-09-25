@@ -1,0 +1,106 @@
+# Beszel hub — mirrors beszel/compose.yml's `beszel` service. The
+# beszel-agent (network_mode: host in Compose) is ported separately in
+# agent-deployment.yaml — see that file's header comment for the
+# network_mode/hostNetwork gap this introduces.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beszel-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Shared unix socket the hub and agent communicate over (agent LISTENs on
+# /beszel_socket/beszel.sock, hub connects to it directly) — mirrors the
+# ${DATA_ROOT}/socket bind mount both Compose services share.
+#
+# ReadWriteOnce means only one node can mount this at a time, so this only
+# works correctly if the beszel (hub) and beszel-agent pods land on the
+# *same* node — a real Compose→k8s semantic gap: Compose's shared bind
+# mount has no such constraint since both containers always run on the one
+# Docker host by definition. Not pinned via nodeAffinity here since this
+# pilot's kind cluster's default storage class already binds a PVC to
+# whichever node its pod first schedules on; if the hub and agent pods ever
+# land on different nodes, add matching nodeSelector/nodeAffinity to both
+# this Deployment and beszel-agent's to force colocation.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beszel-socket
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beszel
+  namespace: apps
+  labels:
+    app: beszel
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: beszel
+  template:
+    metadata:
+      labels:
+        app: beszel
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: beszel
+          image: henrygd/beszel:0.18.7
+          env:
+            - name: APP_URL
+              value: "https://beszel.k8s.local"
+            - name: CHECK_UPDATES
+              value: "false"
+            - name: CONTAINER_DETAILS
+              value: "true"
+            - name: SHARE_ALL_SYSTEMS
+              value: "false"
+          ports:
+            - containerPort: 8090
+          volumeMounts:
+            - name: data
+              mountPath: /beszel_data
+            - name: socket
+              mountPath: /beszel_socket
+          readinessProbe:
+            exec:
+              command: ["/beszel", "health", "--url", "http://localhost:8090"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["/beszel", "health", "--url", "http://localhost:8090"]
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: beszel-data
+        - name: socket
+          persistentVolumeClaim:
+            claimName: beszel-socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beszel
+  namespace: apps
+spec:
+  selector:
+    app: beszel
+  ports:
+    - port: 8090

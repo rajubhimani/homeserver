@@ -1,0 +1,18 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+# Points at the hub only (the agent has no inbound port of its own, same as
+# in Compose — it's reached solely over the shared unix socket).
+#
+# Port 8106 matches beszel/compose.dev.yml exactly. The Compose version
+# was stopped (uv run homeserver.py dev down beszel) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: beszel-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: beszel
+  ports:
+    - port: 8106
+      targetPort: 8090

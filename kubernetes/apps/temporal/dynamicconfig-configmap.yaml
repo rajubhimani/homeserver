@@ -1,0 +1,24 @@
+# Bakes temporal/dynamicconfig/development-sql.yaml (6 lines) into a
+# ConfigMap — small enough to inline, same call as landing/configmap.yaml's
+# index.html/nginx.conf/entrypoint.sh. Unlike landing, no subPath mounting
+# is needed here: compose.yml bind-mounts the *entire* ./dynamicconfig
+# directory onto /etc/temporal/config/dynamicconfig (not individual files
+# alongside other content already at that path), so a full ConfigMap volume
+# mount below is the exact equivalent, not an approximation.
+#
+# Same drift risk as landing's ConfigMap: this is a point-in-time copy, not
+# a live link — editing temporal/dynamicconfig/development-sql.yaml in the
+# repo does not automatically update this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-dynamicconfig
+  namespace: apps
+data:
+  development-sql.yaml: |
+    limit.maxIDLength:
+      - value: 255
+        constraints: {}
+    system.forceSearchAttributesCacheRefreshOnRead:
+      - value: true # Dev setup only. Please don't turn this on in production.
+        constraints: {}
