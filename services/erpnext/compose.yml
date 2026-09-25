@@ -1,5 +1,5 @@
 x-erpnext-image: &erpnext_image
-  image: frappe/erpnext:${ERPNEXT_VERSION:-v15.60.1}
+  image: frappe/erpnext:${ERPNEXT_VERSION:-v16.36.0}
   restart: unless-stopped
 
 x-depends-on-configurator: &depends_on_configurator
@@ -80,6 +80,7 @@ services:
         bench set-config -g redis_queue "redis://erpnext-redis-queue:6379";
         bench set-config -g redis_socketio "redis://erpnext-redis-queue:6379";
         bench set-config -gp socketio_port 9000;
+        bench set-config -g chromium_path /usr/bin/chromium-headless-shell;
     volumes:
       - erpnext-sites:/home/frappe/frappe-bench/sites
     depends_on:

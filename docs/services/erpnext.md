@@ -35,9 +35,37 @@ docker compose -f services/erpnext/compose.yml -f services/erpnext/compose.dev.y
 
 Replace `${DOMAIN}` with the actual value from the root `.env`, and pick a real admin password (this is the one you'll actually log in with — it's not read from any `.env` file). This takes a few minutes (installs the ERPNext app's full schema/fixtures into a fresh database). Run it exactly once — running it again for the same site name fails because the site already exists.
 
+**Public hostname (prod):** the Cloudflare tunnel is dashboard-managed, so `erpnext.${DOMAIN}` returns a Cloudflare **502** until you add it: [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → Networks → Tunnels → this tunnel → **Public Hostname** → add `erpnext.${DOMAIN}` → `http://nginx-plain:80` (see [cloudflared's doc](cloudflared.md)). nginx-plain's `erpnext` vhost only takes effect after nginx-plain restarts (`uv run homeserver.py prod up nginx-plain`).
+
+**PDFs:** the default `wkhtmltopdf` generator fetches the page's own CSS over HTTP from the site URL, so until the public hostname above resolves end-to-end it fails with `wkhtmltopdf reported an error: Exit with code 1 due to network error: ConnectionRefusedError`. v16's Chrome generator (`pdf_generator=chrome`, per print format) doesn't have that dependency and works out of the box via the `chromium_path` the configurator sets — verified 2026-09-25 on v16.36.0.
+
+**Setup wizard enables the scheduler:** `bench new-site` ends with `*** Scheduler is disabled ***` — expected; background jobs start once the first-login setup wizard below is completed.
+
 ## First login
 
 Browse to `http://<ip>:8153` (dev) or `https://erpnext.${DOMAIN}` (prod, once `nginx-plain`/Cloudflare routing is in place — see [nginx-plain's own doc](nginx-plain.md) if unsure). Log in as `Administrator` with the `--admin-password` chosen above. ERPNext's own setup wizard runs on first login (company name, country, currency, chart of accounts) — this is separate from and after the `bench new-site` step, and only configures the app, not the database.
+
+## Administrator and admin users
+
+**The `Administrator` account is created by `bench new-site`** — its password is whatever `--admin-password` was passed there. It is **not stored anywhere** in this repo or any `.env` (unlike `DB_PASSWORD`), so save it in Vaultwarden straight away. Change it later from the UI: avatar (top right) → **My Settings** → **Change Password**.
+
+All commands below run against the live site from the host — no old password needed. `<site>` is `erpnext.${DOMAIN}` with the real domain substituted (e.g. `erpnext.example.com`); `-it` is only there so a password prompt works if you leave the password argument out.
+
+```bash
+# Reset the Administrator password (lost/forgotten)
+docker exec -it erpnext-backend bench --site <site> set-admin-password '<new-password>'
+
+# Create a named admin account for day-to-day use (full System Manager rights)
+docker exec -it erpnext-backend bench --site <site> add-system-manager you@example.com \
+  --first-name You --last-name Name --password '<password>'
+
+# Reset any other user's password (add --logout-all-sessions to kick existing logins)
+docker exec -it erpnext-backend bench --site <site> set-password you@example.com '<new-password>'
+```
+
+**Prefer a named System Manager over `Administrator` for daily work** — `Administrator` is Frappe's built-in superuser (bypasses all permission checks, can't be disabled or deleted), and a named account keeps an audit trail of who changed what. Keep `Administrator` for recovery. Adding staff through the UI instead: search **User** → **Add User** → set email/name → **Roles** (e.g. System Manager, Accounts User, Sales User) → Save; they get an email to set their own password once outgoing email is configured.
+
+Note: quotes around passwords matter — a `$` or `!` inside double quotes gets expanded by the host shell before it reaches `bench`.
 
 ## Using the Party Ledger (the Khatabook-equivalent workflow)
 
@@ -56,7 +84,7 @@ Install **ERPNext Mobile** (`com.createchsoft.erpnextmobile` on Google Play) or 
 
 ## Notes
 
-- Image: `frappe/erpnext` — pin the tag in `.env` (`ERPNEXT_VERSION`); check [Docker Hub tags](https://hub.docker.com/r/frappe/erpnext/tags) before bumping, since major-version jumps (`v14` → `v15`) can require running `bench migrate` and reading ERPNext's own release notes first.
+- Image: `frappe/erpnext` — pin the tag in `.env` (`ERPNEXT_VERSION`); check [Docker Hub tags](https://hub.docker.com/r/frappe/erpnext/tags) before bumping, since major-version jumps (`v14` → `v15`) can require running `bench migrate` and reading ERPNext's own release notes first. Pinned to `v16.36.0` (matches upstream `frappe_docker`'s `example.env` as of 2026-09-23). v16 renders PDFs with headless Chromium, so the configurator also sets `chromium_path` (`/usr/bin/chromium-headless-shell`, bundled in the image) — mirrors upstream's `compose.yaml`.
 - This stack mirrors the official [frappe_docker](https://github.com/frappe/frappe_docker) production compose + MariaDB/Redis overrides, adapted to this repo's compose.yml/dev/prod split and container-naming convention (`erpnext-*` prefix) rather than using their multi-file override system directly.
 - Multiple companies are supported under one login (Frappe's own multi-tenancy — separate from the `sites` mechanism, which is for fully separate installs), if you need to track more than one business.
 
