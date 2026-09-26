@@ -7,12 +7,19 @@ Default mode only covers currently-running containers (docker ps), all
 enabled. --all instead discovers every container defined across every
 services/*/compose.yml -- including ones not currently started -- and
 creates a monitor for each: enabled for min/core tier (the always-on
-services), disabled for daily/office/automation-ai/extra/manual (opt-in
+services), disabled for daily/browser/office/automation-ai/extra/manual (opt-in
 tiers, so a stopped-on-purpose service doesn't trigger false down alerts) --
 flip a monitor's Active toggle by hand later if you start using one of those
 regularly.
 
-Run with: uv run services/uptime-kuma/setup-monitors.py [--all]
+--prune (only with --all) also deletes this script's own Docker Container
+monitors whose container no longer exists in any services/*/compose.yml --
+i.e. a service that was removed or renamed -- or is a one-shot init
+container (restart: "no"/on-failure), which exits by design and would
+otherwise sit permanently "down". Re-run --all --prune after every
+add/remove/rename so monitoring always matches the repo.
+
+Run with: uv run services/uptime-kuma/setup-monitors.py [--all [--prune]]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -49,22 +56,17 @@ EXCLUDE_CONTAINERS = {"uptime-kuma", "uptime-kuma-db"}
 # nginx-plain (only one proxy runs at a time) -- not part of any tier.
 EXCLUDE_SERVICE_DIRS = {"nginx"}
 
-# One-shot init/permission-fixing containers (restart: "no" in their own
-# compose.yml) -- these are *supposed* to exit after running once, so a
-# Docker Container monitor expecting them to stay "running" would be
-# permanently, misleadingly "down". Not real long-running services.
-EXCLUDE_ONE_SHOT = {
-    "appflowy-minio-setup",
-    "airflow-init",
-    "plane-migrator",
-    "firefly-permissions",
-    "temporal-schema-setup",
-    "temporal-create-namespace",
-    "syncthing-permissions",
-    "rocketchat-mongodb-fix-permission",
-    "rocketchat-mongodb-init",
-    "bichon-init",
-}
+# One-shot init/permission-fixing containers are *supposed* to exit after
+# running once, so a Docker Container monitor expecting them to stay
+# "running" would be permanently, misleadingly "down". They're detected
+# automatically from their own compose.yml -- any service whose restart
+# policy is one of these runs to completion by design. (This used to be a
+# hand-maintained name list; it silently drifted -- atuin-permissions,
+# authentik-permissions and eight others got monitors that sat "down".)
+ONE_SHOT_RESTART_POLICIES = {"no", "on-failure"}
+
+_SERVICE_KEY = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*(#.*)?$")
+_FIELD = re.compile(r"^    (container_name|restart):\s*[\"']?([^\"'\s#]+)")
 
 
 def load_ntfy_token() -> str | None:
@@ -87,15 +89,47 @@ def running_containers() -> list[str]:
     return names
 
 
-def all_defined_containers() -> dict[str, str]:
+def compose_containers(compose_file: Path) -> list[tuple[str, str]]:
+    """(container_name, restart policy) for each service in a compose file.
+    Line-based rather than a YAML dependency: every compose.yml here uses
+    2-space service keys and 4-space fields under a top-level 'services:'."""
+    result: list[tuple[str, str]] = []
+    in_services = False
+    current: dict[str, str] = {}
+
+    def flush() -> None:
+        if current.get("container_name"):
+            result.append((current["container_name"], current.get("restart", "")))
+
+    for line in compose_file.read_text().splitlines():
+        if line and not line[0].isspace():  # top-level key
+            flush()
+            current = {}
+            in_services = line.startswith("services:")
+            continue
+        if not in_services:
+            continue
+        if _SERVICE_KEY.match(line):
+            flush()
+            current = {}
+        elif m := _FIELD.match(line):
+            current[m.group(1)] = m.group(2)
+    flush()
+    return result
+
+
+def all_defined_containers() -> tuple[dict[str, str], set[str]]:
     """Every container_name in every services/*/compose*.yml, mapped to its
     service directory's tier (from services.json). Covers containers that
-    aren't currently running, not just the live set from `docker ps`."""
+    aren't currently running, not just the live set from `docker ps`.
+    Also returns the one-shot containers that were left out (see
+    ONE_SHOT_RESTART_POLICIES), so --prune can delete monitors for them."""
     data = json.loads(SERVICES_JSON.read_text())
     services = data.get("services", data)
     tier_by_slug = {s["slug"]: s["tier"] for s in services if "slug" in s and "tier" in s and not s.get("virtual")}
 
     container_to_tier: dict[str, str] = {}
+    one_shots: set[str] = set()
     for svc_dir in sorted((REPO_ROOT / "services").iterdir()):
         if not svc_dir.is_dir() or svc_dir.name in EXCLUDE_SERVICE_DIRS:
             continue
@@ -103,12 +137,14 @@ def all_defined_containers() -> dict[str, str]:
         if not tier:
             continue
         for compose_file in list(svc_dir.glob("compose.yml")) + list(svc_dir.glob("docker-compose.yml")):
-            for m in re.finditer(r"container_name:\s*(\S+)", compose_file.read_text()):
-                name = m.group(1).strip().strip("\"'")
-                if name in EXCLUDE_CONTAINERS or name in EXCLUDE_ONE_SHOT:
+            for name, restart in compose_containers(compose_file):
+                if name in EXCLUDE_CONTAINERS:
+                    continue
+                if restart in ONE_SHOT_RESTART_POLICIES:
+                    one_shots.add(name)
                     continue
                 container_to_tier.setdefault(name, tier)
-    return container_to_tier
+    return container_to_tier, one_shots
 
 
 def main() -> None:
@@ -121,10 +157,19 @@ def main() -> None:
         help="Cover every container defined in the repo, not just currently-running ones. "
         "Enabled for min/core tier, created disabled for everything else.",
     )
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="With --all: delete Docker Container monitors on the homeserver docker host whose "
+        "container no longer exists in any services/*/compose.yml (removed/renamed services).",
+    )
     args = parser.parse_args()
+    if args.prune and not args.all:
+        parser.error("--prune needs --all (without --all the script only sees running containers, "
+                     "so every stopped service would look 'removed')")
 
     if args.all:
-        container_tiers = all_defined_containers()
+        container_tiers, one_shots = all_defined_containers()
         if not container_tiers:
             print("No containers discovered across services/*/compose.yml. Nothing to do.")
             return
@@ -138,6 +183,7 @@ def main() -> None:
         if not running:
             print("No running containers found (besides uptime-kuma itself). Nothing to do.")
             return
+        one_shots: set[str] = set()
         container_tiers = {name: "min" for name in running}  # tier value only used for the active/disabled decision below
         print(f"Found {len(running)} running container(s) to monitor.")
 
@@ -150,7 +196,14 @@ def main() -> None:
 
     api = UptimeKumaApi(args.url, timeout=60)
     try:
-        api.login(username, password)
+        # With 2FA enabled, a correct username/password doesn't raise -- the
+        # server just answers {"tokenRequired": true} and leaves the socket
+        # unauthenticated, so the next call (get_docker_hosts) waits 60s for
+        # state that never comes and times out. Ask for the code and retry.
+        result = api.login(username, password)
+        if isinstance(result, dict) and result.get("tokenRequired"):
+            token = input("Uptime Kuma 2FA code: ").strip()
+            api.login(username, password, token)
         print("Logged in.")
 
         hosts = api.get_docker_hosts()
@@ -218,7 +271,23 @@ def main() -> None:
             created += 1
             print(f"  + {name}{'' if active else '  (disabled, tier=' + tier + ')'}")
 
-        print(f"\nDone. Created {created} monitor(s), skipped {skipped} already-existing.")
+        pruned = 0
+        if args.prune:
+            # Only this script's own kind of monitor (Docker Container type on
+            # the homeserver docker host) -- hand-made HTTP/keyword/etc.
+            # monitors are never touched, whatever their name.
+            for m in existing_monitors:
+                if m.get("type") != MonitorType.DOCKER or m.get("docker_host") != host_id:
+                    continue
+                name = m["name"]
+                if name in container_tiers or name in EXCLUDE_CONTAINERS:
+                    continue
+                api.delete_monitor(m["id"])
+                pruned += 1
+                why = "one-shot init container, exits by design" if name in one_shots else "no longer defined in any compose.yml"
+                print(f"  - {name}  (removed: {why})")
+
+        print(f"\nDone. Created {created} monitor(s), skipped {skipped} already-existing, pruned {pruned} stale.")
     finally:
         api.disconnect()
 
