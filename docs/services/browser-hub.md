@@ -4,26 +4,65 @@
 
 ---
 
-**Purpose:** One public entry point, one SSO login, five real browsers (Firefox, Chromium, Ungoogled Chromium, Brave, Mullvad Browser) running on the server and controlled remotely — for reaching sites blocked on your own device or local network.
-**Port:** n/a — subpath-routed through `nginx-plain`, not a container of its own | **Login:** Authentik forward-auth on `browser.${DOMAIN}` (see [authentik.md](authentik.md)) — same SSO session as every other forward-auth-gated service in this stack | **Requires:** the five browser containers (see their own docs) | **Memory:** no hard limit set on any browser container; measured idle varies notably by browser (see individual docs) — roughly 207-442MB each, ~1.64GB total if all five are running at once
+**Purpose:** One public entry point, one SSO login, ten real browsers (Firefox, Chromium, Brave, Mullvad Browser, LibreWolf, Zen, Helium, Chrome, Edge, Vivaldi) running on the server and controlled remotely — for reaching sites blocked on your own device or local network.
+**Port:** n/a — subpath-routed through `nginx-plain`, not a container of its own | **Login:** Authentik forward-auth on `browser.${DOMAIN}` (see [authentik.md](authentik.md)) — same SSO session as every other forward-auth-gated service in this stack | **Requires:** the ten browser containers (see their own docs) | **Memory:** no hard limit set on any browser container; measured idle varies notably by browser (see individual docs) — roughly 207-442MB each for the original five (the newer ones not yet measured; expect 300-700MB each while in use, ~4.5GB disk per image)
 
 ---
 
 ## What it is
 
-Five separate remote-browser containers ([firefox](firefox.md), [chromium](chromium.md), [ungoogled-chromium](ungoogled-chromium.md), [brave](brave.md), [mullvad-browser](mullvad-browser.md)) that deliberately do **not** get their own public subdomain. Instead, `nginx-plain` exposes exactly one hostname — `browser.${DOMAIN}` — gated by Authentik forward-auth, serving a small static page listing all five. Picking one proxies you into that container at a subpath (`/firefox/`, `/chromium/`, etc.). There is no route to any of the five containers except through this one gated hostname — hitting an old-style `firefox.${DOMAIN}` returns a hard-closed connection (444) from nginx-plain's catch-all block, not even a login prompt, since no such route exists.
+Ten separate remote-browser containers ([firefox](firefox.md), [chromium](chromium.md), [brave](brave.md), [mullvad-browser](mullvad-browser.md), [librewolf](librewolf.md), [zen](zen.md), [helium](helium.md), [chrome](chrome.md), [edge](edge.md), [vivaldi](vivaldi.md)) that deliberately do **not** get their own public subdomain. Instead, `nginx-plain` exposes exactly one hostname — `browser.${DOMAIN}` — gated by Authentik forward-auth, serving a small static page listing all ten. Picking one proxies you into that container at a subpath (`/firefox/`, `/chromium/`, etc.). There is no route to any of the ten containers except through this one gated hostname — hitting an old-style `firefox.${DOMAIN}` returns a hard-closed connection (444) from nginx-plain's catch-all block, not even a login prompt, since no such route exists.
 
 | Browser | Subpath | Doc |
 | --- | --- | --- |
 | Firefox | `/firefox/` | [firefox.md](firefox.md) |
 | Chromium | `/chromium/` | [chromium.md](chromium.md) |
-| Ungoogled Chromium | `/ungoogled-chromium/` | [ungoogled-chromium.md](ungoogled-chromium.md) |
 | Brave | `/brave/` | [brave.md](brave.md) |
 | Mullvad Browser | `/mullvad-browser/` | [mullvad-browser.md](mullvad-browser.md) |
+| LibreWolf | `/librewolf/` | [librewolf.md](librewolf.md) |
+| Zen | `/zen/` | [zen.md](zen.md) |
+| Helium | `/helium/` | [helium.md](helium.md) |
+| Chrome | `/chrome/` | [chrome.md](chrome.md) |
+| Edge | `/edge/` | [edge.md](edge.md) |
+| Vivaldi | `/vivaldi/` | [vivaldi.md](vivaldi.md) |
+
+**Removed 2026-09-26:** Ungoogled Chromium (`/ungoogled-chromium/`) was dropped from the hub when LibreWolf and Zen were added — see "Browser safety" below for why. Its last snapshot is in `service_data/backup/ungoogled-chromium/20260926-165229/` and its `service_data/data/ungoogled-chromium/` profile was left on disk; the service directory and doc are recoverable from git history. Static IP `172.18.255.242` is now unused. The k8s pilot's `kubernetes/apps/ungoogled-chromium/` manifests were not touched (separate branch/cluster).
+
+## Browser safety — what's in the hub and what's deliberately not
+
+Every browser here renders arbitrary internet content, so the one thing that matters most is **how quickly security patches reach the image** (the lag behind the upstream engine fix), then privacy/trust. Snapshot assessment from **2026-09-26**, when Chrome 154 (2026-09-22) had just shipped 108 security fixes, 11 of them Critical — any Chromium-based browser without them was exposed. Re-check periodically; versions move weekly.
+
+### In the hub
+
+| Browser | Engine (2026-09-26) | Verdict |
+| --- | --- | --- |
+| Firefox | Firefox 156 (current) | ✅ Safe |
+| Brave | Chromium 154 (current) | ✅ Safe |
+| Mullvad Browser | Firefox ESR 140.16, with Firefox 156's fixes backported | ✅ Safe |
+| LibreWolf | Firefox 156.0.1 | ✅ Safe. Current, and a privacy-hardened Firefox. |
+| Zen | Firefox 156 | ✅ Safe. Stated policy is to follow Firefox within 0-72 hours, and it did ship 156's 67 CVE fixes. Still labelled beta, from a small team. |
+| Helium | Chromium 154 | ✅ Safe. Already on 154; well reviewed for privacy. Young project that has lagged behind a Chromium patch now and then. |
+| Chrome | Chromium 154 | ✅ Safe (fastest patches), but sends data to Google. **Compatibility only.** |
+| Edge | 154 | ✅ Safe, but sends data to Microsoft. **Compatibility only.** |
+| Vivaldi | Chromium 152 Extended Stable, with fixes from 154 backported | 🟡 Acceptable. Extended Stable is a Google-supported channel, so fixes do arrive. |
+| Chromium | 153.0.8010.52 | ⚠️ Missing Chrome 154's 108 fixes. The image is built from Debian's `chromium` package, and Debian only had 154 in unstable at the time. Kept, but refresh with `uv run homeserver.py prod update chromium` once Debian's 154 lands — or prefer Brave/Helium, which are current. |
+
+### Deliberately excluded — do not add to the hub
+
+| Browser | Engine (2026-09-26) | Why it's out |
+| --- | --- | --- |
+| Ungoogled Chromium | 153.0.8010.36 | ❌ Worst of the set. Missing both the 2026-09-15 update (42 fixes) and 154's 108. The main Ungoogled Chromium project released 154 two days after Google, but LinuxServer's image builds from a separate portable build still on 153.0.8010.52, and hadn't been rebuilt since 2026-09-14. **Removed from the hub 2026-09-26.** Helium covers the same "Chromium without Google" idea and is current. |
+| Opera | Chromium 151 | ❌ Not recommended. Three Chromium versions behind with only selective fixes; collects data for advertising; its "VPN" is really a browser-only proxy. **Never added.** |
+
+Also not available/not included: **Tor Browser** (no LinuxServer image — Mullvad Browser is built by the Tor Project but does not route traffic through Tor); **Webtop** (a full Linux desktop, not a single browser) and **Kasm Workspaces** (a heavier disposable-session platform) are related but out of scope for this hub.
+
+### Chromium-based containers and seccomp
+
+The older Chromium-based members (`chromium`, `brave`) run with `security_opt: seccomp:unconfined`, which weakens container isolation — another reason not to keep an unpatched Chromium browser online. The four added on 2026-09-26 (`helium`, `chrome`, `edge`, `vivaldi`) deliberately **don't**: LinuxServer's current compose examples for those images no longer ask for it, and they were verified launching under Docker's default seccomp profile.
 
 ## Why subpaths instead of one-login-per-app
 
-Every other service in this stack gets `service.${DOMAIN}` with its own login. Doing that here would mean five separate credential prompts to remember and re-enter. Centralizing at one nginx server block also happens to make this design easy to upgrade later — see "SSO at the hub level" below (that upgrade already happened).
+Every other service in this stack gets `service.${DOMAIN}` with its own login. Doing that here would mean ten separate credential prompts to remember and re-enter. Centralizing at one nginx server block also happens to make this design easy to upgrade later — see "SSO at the hub level" below (that upgrade already happened).
 
 ## Access
 
@@ -31,11 +70,13 @@ Every other service in this stack gets `service.${DOMAIN}` with its own login. D
 
 ## Setup
 
+**Tier: `browser`** — its own opt-in tier, sequenced MIN → CORE → DAILY → **BROWSER** → OFFICE → AUTOMATION-AI → EXTRA (2026-09-26; tried in `core` first and moved out as too heavy for always-on — roughly 3-7GB of RAM across all ten while in use). `up browser` bootstraps any missing min/core/daily, then starts the ten browsers; `down browser` stops only the browsers. `up office`/`up automation-ai`/`up all` now start the browsers too, since tiers are additive. The bare word `browser` is the **tier** keyword (it takes precedence over the same-named bundle), so `restart browser`/`update browser` follow the usual tier idiom and cascade through min/core/daily as well — use `group:browser` to restart/update/back up **just** the ten browsers.
+
 ```bash
 uv run homeserver.py dev up browser
 ```
 
-`browser` here is a **bundle**, not a real service directory — `up browser` (bare, not `group:browser`) expands to all five browser containers plus `nginx-plain` (needed for the hub's routing to work, brought up automatically if it isn't already running). `down browser`/`restart browser`/etc. only ever touch the five browsers themselves, never `nginx-plain` — it's shared infra for the whole stack, not something this bundle owns. See the `homeserver-add-service` skill's bundle-schema step for how this is wired (`"bundle"`/`"virtual"`/`"requires"` fields in `services.json`) if you're ever adding a similar multi-container hub.
+`browser` here is a **bundle**, not a real service directory — `up browser` (bare, not `group:browser`) expands to all ten browser containers plus `nginx-plain` (needed for the hub's routing to work, brought up automatically if it isn't already running). `down browser`/`restart browser`/etc. only ever touch the ten browsers themselves, never `nginx-plain` — it's shared infra for the whole stack, not something this bundle owns. See the `homeserver-add-service` skill's bundle-schema step for how this is wired (`"bundle"`/`"virtual"`/`"requires"` fields in `services.json`) if you're ever adding a similar multi-container hub.
 
 There's no browser-hub-specific credential to set up anymore — access is controlled entirely through Authentik (create/manage users there, see [authentik.md](authentik.md)). Nothing in any browser's `.env` or `nginx-plain`'s `.env` needs editing for auth.
 
@@ -67,7 +108,7 @@ The design was intentionally SSO-migration-friendly from the start — auth cent
 
 ## LAN isolation
 
-These 5 containers run real browsers reachable by anyone who can log in (via Authentik) or, per the dev-port gotcha below, anyone on the LAN at all — so they're isolated from this host's own LAN at the network level, independent of and in addition to the auth layer above. Each browser is pinned to a static IP on the `homeserver` Docker network (`172.18.255.240`-`244` for firefox/chromium/ungoogled-chromium/brave/mullvad-browser respectively, set via `networks.homeserver.ipv4_address` in each `compose.yml`) so firewall rules can target them by fixed address regardless of recreation. Internet access is untouched — only reaching this host's own LAN is blocked.
+These 10 containers run real browsers reachable by anyone who can log in (via Authentik) or, per the dev-port gotcha below, anyone on the LAN at all — so they're isolated from this host's own LAN at the network level, independent of and in addition to the auth layer above. Each browser is pinned to a static IP on the `homeserver` Docker network (`172.18.255.240`/`.241`/`.243`/`.244`/`.245`/`.246`/`.247`/`.248`/`.249`/`.250` for firefox/chromium/brave/mullvad-browser/librewolf/zen/helium/chrome/edge/vivaldi respectively — `.242` was ungoogled-chromium, now removed, set via `networks.homeserver.ipv4_address` in each `compose.yml`) so firewall rules can target them by fixed address regardless of recreation. Internet access is untouched — only reaching this host's own LAN is blocked.
 
 Two independent mechanisms are needed (confirmed live, both required — neither alone covers all traffic paths):
 
@@ -98,16 +139,16 @@ Both subcommands are idempotent — safe to run repeatedly, safe to run `undo` e
 
 ## Landing page presence
 
-All six cards (the hub itself plus its five members) live under System → **Browsers**, a subcategory dedicated to this bundle (`services.json`'s `subcategoryLabels.browsers`). Each of the five browsers has its own real card with its own live status dot, driven by the normal per-card `/health/<slug>` mechanism every other card uses (see `services/landing/nginx.conf`) — nothing custom, so a future bundle member gets working status for free just by getting a card the normal way. Each member's public link points at its subpath under the *hub's* subdomain (`https://browser.${DOMAIN}/firefox/`, not `https://${DOMAIN}/browser/firefox` — that URL never existed and 404s, a bug caught and fixed once already) — set via `"sub": "browser"` + `"path": "firefox/"` (trailing slash required — nginx's `location /firefox/ { ... }` is a prefix match) on each member's `services.json` entry, which `buildCard()` combines as `https://${sub}.${DOMAIN}/${path}` before falling back to the default `https://${sub}.${DOMAIN}`. The hub's own card needs neither field — its slug already equals its subdomain.
+All eleven cards (the hub itself plus its ten members) live under System → **Browsers**, a subcategory dedicated to this bundle (`services.json`'s `subcategoryLabels.browsers`). Each of the ten browsers has its own real card with its own live status dot, driven by the normal per-card `/health/<slug>` mechanism every other card uses (see `services/landing/nginx.conf`) — nothing custom, so a future bundle member gets working status for free just by getting a card the normal way. Each member's public link points at its subpath under the *hub's* subdomain (`https://browser.${DOMAIN}/firefox/`, not `https://${DOMAIN}/browser/firefox` — that URL never existed and 404s, a bug caught and fixed once already) — set via `"sub": "browser"` + `"path": "firefox/"` (trailing slash required — nginx's `location /firefox/ { ... }` is a prefix match) on each member's `services.json` entry, which `buildCard()` combines as `https://${sub}.${DOMAIN}/${path}` before falling back to the default `https://${sub}.${DOMAIN}`. The hub's own card needs neither field — its slug already equals its subdomain.
 
 The hub's own card (`services.json` slug `browser`) is marked `"virtual": true` — it has a landing-page presence but no `services/browser/compose.yml`; `homeserver.py` excludes `virtual` entries from `SERVICES_MIN`/`CORE`/`DAILY`/`OFFICE`/`AUTOMATION_AI`/`EXTRA`/`MANUAL` and from automatic category/subcategory `SERVICE_GROUPS` derivation, so `up all`/`up group:browsers`/etc. never try to docker-compose a directory that doesn't exist.
 
 ## Gotchas
 
 - **`RESTART_APP=true` is set on every browser** — compensates for `HARDEN_DESKTOP` above disabling the terminal and xdg-open. Without it, accidentally closing the browser *application itself* inside the remote desktop (not just your own viewing tab — that's harmless, see "Access" above) would strand the session with no in-desktop way to relaunch it, short of restarting the whole container. This watchdog auto-relaunches the main app whenever it exits.
-- **Dev-port direct access bypasses the hub entirely, with no auth of its own at all now.** Each browser's `compose.dev.yml` still exposes its own host port (Firefox `8145`, Chromium `8146`, etc.) for local debugging convenience. Before the Authentik migration this path was still gated by the container's own `CUSTOM_USER`/`PASSWORD`; that gate was removed along with the rest of the per-container Basic Auth (see "Auth history" above), so a dev port is now completely open to whoever can reach it. Consistent with how every other service in this stack treats `dev` ports (LAN-trusted convenience, never published past this host) — but a bigger jump in practice for these five than for most, since they used to have a real credential prompt and now have none. See "LAN isolation" above for the mitigation that does apply here (limits what a session can reach, not who can start one).
+- **Dev-port direct access bypasses the hub entirely, with no auth of its own at all now.** Each browser's `compose.dev.yml` still exposes its own host port (Firefox `8145`, Chromium `8146`, etc.) for local debugging convenience. Before the Authentik migration this path was still gated by the container's own `CUSTOM_USER`/`PASSWORD`; that gate was removed along with the rest of the per-container Basic Auth (see "Auth history" above), so a dev port is now completely open to whoever can reach it. Consistent with how every other service in this stack treats `dev` ports (LAN-trusted convenience, never published past this host) — but a bigger jump in practice for these browsers than for most, since they used to have a real credential prompt and now have none. See "LAN isolation" above for the mitigation that does apply here (limits what a session can reach, not who can start one).
 - **Multi-user login is now real, not simulated.** The old shared-Basic-Auth design was explicitly single-user (one `BROWSER_HUB_USER`/`BROWSER_HUB_PASSWORD` for everyone). Authentik gives every person their own account instead — see [authentik.md](authentik.md) for user management. No script or config in this bundle enforces single-user anymore; that constraint is gone along with the htpasswd-generation script that used to enforce it.
-- If you add a sixth browser later, it needs: its own `compose.yml`/`.env` (with `SUBFOLDER=/<slug>/`), a new `location /<slug>/ { ... }` block copied from an existing one in `default.conf.template`, and a new link on `services/nginx-plain/html/browser-hub/index.html` — the hub page is static, not generated from `services.json`.
+- If you add another browser later, it needs: its own `compose.yml`/`.env` (with `SUBFOLDER=/<slug>/`), a new `location /<slug>/ { ... }` block and a `/_status/<slug>` block copied from existing ones in `default.conf.template`, a static IP added to `browser-lan-block.sh`'s `BROWSER_IPS` (then re-run it), and a new link on `services/nginx-plain/html/browser-hub/index.html` — the hub page is static, not generated from `services.json`.
 
 ---
 

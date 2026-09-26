@@ -1,12 +1,12 @@
 services:
-  ungoogled-chromium:
+  chrome:
     # Deliberate exception to this repo's pinned-version convention, same
     # rationale as services/firefox/compose.yml: internet-reachable, stateless
     # (profile lives in the /config volume), benefits from always-current
-    # security patches. `uv run homeserver.py dev update ungoogled-chromium`
+    # security patches. `uv run homeserver.py dev update chrome`
     # stays current.
-    image: lscr.io/linuxserver/ungoogled-chromium:152.0.7977.64-1-ls183
-    container_name: ungoogled-chromium
+    image: lscr.io/linuxserver/chrome:latest
+    container_name: chrome
     restart: unless-stopped
     env_file: .env
     environment:
@@ -21,24 +21,22 @@ services:
       # ever compromised — disables sudo, terminal emulators, and xdg/exo-open.
       HARDEN_DESKTOP: "true"
       # Compensates for HARDEN_DESKTOP above: with no terminal/xdg-open to
-      # relaunch it, accidentally closing the browser itself (not just your
-      # own viewing tab) would otherwise strand the session with no way to
-      # get it back short of restarting the whole container. This watchdog
-      # auto-relaunches the main app whenever it exits.
+      # relaunch it, accidentally closing Chrome itself (not just
+      # your own viewing tab) would otherwise strand the session with no way
+      # to get it back short of restarting the whole container. This
+      # watchdog auto-relaunches the main app whenever it exits.
       RESTART_APP: "true"
-      # Served at https://browser.${DOMAIN}/ungoogled-chromium/ via the shared
+      # Served at https://browser.${DOMAIN}/chrome/ via the shared
       # browser hub (services/nginx-plain), not its own subdomain — see
       # docs/services/browser-hub.md. Needs both slashes per upstream's docs.
-      SUBFOLDER: /ungoogled-chromium/
+      SUBFOLDER: /chrome/
     volumes:
       - ${DATA_ROOT}/config:/config
     shm_size: "1gb"
-    # Chromium's own sandbox needs syscalls modern Docker restricts by
-    # default — this is in upstream's own base compose example, not just a
-    # troubleshooting fallback. HARDEN_DESKTOP above offsets some of the
-    # extra surface this opens up.
-    security_opt:
-      - seccomp:unconfined
+    # Chromium-based, but deliberately WITHOUT seccomp:unconfined (unlike the
+    # older chromium/brave services): upstream's current compose example for
+    # this image doesn't ask for it, and the default seccomp profile keeps
+    # the container better isolated. Verified launching fine without it.
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/ || exit 1"]
       interval: 30s
@@ -48,11 +46,11 @@ services:
     networks:
       homeserver:
         # Static IP, not dynamically assigned — the LAN-isolation firewall
-        # rule in docs/services/browser-hub.md targets these 5 fixed
+        # rule in docs/services/browser-hub.md targets these fixed
         # addresses specifically, and a rule pinned to a dynamic IP would
         # silently stop matching (or start matching some other container)
         # after any recreation.
-        ipv4_address: 172.18.255.242
+        ipv4_address: 172.18.255.248
 
 networks:
   homeserver:

@@ -17,9 +17,10 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
 | `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, plausible |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
-| `office` | `uv run homeserver.py dev up office` | min + core + daily + every office service below — **opt-in, never implied by `up daily`** |
-| `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + office + every automation/AI service below — **opt-in, never implied by `up office`** |
-| `all` | `uv run homeserver.py dev up all` | core + daily + office + automation-ai + every extra service (manual-only services excluded) |
+| `browser` | `uv run homeserver.py dev up browser` | min + core + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |
+| `office` | `uv run homeserver.py dev up office` | min + core + daily + browser + every office service below — **opt-in, never implied by `up browser`** |
+| `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + browser + office + every automation/AI service below — **opt-in, never implied by `up office`** |
+| `all` | `uv run homeserver.py dev up all` | core + daily + browser + office + automation-ai + every extra service (manual-only services excluded) |
 
 **`up core`/`up daily`/`up office`/`up automation-ai` bootstrap, they don't
 restart**: each checks which of its lower tier(s) are already running and
@@ -36,8 +37,7 @@ one command that stops the entire stack, in reverse order — no list to
 maintain.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
-brave, chromium, coolify, excalidraw, firefox, ungoogled-chromium,
-mullvad-browser, browser, karakeep, homebox, silverbullet, syncthing, trilium,
+coolify, excalidraw, karakeep, homebox, silverbullet, syncthing, trilium,
 wallabag.
 
 **Office services** (firm/business apps — started with `up office`/`up all` or individually):
@@ -45,6 +45,10 @@ stirling-pdf-lite, stirling-pdf, vikunja, appflowy, plane, calcom, listmonk, min
 
 **Automation & AI services** (workflow/automation/AI apps — started with `up automation-ai`/`up all` or individually):
 airflow, dagster, temporal, ollama, open-webui, n8n.
+
+**Browser services** (the Browser Hub's remote browsers — started with `up browser`/`up all` or individually; `group:browser` acts on just these without the lower-tier cascade):
+brave, chromium, firefox, mullvad-browser, librewolf, zen, helium, chrome, edge,
+vivaldi, browser (the hub's virtual card).
 
 **Extra services** (started with `up all` or individually):
 crowdsec, dockge, dozzle,
@@ -88,13 +92,8 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | core |
 | Plausible | `plausible` | 8130 | 8000 | core |
-| Brave | `brave` | 8148 | 3000 | daily |
-| Chromium | `chromium` | 8146 | 3000 | daily |
 | Coolify | `coolify` | 8132 | 8080 | daily |
 | Excalidraw | `excalidraw` | 8116 | 80 | daily |
-| Firefox | `firefox` | 8145 | 3000 | daily |
-| Ungoogled Chromium | `ungoogled-chromium` | 8147 | 3000 | daily |
-| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | daily |
 | Karakeep | `karakeep` | 8117 | 3000 | daily |
 | HomeBox | `homebox` | 8136 | 7745 | daily |
 | SilverBullet | `silverbullet` | 8113 | 3000 | daily |
@@ -115,6 +114,16 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Ollama | `ollama` | 8110 | 11434 | automation-ai |
 | Open WebUI | `open-webui` | 8109 | 8080 | automation-ai |
 | n8n | `n8n` | 8120 | 5678 | automation-ai |
+| Brave | `brave` | 8148 | 3000 | browser |
+| Chromium | `chromium` | 8146 | 3000 | browser |
+| Firefox | `firefox` | 8145 | 3000 | browser |
+| Mullvad Browser | `mullvad-browser` | 8149 | 3000 | browser |
+| LibreWolf | `librewolf` | 8156 | 3000 | browser |
+| Zen | `zen` | 8157 | 3000 | browser |
+| Helium | `helium` | 8158 | 3000 | browser |
+| Chrome | `chrome` | 8159 | 3000 | browser |
+| Edge | `edge` | 8160 | 3000 | browser |
+| Vivaldi | `vivaldi` | 8161 | 3000 | browser |
 | CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
 | Dozzle | `dozzle` | 9999 | 8080 | extra |
@@ -207,7 +216,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `silverbullet.yourdomain.com` | `silverbullet` | `3000` | daily |
 | `excalidraw.yourdomain.com` | `excalidraw` | `80` | daily |
 | `karakeep.yourdomain.com` | `karakeep` | `3000` | daily |
-| `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 5 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | daily |
+| `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 10 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | browser |
 | `n8n.yourdomain.com` | `n8n` | `5678` | automation-ai |
 | `airflow.yourdomain.com` | `airflow-apiserver` | `8080` | automation-ai |
 | `temporal.yourdomain.com` | `temporal-ui` | `8080` | automation-ai |

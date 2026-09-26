@@ -1,11 +1,12 @@
 services:
-  chromium:
+  librewolf:
     # Deliberate exception to this repo's pinned-version convention, same
     # rationale as services/firefox/compose.yml: internet-reachable, stateless
     # (profile lives in the /config volume), benefits from always-current
-    # security patches. `uv run homeserver.py dev update chromium` stays current.
-    image: lscr.io/linuxserver/chromium:latest
-    container_name: chromium
+    # security patches. `uv run homeserver.py dev update librewolf`
+    # stays current.
+    image: lscr.io/linuxserver/librewolf:latest
+    container_name: librewolf
     restart: unless-stopped
     env_file: .env
     environment:
@@ -20,24 +21,20 @@ services:
       # ever compromised — disables sudo, terminal emulators, and xdg/exo-open.
       HARDEN_DESKTOP: "true"
       # Compensates for HARDEN_DESKTOP above: with no terminal/xdg-open to
-      # relaunch it, accidentally closing Chromium itself (not just your own
-      # viewing tab) would otherwise strand the session with no way to get
-      # the browser back short of restarting the whole container. This
+      # relaunch it, accidentally closing LibreWolf itself (not just
+      # your own viewing tab) would otherwise strand the session with no way
+      # to get it back short of restarting the whole container. This
       # watchdog auto-relaunches the main app whenever it exits.
       RESTART_APP: "true"
-      # Served at https://browser.${DOMAIN}/chromium/ via the shared browser
-      # hub (services/nginx-plain), not its own subdomain — see
+      # Served at https://browser.${DOMAIN}/librewolf/ via the shared
+      # browser hub (services/nginx-plain), not its own subdomain — see
       # docs/services/browser-hub.md. Needs both slashes per upstream's docs.
-      SUBFOLDER: /chromium/
+      SUBFOLDER: /librewolf/
     volumes:
       - ${DATA_ROOT}/config:/config
     shm_size: "1gb"
-    # Chromium's own sandbox needs syscalls modern Docker restricts by
-    # default — this is in upstream's own base compose example, not just a
-    # troubleshooting fallback. HARDEN_DESKTOP above offsets some of the
-    # extra surface this opens up.
-    security_opt:
-      - seccomp:unconfined
+    # Firefox-based (like services/firefox), not Chromium — no seccomp
+    # relaxation needed, unlike chromium/brave.
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/ || exit 1"]
       interval: 30s
@@ -47,11 +44,11 @@ services:
     networks:
       homeserver:
         # Static IP, not dynamically assigned — the LAN-isolation firewall
-        # rule in docs/services/browser-hub.md targets these 5 fixed
+        # rule in docs/services/browser-hub.md targets these fixed
         # addresses specifically, and a rule pinned to a dynamic IP would
         # silently stop matching (or start matching some other container)
         # after any recreation.
-        ipv4_address: 172.18.255.241
+        ipv4_address: 172.18.255.245
 
 networks:
   homeserver:

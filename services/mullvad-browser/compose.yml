@@ -5,7 +5,7 @@ services:
     # (profile lives in the /config volume), benefits from always-current
     # security patches. `uv run homeserver.py dev update mullvad-browser`
     # stays current.
-    image: lscr.io/linuxserver/mullvad-browser:15.0.21-ls199
+    image: lscr.io/linuxserver/mullvad-browser:latest
     container_name: mullvad-browser
     restart: unless-stopped
     env_file: .env
@@ -34,7 +34,7 @@ services:
       - ${DATA_ROOT}/config:/config
     shm_size: "1gb"
     # Firefox-based (like services/firefox), not Chromium — no seccomp
-    # relaxation needed, unlike chromium/ungoogled-chromium/brave.
+    # relaxation needed, unlike chromium/brave.
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/ || exit 1"]
       interval: 30s

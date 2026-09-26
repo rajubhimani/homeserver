@@ -349,7 +349,7 @@ server {
     }
 }
 
-# ── Browser Hub (Firefox/Chromium/Ungoogled Chromium/Brave/Mullvad Browser) ───
+# ── Browser Hub (10 remote browsers — full list in docs/services/browser-hub.md) ───
 # Authentik forward-auth gates every remote browser below — see
 # docs/services/browser-hub.md for the design. Individual browsers are
 # deliberately NOT given their own server_name/subdomain — there is no route to
@@ -392,12 +392,6 @@ server {
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
     }
-    location = /_status/ungoogled-chromium {
-        set $upstream http://ungoogled-chromium:3000;
-        proxy_pass $upstream/;
-        proxy_connect_timeout 2s;
-        proxy_read_timeout 3s;
-    }
     location = /_status/brave {
         set $upstream http://brave:3000;
         proxy_pass $upstream/;
@@ -406,6 +400,42 @@ server {
     }
     location = /_status/mullvad-browser {
         set $upstream http://mullvad-browser:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/librewolf {
+        set $upstream http://librewolf:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/zen {
+        set $upstream http://zen:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/helium {
+        set $upstream http://helium:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/chrome {
+        set $upstream http://chrome:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/edge {
+        set $upstream http://edge:3000;
+        proxy_pass $upstream/;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+    location = /_status/vivaldi {
+        set $upstream http://vivaldi:3000;
         proxy_pass $upstream/;
         proxy_connect_timeout 2s;
         proxy_read_timeout 3s;
@@ -440,19 +470,6 @@ server {
         proxy_read_timeout 3600s;
     }
 
-    location /ungoogled-chromium/ {
-        set $upstream http://ungoogled-chromium:3000;
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $real_client_ip;
-        proxy_set_header X-Forwarded-For $real_client_ip;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_read_timeout 3600s;
-    }
-
     location /brave/ {
         set $upstream http://brave:3000;
         proxy_pass $upstream;
@@ -468,6 +485,84 @@ server {
 
     location /mullvad-browser/ {
         set $upstream http://mullvad-browser:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /librewolf/ {
+        set $upstream http://librewolf:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /zen/ {
+        set $upstream http://zen:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /helium/ {
+        set $upstream http://helium:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /chrome/ {
+        set $upstream http://chrome:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /edge/ {
+        set $upstream http://edge:3000;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+
+    location /vivaldi/ {
+        set $upstream http://vivaldi:3000;
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $real_client_ip;

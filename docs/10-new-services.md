@@ -50,9 +50,14 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Browser Hub | [docs/services/browser-hub.md](services/browser-hub.md) |
 | Firefox | [docs/services/firefox.md](services/firefox.md) |
 | Chromium | [docs/services/chromium.md](services/chromium.md) |
-| Ungoogled Chromium | [docs/services/ungoogled-chromium.md](services/ungoogled-chromium.md) |
 | Brave | [docs/services/brave.md](services/brave.md) |
 | Mullvad Browser | [docs/services/mullvad-browser.md](services/mullvad-browser.md) |
+| LibreWolf | [docs/services/librewolf.md](services/librewolf.md) |
+| Zen | [docs/services/zen.md](services/zen.md) |
+| Helium | [docs/services/helium.md](services/helium.md) |
+| Chrome | [docs/services/chrome.md](services/chrome.md) |
+| Edge | [docs/services/edge.md](services/edge.md) |
+| Vivaldi | [docs/services/vivaldi.md](services/vivaldi.md) |
 | Open WebUI | [docs/services/open-webui.md](services/open-webui.md) |
 | Ollama | [docs/services/ollama.md](services/ollama.md) |
 | Vikunja | [docs/services/vikunja.md](services/vikunja.md) |

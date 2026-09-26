@@ -2,9 +2,9 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
 
-  Any command targeting a tier keyword (min/core/daily/all/running),
+  Any command targeting a tier keyword (min/core/daily/browser/office/automation-ai/all/running),
   'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
   resolved service list and asks for confirmation before acting — pass
   --yes/-y to skip the prompt (e.g. non-interactive/cron use). Naming
@@ -46,13 +46,19 @@ Service tiers:
            'up core'. 'up daily' bootstraps any of min/core NOT already
            running, then starts daily; 'down daily' stops ONLY daily, min/core
            are left running. You flip this tier on/off yourself as needed.
+  browser — the Browser Hub's remote browsers (firefox, chromium, brave,
+           mullvad-browser, librewolf, zen, helium, chrome, edge, vivaldi);
+           opt-in, same idiom as daily but bootstraps min/core/daily first.
+           'browser' is the tier keyword — it takes precedence over the
+           same-named bundle; use 'group:browser' to act on just the
+           browsers without the lower-tier cascade (e.g. restart/update).
   office — firm/business apps (calcom, listmonk, plane, vikunja, appflowy,
            stirling-pdf-lite, stirling-pdf); opt-in, same idiom as daily but
-           bootstraps min/core/daily first.
+           bootstraps min/core/daily/browser first.
   automation-ai — workflow/automation/AI apps (ollama, open-webui, n8n,
            airflow, temporal, dagster); opt-in, bootstraps
-           min/core/daily/office first.
-  all    — core + daily + office + automation-ai + extra (everything)
+           min/core/daily/browser/office first.
+  all    — core + daily + browser + office + automation-ai + extra (everything)
 
   Every `down` target (a service, group, tier, or all) also stops containers
   from every optional Compose profile declared by the selected service.
@@ -64,6 +70,7 @@ IMPORTANT: When adding a new service —
   - Add to SERVICES_CORE if it should auto-start with 'up core'
   - Add to SERVICES_DAILY if it's used regularly but shouldn't auto-start
     with core — the user turns it on/off explicitly with 'up/down daily'
+  - Add to SERVICES_BROWSER only if it's a Browser Hub member browser
   - Add to SERVICES_OFFICE/SERVICES_AUTOMATION_AI if it fits one of those
     opt-in groupings (firm/business apps, or workflow/automation/AI apps)
     instead of general-purpose daily
@@ -181,11 +188,13 @@ if os.path.exists(DOCKER_SOCKET):
 #   up core          = bootstrap any of MIN not already running, + CORE
 #   up daily         = bootstrap any of MIN/CORE not already running, + DAILY
 #                      (opt-in — never implied by 'up core')
-#   up office        = bootstrap any of MIN/CORE/DAILY not already running,
-#                      + OFFICE (opt-in — never implied by 'up daily')
-#   up automation-ai = bootstrap any of MIN/CORE/DAILY/OFFICE not already
+#   up browser       = bootstrap any of MIN/CORE/DAILY not already running,
+#                      + BROWSER (opt-in — never implied by 'up daily')
+#   up office        = bootstrap any of MIN/CORE/DAILY/BROWSER not already
+#                      running, + OFFICE (opt-in — never implied by 'up browser')
+#   up automation-ai = bootstrap any of MIN/CORE/DAILY/BROWSER/OFFICE not already
 #                      running, + AUTOMATION_AI (opt-in)
-#   up all           = MIN + CORE + DAILY + OFFICE + AUTOMATION_AI + EXTRA,
+#   up all           = MIN + CORE + DAILY + BROWSER + OFFICE + AUTOMATION_AI + EXTRA,
 #                      always (full cascade)
 #
 #   every down target  = selected services, reversed when tier/group/all;
@@ -225,6 +234,7 @@ def is_managed_service(entry: dict) -> bool:
 SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and is_managed_service(s)]
 SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and is_managed_service(s)]
 SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "daily" and is_managed_service(s)]
+SERVICES_BROWSER = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "browser" and is_managed_service(s)]
 SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "office" and is_managed_service(s)]
 SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "automation-ai" and is_managed_service(s)]
 SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and is_managed_service(s)]
@@ -258,7 +268,7 @@ for _s in _SERVICES_DATA["services"]:
 del _s, _key, _val, _cat, _sub
 
 # "bundle" groups multiple independently-deployed service directories under
-# one startable name — a hub-of-containers (Browser Hub's five browser
+# one startable name — a hub-of-containers (Browser Hub's ten browser
 # containers behind one shared login, see docs/services/browser-hub.md) that
 # isn't a category/subcategory grouping. A member declares "bundle": "<hub
 # slug>"; the hub's own (virtual) entry can declare "requires": [...] for
@@ -979,6 +989,7 @@ def is_valid_service(service: str) -> bool:
         SERVICES_MIN
         + SERVICES_CORE
         + SERVICES_DAILY
+        + SERVICES_BROWSER
         + SERVICES_OFFICE
         + SERVICES_AUTOMATION_AI
         + SERVICES_EXTRA
@@ -1078,6 +1089,7 @@ def get_running_services() -> list[str]:
         SERVICES_MIN
         + SERVICES_CORE
         + SERVICES_DAILY
+        + SERVICES_BROWSER
         + SERVICES_OFFICE
         + SERVICES_AUTOMATION_AI
         + SERVICES_EXTRA
@@ -1094,6 +1106,7 @@ def do_status() -> int:
         SERVICES_MIN
         + SERVICES_CORE
         + SERVICES_DAILY
+        + SERVICES_BROWSER
         + SERVICES_OFFICE
         + SERVICES_AUTOMATION_AI
         + SERVICES_EXTRA
@@ -1113,6 +1126,7 @@ def do_status() -> int:
     show_tier("MIN", SERVICES_MIN)
     show_tier("CORE", SERVICES_CORE)
     show_tier("DAILY", SERVICES_DAILY)
+    show_tier("BROWSER", SERVICES_BROWSER)
     show_tier("OFFICE", SERVICES_OFFICE)
     show_tier("AUTOMATION-AI", SERVICES_AUTOMATION_AI)
     show_tier("EXTRA", SERVICES_EXTRA)
@@ -1991,6 +2005,7 @@ def do_orphaned_volumes(target: str, assume_yes: bool) -> int:
             SERVICES_MIN
             + SERVICES_CORE
             + SERVICES_DAILY
+            + SERVICES_BROWSER
             + SERVICES_OFFICE
             + SERVICES_AUTOMATION_AI
             + SERVICES_EXTRA
@@ -2158,11 +2173,13 @@ def show_help() -> None:
     print("            'down core' stops only core, min stays up")
     print("    daily   apps used regularly but not core infra — opt-in, NOT included by 'core';")
     print("            'up daily' bootstraps min/core if needed; 'down daily' stops only daily")
-    print("    office  firm/business apps — opt-in; 'up office' bootstraps min/core/daily if needed;")
+    print("    browser the Browser Hub's remote browsers — opt-in; 'up browser' bootstraps min/core/daily if needed;")
+    print("            'down browser' stops only the browsers")
+    print("    office  firm/business apps — opt-in; 'up office' bootstraps min/core/daily/browser if needed;")
     print("            'down office' stops only office")
     print("    automation-ai workflow/automation/AI apps — opt-in; 'up automation-ai' bootstraps")
-    print("            min/core/daily/office if needed; 'down automation-ai' stops only automation-ai")
-    print("    all     core + daily + office + automation-ai + extra — starts/stops literally everything")
+    print("            min/core/daily/browser/office if needed; 'down automation-ai' stops only automation-ai")
+    print("    all     core + daily + browser + office + automation-ai + extra — starts/stops literally everything")
     print("    running update only — currently running services")
     print()
     print(f"  {BOLD}Groups:{RESET}")
@@ -2173,9 +2190,10 @@ def show_help() -> None:
     print("    python homeserver.py dev up min                      start bare minimum")
     print("    python homeserver.py dev up core                     start full default stack")
     print("    python homeserver.py dev up daily                    start core + the daily-use opt-in tier")
-    print("    python homeserver.py dev up office                   start core + daily + the firm/business opt-in tier")
-    print("    python homeserver.py dev up automation-ai            start core + daily + office + the automation/AI opt-in tier")
-    print("    python homeserver.py dev up all                      start everything (core + daily + office + automation-ai + extra)")
+    print("    python homeserver.py dev up browser                  start core + daily + the Browser Hub's browsers")
+    print("    python homeserver.py dev up office                   start core + daily + browser + the firm/business opt-in tier")
+    print("    python homeserver.py dev up automation-ai            start core + daily + browser + office + the automation/AI opt-in tier")
+    print("    python homeserver.py dev up all                      start everything (core + daily + browser + office + automation-ai + extra)")
     print("    python homeserver.py dev down min                    stop minimum (reverse order)")
     print("    python homeserver.py dev down core                   stop core only, reverse order (min stays up)")
     print("    python homeserver.py dev down daily                  stop daily only, reverse order (min/core stay up)")
@@ -2226,7 +2244,10 @@ def show_help() -> None:
     print(f"  {BOLD}DAILY (regular-use apps, opt-in — 'up daily' or 'up all', NOT 'up core'):{RESET}")
     print(f"    {' '.join(SERVICES_DAILY)}")
     print()
-    print(f"  {BOLD}OFFICE (firm/business apps, opt-in — 'up office' or 'up all', NOT 'up daily'):{RESET}")
+    print(f"  {BOLD}BROWSER (Browser Hub's remote browsers, opt-in — 'up browser' or 'up all', NOT 'up daily'):{RESET}")
+    print(f"    {' '.join(SERVICES_BROWSER)}")
+    print()
+    print(f"  {BOLD}OFFICE (firm/business apps, opt-in — 'up office' or 'up all', NOT 'up browser'):{RESET}")
     print(f"    {' '.join(SERVICES_OFFICE)}")
     print()
     print(f"  {BOLD}AUTOMATION-AI (workflow/automation/AI apps, opt-in — 'up automation-ai' or 'up all', NOT 'up office'):{RESET}")
@@ -2377,7 +2398,7 @@ def main() -> int:
     used_group_or_bundle = False
     snapshot: str | None = None
     image_flag: str | None = None
-    run_all = run_core = run_daily = run_office = run_automation_ai = run_min = run_running = False
+    run_all = run_core = run_daily = run_browser = run_office = run_automation_ai = run_min = run_running = False
 
     i = 0
     while i < len(rest):
@@ -2416,6 +2437,11 @@ def main() -> int:
             run_core = True
         elif tok == "daily":
             run_daily = True
+        elif tok == "browser":
+            # Tier keyword — checked before the bare-bundle branch below, so
+            # 'browser' means the whole browser tier (same members as the
+            # Browser Hub bundle) with normal tier semantics.
+            run_browser = True
         elif tok == "office":
             run_office = True
         elif tok == "automation-ai":
@@ -2460,13 +2486,13 @@ def main() -> int:
     # first-seen order so nothing runs twice.
     services_to_run = list(dict.fromkeys(services_to_run))
 
-    if not (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running) and not services_to_run:
+    if not (run_all or run_core or run_daily or run_browser or run_office or run_automation_ai or run_min or run_running) and not services_to_run:
         error("No services specified")
         show_help()
         return 1
 
     if no_ml:
-        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running:
+        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_daily or run_browser or run_office or run_automation_ai or run_min or run_running:
             error("--no-ml is only valid with 'up immich' on its own (excludes immich-ml)")
             return 1
 
@@ -2478,7 +2504,7 @@ def main() -> int:
         error("--update is only valid with the precreate action")
         return 1
 
-    if action == "migrate" and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running):
+    if action == "migrate" and (run_all or run_core or run_daily or run_browser or run_office or run_automation_ai or run_min or run_running):
         error("migrate only works against explicitly named services, e.g. 'dev migrate forgejo' — no tier-wide migration")
         return 1
 
@@ -2493,8 +2519,8 @@ def main() -> int:
         ensure_network()
         exclude = ["immich-machine-learning"] if no_ml else None
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
-            header(f"Starting all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Starting all services (min + core + daily + browser + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "All services", fresh=fresh)
@@ -2520,24 +2546,35 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "Daily services", fresh=fresh)
-        elif run_office:
+        elif run_browser:
             running = set(get_running_services())
             missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY if s not in running]
             if missing:
-                header(f"Starting office services in {env} mode (bootstrapping missing min/core/daily: {', '.join(missing)})...")
+                header(f"Starting browser services in {env} mode (bootstrapping missing min/core/daily: {', '.join(missing)})...")
             else:
-                header(f"Starting office services in {env} mode (min/core/daily already running, left untouched)...")
+                header(f"Starting browser services in {env} mode (min/core/daily already running, left untouched)...")
+            services = missing + SERVICES_BROWSER + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Browser services", fresh=fresh)
+        elif run_office:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER if s not in running]
+            if missing:
+                header(f"Starting office services in {env} mode (bootstrapping missing min/core/daily/browser: {', '.join(missing)})...")
+            else:
+                header(f"Starting office services in {env} mode (min/core/daily/browser already running, left untouched)...")
             services = missing + SERVICES_OFFICE + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "Office services", fresh=fresh)
         elif run_automation_ai:
             running = set(get_running_services())
-            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE if s not in running]
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE if s not in running]
             if missing:
-                header(f"Starting automation-ai services in {env} mode (bootstrapping missing min/core/daily/office: {', '.join(missing)})...")
+                header(f"Starting automation-ai services in {env} mode (bootstrapping missing min/core/daily/browser/office: {', '.join(missing)})...")
             else:
-                header(f"Starting automation-ai services in {env} mode (min/core/daily/office already running, left untouched)...")
+                header(f"Starting automation-ai services in {env} mode (min/core/daily/browser/office already running, left untouched)...")
             services = missing + SERVICES_AUTOMATION_AI + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2557,8 +2594,8 @@ def main() -> int:
     elif action == "precreate":
         ensure_network()
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
-            header(f"Pre-creating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Pre-creating all services (min + core + daily + browser + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_precreate, services, env, profile, "All services", update=update_flag)
@@ -2574,15 +2611,21 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_precreate, services, env, profile, "Daily services", update=update_flag)
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header(f"Pre-creating browser services (min + core + daily + browser) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Browser services", update=update_flag)
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
-            header(f"Pre-creating office services (min + core + daily + office) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
+            header(f"Pre-creating office services (min + core + daily + browser + office) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_precreate, services, env, profile, "Office services", update=update_flag)
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
-            header(f"Pre-creating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Pre-creating automation-ai services (min + core + daily + browser + office + automation-ai) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_precreate, services, env, profile, "Automation-AI services", update=update_flag)
@@ -2601,18 +2644,21 @@ def main() -> int:
     elif action in ("down", "-d"):
         if run_all:
             header("Stopping all services and profile containers (reverse order)...")
-            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
+            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
         elif run_core:
             header("Stopping core services (reverse order) — min stays running...")
             lst = list(reversed(SERVICES_CORE + services_to_run))
         elif run_daily:
             header("Stopping daily services (reverse order) — min/core stay running...")
             lst = list(reversed(SERVICES_DAILY + services_to_run))
+        elif run_browser:
+            header("Stopping browser services (reverse order) — min/core/daily stay running...")
+            lst = list(reversed(SERVICES_BROWSER + services_to_run))
         elif run_office:
-            header("Stopping office services (reverse order) — min/core/daily stay running...")
+            header("Stopping office services (reverse order) — min/core/daily/browser stay running...")
             lst = list(reversed(SERVICES_OFFICE + services_to_run))
         elif run_automation_ai:
-            header("Stopping automation-ai services (reverse order) — min/core/daily/office stay running...")
+            header("Stopping automation-ai services (reverse order) — min/core/daily/browser/office stay running...")
             lst = list(reversed(SERVICES_AUTOMATION_AI + services_to_run))
         elif run_min:
             header("Stopping min services (reverse order)...")
@@ -2620,7 +2666,7 @@ def main() -> int:
         else:
             header("Stopping services...")
             lst = services_to_run
-        if (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or used_group_or_bundle) and not confirm_expansion(lst, assume_yes):
+        if (run_all or run_core or run_daily or run_browser or run_office or run_automation_ai or run_min or used_group_or_bundle) and not confirm_expansion(lst, assume_yes):
             return 1
         # A Compose profile is opt-in by default, so a plain `compose down`
         # misses profile-only containers that were previously started (for
@@ -2636,7 +2682,7 @@ def main() -> int:
     elif action in ("restart", "-r"):
         ensure_network()
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header(f"Restarting all services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2653,14 +2699,20 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restart, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header(f"Restarting browser services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header(f"Restarting office services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restart, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header(f"Restarting automation-ai services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2685,8 +2737,8 @@ def main() -> int:
     elif action == "update":
         ensure_network()
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
-            header(f"Updating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Updating all services (min + core + daily + browser + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "All services")
@@ -2702,15 +2754,21 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header(f"Updating browser services (min + core + daily + browser) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
-            header(f"Updating office services (min + core + daily + office) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
+            header(f"Updating office services (min + core + daily + browser + office) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
-            header(f"Updating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Updating automation-ai services (min + core + daily + browser + office + automation-ai) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Automation-AI services")
@@ -2739,7 +2797,7 @@ def main() -> int:
 
     elif action == "backup":
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Backing up all services (named volumes + service_data) to service_data/backup/...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2756,14 +2814,20 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header("Backing up browser services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header("Backing up office services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header("Backing up automation-ai services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2782,11 +2846,11 @@ def main() -> int:
 
     elif action == "restore":
         ensure_network()
-        if snapshot and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min):
+        if snapshot and (run_all or run_core or run_daily or run_browser or run_office or run_automation_ai or run_min):
             error("--snapshot only works when restoring a single named service")
             return 1
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Restoring all services from service_data/backup/...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2803,14 +2867,20 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restore, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header("Restoring browser services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header("Restoring office services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restore, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header("Restoring automation-ai services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2836,7 +2906,7 @@ def main() -> int:
 
     elif action == "dump":
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Dumping all running services' databases to service_data/db_dump/...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2853,14 +2923,20 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_dump, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header("Dumping browser services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header("Dumping office services' databases...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_dump, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header("Dumping automation-ai services' databases...")
             if not confirm_expansion(services, assume_yes):
                 return 1

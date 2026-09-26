@@ -1,0 +1,4 @@
+services:
+  librewolf:
+    ports:
+      - "0.0.0.0:8156:3000"

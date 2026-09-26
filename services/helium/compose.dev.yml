@@ -1,0 +1,4 @@
+services:
+  helium:
+    ports:
+      - "0.0.0.0:8158:3000"

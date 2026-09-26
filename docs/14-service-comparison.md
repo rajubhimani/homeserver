@@ -152,7 +152,7 @@ Single-purpose services with nothing else in this stack doing the same job. List
 | Ollama | — (AI backend, pairs with Open WebUI) | ● up | daily | ~18MB idle, one small model pulled (`qwen2.5:0.5b`, live) |
 | Excalidraw | draw.io / Miro | ● up | extra | ~10MB (live) |
 | ntfy | Pushover / Pushbullet | ○ down | extra | not measured |
-| Firefox / Chromium / Ungoogled Chromium / Brave / Mullvad Browser | — (isolated remote browsers via Browser Hub) | ● up | extra | 207-442MB each (live, this session) — still well under docs' "~1GB each" estimate, though noticeably higher than a prior session's 91-252MB range; real session-to-session variance, worth eventually settling the individual browser docs to a real range instead of the old ~1GB placeholder |
+| Firefox / Chromium / Brave / Mullvad Browser / LibreWolf / Zen / Helium / Chrome / Edge / Vivaldi | — (isolated remote browsers via Browser Hub) | ● up | extra | 207-442MB each (live, this session) — still well under docs' "~1GB each" estimate, though noticeably higher than a prior session's 91-252MB range; real session-to-session variance, worth eventually settling the individual browser docs to a real range instead of the old ~1GB placeholder |
 | Crowdsec | Fail2ban / Cloudflare WAF | ● up | extra | ~80MB (live) |
 | AdGuard Home | Pi-hole | ● up | extra | ~57MB (live) |
 | OrangeHRM | BambooHR / Workday | ○ down | extra | not measured |

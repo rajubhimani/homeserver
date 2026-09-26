@@ -264,7 +264,7 @@
     },
     {
       "slug": "brave",
-      "tier": "daily",
+      "tier": "browser",
       "bundle": "browser",
       "name": "Brave",
       "category": "system",
@@ -273,11 +273,11 @@
       "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A83535\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A83535\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A83535\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
       "sub": "browser",
       "path": "brave/",
-      "desc": "Privacy-focused, ad-blocking-by-default remote browser. Part of the Browser Hub, one login for all five browsers here."
+      "desc": "Privacy-focused, ad-blocking-by-default remote browser. Part of the Browser Hub, one login for all ten browsers here."
     },
     {
       "slug": "chromium",
-      "tier": "daily",
+      "tier": "browser",
       "bundle": "browser",
       "name": "Chromium",
       "category": "system",
@@ -286,7 +286,7 @@
       "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#1565C0\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#1565C0\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#1565C0\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
       "sub": "browser",
       "path": "chromium/",
-      "desc": "Remote Chromium - for sites/tools that specifically need Chrome/Chromium. Part of the Browser Hub, one login for all five browsers here."
+      "desc": "Remote Chromium - for sites/tools that specifically need Chrome/Chromium. Part of the Browser Hub, one login for all ten browsers here."
     },
     {
       "slug": "coolify",
@@ -312,7 +312,7 @@
     },
     {
       "slug": "firefox",
-      "tier": "daily",
+      "tier": "browser",
       "bundle": "browser",
       "name": "Firefox",
       "category": "system",
@@ -321,24 +321,11 @@
       "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A85C04\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A85C04\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A85C04\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
       "sub": "browser",
       "path": "firefox/",
-      "desc": "General-purpose remote Firefox - part of the Browser Hub, one login for all five browsers here."
-    },
-    {
-      "slug": "ungoogled-chromium",
-      "tier": "daily",
-      "bundle": "browser",
-      "name": "Ungoogled Chromium",
-      "category": "system",
-      "subcategory": "browsers",
-      "icon": "green",
-      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#2E7D32\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#2E7D32\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#2E7D32\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
-      "sub": "browser",
-      "path": "ungoogled-chromium/",
-      "desc": "Chromium with Google's tracking and telemetry stripped out. Part of the Browser Hub, one login for all five browsers here."
+      "desc": "General-purpose remote Firefox - part of the Browser Hub, one login for all ten browsers here."
     },
     {
       "slug": "mullvad-browser",
-      "tier": "daily",
+      "tier": "browser",
       "bundle": "browser",
       "name": "Mullvad Browser",
       "category": "system",
@@ -347,11 +334,89 @@
       "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#0F6E56\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#0F6E56\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#0F6E56\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
       "sub": "browser",
       "path": "mullvad-browser/",
-      "desc": "Hardened, anti-fingerprinting Firefox fork built with the Tor Project - does not itself route traffic through the Tor network. Part of the Browser Hub, one login for all five browsers here."
+      "desc": "Hardened, anti-fingerprinting Firefox fork built with the Tor Project - does not itself route traffic through the Tor network. Part of the Browser Hub, one login for all ten browsers here."
+    },
+    {
+      "slug": "librewolf",
+      "tier": "browser",
+      "bundle": "browser",
+      "name": "LibreWolf",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "purple",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#6B35B5\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#6B35B5\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#6B35B5\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "librewolf/",
+      "desc": "Privacy-hardened Firefox fork with telemetry removed and uBlock Origin built in. Part of the Browser Hub, one login for all ten browsers here."
+    },
+    {
+      "slug": "zen",
+      "tier": "browser",
+      "bundle": "browser",
+      "name": "Zen",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "pink",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#A5356B\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#A5356B\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#A5356B\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#A5356B\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "zen/",
+      "desc": "Firefox-based browser with vertical tabs, split view and a clean, modern layout. Part of the Browser Hub, one login for all ten browsers here."
+    },
+    {
+      "slug": "helium",
+      "tier": "browser",
+      "bundle": "browser",
+      "name": "Helium",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "yellow",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#8A6D00\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#8A6D00\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#8A6D00\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#8A6D00\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "helium/",
+      "desc": "Privacy-first Chromium-based browser with ad-blocking built in and Google services stripped out. Part of the Browser Hub, one login for all ten browsers here."
+    },
+    {
+      "slug": "chrome",
+      "tier": "browser",
+      "bundle": "browser",
+      "name": "Chrome",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "blue",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#185FA5\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#185FA5\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#185FA5\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "chrome/",
+      "desc": "The official Google Chrome, for sites that only work properly in Chrome. Sends usage data to Google - use it for compatibility, not everyday privacy. Part of the Browser Hub, one login for all ten browsers here."
+    },
+    {
+      "slug": "edge",
+      "tier": "browser",
+      "bundle": "browser",
+      "name": "Edge",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "teal",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#00695C\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#00695C\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#00695C\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#00695C\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "edge/",
+      "desc": "The official Microsoft Edge, for Microsoft 365 and sites that insist on Edge. Sends usage data to Microsoft - use it for compatibility, not everyday privacy. Part of the Browser Hub, one login for all ten browsers here."
+    },
+    {
+      "slug": "vivaldi",
+      "tier": "browser",
+      "bundle": "browser",
+      "name": "Vivaldi",
+      "category": "system",
+      "subcategory": "browsers",
+      "icon": "red",
+      "svg": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1.5\" stroke=\"#8A1F1F\" stroke-width=\"1.4\"/> <path d=\"M2 6.5 h14\" stroke=\"#8A1F1F\" stroke-width=\"1.4\"/> <circle cx=\"9\" cy=\"10.5\" r=\"3\" stroke=\"#8A1F1F\" stroke-width=\"1.2\"/> <path d=\"M6 10.5 h6 M9 7.5 v6\" stroke=\"#8A1F1F\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+      "sub": "browser",
+      "path": "vivaldi/",
+      "desc": "Power-user Chromium browser with tab stacking, built-in mail and calendar, and heavy customisation. Part of the Browser Hub, one login for all ten browsers here."
     },
     {
       "slug": "browser",
-      "tier": "daily",
+      "tier": "browser",
       "virtual": true,
       "requires": [
         "nginx-plain"
@@ -361,7 +426,7 @@
       "subcategory": "browsers",
       "icon": "gray",
       "svg": "<rect x=\"2\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\" stroke=\"#555555\" stroke-width=\"1.3\"/> <rect x=\"10\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\" stroke=\"#555555\" stroke-width=\"1.3\"/> <rect x=\"2\" y=\"10\" width=\"6\" height=\"6\" rx=\"1\" stroke=\"#555555\" stroke-width=\"1.3\"/> <rect x=\"10\" y=\"10\" width=\"6\" height=\"6\" rx=\"1\" stroke=\"#555555\" stroke-width=\"1.3\"/>",
-      "desc": "One login, then pick from five real browsers (Firefox, Chromium, Ungoogled Chromium, Brave, Mullvad Browser) running on the server and controlled from any device - the page loads and the traffic goes out from your server, so it reaches sites your local connection can't. Each browser only exists at its own /path/ here, not its own web address."
+      "desc": "One login, then pick from ten real browsers (Firefox, Chromium, Brave, Mullvad Browser, LibreWolf, Zen, Helium, Chrome, Edge, Vivaldi) running on the server and controlled from any device - the page loads and the traffic goes out from your server, so it reaches sites your local connection can't. Each browser only exists at its own /path/ here, not its own web address."
     },
     {
       "slug": "karakeep",

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Blocks the 5 remote-browser containers (Firefox/Chromium/Ungoogled
-# Chromium/Brave/Mullvad Browser — services/{firefox,chromium,...}/compose.yml)
+# Blocks the 10 remote-browser containers (Firefox/Chromium/Brave/Mullvad
+# Browser/LibreWolf/Zen/Helium/Chrome/Edge/Vivaldi —
+# services/{firefox,chromium,...}/compose.yml)
 # from reaching this host's LAN, while leaving their internet access
-# untouched. Scoped to just these 5 static IPs deliberately — never applied
+# untouched. Scoped to just these 10 static IPs deliberately — never applied
 # stack-wide, since e.g. Guacamole's whole job is reaching LAN devices.
 #
 # Usage:
@@ -56,9 +57,14 @@ FIREWALLD_ZONE="docker"
 BROWSER_IPS=(
     172.18.255.240 # firefox
     172.18.255.241 # chromium
-    172.18.255.242 # ungoogled-chromium
     172.18.255.243 # brave
     172.18.255.244 # mullvad-browser
+    172.18.255.245 # librewolf
+    172.18.255.246 # zen
+    172.18.255.247 # helium
+    172.18.255.248 # chrome
+    172.18.255.249 # edge
+    172.18.255.250 # vivaldi
 )
 
 apply() {
