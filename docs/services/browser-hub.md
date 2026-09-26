@@ -117,7 +117,7 @@ Two independent mechanisms are needed (confirmed live, both required — neither
 
 IPv6 is deliberately not covered — confirmed live, the browser containers have no IPv6 connectivity at all (the `homeserver` Docker network is IPv4-only), so there's nothing for an IPv6 rule to restrict.
 
-**Install** (already applied on this host as of 2026-08-21):
+**Install** — one-time, per host. Installed on the current host 2026-09-26 (10 rules, one per browser). An earlier note said it was applied 2026-08-21, but on 2026-09-26 neither `/usr/local/bin/browser-lan-block.sh` nor the unit existed here, so the browsers had no LAN isolation until then. It doesn't travel with a repo clone or a machine migration, so verify it after setting up any new host: `systemctl is-active browser-lan-block.service` and `sudo iptables -S DOCKER-USER | grep -c 172.18.255` (expect one DROP rule per browser).
 
 ```bash
 sudo cp services/nginx-plain/browser-lan-block.sh /usr/local/bin/browser-lan-block.sh
