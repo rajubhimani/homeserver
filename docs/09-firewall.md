@@ -101,6 +101,33 @@ Most people assume `docker run -p 8080:8080` or a compose `ports: ["8080:8080"]`
 
 This stack's answer is the dev/prod compose split described in the root `CLAUDE.md` ("Compose file pattern"): `compose.dev.yml` binds `0.0.0.0` for LAN convenience, `compose.prod.yml` binds `127.0.0.1` only. **Once a host has a real public IPv6 address, running in `dev` mode day-to-day is no longer just a LAN convenience — it's a public exposure**, and `prod` mode should be the default, with `dev` mode used only for short, deliberate local-testing sessions.
 
+## Docker vs. VMs and the VPN
+
+**Symptom (hit 2026-09-26):** a libvirt VM (`win11`, NAT network `default` on `virbr0`) gets a DHCP address and the host can see it, but it has **no internet**. Nothing in libvirt's or the VPN's config changed — it started right after Docker restarted.
+
+**Cause:** Docker sets the host's `iptables` `FORWARD` chain policy to **DROP** (the `ip filter` table, `policy drop; ... DOCKER-USER, DOCKER-FORWARD`) and only whitelists its own bridges (`docker0`, `br-*`) in `DOCKER-FORWARD`. libvirt's own nftables table accepts the VM's traffic, but a forwarded packet has to be accepted by *every* forward hook on the host, so Docker's DROP wins — confirmed live, ~11k packets counted against the policy. The same chain also drops wg-easy **full-tunnel** traffic from `wg0` (wg-easy's own `FORWARD -i wg0 -j ACCEPT` rules land in the *legacy* iptables tables, not Docker's nft one, so they don't help). Docker re-asserts the DROP policy on every start, so a one-off manual fix is lost on the next Docker restart or reboot.
+
+**Fix (permanent, installed by `sudo bash docker/host-boot-safety.sh`, item 4):** `homeserver-docker-forward.service` runs after every Docker start (`PartOf=`/`WantedBy=docker.service`) and appends to `DOCKER-USER` — the one chain Docker never rewrites — for each of `virbr0` and `wg0` (`FORWARD_ALLOW_IFACES` in the script):
+
+```
+-i <if> -o docker0 -j RETURN     # to containers: hand back to Docker's own rules
+-i <if> -o br-+    -j RETURN
+-i <if> -j ACCEPT                # internet / LAN: allow
+-o <if> -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+```
+
+The two `RETURN` rules are deliberate: a blanket `-i virbr0 -j ACCEPT` would also let VMs and VPN clients reach **every container directly by its bridge IP**, unpublished ports (databases, internal APIs) included. Returning that traffic to Docker keeps Docker's normal isolation for it — only published ports are reachable, exactly as before. `browser-lan-block.sh`'s `DROP` rules are inserted at the top of the same chain (`-I`), so they still take precedence over these appended (`-A`) ones.
+
+Check / undo:
+
+```bash
+sudo iptables -S DOCKER-USER                       # rules present?
+systemctl status homeserver-docker-forward         # applied since last Docker start?
+sudo /usr/local/bin/homeserver-docker-forward undo # remove the rules (until next Docker start)
+```
+
+Adding another non-Docker interface that needs to route through this host (a second libvirt network, another VPN): add it to `FORWARD_ALLOW_IFACES` in `docker/host-boot-safety.sh` and re-run the script.
+
 ## Guacamole-style gateways: firewall by network path, not just by port
 
 If you use [Guacamole](services/guacamole.md) (or any similar browser-based remote-desktop gateway) to reach a VNC/RDP/SSH service running on the *same host* the gateway itself runs on, that target service still needs to be listening — but it does **not** need to be reachable from the WAN interface. Guacamole's `guacd` container reaches the host over the internal Docker bridge network, not through the host's real network interface at all. That means you can (and should) firewall the WAN-facing interface to reject that port entirely, while the Guacamole path keeps working untouched — the two are on genuinely different network paths, not just different "logical" access methods. Don't reason about this as "the port needs to be open because Guacamole needs it" — it needs to be open on the Docker bridge, not on the interface facing the internet.

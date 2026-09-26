@@ -22,6 +22,16 @@
 #    drive is unmounted or read-only (NTFS falls back to read-only after a
 #    Windows Fast Startup/hibernate; Immich then fails every upload silently).
 #    Installed outside the repo so it still runs if /mnt/mydata is missing.
+# 4. homeserver-docker-forward.service -- Docker sets the host's iptables
+#    FORWARD policy to DROP and only whitelists its own bridges, which
+#    silently kills forwarding for everything else on the host: libvirt VMs
+#    on virbr0 (VM gets a DHCP lease but no internet) and wg-easy
+#    full-tunnel clients on wg0. This re-allows those interfaces in
+#    DOCKER-USER (the one chain Docker never rewrites) every time Docker
+#    starts -- but traffic from them *to* Docker's bridges is RETURNed to
+#    Docker's own rules first, so VMs/VPN clients still can't reach
+#    unpublished container ports directly. See docs/09-firewall.md
+#    "Docker vs. VMs and the VPN".
 set -euo pipefail
 
 REQUIRED_MOUNTS="/mnt/mydata"
@@ -34,12 +44,19 @@ SYSCTL=/etc/sysctl.d/90-homeserver-nonlocal-bind.conf
 WATCH_BIN=/usr/local/bin/homeserver-mount-watch
 WATCH_ENV=/etc/homeserver-mount-watch.env
 WATCH_UNIT=/etc/systemd/system/homeserver-mount-watch
+FWD_BIN=/usr/local/bin/homeserver-docker-forward
+FWD_UNIT=/etc/systemd/system/homeserver-docker-forward.service
+# Non-Docker interfaces that must keep forwarding through Docker's DROP policy.
+# Missing interfaces are fine (rules match by name, no error) -- e.g. no VMs yet.
+FORWARD_ALLOW_IFACES="virbr0 wg0"
 
 [ "$(id -u)" -eq 0 ] || { echo "Run as root: sudo $0 $*" >&2; exit 1; }
 
 if [ "${1:-}" = "--remove" ]; then
   systemctl disable --now homeserver-mount-watch.timer 2>/dev/null || true
-  rm -f "$DROPIN" "$SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer"
+  if [ -x "$FWD_BIN" ]; then "$FWD_BIN" undo || true; fi
+  systemctl disable homeserver-docker-forward.service 2>/dev/null || true
+  rm -f "$DROPIN" "$SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT"
   sysctl -w net.ipv4.ip_nonlocal_bind=0 >/dev/null
   systemctl daemon-reload
   echo "Removed. (docker.service ordering takes effect on next boot.)"
@@ -122,7 +139,62 @@ systemctl enable --now homeserver-mount-watch.timer >/dev/null
 echo "✔ homeserver-mount-watch.timer enabled (watching: $WATCH_MOUNTS)"
 
 systemctl start homeserver-mount-watch.service
+
+# ── 4. Let VMs (virbr0) and VPN clients (wg0) forward despite Docker's DROP ──
+cat >"$FWD_BIN" <<EOF
+#!/usr/bin/env bash
+# Installed by homeserver docker/host-boot-safety.sh -- see that script, item 4.
+#   homeserver-docker-forward apply|undo   (idempotent)
+set -uo pipefail
+IFACES="$FORWARD_ALLOW_IFACES"
+EOF
+cat >>"$FWD_BIN" <<'EOF'
+rules() {  # one rule per line, in the order they must sit in DOCKER-USER
+  for i in $IFACES; do
+    echo "-i $i -o docker0 -j RETURN"   # to containers: Docker's own rules decide
+    echo "-i $i -o br-+ -j RETURN"
+    echo "-i $i -j ACCEPT"              # everything else (internet, LAN): allow
+    echo "-o $i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+  done
+}
+case "${1:-apply}" in
+  apply)
+    iptables -N DOCKER-USER 2>/dev/null || true
+    rules | while read -r r; do
+      iptables -C DOCKER-USER $r 2>/dev/null || iptables -A DOCKER-USER $r
+    done
+    echo "DOCKER-USER forwarding allowed for: $IFACES" ;;
+  undo)
+    rules | while read -r r; do
+      while iptables -C DOCKER-USER $r 2>/dev/null; do iptables -D DOCKER-USER $r; done
+    done
+    echo "DOCKER-USER forwarding rules removed for: $IFACES" ;;
+  *) echo "Usage: $0 [apply|undo]" >&2; exit 1 ;;
+esac
+EOF
+chmod 755 "$FWD_BIN"
+
+# PartOf + WantedBy=docker.service: re-runs every time Docker (re)starts,
+# since Docker re-asserts its FORWARD DROP policy on every start.
+cat >"$FWD_UNIT" <<EOF
+[Unit]
+Description=Allow libvirt VMs and WireGuard clients to forward past Docker's FORWARD DROP policy
+After=docker.service
+PartOf=docker.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$FWD_BIN apply
+ExecStop=$FWD_BIN undo
+[Install]
+WantedBy=docker.service
+EOF
+systemctl daemon-reload
+systemctl enable homeserver-docker-forward.service >/dev/null
+systemctl restart homeserver-docker-forward.service
+echo "✔ homeserver-docker-forward.service enabled + applied ($FORWARD_ALLOW_IFACES)"
 echo
 echo "Done. Docker's mount ordering applies from the next boot; check with:"
 echo "  systemctl show docker -p RequiresMountsFor -p After | tr ' ' '\\n' | grep mnt"
 echo "  journalctl -u homeserver-mount-watch -n 5"
+echo "  sudo iptables -S DOCKER-USER     # VM/VPN forwarding rules (item 4)"

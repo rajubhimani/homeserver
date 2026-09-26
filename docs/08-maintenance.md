@@ -518,13 +518,15 @@ On a reboot, `dockerd` restarts every `restart: unless-stopped` container itself
 **Host fix — run once, as root:**
 
 ```bash
-sudo docker/host-boot-safety.sh           # idempotent; --remove undoes it
+sudo bash docker/host-boot-safety.sh      # idempotent; --remove undoes it
+# (run via 'bash' -- the file has no execute bit, so 'sudo docker/host-boot-safety.sh' fails)
 ```
 
 It installs:
 
 - `/etc/systemd/system/docker.service.d/wait-for-data-mounts.conf` — `RequiresMountsFor=/mnt/mydata` (Docker won't start at all without the repo/`service_data` drive — better than writing to the wrong disk) and `Wants=`/`After=mnt-media.mount` (ordering only: a dead media disk shouldn't take down services that don't use it). Takes effect from the next boot.
 - `/etc/sysctl.d/90-homeserver-nonlocal-bind.conf` — `net.ipv4.ip_nonlocal_bind=1`, so docker-proxy can bind `10.8.0.1` before `wg0` exists. The firewall still gates who can reach it.
+- `homeserver-docker-forward.service` (+ `/usr/local/bin/homeserver-docker-forward`) — re-allows forwarding for libvirt VMs (`virbr0`) and WireGuard clients (`wg0`) past Docker's `FORWARD` DROP policy, re-applied every time Docker (re)starts. Without it a VM gets a DHCP lease but no internet (hit 2026-09-26 on the `win11` VM right after a Docker restart). See [09-firewall.md](09-firewall.md#docker-vs-vms-and-the-vpn).
 - `homeserver-mount-watch.timer` — every 5 min, a script copied to `/usr/local/bin/` (so it still runs if `/mnt/mydata` itself is missing) checks each data drive is mounted and read-write, and alerts via ntfy's `homeserver-alerts` topic (token reused from `services/clamav/.env`, re-alerts at most every 6h). Caveat: ntfy's own data lives on `/mnt/mydata`, so a missing `/mnt/mydata` only reaches the journal (`journalctl -u homeserver-mount-watch`) — but with the drop-in above, Docker doesn't start at all in that case either.
 
 **Repo-side guard (no setup needed):** `homeserver.py up`/`update`/`restart` refuse to start a service whose `DATA_ROOT` — or any path-valued var in its own `.env` (`UPLOAD_LOCATION`, `MEDIA_ROOT`, `OS_ISO_ROOT`, …) — sits on an `/etc/fstab` mount that is unmounted or read-only. This only covers starts through `homeserver.py`, not dockerd's own autostart — hence the host fix above.

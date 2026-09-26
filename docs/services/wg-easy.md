@@ -77,6 +77,10 @@ sudo firewall-cmd --reload
 
 (If you don't use firewalld — e.g. Ubuntu with ufw or ufw disabled — this step doesn't apply, but check whatever firewall manager you do have for an equivalent "masquerade"/NAT toggle.)
 
+### 4b. Docker's FORWARD DROP policy (full-tunnel clients)
+
+Docker sets the host's `iptables` `FORWARD` policy to DROP and only whitelists its own bridges, so full-tunnel traffic arriving on `wg0` and headed for the internet/LAN is dropped in Docker's table — wg-easy's own `FORWARD -i wg0 -j ACCEPT` rules land in the *legacy* iptables tables and don't help. The same thing breaks libvirt VMs' internet. Fixed permanently by `sudo bash docker/host-boot-safety.sh` (item 4, `homeserver-docker-forward.service`) — see [09-firewall.md](../09-firewall.md#docker-vs-vms-and-the-vpn).
+
 ### 5. Router IPv6 firewall
 
 Your router needs to allow inbound UDP on the WireGuard port over IPv6. Unlike IPv4 port-forwarding (NAT translation), this is just a firewall **allow rule** — IPv6 doesn't need NAT since addresses are already globally routable.
