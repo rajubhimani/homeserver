@@ -6,6 +6,23 @@
 
 **Purpose:** Stream movies, TV shows, and music from your server.
 **Port:** `8096` (host) → `8096` (container) | **Data:** `service_data/data/jellyfin/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~65MB — but **RAM is not the real constraint here**. Jellyfin's own docs recommend 8GB and emphasize CPU/GPU, not RAM: without hardware acceleration, CPU-only transcoding of HEVC/AV1/VP9 or HDR tone-mapping is "very performance demanding" (jellyfin.org/docs/general/administration/hardware-selection/) — idle numbers say nothing about what happens during actual transcoded playback
+**Pinned version:** `jellyfin/jellyfin:12.1` (upgraded from `10.11.11` on 2026-09-28). **Versioning changed:** Jellyfin dropped the fixed `10.` prefix, so `12.0` is simply the release after `10.11`, and a first-number bump now means a big release. Tags are two-part (`12.1`) plus date-stamped rebuilds (`12.1.20260915-010956`). Don't pin to the huge `2026092811`-style tags — they're build dates, not versions. Notes below that say "10.11.x" were verified against that release; re-check them against 12.x before relying on them.
+
+## Upgrading across a major (done for 10.11 → 12.1, 2026-09-28)
+
+Major Jellyfin releases rewrite the database on first boot and **can't be rolled back except from a backup**. Upstream's instruction is to stop Jellyfin and take a full backup of the data and config first. What was done, and what to repeat next time:
+
+1. Remove third-party plugins first — plugins built for the old major won't load (12.0 moved to .NET 10). This install has none (`/config/plugins` holds only `configurations`).
+2. `uv run homeserver.py prod down jellyfin` — stops it *and* snapshots `DATA_ROOT` (config and cache, about 105MB; includes `config/data/jellyfin.db`).
+3. With it stopped, archive `METADATA_ROOT` too. The normal snapshot skips it on purpose, because it can be re-downloaded, but keeping a copy makes a rollback fast. **Keep it out of the snapshot folder:** `homeserver.py restore` treats every extra `.tar.gz` in `service_data/backup/jellyfin/<ts>/` as a Docker volume to create. The 12.1 archive is at `service_data/backup/jellyfin-manual/metadata_pre-12.1_20260929-003053.tar.gz`, paired with snapshot `20260929-003053`.
+4. Bump the tag, `prod up jellyfin`, then check the logs for `Migration ... was successfully applied` and `Startup complete`.
+5. Verify rather than assume: `database.xml`/`system.xml` tuning values (from `apply-tuning.py`) were unchanged, and library counts in `jellyfin.db` matched the pre-upgrade copy exactly. That was 6,282 items, 3 users, and 1,601 userdata (watch-state) rows.
+
+**Expected one-time error on the first 12.x boot:** `Error loading configuration file: /config/config/encoding.xml ... '' is not a valid value for EncoderPreset`. The old file stored an empty `<EncoderPreset xsi:nil="true" />`, which 12.x rejects. Jellyfin rewrote it as `auto`, which is what empty meant anyway. Diffing against the backup showed no other change, apart from a new `SubtitleExtractionTimeoutMinutes` key at its default. A second boot loads it cleanly with 0 errors.
+
+**Client note:** 12.0 removed the legacy `/emby/` and `/mediabrowser/` URL prefixes, so only clients that haven't been updated in years are affected.
+
+**PostgreSQL:** still not officially supported as of 12.1, and there's no announced target version or date. The only route is the experimental plugin database API that arrived in 10.11, plus an unofficial Postgres plugin by a core developer ([JPVenson/Jellyfin.Pgsql](https://github.com/JPVenson/Jellyfin.Pgsql)); see [discussion #17211](https://github.com/orgs/jellyfin/discussions/17211). SQLite plus the `Optimistic` locking tuning below remains the supported setup.
 
 ## Setup
 
@@ -21,7 +38,7 @@ Open `http://<ip>:8096` — the setup wizard creates the admin account and lets 
 
 ## Health endpoint
 
-`compose.yml` has no `healthcheck:` block of its own — the `jellyfin/jellyfin:10.11.11` image bakes one into the Dockerfile (`docker inspect jellyfin --format '{{json .Config.Healthcheck}}'` confirms it: `curl ... "${HEALTHCHECK_URL}"`, `HEALTHCHECK_URL` defaulting to `http://localhost:8096/health`). Confirmed live in this deployment:
+`compose.yml` has no `healthcheck:` block of its own — the `jellyfin/jellyfin` image bakes one into the Dockerfile (still present in `12.1`) (`docker inspect jellyfin --format '{{json .Config.Healthcheck}}'` confirms it: `curl ... "${HEALTHCHECK_URL}"`, `HEALTHCHECK_URL` defaulting to `http://localhost:8096/health`). Confirmed live in this deployment:
 
 ```bash
 docker exec jellyfin curl -s http://localhost:8096/health
