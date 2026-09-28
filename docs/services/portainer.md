@@ -6,6 +6,7 @@
 
 **Purpose:** Docker container management UI.
 **Port:** `9000` (HTTP) or `9445` (HTTPS, host-mapped off the image's default `9443` — that port is claimed locally by the `kind` k8s-pilot cluster's ingress) | **Data:** `service_data/data/portainer/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~38MB
+**Pinned version:** `portainer/portainer-ce:2.45.1` (LTS). Portainer runs two tracks: LTS (`2.39.x`, `2.45.x`) and short-term STS releases (`2.44.0`). Stay on the LTS line, and take patch bumps within it — `2.45.0` → `2.45.1` on 2026-09-28 was CVE fixes plus SSRF hardening, with no removed features.
 
 ## Setup
 
