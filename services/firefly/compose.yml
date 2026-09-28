@@ -25,7 +25,7 @@ services:
       - homeserver
 
   firefly-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: firefly-permissions
     restart: "no"
     user: "0:0"
@@ -35,7 +35,7 @@ services:
     command: chown -R 33:33 /var/www/html/storage
 
   firefly:
-    image: fireflyiii/core:version-6.6.6
+    image: fireflyiii/core:version-6.7.6
     container_name: firefly
     restart: unless-stopped
     user: "0:0"
@@ -81,7 +81,7 @@ services:
       - homeserver
 
   firefly-importer:
-    image: fireflyiii/data-importer:version-2.3.4
+    image: fireflyiii/data-importer:version-2.3.5
     container_name: firefly-importer
     restart: unless-stopped
     env_file: .env
@@ -106,7 +106,7 @@ services:
       - homeserver
 
   firefly-cron:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: firefly-cron
     restart: unless-stopped
     env_file: .env

@@ -36,7 +36,7 @@ services:
   # and pushes an ntfy notification when it's been unhealthy for a while.
   # Same watchdog pattern as adguard-home's (see services/adguard-home/).
   clamav-watchdog:
-    image: curlimages/curl:8.21.0
+    image: curlimages/curl:8.22.0
     container_name: clamav-watchdog
     restart: unless-stopped
     # curlimages/curl drops to a non-root user by default, which can't reach

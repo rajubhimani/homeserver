@@ -44,10 +44,10 @@ Single container, `axllent/mailpit`. Persistent message storage via `MP_DATABASE
 
 ## Health endpoint
 
-The compose healthcheck runs `wget -qO- http://localhost:8025/api/v1/info` inside the container. Confirmed live against the running `v1.30.7` container — it returns `200` with a JSON body describing the instance, not just a bare `ok`:
+The compose healthcheck runs `wget -qO- http://localhost:8025/api/v1/info` inside the container. Confirmed live against the running `v1.31.3` container (re-checked 2026-09-28; version comes from `MAILPIT_VERSION` in `.env`) — it returns `200` with a JSON body describing the instance, not just a bare `ok`:
 
 ```json
-{"Version":"v1.30.7","LatestVersion":"v1.30.7","Database":"/data/mailpit.db","DatabaseSize":561152,"Messages":47,"Unread":0,"Tags":{},"RuntimeStats":{"Uptime":14847,"Memory":35498264,"MessagesDeleted":0,"SMTPAccepted":0,"SMTPAcceptedSize":0,"SMTPRejected":0,"SMTPIgnored":0}}
+{"Version":"v1.31.3","LatestVersion":"v1.31.3","Database":"/data/mailpit.db","DatabaseSize":122880,"Messages":4,"Unread":4,"Tags":{},"RuntimeStats":{"Uptime":11,"Memory":16660744,"MessagesDeleted":0,"SMTPAccepted":0,"SMTPAcceptedSize":0,"SMTPRejected":0,"SMTPIgnored":0}}
 ```
 
 Same endpoint from outside the container: `curl http://mailpit:8025/api/v1/info` from another service on the `homeserver` network, or `curl http://<host>:8140/api/v1/info` from the host in dev.

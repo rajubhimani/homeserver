@@ -21,7 +21,7 @@ services:
   # the actual network attachment via the Docker API and reattaches it when
   # missing.
   adguard-watchdog:
-    image: curlimages/curl:8.21.0
+    image: curlimages/curl:8.22.0
     container_name: adguard-watchdog
     restart: unless-stopped
     # curlimages/curl drops to a non-root user by default, which can't reach the

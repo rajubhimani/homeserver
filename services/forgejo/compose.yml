@@ -25,7 +25,7 @@ services:
       - homeserver
 
   forgejo:
-    image: codeberg.org/forgejo/forgejo:16.0.3
+    image: codeberg.org/forgejo/forgejo:16.0.5
     container_name: forgejo
     restart: unless-stopped
     env_file: .env
@@ -66,7 +66,7 @@ services:
       - homeserver
 
   forgejo-runner:
-    image: code.forgejo.org/forgejo/runner:13.0.0
+    image: code.forgejo.org/forgejo/runner:13.2.0
     container_name: forgejo-runner
     restart: unless-stopped
     # Image defaults to uid 1000, which can't reach the bind-mounted host docker.sock
@@ -101,7 +101,7 @@ services:
     # help text and exits 0 -- with restart:unless-stopped that loops forever and the
     # container never stays up long enough to `docker exec` a manual `register` into it.
     #
-    # This pin (v13.0.0) deprecated the old `register --token <pool-token>` flow --
+    # This line (pinned since v13.0.0, now v13.2.0) deprecated the old `register --token <pool-token>` flow --
     # confirmed live: it logs "`register` has been deprecated; declare connections in
     # the runner configuration instead" on every start, and Forgejo's own "Create new
     # Runner" admin UI now generates a per-runner UUID+token pair for the

@@ -6,6 +6,7 @@
 
 **Purpose:** Personal finance manager — income, expenses, budgets, accounts, recurring transactions.
 **Port:** `8102` (host) → `8080` (container) | **Data:** `service_data/data/firefly/` (app storage) + named volume `firefly-postgres-alpine` (DB) | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~141MB total (importer 59 + cron 2 + app 74 + db 6)
+**Pinned versions:** `fireflyiii/core:version-6.7.6`, `fireflyiii/data-importer:version-2.3.5` (bumped 2026-09-28 from 6.6.6 / 2.3.4). **6.7 is a full UI redesign**, and it runs DB upgrade steps automatically on first start (`upgrade:6xx-*` in the logs). It also has security fixes, including a possible MFA bypass. Two behaviour changes to know about: the rule engine's **expression engine is now off by default** — re-enable it under `/settings` if any rule uses expressions; and upstream lists a known issue where editing split transactions can display the splits out of order (the stored data isn't affected). OAuth tokens moved to their own page.
 
 ## Setup
 

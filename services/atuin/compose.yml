@@ -32,7 +32,7 @@ services:
   # getting this wrong are low (config regenerates), but fixed anyway for
   # consistency with the rest of this stack's now-established convention.
   atuin-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: atuin-permissions
     restart: "no"
     user: "0:0"
@@ -41,7 +41,7 @@ services:
     command: sh -c "mkdir -p /atuin-config && chown -R 1000:1000 /atuin-config"
 
   atuin:
-    image: ghcr.io/atuinsh/atuin:18.21.0
+    image: ghcr.io/atuinsh/atuin:18.23.0
     container_name: atuin
     restart: unless-stopped
     command: start
