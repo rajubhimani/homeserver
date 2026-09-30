@@ -118,7 +118,7 @@ membership. One entry drives both, so there's no second file to keep in sync.
 
    In practice, though, if `services.json` ever 404s or the landing page shows stale
    cards right after an edit, recreate the container anyway — `services.json` is bind-mounted
-   as a single file, and an editor that saves via write-temp-then-rename replaces the
+   as a single file, and an editor that saves via write-temp-then-rename (or a `git switch`/`merge` that touches the file) replaces the
    underlying inode, orphaning the running container's mount even though `docker inspect`
    still lists it. `uv run homeserver.py dev restart landing` does a full recreate, which
    fixes it. Hit this in practice; see [docs](services/docs.md)'s Notes for the same
