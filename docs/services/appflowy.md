@@ -30,20 +30,22 @@ Install the official [AppFlowy app](https://appflowy.io/download) (desktop: Mac/
 
 > The `appflowy-minio-setup` container runs once to create the `appflowy` S3 bucket, then exits — this is normal, not a crash.
 
+> **Blocked since 2026-09-30 — MinIO image unavailable.** Docker Hub now refuses pulls of `minio/minio` and `minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags either, so on a host without those images cached this service can't start at all. Needs a decision on a replacement S3 backend (e.g. a community MinIO rebuild such as `pgsty/minio`, or Garage/SeaweedFS) before it can run again.
+
 ## Architecture
 
 Multi-container: postgres (pgvector), redis, minio, gotrue, appflowy-cloud, appflowy-web, admin-frontend, nginx. `GOTRUE_JWT_SECRET` must be at least 32 chars and **identical** across gotrue and appflowy-cloud (`openssl rand -hex 32`).
 
 ### Compatible image versions
 
-All services below must stay in sync. `appflowy_web` uses its own versioning scheme — `0.15.5` is the current latest for the web frontend regardless of cloud version.
+All services below must stay in sync. `appflowy_web` uses its own versioning scheme. The 0.18 set below was bumped on 2026-09-30 but not started, because of the MinIO block below.
 
 | Service | Image | Version | Notes |
 | --- | --- | --- | --- |
-| Cloud backend | `appflowyinc/appflowy_cloud` | `0.18.3` | Pinned independently — not currently in lockstep with gotrue/admin |
-| Auth service | `appflowyinc/gotrue` | `0.17.9` | Must match admin — `admin_frontend` has no `0.18.x` release yet, capped at `0.17.9` |
-| Admin UI | `appflowyinc/admin_frontend` | `0.17.9` | Must match gotrue |
-| Web frontend | `appflowyinc/appflowy_web` | `0.17.1` | Own versioning scheme — nginx rewrite handles path differences |
+| Cloud backend | `appflowyinc/appflowy_cloud` | `0.18.11` | Same release line as gotrue |
+| Auth service | `appflowyinc/gotrue` | `0.18.11` | Bumped from `0.17.9` together with admin on 2026-09-30 once `admin_frontend` shipped a `0.18.x` |
+| Admin UI | `appflowyinc/admin_frontend` | `0.18.2` | Keep on the same `0.x` line as gotrue (patch numbers differ upstream) |
+| Web frontend | `appflowyinc/appflowy_web` | `0.18.5` | Own versioning scheme — nginx rewrite handles path differences |
 | Database | `pgvector/pgvector` | `pg16` | — |
 | Cache | `redis` | `8.10-alpine` | — |
 

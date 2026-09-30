@@ -34,7 +34,7 @@ services:
   # chowns the whole DATA_ROOT tree, then exits; mattermost itself waits for
   # it via depends_on below.
   mattermost-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: mattermost-permissions
     restart: "no"
     user: "0:0"

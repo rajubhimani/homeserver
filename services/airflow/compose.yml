@@ -178,7 +178,7 @@ services:
       # _PIP_ADDITIONAL_REQUIREMENTS reinstalls on every start — fine for two
       # packages on a homelab, not how the upstream docs recommend doing this
       # for real production use (they say build/extend the image).
-      _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-docker temporalio==1.31.0
+      _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-docker temporalio==1.33.0
     # No user: override here (unlike the other airflow-* containers) — the
     # host's docker.sock is normally root:docker mode 660, and AIRFLOW_UID:0
     # (group 0 = root, not docker) can't open it by default. The fix is

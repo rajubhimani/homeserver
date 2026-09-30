@@ -31,7 +31,7 @@ services:
   # cert.p12 -- that's a real file the user must provide (see docs/
   # services/documenso.md), not something to mkdir a directory over.
   documenso-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: documenso-permissions
     restart: "no"
     user: "0:0"
@@ -40,7 +40,7 @@ services:
     command: sh -c "mkdir -p /documenso-data && chown -R 1001:65533 /documenso-data"
 
   documenso:
-    image: documenso/documenso:v2.17.0
+    image: documenso/documenso:v2.19.0
     container_name: documenso
     restart: unless-stopped
     env_file: .env

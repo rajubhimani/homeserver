@@ -90,7 +90,7 @@ services:
   # uploads/ at startup -- but a real file/avatar upload would fail silently
   # against a root-owned dir left behind by a wipe/--fresh restart.
   rocketchat-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: rocketchat-permissions
     restart: "no"
     user: "0:0"

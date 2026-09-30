@@ -22,7 +22,7 @@ Browse to `http://<ip>:8100` — create a workspace and admin account.
 
 ## Mobile app: not usable against this deployment
 
-Plane's official iOS/Android app requires the self-hosted **Commercial Edition, v1.12.0+** — it explicitly does not support the Community Edition, which is what this stack runs (`makeplane/plane-backend:v1.4.1`, per `compose.yml`). Don't install the mobile app expecting it to work here; the web UI (`https://plane.${DOMAIN}/`) is the only supported client for this deployment. Desktop apps (Mac/Windows/Linux) may have the same CE restriction — check [Plane's current download page](https://plane.so/download) before assuming one works, rather than trusting this note indefinitely as CE/Commercial parity can change release to release.
+Plane's official iOS/Android app requires the self-hosted **Commercial Edition, v1.12.0+** — it explicitly does not support the Community Edition, which is what this stack runs (`makeplane/plane-backend:v1.4.2`, per `compose.yml`). Don't install the mobile app expecting it to work here; the web UI (`https://plane.${DOMAIN}/`) is the only supported client for this deployment. Desktop apps (Mac/Windows/Linux) may have the same CE restriction — check [Plane's current download page](https://plane.so/download) before assuming one works, rather than trusting this note indefinitely as CE/Commercial parity can change release to release.
 
 ## Using it day to day
 
@@ -33,6 +33,8 @@ Plane's official iOS/Android app requires the self-hosted **Commercial Edition, 
 ## Architecture — needs 5 frontend/backend images, not 3
 
 Multi-container: postgres, valkey, rabbitmq, minio, api, worker, beat, web, admin, space, proxy.
+
+> **Blocked since 2026-09-30 — MinIO image unavailable.** Docker Hub now refuses pulls of `minio/minio` and `minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags either, so on a host without those images cached this service can't start at all. Needs a decision on a replacement S3 backend (e.g. a community MinIO rebuild such as `pgsty/minio`, or Garage/SeaweedFS) before it can run again.
 
 `plane-web` (`makeplane/plane-frontend`) serves the main app **only**. `/god-mode/*` (onboarding, instance admin) and `/spaces/*` (public views) are served by **separate containers**: `plane-admin` (`makeplane/plane-admin`) and `plane-space` (`makeplane/plane-space`).
 

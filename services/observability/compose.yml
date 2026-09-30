@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:v3.14.0
+    image: prom/prometheus:v3.15.0
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -20,7 +20,7 @@ services:
       - homeserver
 
   loki:
-    image: grafana/loki:3.7.7
+    image: grafana/loki:3.7.8
     container_name: loki
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
@@ -42,7 +42,7 @@ services:
   # config needed since FastAPI services here already log Loki-compatible
   # JSON to stdout (queryable in Grafana via `| json` in LogQL).
   alloy:
-    image: grafana/alloy:v1.19.2
+    image: grafana/alloy:v1.20.1
     container_name: alloy
     restart: unless-stopped
     command:
@@ -70,7 +70,7 @@ services:
   # Needs broad host access (docker internals, cgroups) to read this data —
   # standard requirement for cAdvisor, not specific to this stack.
   cadvisor:
-    image: ghcr.io/google/cadvisor:v0.60.5
+    image: ghcr.io/google/cadvisor:v0.60.6
     container_name: cadvisor
     restart: unless-stopped
     privileged: true

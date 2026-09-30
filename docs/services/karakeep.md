@@ -37,7 +37,7 @@ Once connected, the mobile app's share-sheet ("Share → Karakeep" from any othe
 ## Architecture — three containers
 
 - `karakeep` — the app itself (web UI + background workers combined), SQLite database and uploaded assets under `service_data/data/karakeep/data/`.
-- `karakeep-meilisearch` — full-text search index. Data lives in a named Docker volume (`karakeep-meilisearch`), not under `service_data/data/` — it's a rebuildable index, not source data.
+- `karakeep-meilisearch` — full-text search index. Data lives in a named Docker volume (`karakeep-meilisearch`), not under `service_data/data/` — it's a rebuildable index, not source data. `MEILI_UPGRADE_DB=true` (compose.yml) lets a Meilisearch minor bump (e.g. `v1.53` → `v1.54`) upgrade the index in place on startup; if that ever fails, stop karakeep, remove the `karakeep_karakeep-meilisearch` volume and use Karakeep's admin **Reindex all bookmarks** to rebuild it.
 - `karakeep-chrome` — headless Chrome, used for fetching/rendering pages so bookmarks get proper screenshots and content extraction. Uses `ghcr.io/karakeep-app/karakeep-chrome:release` — Karakeep's own maintained chrome image, matching their current upstream `docker-compose.yml`. (Previously `gcr.io/zenika-hub/alpine-chrome:124`; switched after that image started failing to pull with a Google Cloud "billing must be enabled on this project" error — an upstream GCR change, not anything specific to this stack.)
 
 ## Notes

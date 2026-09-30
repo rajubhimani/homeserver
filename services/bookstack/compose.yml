@@ -1,6 +1,6 @@
 services:
   bookstack-db:
-    image: mariadb:12.3.2
+    image: mariadb:12.3.3
     container_name: bookstack-db
     restart: unless-stopped
     env_file: .env

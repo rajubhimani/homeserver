@@ -22,6 +22,8 @@ None — Trilium is single-user by design, no signup toggle applies.
 
 ## Connecting desktop and mobile clients (sync)
 
+> **Clients must run the same Trilium version as the server to sync.** After bumping the image (e.g. `v0.105.0` → `v0.106.0` on 2026-09-30), update every desktop app to the matching release before expecting sync to work.
+
 This container is the **sync server**; the web UI above is only one way to reach it. For daily use, the desktop app is the more common driver — it works offline and syncs to this server in the background:
 
 1. Download the build for your OS from [TriliumNext/Trilium releases](https://github.com/TriliumNext/Trilium/releases/latest) (Windows/Mac/Linux — unzip and run, no installer).

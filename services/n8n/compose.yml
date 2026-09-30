@@ -31,7 +31,7 @@ services:
   # '/home/node/.n8n/config'" -- confirmed live via an actual
   # wipe-and-restart test, not assumed.
   n8n-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: n8n-permissions
     restart: "no"
     user: "0:0"
@@ -40,7 +40,7 @@ services:
     command: sh -c "mkdir -p /n8n-data && chown -R 1000:1000 /n8n-data"
 
   n8n:
-    image: n8nio/n8n:2.38.3
+    image: n8nio/n8n:2.42.1
     container_name: n8n
     restart: unless-stopped
     env_file: .env

@@ -1,5 +1,5 @@
 x-erpnext-image: &erpnext_image
-  image: frappe/erpnext:${ERPNEXT_VERSION:-v16.36.0}
+  image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
   restart: unless-stopped
 
 x-depends-on-configurator: &depends_on_configurator
