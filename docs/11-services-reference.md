@@ -54,7 +54,7 @@ vivaldi, browser (the hub's virtual card).
 crowdsec, dockge, dozzle,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,
-documenso, invoiceshelf, erpnext, openproject, mattermost,
+documenso, invoiceshelf, erpnext, ghostfolio, openproject, mattermost,
 rocketchat, zulip, mail-archiver, bichon, orangehrm.
 
 **Manual-only services** (never started by any tier — start individually with `up <service>`):
@@ -138,6 +138,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Documenso | `documenso` | 8128 | 3000 | extra |
 | InvoiceShelf | `invoiceshelf` | 8101 | 8080 | extra |
 | ERPNext | `erpnext` | 8153 | 8080 | extra |
+| Ghostfolio | `ghostfolio` | 8162 | 3333 | extra |
 | OpenProject | `openproject` | 8099 | 80 | extra |
 | Mattermost | `mattermost` | 8141 | 8065 | extra |
 | Rocket.Chat | `rocketchat` | 8142 | 3000 | extra |
@@ -150,7 +151,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 
 Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-exporter`) have no host port — they're only reached over the internal `homeserver` network (Prometheus scrapes cadvisor/node-exporter; Grafana queries Prometheus/Loki), and none of them have auth, so none get a public nginx-plain route either — only Grafana is public-facing.
 
-**Next available ports:** web `8156`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
+**Next available ports:** web `8163`, SSH `2225`. (Coolify also uses `6001`/`6002` for its realtime websocket service — not part of the sequential web-port pool.) (Port `53` is claimed by AdGuard Home for LAN-wide DNS — not part of the sequential web-port pool, don't reassign it.) Always check this table before assigning a port to a new service — every host dev port and SSH port must be unique, even for manual-only services (they may run alongside `all`).
 
 **In `prod` mode, every service above is also reachable at `10.8.0.1:<same port>`** over the WireGuard tunnel (whether the service is currently running or not — the binding is in `compose.prod.yml`, applied whenever it's next started) (in addition to `127.0.0.1`, not instead of it) — e.g. `10.8.0.1:2283` for Immich, `10.8.0.1:8096` for Jellyfin. See [09 — Firewall § Restoring fast direct access, safely](09-firewall.md#restoring-fast-direct-access-safely-the-10801-pattern) for why this is safe and how to add it to a new service.
 
@@ -233,6 +234,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `openproject.yourdomain.com` | `openproject` | `80` | extra |
 | `invoiceshelf.yourdomain.com` | `invoiceshelf` | `8080` | extra |
 | `erpnext.yourdomain.com` | `erpnext` | `8080` | extra |
+| `ghostfolio.yourdomain.com` | `ghostfolio` | `3333` | extra |
 | `outline.yourdomain.com` | `outline` | `3000` | extra |
 | `bookstack.yourdomain.com` | `bookstack` | `80` | extra |
 | `mattermost.yourdomain.com` | `mattermost` | `8065` | extra |

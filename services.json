@@ -797,6 +797,17 @@
       "replaces": "Khatabook / Vyapar / SAP Business One"
     },
     {
+      "slug": "ghostfolio",
+      "tier": "extra",
+      "name": "Ghostfolio",
+      "category": "productivity",
+      "subcategory": "finance",
+      "icon": "green",
+      "svg": "<path d=\"M3 15 L3 3\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/> <path d=\"M5.5 12 L8.5 8.5 L11 10.5 L14.5 5.5\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/>",
+      "desc": "Investment portfolio tracker for stocks, ETFs, mutual funds and crypto across all your brokers. Live prices, performance, allocation and dividends in one dashboard.",
+      "replaces": "Kuvera / INDmoney / Sharesight"
+    },
+    {
       "slug": "openproject",
       "tier": "extra",
       "name": "OpenProject",

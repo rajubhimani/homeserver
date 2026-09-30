@@ -27,7 +27,7 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 
 **Documents** — [Paperless-ngx](docs/services/paperless.md "Scan, index, and archive all your documents. Full-text search with OCR — go paperless. Replaces: Scansnap cloud.") · [Stirling PDF](docs/services/stirling-pdf.md "Full PDF toolkit with Word/Excel conversion via LibreOffice. Start manually on demand. Replaces: Adobe Acrobat.") · [Documenso](docs/services/documenso.md "Sign documents electronically and collect signatures from others — a self-hosted alternative to DocuSign.") · [ONLYOFFICE](docs/services/onlyoffice.md "Real-time collaborative editing for Word, Excel, and PowerPoint documents stored in Nextcloud — a self-hosted Microsoft Office alternative built for native .docx/.xlsx/.pptx compatibility.")
 
-**Finance & Business** — [Firefly III](docs/services/firefly.md "Personal finance manager. Track income, expenses, budgets and accounts in one place. Replaces: YNAB / Mint.") · [InvoiceShelf](docs/services/invoiceshelf.md "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments. Replaces: FreshBooks.") · [Cal.com](docs/services/calcom.md "Share a booking page so people can schedule meetings with you automatically — a self-hosted alternative to Calendly.") · [OrangeHRM](docs/services/orangehrm.md "Open-source HR management — employee records, leave, time tracking, recruitment. Replaces: BambooHR / Workday.")
+**Finance & Business** — [Firefly III](docs/services/firefly.md "Personal finance manager. Track income, expenses, budgets and accounts in one place. Replaces: YNAB / Mint.") · [Ghostfolio](docs/services/ghostfolio.md "Investment portfolio tracker for stocks, ETFs, mutual funds and crypto across all your brokers. Live prices, performance, allocation and dividends in one dashboard. Replaces: Kuvera / INDmoney / Sharesight.") · [InvoiceShelf](docs/services/invoiceshelf.md "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments. Replaces: FreshBooks.") · [Cal.com](docs/services/calcom.md "Share a booking page so people can schedule meetings with you automatically — a self-hosted alternative to Calendly.") · [OrangeHRM](docs/services/orangehrm.md "Open-source HR management — employee records, leave, time tracking, recruitment. Replaces: BambooHR / Workday.")
 
 **Reading & Feeds** — [Miniflux](docs/services/miniflux.md "Minimalist RSS reader. Follow blogs, news, and podcasts without tracking or algorithms. Replaces: Feedly.") · [Wallabag](docs/services/wallabag.md "Read-it-later app, self-hosted Pocket alternative. Saves a clean, readable copy of articles.") · [Listmonk](docs/services/listmonk.md "Send and manage email newsletters and mailing lists — a self-hosted alternative to Mailchimp.")
 
@@ -283,6 +283,7 @@ uv run homeserver.py prod up all
     ├── plane/
     ├── invoiceshelf/
     ├── firefly/
+    ├── ghostfolio/
     ├── ollama/
     ├── open-webui/
     ├── beszel/
@@ -365,6 +366,7 @@ service_data/
 ├── plane/            (postgres/, uploads/, logs/)
 ├── invoiceshelf/     (db/, uploads/)
 ├── firefly/          (postgres/, upload/)
+├── ghostfolio/       (empty — everything lives in the ghostfolio-postgres named volume)
 ├── ollama/           (empty — models live outside this tree, in service_data/cache/ollama/, kept out of DATA_ROOT so backups don't sweep multi-GB model files)
 ├── open-webui/       (data/) — embedding model cache lives outside this tree, in service_data/cache/open-webui/cache/ (same reason)
 ├── beszel/           (data/, socket/, agent/)
