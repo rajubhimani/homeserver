@@ -1,0 +1,164 @@
+# EXPERIMENT — not part of the real stack, not managed by homeserver.py.
+# Tests whether firefly/forgejo/guacamole (all on postgres:18.4-alpine in
+# production) can share ONE Postgres instance via separate databases,
+# instead of each getting its own dedicated container. See README.md.
+#
+# Fully isolated from production: its own bridge network (not the shared
+# `homeserver` network), distinct container names (*-test), distinct host
+# ports, fresh named volumes (not service_data/). Safe to run alongside the
+# real firefly/forgejo/guacamole with zero interaction between them.
+#
+# Fresh/empty databases, not a copy of real data — each app will show its
+# first-run setup wizard. That's expected; this tests the shared-Postgres
+# architecture, not a data migration.
+services:
+  postgres-shared-test:
+    image: postgres:18.4-alpine
+    container_name: postgres-shared-test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: postgres
+    # Sized for 3 light apps sharing one instance — higher connection count
+    # than any single dedicated instance in this repo, since 3 apps' pools
+    # now land on the same server instead of 20 each on their own.
+    command: postgres -c shared_buffers=256MB -c max_connections=60 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=512MB
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - postgres-shared-test-data:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - shared-postgres-experiment
+
+  firefly-test:
+    image: fireflyiii/core:version-6.6.6
+    container_name: firefly-test
+    restart: unless-stopped
+    user: "0:0"
+    env_file: .env
+    environment:
+      APP_URL: http://localhost:19102
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres-shared-test
+      DB_PORT: 5432
+      DB_DATABASE: ${FIREFLY_TEST_DB}
+      DB_USERNAME: ${FIREFLY_TEST_USER}
+      DB_PASSWORD: ${FIREFLY_TEST_PASSWORD}
+      APP_ENV: production
+      MAIL_MAILER: log
+      TRUSTED_PROXIES: "**"
+      CACHE_DRIVER: file
+      SESSION_DRIVER: file
+      DEFAULT_LANGUAGE: en_US
+    volumes:
+      - firefly-test-storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    depends_on:
+      postgres-shared-test:
+        condition: service_healthy
+    ports:
+      - "19102:8080"
+    networks:
+      - shared-postgres-experiment
+
+  forgejo-test:
+    image: codeberg.org/forgejo/forgejo:16.0.2
+    container_name: forgejo-test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: postgres-shared-test:5432
+      FORGEJO__database__NAME: ${FORGEJO_TEST_DB}
+      FORGEJO__database__USER: ${FORGEJO_TEST_USER}
+      FORGEJO__database__PASSWD: ${FORGEJO_TEST_PASSWORD}
+      FORGEJO__server__DOMAIN: localhost
+      FORGEJO__server__ROOT_URL: http://localhost:19002/
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+    volumes:
+      - forgejo-test-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres-shared-test:
+        condition: service_healthy
+    ports:
+      - "19002:3000"
+    networks:
+      - shared-postgres-experiment
+
+  guacd-test:
+    image: guacamole/guacd:1.6.0
+    container_name: guacd-test
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4822 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - shared-postgres-experiment
+
+  guacamole-test:
+    image: guacamole/guacamole:1.6.0
+    container_name: guacamole-test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GUACD_HOSTNAME: guacd-test
+      GUACD_PORT: 4822
+      POSTGRESQL_HOSTNAME: postgres-shared-test
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DATABASE: ${GUACAMOLE_TEST_DB}
+      POSTGRESQL_USERNAME: ${GUACAMOLE_TEST_USER}
+      POSTGRESQL_PASSWORD: ${GUACAMOLE_TEST_PASSWORD}
+      POSTGRESQL_SSL_MODE: prefer
+      WEBAPP_CONTEXT: ROOT
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres-shared-test:
+        condition: service_healthy
+      guacd-test:
+        condition: service_healthy
+    ports:
+      - "19107:8080"
+    networks:
+      - shared-postgres-experiment
+
+volumes:
+  postgres-shared-test-data:
+  firefly-test-storage:
+  forgejo-test-data:
+
+networks:
+  shared-postgres-experiment:
+    driver: bridge
