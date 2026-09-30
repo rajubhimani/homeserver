@@ -19,7 +19,7 @@ cp ../../services/nextcloud/.env .env   # same credentials as live; gitignored
 docker logs -f nextcloud35              # watch the 34 -> 35 upgrade
 ```
 
-Open <http://localhost:8095> on the host, or `http://10.8.0.1:8095` over
+Open <http://localhost:8095> on the host (OnlyOffice's editor runs on :8097), or `http://10.8.0.1:8095` over
 WireGuard. Log in with your normal Nextcloud account.
 
 `clone.sh` only reads from the live instance: it runs `pg_dump` and mounts the
@@ -44,9 +44,17 @@ Stop it with `docker compose down`, or run `docker compose down -v` to delete th
   send mail from here.
 - **`files_antivirus` is disabled,** because ClamAV lives on the real
   `homeserver` network.
-- **OnlyOffice and Whiteboard editing won't work.** Their servers are on the
-  real network and use the real domain. The apps still upgrade and show as
-  enabled, but opening a document or whiteboard fails.
+- **OnlyOffice runs a separate copy inside the sandbox** (`nextcloud35-onlyoffice`,
+  same 9.4.0.1 image, its own JWT secret in `.env`, editor served on port 8097).
+  The live OnlyOffice isn't used, for three reasons: it won't fetch files from a
+  private-IP storage URL, it's on the real network, and the cloned
+  `oc_onlyoffice_filekey` rows would give the sandbox the *same* document keys as
+  live. One key open on both instances would be one shared editing session.
+  `clone.sh` clears that table so the sandbox gets its own keys.
+  The editor URL is `http://localhost:8097/`. If you use the sandbox over WireGuard,
+  set `NEXTCLOUD35_ONLYOFFICE_PUBLIC_URL=http://10.8.0.1:8097/` in `.env` and run
+  `docker compose up -d nextcloud35`.
+- **Whiteboard editing won't work.** Its backend is on the real network and domain.
 
 ## Findings (2026-09-30, 34.0.4 -> 35.0.1)
 

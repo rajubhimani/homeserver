@@ -79,6 +79,29 @@ services:
     networks:
       - nextcloud35
 
+  # The sandbox's own OnlyOffice server, same version as services/onlyoffice.
+  # The live one can't be reused: it refuses private-IP storage URLs
+  # (allowPrivateIPAddress=false) and sits on the real network, and sharing
+  # it would risk document-key collisions with the live instance. Own JWT
+  # secret (NEXTCLOUD35_ONLYOFFICE_JWT in .env), no volumes (cache only).
+  nextcloud35-onlyoffice:
+    image: onlyoffice/documentserver:9.4.0.1
+    container_name: nextcloud35-onlyoffice
+    restart: "no"
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${NEXTCLOUD35_ONLYOFFICE_JWT}
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    ports:
+      - "127.0.0.1:8097:80"
+      - "10.8.0.1:8097:80"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - nextcloud35
+
   # No cron container on purpose: background jobs never run in the sandbox,
   # so the Mail app doesn't sync real mailboxes and no notifications go out.
 

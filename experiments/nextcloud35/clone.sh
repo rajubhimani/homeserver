@@ -47,6 +47,12 @@ echo "==> Dropping the undecryptable notifications web-push key (see comment)"
 docker exec nextcloud35-db psql -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
   "delete from oc_appconfig where appid='notifications' and configkey in ('webpush_vapid_privkey','webpush_vapid_pubkey')"
 
+# OnlyOffice document keys are cached per file in oc_onlyoffice_filekey; a
+# cloned key equals the live one, and the same key open on two instances is
+# one shared editing session. Clearing the table makes the sandbox mint its
+# own (random GUID) keys.
+docker exec nextcloud35-db psql -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "delete from oc_onlyoffice_filekey"
+
 echo "==> Copying volumes: $VOLS"
 for v in $VOLS; do
   docker volume create \
@@ -66,11 +72,14 @@ docker run --rm -v nextcloud35_nextcloud35-config:/c "nextcloud:${NEXTCLOUD35_IM
   $CONFIG["redis"]["host"] = "nextcloud35-redis";
   $CONFIG["overwrite.cli.url"] = "http://localhost:8095";
   unset($CONFIG["overwriteprotocol"]);
-  $CONFIG["trusted_domains"] = ["localhost", "localhost:8095", "10.8.0.1:8095"];
+  $CONFIG["trusted_domains"] = ["localhost", "localhost:8095", "10.8.0.1:8095", "nextcloud35"];
   file_put_contents($f, "<?php\n\$CONFIG = " . var_export($CONFIG, true) . ";\n");
   echo "dbhost=", $CONFIG["dbhost"], " redis=", $CONFIG["redis"]["host"], "\n";
 '
 
+grep -q '^NEXTCLOUD35_ONLYOFFICE_JWT=' .env \
+  || echo "NEXTCLOUD35_ONLYOFFICE_JWT=$(openssl rand -hex 32)" >> .env
+
 echo "==> Starting Nextcloud ${NEXTCLOUD35_IMAGE:-35.0.1} (runs the 34 -> 35 upgrade)"
-$DC up -d nextcloud35
+$DC up -d nextcloud35 nextcloud35-onlyoffice
 echo "Follow with: docker logs -f nextcloud35   then open http://localhost:8095"
