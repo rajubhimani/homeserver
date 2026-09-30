@@ -34,6 +34,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Forgejo | [docs/services/forgejo.md](services/forgejo.md) |
 | Authentik | [docs/services/authentik.md](services/authentik.md) |
 | Firefly III (+ Data Importer) | [docs/services/firefly.md](services/firefly.md) |
+| Ghostfolio | [docs/services/ghostfolio.md](services/ghostfolio.md) |
 | Guacamole | [docs/services/guacamole.md](services/guacamole.md) |
 | IT-Tools | [docs/services/it-tools.md](services/it-tools.md) |
 | Mailpit | [docs/services/mailpit.md](services/mailpit.md) |

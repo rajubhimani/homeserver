@@ -1,0 +1,13 @@
+services:
+  ghostfolio-db:
+    security_opt:
+      - label=disable
+  ghostfolio-redis:
+    security_opt:
+      - label=disable
+  ghostfolio:
+    security_opt:
+      - label=disable
+    depends_on:
+      - ghostfolio-db
+      - ghostfolio-redis

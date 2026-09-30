@@ -50,6 +50,7 @@
       - [ONLYOFFICE](/docs/services/onlyoffice.md "Real-time collaborative editing for Word, Excel, and PowerPoint documents stored in Nextcloud — a self-hosted Microsoft Office alternative built for native .docx/.xlsx/.pptx compatibility.")
     - Finance & Business
       - [Firefly III](/docs/services/firefly.md "Personal finance manager. Track income, expenses, budgets and accounts in one place. Replaces: YNAB / Mint.")
+      - [Ghostfolio](/docs/services/ghostfolio.md "Investment portfolio tracker for stocks, ETFs, mutual funds and crypto across all your brokers. Live prices, performance, allocation and dividends in one dashboard. Replaces: Kuvera / INDmoney / Sharesight.")
       - [InvoiceShelf](/docs/services/invoiceshelf.md "Self-hosted invoicing and billing. Create invoices, track expenses, accept payments. Replaces: FreshBooks.")
       - [ERPNext](/docs/services/erpnext.md "Full open-source ERP — accounting, per-customer/supplier credit ledger (Party Ledger), invoicing, and inventory. Has an official Android app that connects to your own server. Replaces: Khatabook / Vyapar / SAP Business One.")
       - [Cal.com](/docs/services/calcom.md "Share a booking page so people can schedule meetings with you automatically — a self-hosted alternative to Calendly.")

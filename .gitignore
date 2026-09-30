@@ -17,6 +17,8 @@ TODO.md
 .claude
 .agents
 .env
+# Ghostfolio <-> Firefly sync credentials (services/ghostfolio/sync.env.example)
+sync.env
 *.log
 *.json
 # services.json is the single source of truth for tiers + landing-page

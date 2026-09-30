@@ -1,0 +1,83 @@
+services:
+  ghostfolio-db:
+    image: postgres:18.6-alpine
+    container_name: ghostfolio-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    volumes:
+      - ghostfolio-postgres:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  # Cache only (market-data lookups, job queue) — nothing here needs to
+  # survive a restart, so no volume and persistence turned off.
+  ghostfolio-redis:
+    image: redis:8.10-alpine
+    container_name: ghostfolio-redis
+    restart: unless-stopped
+    env_file: .env
+    command: >-
+      sh -c 'redis-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  ghostfolio:
+    image: ghostfolio/ghostfolio:3.75.0
+    container_name: ghostfolio
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ghostfolio-db:5432/${POSTGRES_DB}?connect_timeout=300
+      REDIS_HOST: ghostfolio-redis
+      REDIS_PORT: 6379
+      ROOT_URL: https://ghostfolio.${DOMAIN}
+      # Behind nginx-plain (and Cloudflare in front of that) — needed so
+      # the login rate limiter sees the real client IP, not nginx's.
+      TRUST_PROXY: "2"
+      TZ: ${TZ:-Asia/Kolkata}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3333/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First start runs the Prisma migrations + seed before the API listens.
+      start_period: 120s
+    depends_on:
+      ghostfolio-db:
+        condition: service_healthy
+      ghostfolio-redis:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+volumes:
+  ghostfolio-postgres:
+
+networks:
+  homeserver:
+    external: true
