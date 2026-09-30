@@ -25,7 +25,7 @@ Open `https://ghostfolio.<domain>/` (or `http://<host>:8162` in dev) → **Get S
 Then, as admin:
 
 1. **Admin Control → Overview → User Signup → off**, unless you want anyone who can reach the URL to be able to create an account.
-2. **Settings (your user) → Base Currency** → e.g. `INR`. Everything is converted into this for totals.
+2. **Admin Control → Market Data → `+` → switch to Add Currency → `INR`**, then **Settings (your user) → Base Currency → `INR`**. Everything is converted into this for totals. On a fresh install the Base Currency list only offers `USD`, because it lists just the currencies Ghostfolio already knows about (stored in the admin `CURRENCIES` property, empty at first). Adding INR first also makes Ghostfolio fetch the `USDINR` exchange rate.
 3. **Accounts → Add** one account per broker/bank/wallet (Zerodha, Groww, a savings account, a crypto wallet...).
 4. **Activities → Add / Import** your buys, sells and dividends. Imports take CSV or JSON (upload limit set to 20M in nginx-plain).
 
