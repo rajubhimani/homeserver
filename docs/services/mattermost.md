@@ -1,5 +1,8 @@
 # Mattermost
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/mattermost/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
 
 ---

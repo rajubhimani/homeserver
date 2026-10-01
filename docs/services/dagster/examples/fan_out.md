@@ -17,7 +17,7 @@ flowchart LR
     fan_out_job --> fan_out_c
 ```
 
-**Verified via the run's own event log** (`event_logs` table, `dagster-db`): all 3 `STEP_START` events landed within 0.8s of each other, and each step's ~5s run window genuinely overlapped the others' — not three ~5s steps run back to back (which would show `STEP_START` events roughly 5s apart instead).
+**Verified via the run's own event log** (`event_logs` table, in the old per-service `dagster-db` at the time): all 3 `STEP_START` events landed within 0.8s of each other, and each step's ~5s run window genuinely overlapped the others' — not three ~5s steps run back to back (which would show `STEP_START` events roughly 5s apart instead).
 
 ## Try it
 

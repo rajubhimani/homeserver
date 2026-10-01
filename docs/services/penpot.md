@@ -7,6 +7,9 @@
 **Purpose:** Self-hosted design and prototyping tool (Figma alternative), real-time collaborative.
 **Port:** `8131` (host) → `8080` (container, on `penpot-frontend`) | **Data:** `service_data/data/penpot/assets/` | **Requires:** Postgres, Redis (Valkey)
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `penpot` (fixed), `penpot` (fixed), `POSTGRES_PASSWORD` in `services/penpot/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -23,9 +26,9 @@ Open `https://penpot.<domain>/` (or `http://<host>:8131` in dev) and create the 
 
 `disable-registration` is already in `PENPOT_FLAGS` by default — closed from the start (officially described as recommended for demo instances rather than hardened production use, but reasonable for a personal instance). Create your first account before this matters, or briefly remove the flag to do so. To add another account later without reopening public registration, use Penpot's own team-invitation flow instead — from inside an existing team, **Members → Invite** sends an email invite that works regardless of `disable-registration` (that flag only blocks the public sign-up page, not invites to an existing team).
 
-## Architecture — 5 containers
+## Architecture — 4 containers + shared Postgres
 
-- `penpot-db` (Postgres) — app metadata.
+- Postgres — app metadata, in the `penpot` database on `shared-postgres` (database and user are fixed as `penpot`).
 - `penpot-redis` (Valkey) — websocket notifications/caching.
 - `penpot-backend` — API server, handles asset storage (`assets-fs` backend, writes to the shared `assets` volume).
 - `penpot-exporter` — headless-browser-based PDF/PNG export, talks to the frontend internally.

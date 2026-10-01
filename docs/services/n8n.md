@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Self-hosted workflow automation — webhook → transform → notify style glue for homelab scripts and integrations.
-**Port:** `8120` (host) → `5678` (container) | **Data:** `service_data/data/n8n/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~321MB total (app 297 + db 24)
+**Port:** `8120` (host) → `5678` (container) | **Data:** `service_data/data/n8n/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~321MB total (app 297 + db 24), measured before the 2026-10-01 move to the shared server
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/n8n/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 

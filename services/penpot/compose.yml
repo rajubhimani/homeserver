@@ -1,29 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  penpot-db:
-    image: postgres:18.6-alpine
-    container_name: penpot-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: penpot
-      POSTGRES_USER: penpot
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - penpot-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U penpot"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - homeserver
-
   penpot-redis:
     image: valkey/valkey:9.1.2-alpine
     container_name: penpot-redis
@@ -59,7 +37,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      PENPOT_DATABASE_URI: postgresql://penpot-db/penpot
+      PENPOT_DATABASE_URI: postgresql://shared-postgres/penpot
       PENPOT_DATABASE_USERNAME: penpot
       PENPOT_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
       PENPOT_REDIS_URI: redis://penpot-redis/0
@@ -75,8 +53,6 @@ services:
     volumes:
       - ${DATA_ROOT}/assets:/opt/data/assets
     depends_on:
-      penpot-db:
-        condition: service_healthy
       penpot-redis:
         condition: service_healthy
       penpot-permissions:
@@ -118,9 +94,6 @@ services:
       - penpot-exporter
     networks:
       - homeserver
-
-volumes:
-  penpot-postgres-alpine:
 
 networks:
   homeserver:

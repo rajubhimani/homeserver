@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Open-source issue tracker and project management.
-**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** Postgres + Redis + RabbitMQ + MinIO, ~4GB RAM minimum / 8GB recommended per Plane's own docs (developers.plane.so) | **Memory:** DB capped 512M in compose.yml; other 10 containers: no hard limit set; measured idle ~709MB total across all 11 containers — `plane-worker` (Celery, 8 prefork processes) is by far the heaviest single container at ~205MB idle, and the one most likely to grow further under real task load
+**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** Postgres + Redis + RabbitMQ + MinIO, ~4GB RAM minimum / 8GB recommended per Plane's own docs (developers.plane.so) | **Memory:** database on `shared-postgres` (counted there); other 10 containers: no hard limit set; measured idle ~709MB total across all 11 containers — `plane-worker` (Celery, 8 prefork processes) is by far the heaviest single container at ~205MB idle, and the one most likely to grow further under real task load
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/plane/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 

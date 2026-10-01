@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Self-hosted to-do list and task management app — projects, due dates, labels, Kanban/Gantt views.
-**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~52MB total (app 31 + db 21)
+**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~52MB total (app 31 + db 21), measured before the 2026-10-01 move to the shared server
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/vikunja/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 

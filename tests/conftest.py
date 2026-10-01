@@ -101,6 +101,7 @@ class FakeBackend(hs.DockerBackend):
 
     def volume_remove(self, name):
         self.volumes.discard(name)
+        self.events.append(("volume_remove", name))
         return True
 
     def network_exists(self, name):

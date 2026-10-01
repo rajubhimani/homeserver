@@ -145,8 +145,31 @@ def test_shared_db_apps_are_wired_consistently(entry):
         assert spec[field].startswith("=") or spec[field] in keys, f"{field} key {spec[field]} not in .env.example"
     text = strip_comments(compose_text(svc))
     assert not re.search(rf"image:\s*\S*({ENGINE_IMAGE[spec['engine']]}):", text), "still runs its own database container"
-    assert hs.SHARED_DB_SERVICES[spec["engine"]] in text, "database host isn't the shared server"
-    assert not (REPO / "services" / svc / "postgres-init").exists()
+    host = hs.SHARED_DB_SERVICES[spec["engine"]]
+    # The host may live in compose, in a config file baked into the image
+    # (dagster.yaml), or — for apps configured through a web installer
+    # (orangehrm) — only in the doc that tells you what to type.
+    svc_dir = REPO / "services" / svc
+    config_text = "".join(p.read_text(errors="ignore") for p in svc_dir.rglob("*")
+                          if p.is_file() and p.name != ".env" and p.suffix in {".yml", ".yaml", ".py", ".conf", ".toml"})
+    docs = [REPO / "docs" / "services" / f"{svc}.md", REPO / "docs" / "services" / svc / f"{svc}.md"]
+    doc_text = "".join(d.read_text() for d in docs if d.is_file())
+    assert host in config_text or host in doc_text, f"nothing points {svc} at {host}"
+    assert host in doc_text, f"docs/services/{svc}.md doesn't say its database is on {host}"
+    assert not (svc_dir / "postgres-init").exists()
+
+
+@pytest.mark.parametrize("entry", SHARED_USERS, ids=lambda s: s["slug"])
+def test_docs_do_not_describe_a_removed_db_container(entry):
+    """Once an app moves to a shared server, its own <svc>-db container is
+    gone; docs still describing it (outside clearly historical lines) are stale."""
+    svc = entry["slug"]
+    stale = []
+    for doc in sorted((REPO / "docs").rglob("*.md")):
+        for n, line in enumerate(doc.read_text().splitlines(), 1):
+            if re.search(rf"(?<![\w-]){re.escape(svc)}-db(?![\w-])", line) and not HISTORY_WORDS.search(line):
+                stale.append(f"{doc.relative_to(REPO)}:{n}")
+    assert not stale, f"docs still describe {svc}-db: {stale}"
 
 
 @pytest.mark.parametrize("server", list(hs.SHARED_DB_SERVICES.values()))
@@ -182,6 +205,10 @@ def _pinned_images() -> dict[str, set[str]]:
             img = re.sub(r"\$\{(\w+)(:-([^}]*))?\}", lambda x: env.get(x.group(1), x.group(3) or ""), m.group(1))
             repo, _, tag = img.rpartition(":")
             pins.setdefault(repo, set()).add(tag)
+    # Base images of locally built images (dagster, temporal-worker, ...).
+    for dockerfile in (REPO / "services").rglob("Dockerfile*"):
+        for m in re.finditer(r"^FROM\s+(\S+?):(\S+)", dockerfile.read_text(), re.M):
+            pins.setdefault(m.group(1), set()).add(m.group(2))
     return pins
 
 
@@ -219,3 +246,16 @@ def test_claude_md_tier_lists_match_services_json():
         listed = [re.sub(r"\s*\(.*", "", x).strip() for x in m.group(1).split("→")]
         actual = [s["slug"] for s in SERVICES if s.get("tier") == tier and not s.get("virtual")]
         assert listed == actual, f"CLAUDE.md {key} out of date"
+
+
+def test_starting_services_doc_covers_every_action_and_flag():
+    """docs/15-starting-services.md must mention every CLI action and flag
+    homeserver.py accepts, so new ones can't ship undocumented."""
+    src = (REPO / "homeserver.py").read_text()
+    doc = (REPO / "docs" / "15-starting-services.md").read_text()
+    block = src[src.index("    if action not in ("):]
+    block = block[: block.index(")")]
+    actions = {a for a in re.findall(r'"([a-z]+)"', block)}
+    flags = set(re.findall(r'tok (?:==|in) \(?"(--[a-z-]+)"', src)) | set(re.findall(r'tok == "(--[a-z-]+)"', src))
+    missing = sorted(a for a in actions if f"`{a}" not in doc) + sorted(f for f in flags if f not in doc)
+    assert not missing, f"docs/15-starting-services.md doesn't mention: {missing}"

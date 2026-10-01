@@ -1,28 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  documenso-db:
-    image: postgres:18.6-alpine
-    container_name: documenso-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - documenso-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   # Same pattern as firefly-permissions/mattermost-permissions/etc. --
   # documenso's image runs as a hardcoded "nodejs" user (uid 1001, gid
   # 65533, confirmed via /etc/passwd inside the container) with no root
@@ -46,8 +25,8 @@ services:
     env_file: .env
     environment:
       PORT: 3000
-      NEXT_PRIVATE_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@documenso-db:5432/${POSTGRES_DB}
-      NEXT_PRIVATE_DIRECT_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@documenso-db:5432/${POSTGRES_DB}
+      NEXT_PRIVATE_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}
+      NEXT_PRIVATE_DIRECT_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}
       NEXT_PUBLIC_WEBAPP_URL: https://documenso.${DOMAIN}
       NEXT_PRIVATE_INTERNAL_WEBAPP_URL: http://localhost:3000
       NEXT_PRIVATE_SIGNING_TRANSPORT: local
@@ -62,15 +41,10 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
-      documenso-db:
-        condition: service_healthy
       documenso-permissions:
         condition: service_completed_successfully
     networks:
       - homeserver
-
-volumes:
-  documenso-postgres-alpine:
 
 networks:
   homeserver:

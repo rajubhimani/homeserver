@@ -1,28 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  outline-db:
-    image: postgres:18.6-alpine
-    container_name: outline-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - outline-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   outline-redis:
     image: redis:8.10-alpine
     container_name: outline-redis
@@ -58,7 +37,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@outline-db:5432/${POSTGRES_DB}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}?sslmode=disable
       PGSSLMODE: disable
       REDIS_URL: redis://outline-redis:6379
       URL: https://outline.${DOMAIN}
@@ -77,8 +56,6 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
-      outline-db:
-        condition: service_healthy
       outline-redis:
         condition: service_healthy
       outline-permissions:
@@ -87,7 +64,6 @@ services:
       - homeserver
 
 volumes:
-  outline-postgres-alpine:
   outline-redis-alpine:
 
 networks:

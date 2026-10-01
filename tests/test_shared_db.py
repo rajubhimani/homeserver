@@ -150,6 +150,7 @@ def test_provisioning_creates_db_owned_by_app_role_once(fake, cli, pg_users):
     sql = "\n".join(x["input"] for x in fake.exec_calls)
     assert f'OWNER "{c["user"]}"' in sql
     assert f'ALTER SCHEMA public OWNER TO "{c["user"]}"' in sql
+    assert f'REVOKE ALL ON DATABASE "{c["db"]}" FROM PUBLIC' in sql, "other apps' roles must not be able to connect"
     cli("prod", "down", app)
     cli("prod", "up", app)
     assert [e for e in fake.events if e[0] == "create_db" and e[2] == c["db"]] == creates, "provisioning must be idempotent"

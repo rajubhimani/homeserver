@@ -23,4 +23,4 @@ It's the one version every intended user accepts. OrangeHRM's installer requires
 
 ## Status
 
-Created 2026-10-01. BookStack is the first user and was converted as the pilot, verified live: auto-start, provisioning (user granted on its own database only), snapshot `.sql` dump, backup → drop → restore round trip, and auto-stop when it went down. InvoiceShelf and OrangeHRM follow.
+Created 2026-10-01. BookStack was converted first as the pilot, verified live: auto-start, provisioning (user granted on its own database only), snapshot `.sql` dump, backup → drop → restore round trip, and auto-stop when it went down. Users: [bookstack](bookstack.md), [invoiceshelf](invoiceshelf.md), [orangehrm](orangehrm.md). OrangeHRM is set up through its web installer: enter host `shared-mariadb` plus its `.env` database/user/password, and homeserver.py has already created them.

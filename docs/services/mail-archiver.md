@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Keeps a continuously-synced copy of your real mailboxes on this server, so the mail provider becomes swappable: drop Microsoft 365 (or anyone else) whenever you like, then copy the whole history into the new provider from the same UI. Also a searchable archive in its own right.
-**Port:** `8155` (host) → `5000` (container) | **Data:** `mail-archiver-postgres` named volume (the archive itself) + `service_data/data/mail-archiver/` (encryption keys, import drop folder) | **Requires:** Postgres | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle with an empty archive ~134MB total (app 84 + db 50), will grow with mail
+**Port:** `8155` (host) → `5000` (container) | **Data:** `mail-archiver-postgres` named volume (the archive itself) + `service_data/data/mail-archiver/` (encryption keys, import drop folder) | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle with an empty archive ~134MB total (app 84 + db 50), will grow with mail
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/mail-archiver/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 Upstream: [github.com/s1t5/mail-archiver](https://github.com/s1t5/mail-archiver) — docs index at [doc/Index.md](https://github.com/s1t5/mail-archiver/blob/main/doc/Index.md).
 

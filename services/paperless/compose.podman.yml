@@ -1,7 +1,4 @@
 services:
-  paperless-db:
-    security_opt:
-      - label=disable
   paperless-redis:
     security_opt:
       - label=disable
@@ -9,5 +6,4 @@ services:
     security_opt:
       - label=disable
     depends_on:
-      - paperless-db
       - paperless-redis

@@ -2,7 +2,7 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots|reset> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
 
   Any command targeting a tier keyword (min/core/daily/browser/office/automation-ai/all/running),
   'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
@@ -10,6 +10,8 @@ Usage:
   --yes/-y to skip the prompt (e.g. non-interactive/cron use). Naming
   explicit service(s) directly (e.g. 'up nextcloud vaultwarden') never
   prompts — you already said exactly what you want.
+  Exception: 'reset' always asks (type 'reset'), even for named services,
+  and refuses outright when stdin isn't a terminal unless --yes is given.
   python homeserver.py <env> -r <service...>   (shorthand for restart)
   python homeserver.py <env> up group:notes    start every service in category/subcategory
                                                 'notes' (or any other group — see services.json's
@@ -1276,6 +1278,12 @@ def provision_shared_db(service: str) -> bool:
                 # CREATE DATABASE can't run inside a DO block/transaction.
                 ok, _, err = shared_sql("postgres", f"CREATE DATABASE {_pg_ident(db)} OWNER {role};")
             if ok:
+                # Postgres grants CONNECT/TEMP on every new database to
+                # PUBLIC, so without this any app's role could open any other
+                # app's database (its tables stay unreadable, but it could
+                # still connect and see the schema). Lock it to its owner.
+                ok, _, err = shared_sql("postgres", f"REVOKE ALL ON DATABASE {_pg_ident(db)} FROM PUBLIC;")
+            if ok:
                 # Postgres 15+ no longer lets non-owners create objects in
                 # public, so hand the schema to the app's role.
                 ok, _, err = shared_sql("postgres", f"ALTER SCHEMA public OWNER TO {role}; GRANT ALL ON SCHEMA public TO {role};", db=db)
@@ -1396,6 +1404,33 @@ def restore_shared_db(service: str, snap_dir: Path) -> bool:
         else:
             error(f"  failed to restore {db} on {c['container']}: {err.strip()}")
             ok = False
+    return ok
+
+
+def drop_shared_db(service: str) -> bool:
+    """Remove the service's database(s) and its login from its shared server
+    (reset only — never called on the normal down/up path). Other apps'
+    databases on the same server are untouched."""
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return True
+    ok = True
+    for db in [c["db"]] + c["extra_dbs"]:
+        if c["engine"] == "postgres":
+            shared_sql("postgres", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_sql_literal(db)};")
+            dropped, _, err = shared_sql("postgres", f"DROP DATABASE IF EXISTS {_pg_ident(db)};")
+        else:
+            dropped, _, err = shared_sql("mariadb", f"DROP DATABASE IF EXISTS {_my_ident(db)};")
+        if not dropped:
+            error(f"  couldn't drop {db} on {c['container']}: {err.strip()}")
+            ok = False
+    if c["engine"] == "postgres":
+        dropped, _, err = shared_sql("postgres", f"DROP ROLE IF EXISTS {_pg_ident(c['user'])};")
+    else:
+        dropped, _, err = shared_sql("mariadb", f"DROP USER IF EXISTS {_sql_literal(c['user'])}@'%';")
+    if not dropped:
+        error(f"  couldn't drop login {c['user']} on {c['container']}: {err.strip()}")
+        ok = False
     return ok
 
 
@@ -2006,6 +2041,81 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
     return ok
 
 
+def do_reset(service: str, env: str, profile: str | None) -> bool:
+    """Fresh start with a safety net: snapshot everything the service owns,
+    verify the snapshot really holds it, then wipe exactly that service and
+    start it blank. 'restore <service>' undoes it.
+
+    Wipes: the service's named volumes, service_data/data/<service>/, and —
+    for an app on a shared database server — its own database(s) and login
+    there (other apps on that server are untouched). Does NOT touch secondary
+    data roots outside service_data/data (immich UPLOAD_LOCATION, jellyfin
+    MEDIA_ROOT, ...): those hold bulk media, not app state."""
+    if service in SHARED_DB_SERVICES.values():
+        error(f"{service} is a shared database server — reset the services that use it instead")
+        return False
+    d = SERVICES_DIR / service
+    if not d.is_dir():
+        error(f"Service '{service}' not found")
+        return False
+
+    c = shared_db_creds(service)
+    # The snapshot below needs the shared server up to dump the app's database.
+    if c and not shared_db_ready(service, env, provision=False):
+        return False
+
+    vols = BACKEND.volumes_for_project(service)
+    data_dir = SERVICE_DATA_ROOT / service
+    has_db = bool(c) and shared_db_exists(service)
+    before = set(list_snapshots(service))
+
+    # 1. Snapshot (do_down stops the service and snapshots it, whether or
+    #    not it was running — stopped containers still hold volumes).
+    info(f"Resetting {service}: snapshotting first...")
+    do_down(service, env, profile or "*", no_backup=False)
+
+    # 2. Verify the snapshot holds everything about to be deleted. Pruning
+    #    can't remove it: it's the newest.
+    if vols or data_dir.is_dir() or has_db:
+        new = sorted(set(list_snapshots(service)) - before)
+        if not new:
+            error(f"  no snapshot was written for {service} — nothing deleted")
+            return False
+        names = {p.name for p in new[-1].iterdir()}
+        missing = [v for v in vols if not any(n.startswith(f"{v}_") for n in names)]
+        if data_dir.is_dir() and not any(n.startswith("service_data_") for n in names):
+            missing.append("service_data")
+        if has_db and not any(n.startswith(f"{service}_shareddb_") for n in names):
+            missing.append(f"{c['container']}/{c['db']}")
+        if missing:
+            error(f"  snapshot {new[-1].name} is missing {', '.join(missing)} — nothing deleted")
+            return False
+        success(f"  snapshot verified: service_data/backup/{service}/{new[-1].name}/")
+
+    # 3. Wipe exactly this service.
+    ok = True
+    for v in vols:
+        if BACKEND.volume_remove(v):
+            success(f"  removed volume {v}")
+        else:
+            error(f"  couldn't remove volume {v}")
+            ok = False
+    if data_dir.is_dir():
+        shutil.rmtree(data_dir)
+        success(f"  removed service_data/data/{service}/")
+    if has_db and drop_shared_db(service):
+        success(f"  dropped {service}'s database and login on {c['container']}")
+    elif has_db:
+        ok = False
+    if not ok:
+        error(f"  {service} was only partly wiped — not starting it; 'restore {service}' brings the snapshot back")
+        return False
+
+    # 4. Start blank (provisioning creates a new empty database).
+    info(f"Starting {service} fresh...")
+    return do_up(service, env, profile, fresh=True)
+
+
 def do_dump(service: str, env: str, profile: str | None) -> bool:
     """Logical pg_dump of <service>-db into service_data/db_dump/<service>/<ts>/
     — the source dump 'migrate' restores from for a Debian->Alpine (or any
@@ -2575,6 +2685,7 @@ def show_help() -> None:
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
     print("    python homeserver.py dev up mealie                   auto-restores the latest snapshot if data/volumes are missing")
     print("    python homeserver.py dev up mealie --fresh           start blank even if a snapshot exists")
+    print("    python homeserver.py dev reset mealie                snapshot, wipe and start blank (restore undoes it)")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
@@ -2741,11 +2852,11 @@ def main() -> int:
 
     if action not in (
         "up", "-u", "down", "-d", "restart", "-r", "logs", "update",
-        "backup", "restore", "snapshots", "dump", "migrate", "precreate",
+        "backup", "restore", "snapshots", "dump", "migrate", "precreate", "reset",
     ):
         error(
             "Unknown action "
-            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, or precreate"
+            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, precreate, or reset"
         )
         show_help()
         return 1
@@ -3268,6 +3379,44 @@ def main() -> int:
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_restore, services_to_run, env, profile, "Services", snapshot=snapshot)
+        release_shared_dbs(env)
+
+    elif action == "reset":
+        # Same target semantics as 'down': a tier keyword means just that
+        # tier (never cascades into lower tiers). Order is startup order,
+        # since each service comes back up as part of its own reset.
+        if run_running:
+            error("reset takes services, tiers or groups — not 'running'")
+            return 1
+        if run_all:
+            lst = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + [s for s in SERVICES_MANUAL if s in get_running_services()] + services_to_run
+        elif run_core:
+            lst = SERVICES_CORE + services_to_run
+        elif run_daily:
+            lst = SERVICES_DAILY + services_to_run
+        elif run_browser:
+            lst = SERVICES_BROWSER + services_to_run
+        elif run_office:
+            lst = SERVICES_OFFICE + services_to_run
+        elif run_automation_ai:
+            lst = SERVICES_AUTOMATION_AI + services_to_run
+        elif run_min:
+            lst = SERVICES_MIN + services_to_run
+        else:
+            lst = services_to_run
+        header(f"Reset = snapshot, wipe, start blank ('restore <service>' undoes it): {' '.join(lst)}")
+        # Never auto-confirmed: unlike other tier commands, a non-interactive
+        # reset without -y refuses instead of proceeding (see the
+        # homeserver-py-no-dry-run note in docs/08-maintenance.md).
+        if not assume_yes:
+            if not sys.stdin.isatty():
+                error("reset deletes data — pass -y to confirm when not running interactively")
+                return 1
+            if input(f"Type 'reset' to snapshot and wipe {len(lst)} service(s): ").strip() != "reset":
+                warn("Aborted — nothing changed")
+                return 1
+        ensure_network()
+        run_list(do_reset, lst, env, profile, "Reset")
         release_shared_dbs(env)
 
     elif action == "snapshots":

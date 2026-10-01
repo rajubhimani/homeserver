@@ -1,7 +1,4 @@
 services:
-  plane-db:
-    security_opt:
-      - label=disable
   plane-redis:
     security_opt:
       - label=disable
@@ -18,21 +15,18 @@ services:
     security_opt:
       - label=disable
     depends_on:
-      - plane-db
       - plane-redis
       - plane-mq
   plane-worker:
     security_opt:
       - label=disable
     depends_on:
-      - plane-db
       - plane-redis
       - plane-mq
   plane-beat:
     security_opt:
       - label=disable
     depends_on:
-      - plane-db
       - plane-redis
       - plane-mq
   plane-web:

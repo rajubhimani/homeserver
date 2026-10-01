@@ -1,29 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  dagster-db:
-    image: postgres:18.6-alpine
-    container_name: dagster-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
-      POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
-    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    volumes:
-      - dagster-postgres-alpine:/var/lib/postgresql
-      - ./postgres-init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DAGSTER_POSTGRES_USER} -d ${DAGSTER_POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   # gRPC server exposing your pipeline code to both dagster-webserver and
   # dagster-daemon. DAGSTER_CURRENT_IMAGE tells the run launcher which image
   # to use when it launches a run as its own new container — must match
@@ -85,8 +63,6 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      dagster-db:
-        condition: service_healthy
       dagster-user-code:
         condition: service_started
     networks:
@@ -113,15 +89,12 @@ services:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - dagster-io-manager-storage:/tmp/io_manager_storage
     depends_on:
-      dagster-db:
-        condition: service_healthy
       dagster-user-code:
         condition: service_started
     networks:
       - homeserver
 
 volumes:
-  dagster-postgres-alpine:
   dagster-io-manager-storage:
 
 networks:
