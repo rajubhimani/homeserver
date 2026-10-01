@@ -157,6 +157,8 @@ Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-export
 
 ---
 
+**Shared database servers** (`shared-postgres`, `shared-mariadb`) publish no ports. They're reached only over the `homeserver` network, and `homeserver.py` starts and stops them automatically for the services above CORE that use them. See [shared-postgres](services/shared-postgres.md).
+
 ## Reverse Proxy Config
 
 ### nginx-plain (default)

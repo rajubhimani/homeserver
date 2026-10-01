@@ -402,6 +402,17 @@ class DockerBackend(ABC):
         and harmless). Returns (success, stderr_text)."""
 
     @abstractmethod
+    def db_exec(
+        self, container: str, cmd: list[str], input: bytes | None = None, env: dict[str, str] | None = None,
+    ) -> tuple[bool, bytes, str]:
+        """docker exec [-i] [-e K=V ...] container cmd..., stdin from input,
+        stdout captured as bytes. The shared-db helpers (provision_shared_db,
+        shared-db dump/restore) build psql/mariadb/mariadb-dump commands on
+        top of this; env carries credentials (e.g. MYSQL_PWD) so they never
+        appear in the process list. Returns (success, stdout_bytes,
+        stderr_text)."""
+
+    @abstractmethod
     def compose_create(
         self, files: list[Path], env: dict[str, str], profile: str | None, force_recreate: bool = False,
     ) -> tuple[bool, str]:
@@ -575,6 +586,21 @@ class SubprocessBackend(DockerBackend):
             input=sql, capture_output=True,
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def db_exec(self, container, cmd, input=None, env=None):
+        args = [RUNTIME, "exec"]
+        if input is not None:
+            args.append("-i")
+        # '-e NAME' (no '=value') makes docker copy the value from this
+        # process's environment, so secrets never appear in the docker exec
+        # argv on the host (visible to anyone running ps).
+        run_env = None
+        if env:
+            run_env = {**os.environ, **env}
+            for k in env:
+                args += ["-e", k]
+        proc = subprocess.run(args + [container] + list(cmd), input=input, capture_output=True, env=run_env)
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
 
     def compose_create(self, files, env, profile, force_recreate=False):
         args = self._compose_args(files, profile) + ["create"]
@@ -796,6 +822,21 @@ class PythonOnWhalesBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
+    def db_exec(self, container, cmd, input=None, env=None):
+        args = [RUNTIME, "exec"]
+        if input is not None:
+            args.append("-i")
+        # '-e NAME' (no '=value') makes docker copy the value from this
+        # process's environment, so secrets never appear in the docker exec
+        # argv on the host (visible to anyone running ps).
+        run_env = None
+        if env:
+            run_env = {**os.environ, **env}
+            for k in env:
+                args += ["-e", k]
+        proc = subprocess.run(args + [container] + list(cmd), input=input, capture_output=True, env=run_env)
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
     def compose_create(self, files, env, profile, force_recreate=False):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
@@ -995,6 +1036,9 @@ def is_valid_service(service: str) -> bool:
         + SERVICES_EXTRA
         + SERVICES_MANUAL
         + [PROXY_STANDBY]
+        # Shared DB servers: valid for logs/snapshots/backup/restore by name;
+        # normally started/stopped automatically (see Shared databases).
+        + list(SHARED_DB_SERVICES.values())
     )
 
 
@@ -1100,6 +1144,260 @@ def get_running_services() -> list[str]:
     return result
 
 
+# ── Shared databases (above-CORE services only) ─────────────────────
+#
+# Services above CORE that declare "shared_db" in services.json keep their
+# database inside one shared server per engine (services/shared-postgres,
+# services/shared-mariadb) instead of their own <service>-db container. CORE
+# and MIN keep per-service databases. See docs/services/shared-postgres.md.
+#
+# Lifecycle is reference-counted at the CLI layer (main()), never inside
+# do_up/do_down: do_backup, do_restore, do_up and stop_proxy_conflict all call
+# do_down internally, so counting there would bounce the shared server in the
+# middle of an unrelated operation. Starting is safe from anywhere (it's
+# idempotent), so do_up also ensures the server for the auto-restore path;
+# only stopping is counted, in release_shared_dbs() after a 'down'.
+#
+# The shared servers' tier ("shared") is in none of the SERVICES_* lists, so
+# 'up all'/'down all', tier keywords, groups and 'status' tiers never treat
+# them as ordinary services.
+
+SHARED_DB_SERVICES = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}
+_SERVICES_BY_SLUG = {s["slug"]: s for s in _SERVICES_DATA["services"]}
+
+
+def shared_db_creds(service: str) -> dict | None:
+    """Resolve a service's "shared_db" spec into concrete values. Spec values
+    are key names in services/<service>/.env, or '=literal' for values the
+    app hard-codes (e.g. penpot's db/user). Returns None if the service
+    doesn't use a shared database."""
+    spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_db")
+    if not spec:
+        return None
+    env_vals = load_env_file(SERVICES_DIR / service / ".env")
+
+    def resolve(key: str) -> str:
+        return key[1:] if key.startswith("=") else env_vals.get(key, "")
+
+    return {
+        "engine": spec["engine"],
+        "container": SHARED_DB_SERVICES[spec["engine"]],
+        "db": resolve(spec["db"]),
+        "user": resolve(spec["user"]),
+        "password": resolve(spec["password"]),
+        "extra_dbs": list(spec.get("extra_dbs", [])),
+    }
+
+
+def shared_admin(engine: str) -> tuple[str, str]:
+    """(admin user, admin password) for a shared server, from its own .env."""
+    env_vals = load_env_file(SERVICES_DIR / SHARED_DB_SERVICES[engine] / ".env")
+    if engine == "postgres":
+        return env_vals.get("POSTGRES_USER", "postgres"), env_vals.get("POSTGRES_PASSWORD", "")
+    return "root", env_vals.get("MARIADB_ROOT_PASSWORD", "")
+
+
+def _pg_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _my_ident(name: str) -> str:
+    return "`" + name.replace("`", "``") + "`"
+
+
+def shared_sql(engine: str, sql: str, db: str | None = None) -> tuple[bool, str, str]:
+    """Run SQL (sent on stdin, so passwords never hit argv) as the shared
+    server's admin. Returns (success, stdout, stderr)."""
+    container = SHARED_DB_SERVICES[engine]
+    user, password = shared_admin(engine)
+    if engine == "postgres":
+        cmd = ["psql", "-v", "ON_ERROR_STOP=1", "-tA", "-U", user, "-d", db or "postgres"]
+        ok, out, err = BACKEND.db_exec(container, cmd, input=sql.encode())
+    else:
+        cmd = ["mariadb", "-N", "-B", "-u", user] + ([db] if db else [])
+        ok, out, err = BACKEND.db_exec(container, cmd, input=sql.encode(), env={"MYSQL_PWD": password})
+    return ok, out.decode(errors="replace"), err
+
+
+def shared_db_exists(service: str) -> bool:
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return False
+    if c["engine"] == "postgres":
+        ok, out, _ = shared_sql("postgres", f"SELECT 1 FROM pg_database WHERE datname = {_sql_literal(c['db'])};")
+    else:
+        ok, out, _ = shared_sql("mariadb", f"SHOW DATABASES LIKE {_sql_literal(c['db'])};")
+    return ok and bool(out.strip())
+
+
+def ensure_shared_db(engine: str, env: str) -> bool:
+    """Start the shared server for engine if it isn't already running."""
+    container = SHARED_DB_SERVICES[engine]
+    if BACKEND.container_status(container) == "running" and BACKEND.container_health(container) == "healthy":
+        return True
+    info(f"Starting shared database {container} (needed by services above CORE)...")
+    return do_up(container, env, None)
+
+
+def provision_shared_db(service: str) -> bool:
+    """Idempotently create the service's role/user and database(s) on its
+    shared server, owned by that role — what each per-service
+    postgres-init/init.sh used to do on its own container. Also resets the
+    password to whatever the service's .env says, so editing .env is
+    enough to rotate it."""
+    c = shared_db_creds(service)
+    if not c:
+        return True
+    if not (c["db"] and c["user"] and c["password"]):
+        error(f"{service}: shared_db spec in services.json didn't resolve a db/user/password from services/{service}/.env")
+        return False
+
+    dbs = [c["db"]] + c["extra_dbs"]
+    if c["engine"] == "postgres":
+        role, pw = _pg_ident(c["user"]), _sql_literal(c["password"])
+        ok, _, err = shared_sql("postgres", f"""
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {_sql_literal(c['user'])}) THEN
+                CREATE ROLE {role} LOGIN PASSWORD {pw};
+              ELSE
+                ALTER ROLE {role} WITH LOGIN PASSWORD {pw};
+              END IF;
+            END $$;""")
+        if not ok:
+            error(f"{service}: couldn't create role {c['user']}: {err.strip()}")
+            return False
+        for db in dbs:
+            ok, out, err = shared_sql("postgres", f"SELECT 1 FROM pg_database WHERE datname = {_sql_literal(db)};")
+            if ok and not out.strip():
+                # CREATE DATABASE can't run inside a DO block/transaction.
+                ok, _, err = shared_sql("postgres", f"CREATE DATABASE {_pg_ident(db)} OWNER {role};")
+            if ok:
+                # Postgres 15+ no longer lets non-owners create objects in
+                # public, so hand the schema to the app's role.
+                ok, _, err = shared_sql("postgres", f"ALTER SCHEMA public OWNER TO {role}; GRANT ALL ON SCHEMA public TO {role};", db=db)
+            if not ok:
+                error(f"{service}: couldn't create database {db}: {err.strip()}")
+                return False
+    else:
+        user, pw = _sql_literal(c["user"]), _sql_literal(c["password"])
+        stmts = [f"CREATE USER IF NOT EXISTS {user}@'%' IDENTIFIED BY {pw};", f"ALTER USER {user}@'%' IDENTIFIED BY {pw};"]
+        for db in dbs:
+            stmts.append(f"CREATE DATABASE IF NOT EXISTS {_my_ident(db)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+            stmts.append(f"GRANT ALL PRIVILEGES ON {_my_ident(db)}.* TO {user}@'%';")
+        stmts.append("FLUSH PRIVILEGES;")
+        ok, _, err = shared_sql("mariadb", "\n".join(stmts))
+        if not ok:
+            error(f"{service}: couldn't create database/user on shared-mariadb: {err.strip()}")
+            return False
+    return True
+
+
+def shared_db_ready(service: str, env: str, provision: bool = True) -> bool:
+    """Called by every function that can start an app (do_up, do_update,
+    do_restart, do_restore): start the app's shared server if needed, then
+    provision its database. No-op for services without "shared_db". Safe to
+    call from anywhere — starting is idempotent; only stopping is
+    reference-counted (release_shared_dbs, from main())."""
+    c = shared_db_creds(service)
+    if not c:
+        return True
+    if not ensure_shared_db(c["engine"], env):
+        error(f"{c['container']} failed to start — {service} can't come up without it")
+        return False
+    return provision_shared_db(service) if provision else True
+
+
+def release_shared_dbs(env: str) -> None:
+    """After a 'down': stop each shared server no running service still uses."""
+    running = get_running_services()
+    for engine, container in SHARED_DB_SERVICES.items():
+        if BACKEND.container_status(container) != "running":
+            continue
+        users = [s for s in running if (c := shared_db_creds(s)) and c["engine"] == engine]
+        if users:
+            info(f"{container} stays up — still used by: {', '.join(users)}")
+            continue
+        info(f"No running service uses {container} any more — stopping it...")
+        do_down(container, env, None)
+
+
+def dump_shared_db(service: str, dest_dir: Path, ts: str) -> Path | None:
+    """Logical dump of the service's own database(s) on its shared server into
+    dest_dir — the per-app part of a snapshot (a volume tar of the shared
+    server would hold every app's data at once). Postgres: one custom-format
+    file per database; MariaDB: one SQL file per database."""
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return None
+    admin_user, admin_pw = shared_admin(c["engine"])
+    last = None
+    for db in [c["db"]] + c["extra_dbs"]:
+        if c["engine"] == "postgres":
+            ok, data, err = BACKEND.db_pg_dump(c["container"], admin_user, db)
+            fname = f"{service}_shareddb_{db}_{ts}.dump"
+        else:
+            ok, data, err = BACKEND.db_exec(
+                c["container"],
+                ["mariadb-dump", "-u", admin_user, "--single-transaction", "--routines", "--triggers", db],
+                env={"MYSQL_PWD": admin_pw},
+            )
+            fname = f"{service}_shareddb_{db}_{ts}.sql"
+        if not ok:
+            error(f"  failed to dump {db} from {c['container']}: {err.strip()}")
+            continue
+        (dest_dir / fname).write_bytes(data)
+        last = dest_dir / fname
+        success(f"  {c['container']}/{db} -> {dest_dir.relative_to(BASE_DIR)}/{fname}")
+    return last
+
+
+def restore_shared_db(service: str, snap_dir: Path) -> bool:
+    """Replace the service's database(s) on its shared server with the dumps
+    in snap_dir: drop, re-provision (fresh empty db owned by the app's role),
+    then load. The app must be stopped (do_restore guarantees this)."""
+    c = shared_db_creds(service)
+    files = sorted(snap_dir.glob(f"{service}_shareddb_*"))
+    if not c or not files:
+        return True
+    admin_user, admin_pw = shared_admin(c["engine"])
+    ok = True
+    for db in [c["db"]] + c["extra_dbs"]:
+        f = next((p for p in files if p.name.startswith(f"{service}_shareddb_{db}_")), None)
+        if not f:
+            continue
+        if c["engine"] == "postgres":
+            shared_sql("postgres", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_sql_literal(db)};")
+            dropped, _, err = shared_sql("postgres", f"DROP DATABASE IF EXISTS {_pg_ident(db)};")
+        else:
+            dropped, _, err = shared_sql("mariadb", f"DROP DATABASE IF EXISTS {_my_ident(db)};")
+        if not dropped or not provision_shared_db(service):
+            error(f"  couldn't reset {db} on {c['container']}: {err.strip()}")
+            ok = False
+            continue
+        if c["engine"] == "postgres":
+            # --role: objects are created as the app's role (the admin can
+            # SET ROLE to it), so the app owns everything it owned before.
+            loaded, _, err = BACKEND.db_exec(
+                c["container"],
+                ["pg_restore", "-U", admin_user, "-d", db, "--no-owner", "--role", c["user"]],
+                input=f.read_bytes(),
+            )
+        else:
+            loaded, _, err = BACKEND.db_exec(
+                c["container"], ["mariadb", "-u", admin_user, db], input=f.read_bytes(), env={"MYSQL_PWD": admin_pw},
+            )
+        if loaded:
+            success(f"  restored {db} on {c['container']}")
+        else:
+            error(f"  failed to restore {db} on {c['container']}: {err.strip()}")
+            ok = False
+    return ok
+
+
 def do_status() -> int:
     running = set(get_running_services())
     all_services = (
@@ -1131,6 +1429,15 @@ def do_status() -> int:
     show_tier("AUTOMATION-AI", SERVICES_AUTOMATION_AI)
     show_tier("EXTRA", SERVICES_EXTRA)
     show_tier("MANUAL", SERVICES_MANUAL)
+
+    print(f"  {BOLD}SHARED DATABASES (started/stopped automatically with the services that use them):{RESET}")
+    for engine, container in SHARED_DB_SERVICES.items():
+        up = BACKEND.container_status(container) == "running"
+        users = [s for s in all_services if (c := shared_db_creds(s)) and c["engine"] == engine]
+        live = [s for s in users if s in running]
+        marker = f"{GREEN}●{RESET}" if up else "○"
+        print(f"    {marker} {container} — used by {len(users)} service(s){', running: ' + ' '.join(live) if live else ''}")
+    print()
     success(f"{len(running)}/{len(all_services)} service(s) running")
 
     def show_group(name: str, indent: int) -> None:
@@ -1249,8 +1556,9 @@ def backup_service(service: str) -> None:
     snapshot, then prune old snapshots beyond BACKUP_RETENTION."""
     vols = BACKEND.volumes_for_project(service)
     service_data_dir = SERVICE_DATA_ROOT / service
+    has_shared_db = bool(shared_db_creds(service)) and shared_db_exists(service)
 
-    if not vols and not service_data_dir.is_dir():
+    if not vols and not service_data_dir.is_dir() and not has_shared_db:
         return  # nothing to back up
 
     declared = declared_volumes(service)
@@ -1280,6 +1588,10 @@ def backup_service(service: str) -> None:
         fname = f"service_data_{ts}.tar.gz"
         BACKEND.tar_dir_to(service_data_dir, snap_dir, fname)
         success(f"  service_data -> service_data/backup/{service}/{ts}/{fname}")
+
+    # The app's own database(s) on its shared server, as logical dumps.
+    if has_shared_db:
+        dump_shared_db(service, snap_dir, ts)
 
     prune_snapshots(service)
 
@@ -1401,6 +1713,13 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
         return False
     ensure_wg_tunnel_ready(service, env)
 
+    # Start the app's shared database server (if it uses one) before the
+    # auto-restore check below, which needs to ask it whether the app's
+    # database exists. Provisioning waits until after that check — creating
+    # the database first would make a fresh app look like it has data.
+    if not shared_db_ready(service, env, provision=False):
+        return False
+
     if not fresh:
         service_data_dir = SERVICE_DATA_ROOT / service
         # Cheap dir check first — only pay for the docker-volume-ls call when
@@ -1411,11 +1730,18 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
         # back into do_up once if a live container's volume was deleted out
         # from under it — safe, terminates because restored state is no
         # longer "fresh" on that second pass.
-        if not service_data_dir.is_dir() and not BACKEND.volumes_for_project(service):
+        if (
+            not service_data_dir.is_dir()
+            and not BACKEND.volumes_for_project(service)
+            and not (shared_db_creds(service) and shared_db_exists(service))
+        ):
             snaps = list_snapshots(service)
             if snaps:
                 info(f"{service} has no live volumes or data on disk — restoring latest snapshot ({snaps[-1].name}) before starting (pass --fresh to start blank instead)...")
                 do_restore(service, env, profile)
+
+    if not provision_shared_db(service):
+        return False
 
     stop_proxy_conflict(service, env)
     # Landing bakes env vars into HTML at startup; nginx-plain runs envsubst
@@ -1541,6 +1867,9 @@ def do_update(service: str, env: str, profile: str | None = None) -> bool:
     if not check_data_mounts(service):
         return False
 
+    if not shared_db_ready(service, env):
+        return False
+
     files = compose_files(service, env)
     cenv = compose_env(service)
 
@@ -1564,6 +1893,9 @@ def do_restart(service: str, env: str, profile: str | None) -> bool:
         error(f"Service '{service}' not found")
         return False
     if not check_data_mounts(service):
+        return False
+
+    if not shared_db_ready(service, env):
         return False
 
     files = compose_files(service, env)
@@ -1594,6 +1926,11 @@ def do_backup(service: str, env: str, profile: str | None) -> bool:
         return False
 
     was_running = service in get_running_services()
+
+    # A stopped app's shared server may be down too; the snapshot needs it
+    # up to dump the app's database. main() releases it again afterwards.
+    if not shared_db_ready(service, env, provision=False):
+        return False
 
     do_down(service, env, profile, no_backup=False)
     if was_running:
@@ -1653,6 +1990,13 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
                 error(f"  failed to restore volume {base}")
                 ok = False
 
+    if any(backup_dir.glob(f"{service}_shareddb_*")):
+        if shared_db_ready(service, env, provision=False):
+            if not restore_shared_db(service, backup_dir):
+                ok = False
+        else:
+            ok = False
+
     # Mirror do_backup: put the service back the way it was found, so
     # 'restore' never leaves something the caller didn't ask to stop.
     if was_running:
@@ -1665,6 +2009,20 @@ def do_dump(service: str, env: str, profile: str | None) -> bool:
     """Logical pg_dump of <service>-db into service_data/db_dump/<service>/<ts>/
     — the source dump 'migrate' restores from for a Debian->Alpine (or any
     other Postgres image) migration. Requires the DB container running."""
+    c = shared_db_creds(service)
+    if c:
+        if BACKEND.container_status(c["container"]) != "running":
+            error(f"{c['container']} is not running — start {service} first")
+            return False
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        dump_dir = DB_DUMP_ROOT / service / ts
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        info(f"Dumping {service}'s database(s) from {c['container']} -> service_data/db_dump/{service}/{ts}/")
+        # No roles file: the app's role is recreated from its .env by
+        # provision_shared_db, and a --roles-only dump of a shared server
+        # would carry every other app's role and password with it.
+        return dump_shared_db(service, dump_dir, ts) is not None
+
     db_container = f"{service}-db"
     if BACKEND.container_status(db_container) != "running":
         error(f"{db_container} is not running — start {service} first")
@@ -1729,6 +2087,9 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
     pgvector fork) is never auto-inferred — there's no way to know whether
     that specific fork even publishes an alpine (or any other) variant, so
     --image is required for those."""
+    if shared_db_creds(service):
+        error(f"{service} keeps its database on {shared_db_creds(service)['container']} — migrate only handles a per-service <service>-db container")
+        return False
     dumps = list_dumps(service)
     if not dumps:
         error(f"No dump found for {service} — run 'dump {service}' first")
@@ -2676,6 +3037,9 @@ def main() -> int:
         down_profile = "*"
         for service in lst:
             do_down(service, env, down_profile, no_backup=no_backup)
+        # Reference count: stop a shared database server once no running
+        # service uses it any more (see the Shared databases section).
+        release_shared_dbs(env)
         print()
         success("Done")
 
@@ -2843,6 +3207,9 @@ def main() -> int:
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_backup, services_to_run, env, profile, "Services")
+        # Backing up a stopped app starts its shared server to dump its
+        # database; stop it again if nothing running needs it.
+        release_shared_dbs(env)
 
     elif action == "restore":
         ensure_network()
@@ -2896,6 +3263,7 @@ def main() -> int:
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_restore, services_to_run, env, profile, "Services", snapshot=snapshot)
+        release_shared_dbs(env)
 
     elif action == "snapshots":
         if not services_to_run:

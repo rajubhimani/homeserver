@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Minimal, fast RSS reader with keyboard shortcuts, no JavaScript frontend.
-**Port:** `8093` (host) → `8080` (container) | **Data:** `service_data/data/miniflux/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~29MB total (app 13 + db 16)
+**Port:** `8093` (host) → `8080` (container) | **Data:** `service_data/data/miniflux/` | **Requires:** Postgres, on the shared server ([shared-postgres](shared-postgres.md), started automatically) | **Memory:** app: no hard limit set; measured idle ~13MB (the database's share is part of shared-postgres)
 
 ## Setup
 
@@ -14,6 +14,10 @@ cp services/miniflux/.env.example services/miniflux/.env
 # set MINIFLUX_ADMIN_USER, MINIFLUX_ADMIN_PASSWORD, POSTGRES_PASSWORD
 uv run homeserver.py dev up miniflux
 ```
+
+## Database
+
+Miniflux's database lives on the shared Postgres server, not in its own container. `homeserver.py` reads the `shared_db` entry in `services.json` (pointing at `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD` in this service's `.env`), starts `shared-postgres` if needed, and creates the `miniflux` role and database owned by it. Snapshots include a logical dump of that database (`miniflux_shareddb_miniflux_<ts>.dump`), and `restore` loads it back. Converted on 2026-10-01 as the pilot for [shared-postgres](shared-postgres.md); verified with a backup → delete → restore round trip.
 
 ## Admin account
 
