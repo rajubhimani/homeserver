@@ -15,7 +15,7 @@ uv run homeserver.py dev up dozzle
 
 ## Using it day to day
 
-No separate client — everything happens in the web UI (`https://dozzle.${DOMAIN}/`). Confirmed against Dozzle's own current docs for the pinned `v10.9.0`:
+No separate client — everything happens in the web UI (`https://dozzle.${DOMAIN}/`). Confirmed against Dozzle's own current docs for the then-pinned `v10.9.0` (now `v11.1.3`; v11 is mainly a UI redesign plus GitHub/OIDC sign-in):
 
 - **Multi-container view:** the main screen already shows every container side by side; click one (or shift-click several) to follow multiple logs at once, split-screen.
 - **Search/filter while streaming:** the search bar supports plain text, regex, and filtering by log level, without pausing the live stream — jump to a timestamp and it keeps following from there.

@@ -1,6 +1,6 @@
 services:
   invoiceshelf-db:
-    image: mariadb:12.3.3
+    image: mariadb:13.0.2
     container_name: invoiceshelf-db
     restart: unless-stopped
     env_file: .env

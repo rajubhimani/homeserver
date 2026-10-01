@@ -30,7 +30,7 @@ Install the official [AppFlowy app](https://appflowy.io/download) (desktop: Mac/
 
 > The `appflowy-minio-setup` container runs once to create the `appflowy` S3 bucket, then exits — this is normal, not a crash.
 
-> **Blocked since 2026-09-30 — MinIO image unavailable.** Docker Hub now refuses pulls of `minio/minio` and `minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags either, so on a host without those images cached this service can't start at all. Needs a decision on a replacement S3 backend (e.g. a community MinIO rebuild such as `pgsty/minio`, or Garage/SeaweedFS) before it can run again.
+> **MinIO image: `pgsty/minio` (and `pgsty/mc`), since 2026-10-01.** Docker Hub stopped serving `minio/minio`/`minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags. `pgsty/*` is a community rebuild of the same MinIO binaries (same on-disk format, ships `curl` so the healthcheck is unchanged). Check its tags on Docker Hub when bumping.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ Multi-container: postgres (pgvector), redis, minio, gotrue, appflowy-cloud, appf
 
 ### Compatible image versions
 
-All services below must stay in sync. `appflowy_web` uses its own versioning scheme. The 0.18 set below was bumped on 2026-09-30 but not started, because of the MinIO block below.
+All services below must stay in sync. `appflowy_web` uses its own versioning scheme. The 0.18 set below was bumped on 2026-09-30.
 
 | Service | Image | Version | Notes |
 | --- | --- | --- | --- |

@@ -107,8 +107,8 @@ See [`docs/12-orchestration.md`](12-orchestration.md) for what each of these is 
 
 | Our Service | Status | Tier | Memory | Version |
 | --- | --- | --- | --- | --- |
-| **Stirling PDF (lite)** | ● up | extra | **~274MB** (live, this session) | 2.14.3 — current |
-| **Stirling PDF (full)** | ● up | extra | **~501MB** (live, this session) | 2.14.3 — current |
+| **Stirling PDF (lite)** | ● up | extra | **~274MB** (live, this session) | 3.0.0 — current |
+| **Stirling PDF (full)** | ● up | extra | **~501MB** (live, this session) | 3.0.0 — current |
 
 **Notes:** the "lite"/"ultra-lite" naming previously looked misleading based on a "nearly identical idle RAM" claim — but now measured live, full (~501MB) is actually ~83% heavier than lite (~274MB), a real difference, not "nearly identical." Both are still JVM/Spring Boot apps with a large baseline heap, so this could shift with longer settle time or different load; worth treating the "nearly identical" claim as unconfirmed until re-checked rather than assuming either figure is final. The one certain functional difference is the full variant supports login (`SECURITY_ENABLELOGIN`); the lite image's build has no security module at all — if login doesn't matter, lite is both simpler and, per this session's numbers, lighter too.
 

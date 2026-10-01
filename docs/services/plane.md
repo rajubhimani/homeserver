@@ -34,7 +34,7 @@ Plane's official iOS/Android app requires the self-hosted **Commercial Edition, 
 
 Multi-container: postgres, valkey, rabbitmq, minio, api, worker, beat, web, admin, space, proxy.
 
-> **Blocked since 2026-09-30 — MinIO image unavailable.** Docker Hub now refuses pulls of `minio/minio` and `minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags either, so on a host without those images cached this service can't start at all. Needs a decision on a replacement S3 backend (e.g. a community MinIO rebuild such as `pgsty/minio`, or Garage/SeaweedFS) before it can run again.
+> **MinIO image: `pgsty/minio` (and `pgsty/mc`), since 2026-10-01.** Docker Hub stopped serving `minio/minio`/`minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags. `pgsty/*` is a community rebuild of the same MinIO binaries (same on-disk format, ships `curl` so the healthcheck is unchanged). Check its tags on Docker Hub when bumping.
 
 `plane-web` (`makeplane/plane-frontend`) serves the main app **only**. `/god-mode/*` (onboarding, instance admin) and `/spaces/*` (public views) are served by **separate containers**: `plane-admin` (`makeplane/plane-admin`) and `plane-space` (`makeplane/plane-space`).
 

@@ -7,7 +7,7 @@
 **Purpose:** Tracks your investments (stocks, ETFs, mutual funds, crypto, cash) across every broker in one place: live prices, performance over time, allocation by asset class/region/sector, dividends and fees. It's the investment-side companion to [Firefly III](firefly.md), which tracks day-to-day spending. [`firefly-sync.sh`](#connecting-to-firefly-iii) keeps Firefly's net worth in line with Ghostfolio's market values.
 **Port:** `8162` (host) → `3333` (container) | **Data:** `ghostfolio-postgres` named volume (all accounts, activities and cached market data). Nothing under `service_data/data/`. | **Requires:** Postgres, Redis (cache only, not persisted) | **Memory:** DB capped 384M in compose.yml; app and Redis have no hard limit set. Not measured yet.
 
-Upstream: [github.com/ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio). Pinned to `ghostfolio/ghostfolio:3.75.0`.
+Upstream: [github.com/ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio). Pinned to `ghostfolio/ghostfolio:3.76.0`.
 
 ## Setup
 

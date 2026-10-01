@@ -44,14 +44,14 @@ services:
       - homeserver
 
   erpnext-redis-cache:
-    image: redis:8.6-alpine
+    image: redis:8.10-alpine
     container_name: erpnext-redis-cache
     restart: unless-stopped
     networks:
       - homeserver
 
   erpnext-redis-queue:
-    image: redis:8.6-alpine
+    image: redis:8.10-alpine
     container_name: erpnext-redis-queue
     restart: unless-stopped
     volumes:

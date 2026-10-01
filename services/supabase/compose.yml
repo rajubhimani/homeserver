@@ -1,7 +1,7 @@
 services:
   supabase-db:
     container_name: supabase-db
-    image: supabase/postgres:17.6.1.168
+    image: supabase/postgres:17.11.0.002
     restart: unless-stopped
     env_file: .env
     environment:
@@ -37,7 +37,7 @@ services:
 
   supabase-auth:
     container_name: supabase-auth
-    image: supabase/gotrue:v2.190.0
+    image: supabase/gotrue:v2.197.0
     restart: unless-stopped
     env_file: .env
     environment:
@@ -83,7 +83,7 @@ services:
 
   supabase-rest:
     container_name: supabase-rest
-    image: postgrest/postgrest:v14.17
+    image: postgrest/postgrest:v14.18
     restart: unless-stopped
     env_file: .env
     environment:
@@ -114,7 +114,7 @@ services:
     # Container name looks inconsistent but is required — realtime constructs
     # its tenant id by parsing the subdomain of its own hostname.
     container_name: realtime-dev.supabase-realtime
-    image: supabase/realtime:v2.105.0
+    image: supabase/realtime:v2.140.6
     restart: unless-stopped
     env_file: .env
     environment:
@@ -150,7 +150,7 @@ services:
 
   supabase-storage:
     container_name: supabase-storage
-    image: supabase/storage-api:v1.69.9
+    image: supabase/storage-api:v1.79.28
     restart: unless-stopped
     env_file: .env
     environment:
@@ -191,7 +191,7 @@ services:
 
   supabase-imgproxy:
     container_name: supabase-imgproxy
-    image: darthsim/imgproxy:v4.0.14
+    image: darthsim/imgproxy:v4.0.17
     restart: unless-stopped
     environment:
       IMGPROXY_BIND: ":5001"
@@ -230,7 +230,7 @@ services:
 
   supabase-functions:
     container_name: supabase-edge-functions
-    image: supabase/edge-runtime:v1.76.2
+    image: supabase/edge-runtime:v1.77.2
     restart: unless-stopped
     env_file: .env
     environment:
@@ -260,7 +260,7 @@ services:
 
   supabase-studio:
     container_name: supabase-studio
-    image: supabase/studio:2026.08.31-sha-2c76bb3
+    image: supabase/studio:2026.09.28-sha-5e59b60
     restart: unless-stopped
     env_file: .env
     environment:
@@ -339,7 +339,7 @@ services:
 
   supabase-pooler:
     container_name: supabase-pooler
-    image: supabase/supavisor:2.9.7
+    image: supabase/supavisor:2.9.13
     restart: unless-stopped
     env_file: .env
     environment:
