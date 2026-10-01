@@ -20,7 +20,7 @@ services:
       - homeserver
 
   karakeep-meilisearch:
-    image: getmeili/meilisearch:v1.54.2
+    image: getmeili/meilisearch:v1.41.0
     container_name: karakeep-meilisearch
     restart: unless-stopped
     environment:

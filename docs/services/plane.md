@@ -43,7 +43,7 @@ Routing everything through `plane-web` (as an early version of this setup did) s
 The official `Caddyfile` is the source of truth for this routing — extract it from the real proxy image:
 
 ```bash
-docker run --rm --entrypoint cat makeplane/plane-proxy:v1.4.0 /etc/caddy/Caddyfile
+docker run --rm --entrypoint cat makeplane/plane-proxy:v1.4.2 /etc/caddy/Caddyfile
 ```
 
 It 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then routes each to its own container on port 3000.

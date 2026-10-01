@@ -25,12 +25,13 @@ services:
       - homeserver
 
   paperless-redis:
-    image: redis:8.10-alpine
+    # Valkey, matching paperless-ngx's own docker/compose files.
+    image: valkey/valkey:9.1.2-alpine
     container_name: paperless-redis
     restart: unless-stopped
-    command: redis-server --save "" --stop-writes-on-bgsave-error no
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 60s
       timeout: 5s
       retries: 5

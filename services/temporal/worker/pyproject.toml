@@ -3,7 +3,7 @@ name = "temporal-worker"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "temporalio==1.33.0",
+    "temporalio==1.34.0",
     "docker==7.2.0",
 ]
 

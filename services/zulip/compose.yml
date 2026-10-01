@@ -47,7 +47,7 @@ services:
       - homeserver
 
   zulip-rabbitmq:
-    image: rabbitmq:4.3
+    image: rabbitmq:4.2
     container_name: zulip-rabbitmq
     restart: unless-stopped
     secrets:

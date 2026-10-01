@@ -134,7 +134,7 @@ services:
       - homeserver
 
   grafana:
-    image: grafana/grafana-oss:13.0.2
+    image: grafana/grafana:13.2.3
     # container_name is "observability", not "grafana", so homeserver.py's
     # wait_healthy()/get_running_services() (which match on the service
     # *directory* name, "observability") find this container — same trick
