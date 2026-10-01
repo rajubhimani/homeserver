@@ -1,4 +1,4 @@
 services:
-  supabase-kong:
+  supabase-envoy:
     ports:
       - "8133:8000"

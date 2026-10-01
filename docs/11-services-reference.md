@@ -131,7 +131,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | BookStack | `bookstack` | 8115 | 80 | extra |
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
 | Mealie | `mealie` | 9925 | 9000 | extra |
-| Supabase | `supabase-kong` | 8133 | 8000 | extra |
+| Supabase | `supabase-envoy` (alias `supabase-kong`) | 8133 | 8000 | extra |
 | NocoDB | `nocodb` | 8126 | 8080 | extra |
 | Outline | `outline` | 8114 | 3000 | extra |
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
@@ -246,7 +246,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `nocodb.yourdomain.com` | `nocodb` | `8080` | extra |
 | `documenso.yourdomain.com` | `documenso` | `3000` | extra |
 | `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
-| `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
+| `supabase.yourdomain.com` | `supabase-kong` (alias of `supabase-envoy`) | `8000` | extra |
 | `gitlab.yourdomain.com` | `gitlab` | `80` | manual |
 
 ---
