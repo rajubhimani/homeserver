@@ -66,4 +66,6 @@ Kept on their own database on purpose: appflowy (pgvector, pg16), supabase (cust
 ## History
 
 - 2026-10-01: created. Miniflux converted first as the pilot, verified live: auto-start, provisioning (database owned by its role), snapshot dump, backup → delete → restore round trip, and auto-stop when the last user went down.
-- 2026-10-01: the remaining 18 above-CORE Postgres apps converted; each brought up and checked healthy on the shared server.
+- 2026-10-01: the remaining 18 above-CORE Postgres apps were converted, and each was brought up and checked healthy on the shared server. Two needed fixes:
+  - **temporal:** `temporal-sql-tool create` always issues `CREATE DATABASE`, which an app role may not do ("permission denied to create database"). The step was removed, since provisioning pre-creates both databases. Verified on first and second start: 40 + 3 tables, owned by `temporal`.
+  - **penpot:** unrelated to the database; see penpot.md.

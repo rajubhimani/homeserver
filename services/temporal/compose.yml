@@ -11,7 +11,10 @@ services:
   # idempotent no-ops when already applied. Since 2026-10-01 both databases
   # (${POSTGRES_DB} and temporal_visibility) live on shared-postgres and are
   # pre-created by homeserver.py's provisioning (services.json shared_db
-  # extra_dbs), so `create` finds them already there.
+  # extra_dbs), so there's no `create` step any more: temporal-sql-tool's
+  # create always issues CREATE DATABASE, which the temporal role (owner of
+  # its two databases, nothing more) isn't allowed to do — it failed with
+  # "permission denied to create database".
   temporal-schema-setup:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
     container_name: temporal-schema-setup
@@ -23,7 +26,6 @@ services:
       - |
         set -eu
         for db in ${POSTGRES_DB} temporal_visibility; do
-          temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db "$$db" create
           temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db "$$db" setup-schema -v 0.0
         done
         temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db ${POSTGRES_DB} update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned

@@ -138,6 +138,7 @@ def test_temporal_schema_setup_targets_both_provisioned_databases():
     assert f"--ep {c['host']}" in cmd and f"-u {c['user']}" in cmd
     for db in [c["db"], *c["extra"]]:
         assert f"--db {db} update-schema" in cmd, f"schema setup never updates {db}"
+    assert not re.search(r"\bcreate\b", cmd), "temporal's role can't CREATE DATABASE; provisioning creates both databases"
 
 
 def test_dagster_yaml_storage_uses_shared_postgres_and_spec_keys():

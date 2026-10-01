@@ -49,6 +49,7 @@ No confirmed official mobile app as of this check (a mobile app has been a long-
 
 - `PENPOT_SECRET_KEY` derives every other internal key — losing or changing it invalidates every active session and pending invitation. **Both `penpot-backend` and `penpot-exporter` need it set**, not just the backend — the exporter crash-loops with a `missing-key :secret-key` schema error otherwise (confirmed while verifying this setup).
 - SMTP (`PENPOT_SMTP_*`) is required for invitations/notifications to actually send, but setting the host/port/credentials alone does nothing — Penpot only turns SMTP on via the `enable-smtp` flag in `PENPOT_FLAGS`, not a separate on/off env var. (An earlier version of this file had an inert `PENPOT_SMTP_ENABLED` var that Penpot never reads — caught and removed while backfilling this doc.)
+- **Frontend healthcheck uses bash, not wget:** `penpotapp/frontend` 2.18 (Debian trixie base) ships no `wget`/`curl`/`nc`, so the old `wget` check could never pass, and `up` timed out with the frontend "unhealthy" while serving pages fine. It now opens `/dev/tcp/127.0.0.1/8080`, sends `GET /` and requires `200` (fixed 2026-10-01).
 - No confirmed dedicated health endpoint on the frontend — the compose healthcheck and landing-page health route both just check that `/` responds (Penpot's own backend health endpoint isn't exposed through the frontend/nginx layer, only on direct backend access).
 
 ---
