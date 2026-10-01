@@ -586,3 +586,28 @@ Preventive knowledge — things to know *before* they bite you, as opposed to th
 ---
 
 [← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)
+
+## Tests (`homeserver.py` and repo consistency)
+
+```bash
+uv sync            # once — installs pytest (dev dependency only; homeserver.py stays pure-stdlib)
+uv run pytest      # ~1s, never touches Docker
+```
+
+- **`tests/test_lifecycle.py`, `tests/test_shared_db.py`** run the real `homeserver.py` code (`main()`, `do_up`, `do_down`, backup/restore…) against `FakeBackend` (`tests/conftest.py`), an in-memory implementation of the `DockerBackend` interface. Any real `subprocess.run` fails the test, so the live stack can't be touched. They cover:
+  - the tier cascades and `down` semantics;
+  - bundles never stopping `requires` infra;
+  - snapshot retention and auto-restore;
+  - the shared-database reference counting, provisioning, dumps and restore.
+- **`tests/test_backend_interface.py`** checks that both backends implement the whole interface, and that nothing calls docker outside them.
+- **`tests/test_repo_invariants.py`** checks that `services.json`, the compose files, `.env.example`, the docs and the `CLAUDE.md` tier lists agree:
+  - prod ports are loopback-only and mirrored on `10.8.0.1`;
+  - every compose variable is in `.env.example`;
+  - every service has a doc;
+  - doc image tags aren't stale;
+  - `shared_db` apps are wired consistently.
+
+  Legitimate exceptions are listed in that file with a reason.
+
+Run it after any change to `homeserver.py`, `services.json`, a compose file, a `.env.example` or a doc. When you add a `DockerBackend` method, `FakeBackend` must implement it too: it subclasses the ABC, so the suite errors out until it does.
+

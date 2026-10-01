@@ -57,6 +57,7 @@ Admin UI:
 
 - **Cloudflare path:** `http://localhost:8181` (or SSH tunnel: `ssh -L 8181:127.0.0.1:8181 user@server`)
 - **Tailscale path:** `http://100.x.x.x:8181`
+- **WireGuard path:** `http://10.8.0.1:8181`. In prod, every NPM port (8180/8443/8181) is also mirrored on wg-easy's tunnel address, like every other service; see [09 — Firewall](09-firewall.md).
 
 Default login: `admin@example.com` / `changeme` — change immediately.
 

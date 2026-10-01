@@ -23,4 +23,4 @@ It's the one version every intended user accepts. OrangeHRM's installer requires
 
 ## Status
 
-Created 2026-10-01. Intended users: bookstack, invoiceshelf, orangehrm. **No app uses it yet.** The BookStack pilot conversion is pending, so it never starts until one does.
+Created 2026-10-01. BookStack is the first user and was converted as the pilot, verified live: auto-start, provisioning (user granted on its own database only), snapshot `.sql` dump, backup → drop → restore round trip, and auto-stop when it went down. InvoiceShelf and OrangeHRM follow.

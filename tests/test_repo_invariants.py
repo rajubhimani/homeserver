@@ -1,0 +1,221 @@
+"""Repo-wide consistency checks — services.json, compose files, .env.example and
+docs must agree. These catch drift that only shows up on a fresh clone or a
+later edit (CLAUDE.md: a compose/.env change isn't done until .env.example and
+the service's doc match). Exceptions are listed explicitly with a reason;
+adding one should be a deliberate decision, not a way to silence a failure."""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+import homeserver as hs
+
+REPO = hs.BASE_DIR
+SERVICES = json.loads((REPO / "services.json").read_text())["services"]
+BY_SLUG = {s["slug"]: s for s in SERVICES}
+KNOWN_TIERS = {"min", "core", "daily", "browser", "office", "automation-ai", "extra", "manual", "shared"}
+ABOVE_CORE = {"daily", "browser", "office", "automation-ai", "extra", "manual"}
+INJECTED_VARS = {"DOMAIN", "DATA_ROOT", "DOCKER_SOCKET"}  # set by homeserver.py's compose_env / root .env
+
+
+def service_dirs() -> list[str]:
+    return sorted(p.name for p in (REPO / "services").iterdir()
+                  if p.is_dir() and (p / hs.base_file(p.name)).is_file())
+
+
+def compose_text(svc: str, name: str | None = None) -> str:
+    return (REPO / "services" / svc / (name or hs.base_file(svc))).read_text()
+
+
+def env_example_keys(svc: str) -> set[str]:
+    p = REPO / "services" / svc / ".env.example"
+    return set(re.findall(r"^([A-Z_0-9]+)=", p.read_text(), re.M)) if p.is_file() else set()
+
+
+def strip_comments(text: str) -> str:
+    return "\n".join(line.split("#", 1)[0] if line.lstrip().startswith("#") else line for line in text.splitlines())
+
+
+# ── services.json ─────────────────────────────────────────────────
+
+def test_slugs_are_unique():
+    slugs = [s["slug"] for s in SERVICES]
+    assert len(slugs) == len(set(slugs))
+
+
+@pytest.mark.parametrize("entry", [s for s in SERVICES if s.get("tier")], ids=lambda s: s["slug"])
+def test_tier_is_known(entry):
+    assert entry["tier"] in KNOWN_TIERS
+
+
+def test_bundle_and_requires_reference_real_services():
+    for s in SERVICES:
+        if s.get("bundle"):
+            assert s["bundle"] in BY_SLUG
+        for r in s.get("requires", []):
+            assert r in BY_SLUG, f"{s['slug']} requires unknown {r}"
+
+
+# Directories that are deliberately not services.json entries.
+UNLISTED_DIRS = {
+    hs.PROXY_STANDBY: "Nginx Proxy Manager — manual standby proxy, addressed via PROXY_STANDBY",
+}
+
+
+@pytest.mark.parametrize("svc", service_dirs())
+def test_every_service_dir_is_registered(svc):
+    assert svc in BY_SLUG or svc in UNLISTED_DIRS, f"services/{svc} has a compose file but no services.json entry"
+
+
+@pytest.mark.parametrize("svc", service_dirs())
+def test_every_service_has_dev_and_prod_overrides(svc):
+    d = REPO / "services" / svc
+    assert (d / "compose.dev.yml").is_file() and (d / "compose.prod.yml").is_file()
+
+
+# ── ports (CLAUDE.md compose file pattern) ────────────────────────
+
+# Published on every interface in prod on purpose.
+PUBLIC_PROD_PORTS = {
+    "syncthing": "device sync + LAN discovery need peer reachability — docs/services/syncthing.md",
+}
+
+
+@pytest.mark.parametrize("svc", service_dirs())
+def test_prod_ports_are_loopback_and_mirrored_on_wireguard(svc):
+    text = strip_comments(compose_text(svc, "compose.prod.yml"))
+    loopback = set(re.findall(r"127\.0\.0\.1:([^:\"\s]+):(\d+)", text))
+    mirrored = set(re.findall(r"10\.8\.0\.1:([^:\"\s]+):(\d+)", text))
+    assert loopback <= mirrored, f"missing 10.8.0.1 mirror for {sorted(loopback - mirrored)}"
+    if svc not in PUBLIC_PROD_PORTS:
+        public = re.findall(r'^\s*-\s*"?((?:0\.0\.0\.0:)?\d+:\d+[^"\s]*)"?\s*$', text, re.M)
+        assert not public, f"prod publishes on all interfaces: {public}"
+
+
+def test_every_prod_host_port_is_in_the_services_reference():
+    ref = (REPO / "docs" / "11-services-reference.md").read_text()
+    missing = []
+    for svc in service_dirs():
+        text = strip_comments(compose_text(svc, "compose.prod.yml"))
+        for port in re.findall(r"127\.0\.0\.1:(?:\$\{[A-Z_]+:-)?(\d+)\}?:", text):
+            if not re.search(rf"\b{port}\b", ref):
+                missing.append(f"{svc}:{port}")
+    assert not missing, f"ports missing from docs/11-services-reference.md: {missing}"
+
+
+# ── .env.example ──────────────────────────────────────────────────
+
+@pytest.mark.parametrize("svc", service_dirs())
+def test_env_file_services_ship_an_env_example(svc):
+    if "env_file" in compose_text(svc):
+        assert (REPO / "services" / svc / ".env.example").is_file()
+
+
+@pytest.mark.parametrize("svc", service_dirs())
+def test_compose_variables_without_defaults_are_in_env_example(svc):
+    keys = env_example_keys(svc) | INJECTED_VARS
+    missing = set()
+    # Only the files homeserver.py actually loads, not vendored references
+    # like supabase's upstream-docker-compose.yml.
+    names = [hs.base_file(svc), "compose.dev.yml", "compose.prod.yml", "compose.podman.yml"]
+    for f in [REPO / "services" / svc / n for n in names if (REPO / "services" / svc / n).is_file()]:
+        for m in re.finditer(r"(?<!\$)\$\{([A-Z_0-9]+)(:?[-?][^}]*)?\}", strip_comments(f.read_text())):
+            if not m.group(2) and m.group(1) not in keys:
+                missing.add(m.group(1))
+    assert not missing, f"used in compose with no default, missing from .env.example: {sorted(missing)}"
+
+
+# ── shared databases ──────────────────────────────────────────────
+
+SHARED_USERS = [s for s in SERVICES if s.get("shared_db")]
+ENGINE_IMAGE = {"postgres": r"postgres", "mariadb": r"mariadb|mysql"}
+
+
+@pytest.mark.parametrize("entry", SHARED_USERS, ids=lambda s: s["slug"])
+def test_shared_db_apps_are_wired_consistently(entry):
+    svc, spec = entry["slug"], entry["shared_db"]
+    assert entry["tier"] in ABOVE_CORE, "only services above CORE may use a shared database"
+    assert spec["engine"] in hs.SHARED_DB_SERVICES
+    keys = env_example_keys(svc)
+    for field in ("db", "user", "password"):
+        assert spec[field].startswith("=") or spec[field] in keys, f"{field} key {spec[field]} not in .env.example"
+    text = strip_comments(compose_text(svc))
+    assert not re.search(rf"image:\s*\S*({ENGINE_IMAGE[spec['engine']]}):", text), "still runs its own database container"
+    assert hs.SHARED_DB_SERVICES[spec["engine"]] in text, "database host isn't the shared server"
+    assert not (REPO / "services" / svc / "postgres-init").exists()
+
+
+@pytest.mark.parametrize("server", list(hs.SHARED_DB_SERVICES.values()))
+def test_shared_servers_publish_no_ports(server):
+    assert "ports:" not in strip_comments(compose_text(server, "compose.prod.yml"))
+    assert "ports:" not in strip_comments(compose_text(server, "compose.dev.yml"))
+
+
+# ── docs ──────────────────────────────────────────────────────────
+
+# Services documented somewhere other than docs/services/<slug>.md.
+DOC_ELSEWHERE = {
+    "landing": "docs/07-landing.md",
+    "nginx-plain": "docs/04-nginx.md",
+    "stirling-pdf-lite": "docs/services/stirling-pdf.md",
+}
+
+
+@pytest.mark.parametrize("svc", [s["slug"] for s in SERVICES if hs.is_managed_service(s)])
+def test_every_managed_service_is_documented(svc):
+    docs = REPO / "docs" / "services"
+    if svc in DOC_ELSEWHERE:
+        assert (REPO / DOC_ELSEWHERE[svc]).is_file()
+    else:
+        assert (docs / f"{svc}.md").is_file() or (docs / svc).is_dir(), f"no docs/services/{svc}.md"
+
+
+def _pinned_images() -> dict[str, set[str]]:
+    pins: dict[str, set[str]] = {}
+    for svc in service_dirs():
+        env = hs.load_env_file(REPO / "services" / svc / ".env.example")
+        for m in re.finditer(r"^\s*image:\s*(\S+)", strip_comments(compose_text(svc)), re.M):
+            img = re.sub(r"\$\{(\w+)(:-([^}]*))?\}", lambda x: env.get(x.group(1), x.group(3) or ""), m.group(1))
+            repo, _, tag = img.rpartition(":")
+            pins.setdefault(repo, set()).add(tag)
+    return pins
+
+
+HISTORY_WORDS = re.compile(r"→|->|bumped|from `|was |previously|earlier|upgrad|hit going|as of|then-pinned|"
+                           r"confirmed (live|on)|captured|unchanged in|before|old |migrat|reverted|tried|official|upstream", re.I)
+
+
+def test_docs_do_not_cite_stale_image_tags():
+    """A doc line naming repo:tag for an image this stack pins must use the
+    current tag — unless the line is clearly historical (bumped/→/as of...)."""
+    pins = _pinned_images()
+    pattern = re.compile(r"`((?:[a-z0-9.-]+/)*[a-z0-9._-]+):(v?\d[\w.-]*)`")
+    stale = []
+    for doc in sorted((REPO / "docs").rglob("*.md")):
+        for n, line in enumerate(doc.read_text().splitlines(), 1):
+            if HISTORY_WORDS.search(line):
+                continue
+            for m in pattern.finditer(line):
+                repo, tag = m.groups()
+                if repo in pins and tag not in pins[repo]:
+                    stale.append(f"{doc.relative_to(REPO)}:{n} {repo}:{tag} (compose: {sorted(pins[repo])})")
+    assert not stale, "stale image tags in docs:\n" + "\n".join(stale)
+
+
+def test_claude_md_tier_lists_match_services_json():
+    claude = REPO / "CLAUDE.md"
+    if not claude.is_file():
+        pytest.skip("CLAUDE.md is gitignored/local-only")
+    text = claude.read_text()
+    tiers = {"SERVICES_MIN": "min", "SERVICES_CORE": "core", "SERVICES_DAILY": "daily", "SERVICES_OFFICE": "office",
+             "SERVICES_AUTOMATION_AI": "automation-ai", "SERVICES_EXTRA": "extra"}
+    for key, tier in tiers.items():
+        m = re.search(rf"\*\*{key}\*\*[^:]*:\s*(.+)", text)
+        assert m, f"{key} line missing from CLAUDE.md"
+        listed = [re.sub(r"\s*\(.*", "", x).strip() for x in m.group(1).split("→")]
+        actual = [s["slug"] for s in SERVICES if s.get("tier") == tier and not s.get("virtual")]
+        assert listed == actual, f"CLAUDE.md {key} out of date"

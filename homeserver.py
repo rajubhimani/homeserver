@@ -1351,7 +1351,8 @@ def dump_shared_db(service: str, dest_dir: Path, ts: str) -> Path | None:
             continue
         (dest_dir / fname).write_bytes(data)
         last = dest_dir / fname
-        success(f"  {c['container']}/{db} -> {dest_dir.relative_to(BASE_DIR)}/{fname}")
+        shown = dest_dir.relative_to(BASE_DIR) if dest_dir.is_relative_to(BASE_DIR) else dest_dir
+        success(f"  {c['container']}/{db} -> {shown}/{fname}")
     return last
 
 
@@ -3005,7 +3006,11 @@ def main() -> int:
     elif action in ("down", "-d"):
         if run_all:
             header("Stopping all services and profile containers (reverse order)...")
-            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
+            # MANUAL services are never auto-started, but 'down all' is the
+            # one command that stops everything, so include the ones actually
+            # running (not stopped ones, which would only churn snapshots).
+            running_manual = [s for s in SERVICES_MANUAL if s in get_running_services()]
+            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + running_manual + services_to_run))
         elif run_core:
             header("Stopping core services (reverse order) — min stays running...")
             lst = list(reversed(SERVICES_CORE + services_to_run))

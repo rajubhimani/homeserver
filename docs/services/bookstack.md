@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Shelves/books/chapters/pages wiki — simple, dead-reliable structure. Good fit for "one book per homelab service, one page per gotcha."
-**Port:** `8115` (host) → `80` (container) | **Data:** `service_data/data/bookstack/` | **Requires:** MariaDB
+**Port:** `8115` (host) → `80` (container) | **Data:** `service_data/data/bookstack/` | **Requires:** MariaDB, on the shared server ([shared-mariadb](shared-mariadb.md), started automatically)
 
 ## Setup
 
@@ -48,7 +48,7 @@ New users can then sign up from the login page's "Register" link.
 ## Notes
 
 - Uses the `linuxserver/bookstack` image, which follows the `PUID`/`PGID`/`/config` convention (same pattern as `syncthing` in this stack) rather than this repo's usual `DATA_ROOT` bind-mount-only shape — config, uploads, and BookStack's own `.env` all live under `service_data/data/bookstack/config/`.
-- `bookstack-db` uses `mariadb:13.0.2` — the first MariaDB (rather than Postgres) instance in this stack; see the `homeserver-postgres` skill for why DB data still needs a named volume (`bookstack-mariadb`, mounted at `/var/lib/mysql`) rather than a bind mount.
+- **Database:** BookStack's database lives on the shared MariaDB server (`shared-mariadb`, MariaDB 11.8), not in its own container. `homeserver.py` reads the `shared_db` entry in `services.json` (pointing at `MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD` in this service's `.env`), starts the server if needed, and creates the database plus a user granted on that database only. Snapshots include `bookstack_shareddb_bookstack_<ts>.sql`. Converted 2026-10-01 as the MariaDB pilot; verified with a backup → drop → restore round trip and the automatic stop once BookStack went down. (Until then it ran its own `bookstack-db` container; `MYSQL_ROOT_PASSWORD` in `.env` is now unused.)
 - Health endpoint: `/status`.
 
 ---
