@@ -7,6 +7,9 @@
 **Purpose:** Self-hosted design and prototyping tool (Figma alternative), real-time collaborative.
 **Port:** `8131` (host) → `8080` (container, on `penpot-frontend`) | **Data:** `service_data/data/penpot/assets/` | **Requires:** Postgres, Redis (Valkey)
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `penpot` (fixed), `penpot` (fixed), `POSTGRES_PASSWORD` in `services/penpot/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -23,9 +26,9 @@ Open `https://penpot.<domain>/` (or `http://<host>:8131` in dev) and create the 
 
 `disable-registration` is already in `PENPOT_FLAGS` by default — closed from the start (officially described as recommended for demo instances rather than hardened production use, but reasonable for a personal instance). Create your first account before this matters, or briefly remove the flag to do so. To add another account later without reopening public registration, use Penpot's own team-invitation flow instead — from inside an existing team, **Members → Invite** sends an email invite that works regardless of `disable-registration` (that flag only blocks the public sign-up page, not invites to an existing team).
 
-## Architecture — 5 containers
+## Architecture — 4 containers + shared Postgres
 
-- `penpot-db` (Postgres) — app metadata.
+- Postgres — app metadata, in the `penpot` database on `shared-postgres` (database and user are fixed as `penpot`).
 - `penpot-redis` (Valkey) — websocket notifications/caching.
 - `penpot-backend` — API server, handles asset storage (`assets-fs` backend, writes to the shared `assets` volume).
 - `penpot-exporter` — headless-browser-based PDF/PNG export, talks to the frontend internally.
@@ -46,6 +49,8 @@ No confirmed official mobile app as of this check (a mobile app has been a long-
 
 - `PENPOT_SECRET_KEY` derives every other internal key — losing or changing it invalidates every active session and pending invitation. **Both `penpot-backend` and `penpot-exporter` need it set**, not just the backend — the exporter crash-loops with a `missing-key :secret-key` schema error otherwise (confirmed while verifying this setup).
 - SMTP (`PENPOT_SMTP_*`) is required for invitations/notifications to actually send, but setting the host/port/credentials alone does nothing — Penpot only turns SMTP on via the `enable-smtp` flag in `PENPOT_FLAGS`, not a separate on/off env var. (An earlier version of this file had an inert `PENPOT_SMTP_ENABLED` var that Penpot never reads — caught and removed while backfilling this doc.)
+- **Frontend healthcheck uses bash, not wget:** `penpotapp/frontend` 2.18 (Debian trixie base) ships no `wget`/`curl`/`nc`, so the old `wget` check could never pass, and `up` timed out with the frontend "unhealthy" while serving pages fine. It now opens `/dev/tcp/127.0.0.1/8080`, sends `GET /` and requires `200` (fixed 2026-10-01).
+- **Backend healthcheck:** `curl http://localhost:6060/readyz`, Penpot's own readiness endpoint and the same check Penpot's own `docker-compose.yaml` uses. `penpot-exporter` has none, as upstream (added 2026-10-02).
 - No confirmed dedicated health endpoint on the frontend — the compose healthcheck and landing-page health route both just check that `/` responds (Penpot's own backend health endpoint isn't exposed through the frontend/nginx layer, only on direct backend access).
 
 ---

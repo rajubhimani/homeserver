@@ -5,9 +5,12 @@
 ---
 
 **Purpose:** Tracks your investments (stocks, ETFs, mutual funds, crypto, cash) across every broker in one place: live prices, performance over time, allocation by asset class/region/sector, dividends and fees. It's the investment-side companion to [Firefly III](firefly.md), which tracks day-to-day spending. [`firefly-sync.sh`](#connecting-to-firefly-iii) keeps Firefly's net worth in line with Ghostfolio's market values.
-**Port:** `8162` (host) → `3333` (container) | **Data:** `ghostfolio-postgres` named volume (all accounts, activities and cached market data). Nothing under `service_data/data/`. | **Requires:** Postgres, Redis (cache only, not persisted) | **Memory:** DB capped 384M in compose.yml; app and Redis have no hard limit set. Not measured yet.
+**Port:** `8162` (host) → `3333` (container) | **Data:** `ghostfolio-postgres` named volume (all accounts, activities and cached market data). Nothing under `service_data/data/`. | **Requires:** Postgres, Redis (cache only, not persisted) | **Memory:** database on `shared-postgres` (counted there); app and Redis have no hard limit set. Not measured yet.
 
-Upstream: [github.com/ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio). Pinned to `ghostfolio/ghostfolio:3.75.0`.
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/ghostfolio/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
+Upstream: [github.com/ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio). Pinned to `ghostfolio/ghostfolio:3.76.0`.
 
 ## Setup
 
@@ -25,7 +28,7 @@ Open `https://ghostfolio.<domain>/` (or `http://<host>:8162` in dev) → **Get S
 Then, as admin:
 
 1. **Admin Control → Overview → User Signup → off**, unless you want anyone who can reach the URL to be able to create an account.
-2. **Settings (your user) → Base Currency** → e.g. `INR`. Everything is converted into this for totals.
+2. **Admin Control → Market Data → `+` → switch to Add Currency → `INR`**, then **Settings (your user) → Base Currency → `INR`**. Everything is converted into this for totals. On a fresh install the Base Currency list only offers `USD`, because it lists just the currencies Ghostfolio already knows about (stored in the admin `CURRENCIES` property, empty at first). Adding INR first also makes Ghostfolio fetch the `USDINR` exchange rate.
 3. **Accounts → Add** one account per broker/bank/wallet (Zerodha, Groww, a savings account, a crypto wallet...).
 4. **Activities → Add / Import** your buys, sells and dividends. Imports take CSV or JSON (upload limit set to 20M in nginx-plain).
 

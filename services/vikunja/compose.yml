@@ -1,28 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  vikunja-db:
-    image: postgres:18.6-alpine
-    container_name: vikunja-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - vikunja-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   # Same pattern as firefly-permissions/mattermost-permissions -- vikunja's
   # image runs as a hardcoded uid=1000,gid=0 with no root fallback, so it
   # can never self-heal its own bind mount. Without this, a wipe/--fresh
@@ -31,7 +10,7 @@ services:
   # permission denied [process uid=1000 gid=0, dir owner uid=0 gid=0]" --
   # confirmed live via an actual wipe-and-restart test, not assumed.
   vikunja-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: vikunja-permissions
     restart: "no"
     user: "0:0"
@@ -46,7 +25,7 @@ services:
     env_file: .env
     environment:
       VIKUNJA_DATABASE_TYPE: postgres
-      VIKUNJA_DATABASE_HOST: vikunja-db
+      VIKUNJA_DATABASE_HOST: shared-postgres
       VIKUNJA_DATABASE_USER: ${POSTGRES_USER}
       VIKUNJA_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
       VIKUNJA_DATABASE_DATABASE: ${POSTGRES_DB}
@@ -61,15 +40,10 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
-      vikunja-db:
-        condition: service_healthy
       vikunja-permissions:
         condition: service_completed_successfully
     networks:
       - homeserver
-
-volumes:
-  vikunja-postgres-alpine:
 
 networks:
   homeserver:

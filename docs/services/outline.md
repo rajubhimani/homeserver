@@ -7,6 +7,9 @@
 **Purpose:** Polished self-hosted team wiki / docs app with good search.
 **Port:** `8114` (host) → `3000` (container) | **Data:** `service_data/data/outline/` | **Requires:** Postgres, Redis, and an OIDC/OAuth provider (no built-in email/password login)
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/outline/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup — Authentik OIDC required before first login
 
 Outline has **no built-in username/password login** — it requires at least one OAuth/OIDC provider configured or nobody can sign in. This stack already runs Authentik, so use it:
@@ -75,7 +78,7 @@ Browser-only for this deployment, by design of the app rather than a limitation 
 - `SECRET_KEY` / `UTILS_SECRET` must each be a random 32-byte hex string (`openssl rand -hex 32`) — Outline refuses to start without them set to non-default values.
 - File attachments use `FILE_STORAGE=local`, stored under `service_data/data/outline/data/`. `FILE_STORAGE_UPLOAD_MAX_SIZE` caps uploads (default ~250MB).
 - Health endpoint: `/_health`.
-- Needs both Postgres and Redis — two extra containers (`outline-db`, `outline-redis`) beyond the app itself, heavier than most services in this stack.
+- Needs both Postgres and Redis — its database is on `shared-postgres` and Redis is one extra container (`outline-redis`), heavier than most services in this stack.
 
 ---
 

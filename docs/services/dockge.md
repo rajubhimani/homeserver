@@ -26,7 +26,7 @@ Confirmed against Dockge's own current docs/GitHub for the pinned `1.5.0`:
 
 ## Health endpoint
 
-No `healthcheck:` is defined in `services/dockge/compose.yml` — `docker ps` will always show it without a health status, and there's no dedicated endpoint documented upstream to add one against.
+`services/dockge/compose.yml` checks that the web UI answers: `node -e fetch('http://localhost:5001')` (the image ships Node but no curl/wget). Upstream's own compose defines no healthcheck and documents no dedicated endpoint, so this is a local choice (added 2026-10-02, verified healthy on a fresh install).
 
 ## Notes
 

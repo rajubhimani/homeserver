@@ -7,6 +7,9 @@
 **Purpose:** Data orchestrator built around software-defined assets — track lineage, materialize pipelines, and observe data quality.
 **Port:** `8139` (host) → `3000` (container, `dagster-webserver`) | **Data:** DB in a named volume; no `DATA_ROOT`-scoped app data | **Requires:** Postgres
 
+**Database:** on the shared Postgres server ([shared-postgres](../shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `DAGSTER_POSTGRES_DB`, `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD` in `services/dagster/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -24,7 +27,7 @@ mechanism.
 
 Open `https://dagster.<domain>/` (or `http://<host>:8139` in dev) — no login/setup wizard, the UI is open to anyone who can reach it (see Notes).
 
-**Health endpoint:** `dagster-webserver`'s own `compose.yml` healthcheck hits `GET /server_info` (port `3000` internally, `8139` on the dev host port) via `python3 -c "import urllib.request; ..."` rather than `curl` — `python:3.13-slim` doesn't ship `curl`, and adding a package just for the healthcheck wasn't worth it. `dagster-db` uses a plain `pg_isready` check instead, since it's Postgres.
+**Healthchecks:** `dagster-user-code` runs `dagster api grpc-health-check -p 4000`. `dagster-daemon` runs `dagster-daemon liveness-check` at 120s interval / 60s timeout / 2 retries: it reads heartbeats from Postgres and is slow, and those are the commonly used timings. All three Dagster containers set `init: true` (2026-10-02, verified healthy on a fresh install). **Health endpoint:** `dagster-webserver`'s own `compose.yml` healthcheck hits `GET /server_info` (port `3000` internally, `8139` on the dev host port) via `python3 -c "import urllib.request; ..."` rather than `curl` — `python:3.14-slim` (the base in both Dockerfiles) doesn't ship `curl`, and adding a package just for the healthcheck wasn't worth it. The database's readiness is covered by `shared-postgres`'s own `pg_isready` check, which `homeserver.py` waits on before starting Dagster.
 
 ## Architecture — no official pre-built webserver/daemon image, unlike Airflow or Temporal
 
@@ -32,13 +35,13 @@ Dagster's self-hosted webserver+daemon aren't published as ready-to-run images �
 
 **`dagster-user-code` is the reason this can't be a plain image at all** — it's the gRPC server exposing your actual pipeline code, and "your actual pipeline code" doesn't exist as a generic Docker Hub image by definition. See "Where your pipeline code actually lives" below for where `definitions.py` really is and why.
 
-4 containers total: `dagster-db`, `dagster-user-code`, `dagster-webserver`, `dagster-daemon` (plus two named volumes: Postgres data and `io_manager_storage`, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
+3 containers total: `dagster-user-code`, `dagster-webserver`, `dagster-daemon`, with run/event storage on `shared-postgres` (`dagster.yaml`'s `hostname: shared-postgres`, baked into the image, so rebuild it after changing that file), plus the `io_manager_storage` named volume, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
 
 ```mermaid
 flowchart LR
     UI["dagster-webserver<br/>(web UI + GraphQL)"] -->|gRPC| UC["dagster-user-code<br/>(your definitions.py)"]
     Daemon["dagster-daemon<br/>(schedules, sensors,<br/>run queue)"] -->|gRPC| UC
-    UI --> DB[("dagster-db<br/>Postgres")]
+    UI --> DB[("shared-postgres<br/>dagster db")]
     Daemon --> DB
 ```
 
@@ -77,7 +80,7 @@ flowchart TD
     RL -->|"docker_executor,<br/>same socket"| Step1["step container 1<br/>(512m, 1 CPU)"]
     RL --> Step2["step container 2<br/>(512m, 1 CPU)"]
     Step1 -.->|io_manager_storage volume| Step2
-    Step1 & Step2 --> DB[("dagster-db")]
+    Step1 & Step2 --> DB[("shared-postgres")]
 ```
 
 Every box on the right is short-lived — created for one run or one step, then removed — unlike the 4 long-running containers above.
@@ -122,7 +125,7 @@ Dagster 1.13 also added partitioned Asset Checks (a check scoped to one partitio
 
 ## Resource caps on the platform's own containers
 
-Separately from the per-run/per-step caps above, the 4 platform containers themselves have `deploy.resources.limits.memory` caps: `dagster-db` 512M, `dagster-user-code` 256M (just serves gRPC, lightweight), `dagster-webserver` 512M, `dagster-daemon` 384M — conservative starting points, same reasoning as Temporal's (see `docs/services/temporal/temporal.md`'s "Resource caps" section).
+Separately from the per-run/per-step caps above, the 3 platform containers themselves have `deploy.resources.limits.memory` caps (the database's memory is `shared-postgres`'s): `dagster-user-code` 256M (just serves gRPC, lightweight), `dagster-webserver` 512M, `dagster-daemon` 384M — conservative starting points, same reasoning as Temporal's (see `docs/services/temporal/temporal.md`'s "Resource caps" section).
 
 ## Notes
 

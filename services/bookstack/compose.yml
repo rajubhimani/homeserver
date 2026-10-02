@@ -1,32 +1,9 @@
+# Database lives on the shared MariaDB server (services/shared-mariadb),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-mariadb.md.
 services:
-  bookstack-db:
-    image: mariadb:12.3.2
-    container_name: bookstack-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    command: --innodb-buffer-pool-size=128M --max-connections=20
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - bookstack-mariadb:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    networks:
-      - homeserver
-
   bookstack:
-    image: lscr.io/linuxserver/bookstack:v26.05.4-ls282
+    image: lscr.io/linuxserver/bookstack:v26.09.1-ls287
     container_name: bookstack
     restart: unless-stopped
     env_file: .env
@@ -35,7 +12,7 @@ services:
       PGID: 1000
       APP_URL: https://bookstack.${DOMAIN}
       APP_KEY: ${APP_KEY}
-      DB_HOST: bookstack-db
+      DB_HOST: shared-mariadb
       DB_PORT: 3306
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
@@ -48,14 +25,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    depends_on:
-      bookstack-db:
-        condition: service_healthy
     networks:
       - homeserver
-
-volumes:
-  bookstack-mariadb:
 
 networks:
   homeserver:

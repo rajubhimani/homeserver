@@ -1,29 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  airflow-db:
-    image: postgres:18.6-alpine
-    container_name: airflow-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    volumes:
-      - airflow-postgres-alpine:/var/lib/postgresql
-      - ./postgres-init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   # One-shot: runs db migrate + creates the admin user, then exits. The other
   # containers wait on service_completed_successfully before starting.
   airflow-init:
@@ -59,7 +37,7 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
       AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
       AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
@@ -75,9 +53,6 @@ services:
       - ${DATA_ROOT}/config:/opt/airflow/config
       - ${DATA_ROOT}/plugins:/opt/airflow/plugins
       - ./dags-examples:/opt/airflow/dags-examples:ro
-    depends_on:
-      airflow-db:
-        condition: service_healthy
     networks:
       - homeserver
 
@@ -94,7 +69,7 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
       AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
       AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
@@ -132,8 +107,6 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      airflow-db:
-        condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -148,7 +121,7 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
       AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
       AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
@@ -178,7 +151,7 @@ services:
       # _PIP_ADDITIONAL_REQUIREMENTS reinstalls on every start — fine for two
       # packages on a homelab, not how the upstream docs recommend doing this
       # for real production use (they say build/extend the image).
-      _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-docker temporalio==1.31.0
+      _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-docker temporalio==1.34.0
     # No user: override here (unlike the other airflow-* containers) — the
     # host's docker.sock is normally root:docker mode 660, and AIRFLOW_UID:0
     # (group 0 = root, not docker) can't open it by default. The fix is
@@ -222,8 +195,6 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      airflow-db:
-        condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -238,7 +209,7 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
       AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
       AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
@@ -263,8 +234,6 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      airflow-db:
-        condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -279,7 +248,7 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflow-db/${POSTGRES_DB}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
       AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
       AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}
@@ -311,15 +280,10 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      airflow-db:
-        condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     networks:
       - homeserver
-
-volumes:
-  airflow-postgres-alpine:
 
 networks:
   homeserver:

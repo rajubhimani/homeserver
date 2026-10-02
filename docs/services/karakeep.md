@@ -37,12 +37,13 @@ Once connected, the mobile app's share-sheet ("Share → Karakeep" from any othe
 ## Architecture — three containers
 
 - `karakeep` — the app itself (web UI + background workers combined), SQLite database and uploaded assets under `service_data/data/karakeep/data/`.
-- `karakeep-meilisearch` — full-text search index. Data lives in a named Docker volume (`karakeep-meilisearch`), not under `service_data/data/` — it's a rebuildable index, not source data.
+- `karakeep-meilisearch` — full-text search index. Data lives in a named Docker volume (`karakeep-meilisearch`), not under `service_data/data/` — it's a rebuildable index, not source data. Meilisearch is pinned to `v1.41.0`, the version Karakeep's own `docker/docker-compose.yml` uses. `MEILI_UPGRADE_DB=true` (compose.yml) lets a newer Meilisearch upgrade the index in place on startup, but there's no in-place *downgrade*: an index written by a newer Meilisearch (this one briefly ran `v1.54.2` on 2026-09-30) won't open on an older one. In that case, stop karakeep, remove the `karakeep_karakeep-meilisearch` volume and use Karakeep's admin **Reindex all bookmarks** to rebuild it.
 - `karakeep-chrome` — headless Chrome, used for fetching/rendering pages so bookmarks get proper screenshots and content extraction. Uses `ghcr.io/karakeep-app/karakeep-chrome:release` — Karakeep's own maintained chrome image, matching their current upstream `docker-compose.yml`. (Previously `gcr.io/zenika-hub/alpine-chrome:124`; switched after that image started failing to pull with a Google Cloud "billing must be enabled on this project" error — an upstream GCR change, not anything specific to this stack.)
 
 ## Notes
 
 - AI auto-tagging is optional and off by default. This stack already runs Ollama — point Karakeep at it instead of paying for OpenAI by uncommenting the `OPENAI_BASE_URL`/`OPENAI_API_KEY`/`INFERENCE_*` block in `.env` (see the comments there). Requires `ollama` to be running (`uv run homeserver.py dev up ollama`).
+- `karakeep-chrome` has no healthcheck, matching Karakeep's own `docker/docker-compose.yml` (the image ships no wget/curl, and a self-made bash probe didn't pass on 2026-10-02). The `karakeep` container is the one to watch: it reports when the browser is unreachable.
 - Health endpoint: `/api/health` (already baked into the image's own Dockerfile `HEALTHCHECK`; the `compose.yml` entry here just mirrors it for `docker ps`/`depends_on` visibility).
 
 ---

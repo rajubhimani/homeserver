@@ -1,29 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  mattermost-db:
-    image: postgres:18.6-alpine
-    container_name: mattermost-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    volumes:
-      - mattermost-postgres-alpine:/var/lib/postgresql
-      - ./postgres-init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   # Same pattern as firefly-permissions (services/firefly/compose.yml) --
   # mattermost's own image hardcodes uid 2000 with no root fallback (see the
   # `user:` override below), so it can never self-heal its own bind mounts'
@@ -34,7 +12,7 @@ services:
   # chowns the whole DATA_ROOT tree, then exits; mattermost itself waits for
   # it via depends_on below.
   mattermost-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: mattermost-permissions
     restart: "no"
     user: "0:0"
@@ -57,7 +35,7 @@ services:
     environment:
       TZ: UTC
       MM_SQLSETTINGS_DRIVERNAME: postgres
-      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mattermost-db:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
       MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
       MM_SERVICESETTINGS_SITEURL: https://mattermost.${DOMAIN}
       MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
@@ -88,15 +66,10 @@ services:
     # own HEALTHCHECK into the image (`mmctl system status --local`), which
     # this correctly falls back to as long as nothing here overrides it.
     depends_on:
-      mattermost-db:
-        condition: service_healthy
       mattermost-permissions:
         condition: service_completed_successfully
     networks:
       - homeserver
-
-volumes:
-  mattermost-postgres-alpine:
 
 networks:
   homeserver:

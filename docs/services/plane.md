@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Open-source issue tracker and project management.
-**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** Postgres + Redis + RabbitMQ + MinIO, ~4GB RAM minimum / 8GB recommended per Plane's own docs (developers.plane.so) | **Memory:** DB capped 512M in compose.yml; other 10 containers: no hard limit set; measured idle ~709MB total across all 11 containers — `plane-worker` (Celery, 8 prefork processes) is by far the heaviest single container at ~205MB idle, and the one most likely to grow further under real task load
+**Port:** `8100` (host) → `80` (container, `plane-proxy`) | **Data:** `service_data/data/plane/` | **Requires:** Postgres + Redis + RabbitMQ + MinIO, ~4GB RAM minimum / 8GB recommended per Plane's own docs (developers.plane.so) | **Memory:** database on `shared-postgres` (counted there); other 10 containers: no hard limit set; measured idle ~709MB total across all 11 containers — `plane-worker` (Celery, 8 prefork processes) is by far the heaviest single container at ~205MB idle, and the one most likely to grow further under real task load
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/plane/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 
@@ -22,7 +25,7 @@ Browse to `http://<ip>:8100` — create a workspace and admin account.
 
 ## Mobile app: not usable against this deployment
 
-Plane's official iOS/Android app requires the self-hosted **Commercial Edition, v1.12.0+** — it explicitly does not support the Community Edition, which is what this stack runs (`makeplane/plane-backend:v1.4.1`, per `compose.yml`). Don't install the mobile app expecting it to work here; the web UI (`https://plane.${DOMAIN}/`) is the only supported client for this deployment. Desktop apps (Mac/Windows/Linux) may have the same CE restriction — check [Plane's current download page](https://plane.so/download) before assuming one works, rather than trusting this note indefinitely as CE/Commercial parity can change release to release.
+Plane's official iOS/Android app requires the self-hosted **Commercial Edition, v1.12.0+** — it explicitly does not support the Community Edition, which is what this stack runs (`makeplane/plane-backend:v1.4.2`, per `compose.yml`). Don't install the mobile app expecting it to work here; the web UI (`https://plane.${DOMAIN}/`) is the only supported client for this deployment. Desktop apps (Mac/Windows/Linux) may have the same CE restriction — check [Plane's current download page](https://plane.so/download) before assuming one works, rather than trusting this note indefinitely as CE/Commercial parity can change release to release.
 
 ## Using it day to day
 
@@ -34,6 +37,8 @@ Plane's official iOS/Android app requires the self-hosted **Commercial Edition, 
 
 Multi-container: postgres, valkey, rabbitmq, minio, api, worker, beat, web, admin, space, proxy.
 
+> **MinIO image: `pgsty/minio` (and `pgsty/mc`), since 2026-10-01.** Docker Hub stopped serving `minio/minio`/`minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags. `pgsty/*` is a community rebuild of the same MinIO binaries (same on-disk format, ships `curl` so the healthcheck is unchanged). Check its tags on Docker Hub when bumping.
+
 `plane-web` (`makeplane/plane-frontend`) serves the main app **only**. `/god-mode/*` (onboarding, instance admin) and `/spaces/*` (public views) are served by **separate containers**: `plane-admin` (`makeplane/plane-admin`) and `plane-space` (`makeplane/plane-space`).
 
 Routing everything through `plane-web` (as an early version of this setup did) serves the wrong React bundle at those paths — causes a React hydration error (#423) and onboarding buttons that silently do nothing (no request leaves the browser).
@@ -41,7 +46,7 @@ Routing everything through `plane-web` (as an early version of this setup did) s
 The official `Caddyfile` is the source of truth for this routing — extract it from the real proxy image:
 
 ```bash
-docker run --rm --entrypoint cat makeplane/plane-proxy:v1.4.0 /etc/caddy/Caddyfile
+docker run --rm --entrypoint cat makeplane/plane-proxy:v1.4.2 /etc/caddy/Caddyfile
 ```
 
 It 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then routes each to its own container on port 3000.
@@ -53,6 +58,7 @@ It 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then
 
 ## Operational notes
 
+- **`plane-api` healthcheck:** `GET /` must return 200 (Plane Community Edition's documented health check, which returns `{"status": "OK"}`; the `/api/health/` family is Commercial Edition only), via Python's `urllib`. `plane-web`, `plane-admin` and `plane-space` use their images' built-in checks. `plane-worker` and `plane-beat` have no listener, so no check (2026-10-02).
 - `plane-mq` (RabbitMQ) needs `start_period: 90s` on its healthcheck — a fresh vhost/mnesia init can take >30s, especially on a loaded host, and the default was too tight
 - After editing `plane/Caddyfile`, run `docker restart plane-proxy` — compose only recreates a container when the *service definition* changes, not when a bind-mounted file's contents change, so editing the Caddyfile alone does **not** reload the proxy
 

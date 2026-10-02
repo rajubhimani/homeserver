@@ -229,6 +229,13 @@ Avoid `app:update --all`. Treat a major version as its own planned change. **`wh
 
 **Only move up one major version at a time** (Nextcloud doesn't support skipping majors). **Nextcloud 35 is deliberately on hold** as of 2026-09-28. Only 35.0.1 is out, and there are open high-priority reports of schema drift after 34.0.4 → 35.0.0, mostly involving `oc_talk_*`/`oc_mail_*` tables, and this instance runs both Talk and Mail ([server#64505](https://github.com/nextcloud/server/issues/64505), [server#64590](https://github.com/nextcloud/server/issues/64590)). Revisit at 35.0.2 or later, once the apps in use list NC35 support.
 
+**Sandbox trial, 2026-09-30 (34.0.4 → 35.0.1)** — a full clone of this instance was upgraded in an isolated sandbox (`experiments/nextcloud35/`; removed on 2026-10-02 once its findings were recorded here. Recover it from git history at commit `bc16144` if a re-test is ever needed), which is isolated from the live one. What it showed:
+
+- **The upgrade aborts with `HMAC does not match`** until one broken key is removed: `notifications.webpush_vapid_privkey` in `oc_appconfig` was encrypted with a different `secret` than `config.php` now has. The live instance logs the same error on every notifications poll today. **Before the real upgrade**, after the dump, run `docker exec -u www-data nextcloud php occ config:app:delete notifications webpush_vapid_privkey` and the same for `webpush_vapid_pubkey`. Notifications regenerates the pair, and `oc_notifications_webpush` had 0 rows, so nothing is lost.
+- The upgrade disables `spreed` (Talk), `deck` and `quota_warning` as incompatible. Deck came back by itself at 1.19.0. Talk needs `occ app:update spreed` (→ 25.0.2) and quota_warning needs `app:update quota_warning` (→ 1.25.0), then `occ app:enable spreed quota_warning`.
+- After that, `occ status` is clean (35.0.1.1, `needsDbUpgrade: false`) and the web UI works. `occ db:schema:check` still reports Mail-index and `oc_federated_invites` differences, but they're checker-side: the table is dropped on purpose by NC35's own `DropFederatedInvitesTable` migration, and Mail's `db:add-missing-indices` step removes indexes the checker expects. This lines up with the upstream issues above rather than with anything wrong in this instance's data.
+
+
 ## Why `html`/`config`/`data`/`custom_apps` are named volumes, not bind mounts
 
 Nextcloud enforces two checks a Windows bind mount can't reliably satisfy — see the `homeserver-postgres` skill for the general Windows-`chown`-reliability caveat this is an instance of:

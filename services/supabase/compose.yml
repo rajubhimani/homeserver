@@ -1,7 +1,7 @@
 services:
   supabase-db:
     container_name: supabase-db
-    image: supabase/postgres:17.6.1.168
+    image: supabase/postgres:17.6.1.136
     restart: unless-stopped
     env_file: .env
     environment:
@@ -12,7 +12,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: ${POSTGRES_DB}
       POSTGRES_DB: ${POSTGRES_DB}
-      JWT_SECRET: ${JWT_SECRET}
       JWT_EXP: ${JWT_EXPIRY}
     command:
       ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
@@ -37,7 +36,7 @@ services:
 
   supabase-auth:
     container_name: supabase-auth
-    image: supabase/gotrue:v2.190.0
+    image: supabase/gotrue:v2.196.0
     restart: unless-stopped
     env_file: .env
     environment:
@@ -94,9 +93,10 @@ services:
       PGRST_DB_ANON_ROLE: anon
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_ADMIN_SERVER_HOST: localhost
-      PGRST_JWT_SECRET: ${JWT_SECRET}
+      # A plain symmetric secret, a single JWK, or a JWKS. Falls back to the
+      # legacy secret while JWT_JWKS is empty.
+      PGRST_JWT_SECRET: ${JWT_JWKS:-${JWT_SECRET}}
       PGRST_DB_USE_LEGACY_GUCS: "false"
-      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
     command: ["postgrest"]
     healthcheck:
@@ -114,7 +114,7 @@ services:
     # Container name looks inconsistent but is required — realtime constructs
     # its tenant id by parsing the subdomain of its own hostname.
     container_name: realtime-dev.supabase-realtime
-    image: supabase/realtime:v2.105.0
+    image: supabase/realtime:v2.134.10
     restart: unless-stopped
     env_file: .env
     environment:
@@ -150,7 +150,7 @@ services:
 
   supabase-storage:
     container_name: supabase-storage
-    image: supabase/storage-api:v1.69.9
+    image: supabase/storage-api:v1.74.0
     restart: unless-stopped
     env_file: .env
     environment:
@@ -191,7 +191,7 @@ services:
 
   supabase-imgproxy:
     container_name: supabase-imgproxy
-    image: darthsim/imgproxy:v4.0.14
+    image: darthsim/imgproxy:v3.31.4
     restart: unless-stopped
     environment:
       IMGPROXY_BIND: ":5001"
@@ -225,6 +225,11 @@ services:
     depends_on:
       supabase-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - homeserver
 
@@ -235,7 +240,7 @@ services:
     env_file: .env
     environment:
       JWT_SECRET: ${JWT_SECRET}
-      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_URL: http://supabase-envoy:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
@@ -243,7 +248,7 @@ services:
       SUPABASE_SECRET_KEYS: "{\"default\":\"${SUPABASE_SECRET_KEY:-}\"}"
       SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:${POSTGRES_PORT}/${POSTGRES_DB}
       VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
-    command: ["start", "--main-service", "/home/deno/functions/main"]
+    command: ["start", "--user-worker-request-idle-timeout", "150000", "--main-service", "/home/deno/functions/main"]
     volumes:
       - ./volumes/functions:/home/deno/functions:ro
       - supabase-deno-cache:/root/.cache/deno
@@ -253,14 +258,14 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      supabase-kong:
+      supabase-envoy:
         condition: service_healthy
     networks:
       - homeserver
 
   supabase-studio:
     container_name: supabase-studio
-    image: supabase/studio:2026.08.31-sha-2c76bb3
+    image: supabase/studio:2026.09.07-sha-7996410
     restart: unless-stopped
     env_file: .env
     environment:
@@ -278,11 +283,13 @@ services:
       DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION}
       DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_URL: http://supabase-envoy:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       ENABLED_FEATURES_LOGS_ALL: "false"
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
       EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
@@ -298,48 +305,51 @@ services:
     networks:
       - homeserver
 
-  supabase-kong:
-    container_name: supabase-kong
-    image: kong/kong:3.9.3
+  # Envoy replaced Kong as upstream's API gateway (supabase/supabase
+  # discussions/48048). Config lives in volumes/api/envoy/; cds.yaml's
+  # upstream addresses are rewritten from upstream's bare service names
+  # (auth, rest, ...) to this stack's supabase-* container names, since bare
+  # names would be ambiguous on the shared homeserver network.
+  supabase-envoy:
+    container_name: supabase-envoy
+    image: envoyproxy/envoy:v1.39.1
     restart: unless-stopped
     env_file: .env
     environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
-      KONG_ROUTER_FLAVOR: expressions
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_DNS_NOT_FOUND_TTL: 1
-      KONG_DNS_VALID_TTL: 5
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function
-      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
-      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
-      KONG_PROXY_ACCESS_LOG: /dev/stdout combined
-      SUPABASE_ANON_KEY: ${ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
       SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
-    entrypoint: ["/bin/sh", "/home/kong/kong-entrypoint.sh"]
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
     volumes:
-      - ./volumes/api/kong.yml:/home/kong/temp.yml:ro
-      - ./volumes/api/kong-entrypoint.sh:/home/kong/kong-entrypoint.sh:ro
+      - ./volumes/api/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./volumes/api/envoy/cds.yaml:/etc/envoy/cds.yaml:ro
+      - ./volumes/api/envoy/lds.template.yaml:/etc/envoy/lds.template.yaml:ro
+      - ./volumes/api/envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
     healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 5s
+      # No curl/wget in this image, so a TCP check (same as upstream).
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/8000'"]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
     depends_on:
       supabase-studio:
         condition: service_healthy
     networks:
-      - homeserver
+      homeserver:
+        # nginx-plain and landing still proxy to supabase-kong:8000. This
+        # alias keeps them working without touching the MIN-tier proxy.
+        aliases:
+          - supabase-kong
 
   supabase-pooler:
     container_name: supabase-pooler
-    image: supabase/supavisor:2.9.7
+    image: supabase/supavisor:2.9.12
     restart: unless-stopped
     env_file: .env
     environment:

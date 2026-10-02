@@ -1,0 +1,41 @@
+# One MariaDB server shared by the services above CORE that declare
+# "shared_db": {"engine": "mariadb", ...} in services.json. 11.8 is the LTS
+# every current user accepts (OrangeHRM needs < 12). Each app gets its own
+# database + user, created by homeserver.py's provision_shared_db.
+# homeserver.py starts this before any such app and stops it once none is
+# running — see docs/services/shared-mariadb.md.
+services:
+  shared-mariadb:
+    image: mariadb:11.8
+    container_name: shared-mariadb
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_AUTO_UPGRADE: "1"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=256M
+      - --max-connections=100
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    volumes:
+      - shared-mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+volumes:
+  shared-mariadb-data:
+
+networks:
+  homeserver:
+    external: true

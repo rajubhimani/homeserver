@@ -2,7 +2,7 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots|reset> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
 
   Any command targeting a tier keyword (min/core/daily/browser/office/automation-ai/all/running),
   'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
@@ -10,6 +10,8 @@ Usage:
   --yes/-y to skip the prompt (e.g. non-interactive/cron use). Naming
   explicit service(s) directly (e.g. 'up nextcloud vaultwarden') never
   prompts — you already said exactly what you want.
+  Exception: 'reset' always asks (type 'reset'), even for named services,
+  and refuses outright when stdin isn't a terminal unless --yes is given.
   python homeserver.py <env> -r <service...>   (shorthand for restart)
   python homeserver.py <env> up group:notes    start every service in category/subcategory
                                                 'notes' (or any other group — see services.json's
@@ -99,6 +101,7 @@ shell at all, so none of that applies here — no workarounds needed.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -166,6 +169,9 @@ RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
 # Snapshots to keep per service before auto-pruning the oldest; -1 = unlimited
 BACKUP_RETENTION = int(_ROOT_ENV.get("BACKUP_RETENTION", "5"))
+# reset-backup-<ts> folders (each reset's verified pre-wipe snapshot) to keep
+# per service; they never count against BACKUP_RETENTION. -1 = unlimited.
+RESET_BACKUP_RETENTION = int(_ROOT_ENV.get("RESET_BACKUP_RETENTION", "5"))
 # 'subprocess' (default, zero extra deps) or 'python-on-whales' (optional —
 # uv sync --extra docker-sdk) for typed exceptions/structured errors instead
 # of parsed CLI text. Both call the same underlying docker/docker compose CLI
@@ -362,6 +368,20 @@ def header(msg: str) -> None:
 # only to the BACKEND instance, never to subprocess/docker directly.
 
 
+def _healthcheck_seconds(hc: dict | None) -> dict:
+    """Docker's .Config.Healthcheck (durations in ns, 0 = unset) -> seconds
+    with Docker's documented defaults applied. {} when there's no check."""
+    if not hc or not hc.get("Test") or hc["Test"][0] == "NONE":
+        return {}
+    ns = 1_000_000_000
+    return {
+        "interval": (hc.get("Interval") or 30 * ns) / ns,
+        "timeout": (hc.get("Timeout") or 30 * ns) / ns,
+        "start_period": (hc.get("StartPeriod") or 0) / ns,
+        "retries": hc.get("Retries") or 3,
+    }
+
+
 class DockerBackend(ABC):
     @abstractmethod
     def compose_up(
@@ -402,6 +422,17 @@ class DockerBackend(ABC):
         and harmless). Returns (success, stderr_text)."""
 
     @abstractmethod
+    def db_exec(
+        self, container: str, cmd: list[str], input: bytes | None = None, env: dict[str, str] | None = None,
+    ) -> tuple[bool, bytes, str]:
+        """docker exec [-i] [-e K=V ...] container cmd..., stdin from input,
+        stdout captured as bytes. The shared-db helpers (provision_shared_db,
+        shared-db dump/restore) build psql/mariadb/mariadb-dump commands on
+        top of this; env carries credentials (e.g. MYSQL_PWD) so they never
+        appear in the process list. Returns (success, stdout_bytes,
+        stderr_text)."""
+
+    @abstractmethod
     def compose_create(
         self, files: list[Path], env: dict[str, str], profile: str | None, force_recreate: bool = False,
     ) -> tuple[bool, str]:
@@ -435,6 +466,15 @@ class DockerBackend(ABC):
     @abstractmethod
     def container_health(self, name: str) -> str:
         """'healthy', 'unhealthy', 'starting', or 'none' (no HEALTHCHECK defined)."""
+
+    @abstractmethod
+    def container_healthcheck(self, name: str) -> dict:
+        """The container's effective healthcheck settings in seconds:
+        {"interval", "timeout", "start_period", "retries"} — from compose or
+        the image's own HEALTHCHECK, with Docker's defaults (30s/30s/0s/3)
+        where unset. {} if the container has no healthcheck or doesn't exist.
+        wait_healthy uses it to wait as long as Docker itself would before
+        calling a container unhealthy."""
 
     @abstractmethod
     def container_info(self, name: str) -> dict:
@@ -490,6 +530,24 @@ class DockerBackend(ABC):
         corruption ("segments are not sequential") rather than just stale
         data. Confirmed as the root cause of a real incident against this
         stack's own observability service data."""
+
+    @abstractmethod
+    def archive_paths(self, mounts: dict[Path, str], members: list[str], excludes: list[str], dest_file: Path) -> tuple[bool, str]:
+        """tar+gzip `members` (paths relative to /src inside a throwaway root
+        container, where each mounts[host_path] is bind-mounted read-only at
+        /src/<name>) into dest_file. Root so container-owned files (root, or
+        an app's own uid) are readable — a host-user tar would silently skip
+        them. excludes are tar --exclude patterns. Used by `archive`.
+        Returns (success, stderr_text)."""
+
+    @abstractmethod
+    def remove_dir(self, host_dir: Path) -> bool:
+        """Delete host_dir entirely through a throwaway container running as
+        root. Containers create files under service_data/data/<service> as
+        root or their own uid, so a plain shutil.rmtree from homeserver.py
+        (running as the host user) fails with Permission denied — the bug
+        that broke the first 'reset' run on 2026-10-02. Mounts the parent and
+        removes the child, so the directory itself goes too."""
 
     @abstractmethod
     def system_prune(self) -> tuple[bool, str]:
@@ -576,6 +634,21 @@ class SubprocessBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
+    def db_exec(self, container, cmd, input=None, env=None):
+        args = [RUNTIME, "exec"]
+        if input is not None:
+            args.append("-i")
+        # '-e NAME' (no '=value') makes docker copy the value from this
+        # process's environment, so secrets never appear in the docker exec
+        # argv on the host (visible to anyone running ps).
+        run_env = None
+        if env:
+            run_env = {**os.environ, **env}
+            for k in env:
+                args += ["-e", k]
+        proc = subprocess.run(args + [container] + list(cmd), input=input, capture_output=True, env=run_env)
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
     def compose_create(self, files, env, profile, force_recreate=False):
         args = self._compose_args(files, profile) + ["create"]
         if force_recreate:
@@ -612,6 +685,14 @@ class SubprocessBackend(DockerBackend):
             ["inspect", "--format={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", name]
         )
         return proc.stdout.strip() or "none"
+
+    def container_healthcheck(self, name: str) -> dict:
+        proc = self._run(["inspect", "--format={{json .Config.Healthcheck}}", name])
+        try:
+            hc = json.loads(proc.stdout.strip() or "null")
+        except json.JSONDecodeError:
+            return {}
+        return _healthcheck_seconds(hc)
 
     def container_info(self, name: str) -> dict:
         fmt = (
@@ -691,6 +772,25 @@ class SubprocessBackend(DockerBackend):
             "sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to",
         ]
         return self._run(args).returncode == 0
+
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        # Raw subprocess in both backends: the member list goes in on stdin,
+        # which python-on-whales' run() doesn't expose.
+        args = [RUNTIME, "run", "--rm", "-i"]
+        for host, name in mounts.items():
+            args += ["-v", f"{Path(host).resolve()}:/src/{name}:ro"]
+        args += ["-v", f"{dest_file.parent.resolve()}:/out", "alpine:3.21", "sh", "-c",
+                 "cd /src && tar " + " ".join(f"--exclude='{e}'" for e in excludes)
+                 + f" -cf - -T - | gzip -1 > '/out/{dest_file.name}'"]
+        proc = subprocess.run(args, input="\n".join(members).encode(), capture_output=True)
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def remove_dir(self, host_dir: Path) -> bool:
+        host_dir = host_dir.resolve()
+        if not host_dir.exists():
+            return True
+        args = ["run", "--rm", "-v", f"{host_dir.parent}:/parent", "alpine:3.21", "rm", "-rf", f"/parent/{host_dir.name}"]
+        return self._run(args).returncode == 0 and not host_dir.exists()
 
     def system_prune(self) -> tuple[bool, str]:
         proc = self._run(["system", "prune", "-a", "--volumes", "-f"])
@@ -796,6 +896,21 @@ class PythonOnWhalesBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
+    def db_exec(self, container, cmd, input=None, env=None):
+        args = [RUNTIME, "exec"]
+        if input is not None:
+            args.append("-i")
+        # '-e NAME' (no '=value') makes docker copy the value from this
+        # process's environment, so secrets never appear in the docker exec
+        # argv on the host (visible to anyone running ps).
+        run_env = None
+        if env:
+            run_env = {**os.environ, **env}
+            for k in env:
+                args += ["-e", k]
+        proc = subprocess.run(args + [container] + list(cmd), input=input, capture_output=True, env=run_env)
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
     def compose_create(self, files, env, profile, force_recreate=False):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
@@ -856,6 +971,16 @@ class PythonOnWhalesBackend(DockerBackend):
             return c.state.health.status or "none"
         except Exception:
             return "none"
+
+    def container_healthcheck(self, name: str) -> dict:
+        # Raw inspect JSON rather than python-on-whales' model, which renames
+        # and type-converts these fields differently across versions.
+        proc = subprocess.run([RUNTIME, "inspect", "--format={{json .Config.Healthcheck}}", name], capture_output=True, text=True)
+        try:
+            hc = json.loads(proc.stdout.strip() or "null")
+        except json.JSONDecodeError:
+            return {}
+        return _healthcheck_seconds(hc)
 
     def container_info(self, name: str) -> dict:
         try:
@@ -949,6 +1074,34 @@ class PythonOnWhalesBackend(DockerBackend):
             error(f"  {e}")
             return False
 
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        # Raw subprocess in both backends: the member list goes in on stdin,
+        # which python-on-whales' run() doesn't expose.
+        args = [RUNTIME, "run", "--rm", "-i"]
+        for host, name in mounts.items():
+            args += ["-v", f"{Path(host).resolve()}:/src/{name}:ro"]
+        args += ["-v", f"{dest_file.parent.resolve()}:/out", "alpine:3.21", "sh", "-c",
+                 "cd /src && tar " + " ".join(f"--exclude='{e}'" for e in excludes)
+                 + f" -cf - -T - | gzip -1 > '/out/{dest_file.name}'"]
+        proc = subprocess.run(args, input="\n".join(members).encode(), capture_output=True)
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def remove_dir(self, host_dir: Path) -> bool:
+        host_dir = host_dir.resolve()
+        if not host_dir.exists():
+            return True
+        try:
+            self._docker.run(
+                "alpine:3.21",
+                ["rm", "-rf", f"/parent/{host_dir.name}"],
+                volumes=[(host_dir.parent, "/parent")],
+                remove=True,
+            )
+        except Exception as e:
+            error(f"  {e}")
+            return False
+        return not host_dir.exists()
+
     def system_prune(self) -> tuple[bool, str]:
         # Raw subprocess rather than python-on-whales here — same reasoning
         # as db_pg_dump above: this backend's main value (typed compose
@@ -995,6 +1148,9 @@ def is_valid_service(service: str) -> bool:
         + SERVICES_EXTRA
         + SERVICES_MANUAL
         + [PROXY_STANDBY]
+        # Shared DB servers: valid for logs/snapshots/backup/restore by name;
+        # normally started/stopped automatically (see Shared databases).
+        + list(SHARED_DB_SERVICES.values())
     )
 
 
@@ -1100,6 +1256,294 @@ def get_running_services() -> list[str]:
     return result
 
 
+# ── Shared databases (above-CORE services only) ─────────────────────
+#
+# Services above CORE that declare "shared_db" in services.json keep their
+# database inside one shared server per engine (services/shared-postgres,
+# services/shared-mariadb) instead of their own <service>-db container. CORE
+# and MIN keep per-service databases. See docs/services/shared-postgres.md.
+#
+# Lifecycle is reference-counted at the CLI layer (main()), never inside
+# do_up/do_down: do_backup, do_restore, do_up and stop_proxy_conflict all call
+# do_down internally, so counting there would bounce the shared server in the
+# middle of an unrelated operation. Starting is safe from anywhere (it's
+# idempotent), so do_up also ensures the server for the auto-restore path;
+# only stopping is counted, in release_shared_dbs() after a 'down'.
+#
+# The shared servers' tier ("shared") is in none of the SERVICES_* lists, so
+# 'up all'/'down all', tier keywords, groups and 'status' tiers never treat
+# them as ordinary services.
+
+SHARED_DB_SERVICES = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}
+_SERVICES_BY_SLUG = {s["slug"]: s for s in _SERVICES_DATA["services"]}
+
+
+def shared_db_creds(service: str) -> dict | None:
+    """Resolve a service's "shared_db" spec into concrete values. Spec values
+    are key names in services/<service>/.env, or '=literal' for values the
+    app hard-codes (e.g. penpot's db/user). Returns None if the service
+    doesn't use a shared database."""
+    spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_db")
+    if not spec:
+        return None
+    env_vals = load_env_file(SERVICES_DIR / service / ".env")
+
+    def resolve(key: str) -> str:
+        return key[1:] if key.startswith("=") else env_vals.get(key, "")
+
+    return {
+        "engine": spec["engine"],
+        "container": SHARED_DB_SERVICES[spec["engine"]],
+        "db": resolve(spec["db"]),
+        "user": resolve(spec["user"]),
+        "password": resolve(spec["password"]),
+        "extra_dbs": list(spec.get("extra_dbs", [])),
+    }
+
+
+def shared_admin(engine: str) -> tuple[str, str]:
+    """(admin user, admin password) for a shared server, from its own .env."""
+    env_vals = load_env_file(SERVICES_DIR / SHARED_DB_SERVICES[engine] / ".env")
+    if engine == "postgres":
+        return env_vals.get("POSTGRES_USER", "postgres"), env_vals.get("POSTGRES_PASSWORD", "")
+    return "root", env_vals.get("MARIADB_ROOT_PASSWORD", "")
+
+
+def _pg_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _my_ident(name: str) -> str:
+    return "`" + name.replace("`", "``") + "`"
+
+
+def shared_sql(engine: str, sql: str, db: str | None = None) -> tuple[bool, str, str]:
+    """Run SQL (sent on stdin, so passwords never hit argv) as the shared
+    server's admin. Returns (success, stdout, stderr)."""
+    container = SHARED_DB_SERVICES[engine]
+    user, password = shared_admin(engine)
+    if engine == "postgres":
+        cmd = ["psql", "-v", "ON_ERROR_STOP=1", "-tA", "-U", user, "-d", db or "postgres"]
+        ok, out, err = BACKEND.db_exec(container, cmd, input=sql.encode())
+    else:
+        cmd = ["mariadb", "-N", "-B", "-u", user] + ([db] if db else [])
+        ok, out, err = BACKEND.db_exec(container, cmd, input=sql.encode(), env={"MYSQL_PWD": password})
+    return ok, out.decode(errors="replace"), err
+
+
+def shared_db_exists(service: str) -> bool:
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return False
+    if c["engine"] == "postgres":
+        ok, out, _ = shared_sql("postgres", f"SELECT 1 FROM pg_database WHERE datname = {_sql_literal(c['db'])};")
+    else:
+        ok, out, _ = shared_sql("mariadb", f"SHOW DATABASES LIKE {_sql_literal(c['db'])};")
+    return ok and bool(out.strip())
+
+
+def ensure_shared_db(engine: str, env: str) -> bool:
+    """Start the shared server for engine if it isn't already running."""
+    container = SHARED_DB_SERVICES[engine]
+    if BACKEND.container_status(container) == "running" and BACKEND.container_health(container) == "healthy":
+        return True
+    info(f"Starting shared database {container} (needed by services above CORE)...")
+    return do_up(container, env, None)
+
+
+def provision_shared_db(service: str) -> bool:
+    """Idempotently create the service's role/user and database(s) on its
+    shared server, owned by that role — what each per-service
+    postgres-init/init.sh used to do on its own container. Also resets the
+    password to whatever the service's .env says, so editing .env is
+    enough to rotate it."""
+    c = shared_db_creds(service)
+    if not c:
+        return True
+    if not (c["db"] and c["user"] and c["password"]):
+        error(f"{service}: shared_db spec in services.json didn't resolve a db/user/password from services/{service}/.env")
+        return False
+
+    dbs = [c["db"]] + c["extra_dbs"]
+    if c["engine"] == "postgres":
+        role, pw = _pg_ident(c["user"]), _sql_literal(c["password"])
+        ok, _, err = shared_sql("postgres", f"""
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {_sql_literal(c['user'])}) THEN
+                CREATE ROLE {role} LOGIN PASSWORD {pw};
+              ELSE
+                ALTER ROLE {role} WITH LOGIN PASSWORD {pw};
+              END IF;
+            END $$;""")
+        if not ok:
+            error(f"{service}: couldn't create role {c['user']}: {err.strip()}")
+            return False
+        for db in dbs:
+            ok, out, err = shared_sql("postgres", f"SELECT 1 FROM pg_database WHERE datname = {_sql_literal(db)};")
+            if ok and not out.strip():
+                # CREATE DATABASE can't run inside a DO block/transaction.
+                ok, _, err = shared_sql("postgres", f"CREATE DATABASE {_pg_ident(db)} OWNER {role};")
+            if ok:
+                # Postgres grants CONNECT/TEMP on every new database to
+                # PUBLIC, so without this any app's role could open any other
+                # app's database (its tables stay unreadable, but it could
+                # still connect and see the schema). Lock it to its owner.
+                ok, _, err = shared_sql("postgres", f"REVOKE ALL ON DATABASE {_pg_ident(db)} FROM PUBLIC;")
+            if ok:
+                # Postgres 15+ no longer lets non-owners create objects in
+                # public, so hand the schema to the app's role.
+                ok, _, err = shared_sql("postgres", f"ALTER SCHEMA public OWNER TO {role}; GRANT ALL ON SCHEMA public TO {role};", db=db)
+            if not ok:
+                error(f"{service}: couldn't create database {db}: {err.strip()}")
+                return False
+    else:
+        user, pw = _sql_literal(c["user"]), _sql_literal(c["password"])
+        stmts = [f"CREATE USER IF NOT EXISTS {user}@'%' IDENTIFIED BY {pw};", f"ALTER USER {user}@'%' IDENTIFIED BY {pw};"]
+        for db in dbs:
+            stmts.append(f"CREATE DATABASE IF NOT EXISTS {_my_ident(db)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+            stmts.append(f"GRANT ALL PRIVILEGES ON {_my_ident(db)}.* TO {user}@'%';")
+        stmts.append("FLUSH PRIVILEGES;")
+        ok, _, err = shared_sql("mariadb", "\n".join(stmts))
+        if not ok:
+            error(f"{service}: couldn't create database/user on shared-mariadb: {err.strip()}")
+            return False
+    return True
+
+
+def shared_db_ready(service: str, env: str, provision: bool = True) -> bool:
+    """Called by every function that can start an app (do_up, do_update,
+    do_restart, do_restore): start the app's shared server if needed, then
+    provision its database. No-op for services without "shared_db". Safe to
+    call from anywhere — starting is idempotent; only stopping is
+    reference-counted (release_shared_dbs, from main())."""
+    c = shared_db_creds(service)
+    if not c:
+        return True
+    if not ensure_shared_db(c["engine"], env):
+        error(f"{c['container']} failed to start — {service} can't come up without it")
+        return False
+    return provision_shared_db(service) if provision else True
+
+
+def release_shared_dbs(env: str) -> None:
+    """After a 'down': stop each shared server no running service still uses."""
+    running = get_running_services()
+    for engine, container in SHARED_DB_SERVICES.items():
+        if BACKEND.container_status(container) != "running":
+            continue
+        users = [s for s in running if (c := shared_db_creds(s)) and c["engine"] == engine]
+        if users:
+            info(f"{container} stays up — still used by: {', '.join(users)}")
+            continue
+        info(f"No running service uses {container} any more — stopping it...")
+        do_down(container, env, None)
+
+
+def dump_shared_db(service: str, dest_dir: Path, ts: str) -> Path | None:
+    """Logical dump of the service's own database(s) on its shared server into
+    dest_dir — the per-app part of a snapshot (a volume tar of the shared
+    server would hold every app's data at once). Postgres: one custom-format
+    file per database; MariaDB: one SQL file per database."""
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return None
+    admin_user, admin_pw = shared_admin(c["engine"])
+    last = None
+    for db in [c["db"]] + c["extra_dbs"]:
+        if c["engine"] == "postgres":
+            ok, data, err = BACKEND.db_pg_dump(c["container"], admin_user, db)
+            fname = f"{service}_shareddb_{db}_{ts}.dump"
+        else:
+            ok, data, err = BACKEND.db_exec(
+                c["container"],
+                ["mariadb-dump", "-u", admin_user, "--single-transaction", "--routines", "--triggers", db],
+                env={"MYSQL_PWD": admin_pw},
+            )
+            fname = f"{service}_shareddb_{db}_{ts}.sql"
+        if not ok:
+            error(f"  failed to dump {db} from {c['container']}: {err.strip()}")
+            continue
+        (dest_dir / fname).write_bytes(data)
+        last = dest_dir / fname
+        shown = dest_dir.relative_to(BASE_DIR) if dest_dir.is_relative_to(BASE_DIR) else dest_dir
+        success(f"  {c['container']}/{db} -> {shown}/{fname}")
+    return last
+
+
+def restore_shared_db(service: str, snap_dir: Path) -> bool:
+    """Replace the service's database(s) on its shared server with the dumps
+    in snap_dir: drop, re-provision (fresh empty db owned by the app's role),
+    then load. The app must be stopped (do_restore guarantees this)."""
+    c = shared_db_creds(service)
+    files = sorted(snap_dir.glob(f"{service}_shareddb_*"))
+    if not c or not files:
+        return True
+    admin_user, admin_pw = shared_admin(c["engine"])
+    ok = True
+    for db in [c["db"]] + c["extra_dbs"]:
+        f = next((p for p in files if p.name.startswith(f"{service}_shareddb_{db}_")), None)
+        if not f:
+            continue
+        if c["engine"] == "postgres":
+            shared_sql("postgres", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_sql_literal(db)};")
+            dropped, _, err = shared_sql("postgres", f"DROP DATABASE IF EXISTS {_pg_ident(db)};")
+        else:
+            dropped, _, err = shared_sql("mariadb", f"DROP DATABASE IF EXISTS {_my_ident(db)};")
+        if not dropped or not provision_shared_db(service):
+            error(f"  couldn't reset {db} on {c['container']}: {err.strip()}")
+            ok = False
+            continue
+        if c["engine"] == "postgres":
+            # --role: objects are created as the app's role (the admin can
+            # SET ROLE to it), so the app owns everything it owned before.
+            loaded, _, err = BACKEND.db_exec(
+                c["container"],
+                ["pg_restore", "-U", admin_user, "-d", db, "--no-owner", "--role", c["user"]],
+                input=f.read_bytes(),
+            )
+        else:
+            loaded, _, err = BACKEND.db_exec(
+                c["container"], ["mariadb", "-u", admin_user, db], input=f.read_bytes(), env={"MYSQL_PWD": admin_pw},
+            )
+        if loaded:
+            success(f"  restored {db} on {c['container']}")
+        else:
+            error(f"  failed to restore {db} on {c['container']}: {err.strip()}")
+            ok = False
+    return ok
+
+
+def drop_shared_db(service: str) -> bool:
+    """Remove the service's database(s) and its login from its shared server
+    (reset only — never called on the normal down/up path). Other apps'
+    databases on the same server are untouched."""
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return True
+    ok = True
+    for db in [c["db"]] + c["extra_dbs"]:
+        if c["engine"] == "postgres":
+            shared_sql("postgres", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_sql_literal(db)};")
+            dropped, _, err = shared_sql("postgres", f"DROP DATABASE IF EXISTS {_pg_ident(db)};")
+        else:
+            dropped, _, err = shared_sql("mariadb", f"DROP DATABASE IF EXISTS {_my_ident(db)};")
+        if not dropped:
+            error(f"  couldn't drop {db} on {c['container']}: {err.strip()}")
+            ok = False
+    if c["engine"] == "postgres":
+        dropped, _, err = shared_sql("postgres", f"DROP ROLE IF EXISTS {_pg_ident(c['user'])};")
+    else:
+        dropped, _, err = shared_sql("mariadb", f"DROP USER IF EXISTS {_sql_literal(c['user'])}@'%';")
+    if not dropped:
+        error(f"  couldn't drop login {c['user']} on {c['container']}: {err.strip()}")
+        ok = False
+    return ok
+
+
 def do_status() -> int:
     running = set(get_running_services())
     all_services = (
@@ -1131,6 +1575,15 @@ def do_status() -> int:
     show_tier("AUTOMATION-AI", SERVICES_AUTOMATION_AI)
     show_tier("EXTRA", SERVICES_EXTRA)
     show_tier("MANUAL", SERVICES_MANUAL)
+
+    print(f"  {BOLD}SHARED DATABASES (started/stopped automatically with the services that use them):{RESET}")
+    for engine, container in SHARED_DB_SERVICES.items():
+        up = BACKEND.container_status(container) == "running"
+        users = [s for s in all_services if (c := shared_db_creds(s)) and c["engine"] == engine]
+        live = [s for s in users if s in running]
+        marker = f"{GREEN}●{RESET}" if up else "○"
+        print(f"    {marker} {container} — used by {len(users)} service(s){', running: ' + ' '.join(live) if live else ''}")
+    print()
     success(f"{len(running)}/{len(all_services)} service(s) running")
 
     def show_group(name: str, indent: int) -> None:
@@ -1152,6 +1605,19 @@ def do_status() -> int:
 # ── Wait for healthy ─────────────────────────────────────────────────
 
 
+def health_deadline(container: str) -> int:
+    """How long to wait for container to turn healthy: as long as Docker
+    itself would before calling it unhealthy (start_period plus retries
+    rounds of interval+timeout, from its compose or image healthcheck), but
+    never less than HEALTH_TIMEOUT. A fixed 180s made first boots that run
+    long migrations (Grafana, Coolify, GitLab) look like failures even
+    though they came up fine (2026-10-02 fresh-install run)."""
+    hc = BACKEND.container_healthcheck(container)
+    if not hc:
+        return HEALTH_TIMEOUT
+    return int(max(HEALTH_TIMEOUT, hc["start_period"] + hc["retries"] * (hc["interval"] + hc["timeout"]) + 30))
+
+
 def wait_healthy(service: str) -> bool:
     all_names = BACKEND.all_container_names()
 
@@ -1165,11 +1631,12 @@ def wait_healthy(service: str) -> bool:
     if not container:
         container = service
 
+    deadline = health_deadline(container)
     print(f"  {CYAN}waiting for {service} to be ready...", end="", flush=True)
 
     elapsed = 0
     interval = 5
-    while elapsed < HEALTH_TIMEOUT:
+    while elapsed < deadline:
         status = BACKEND.container_status(container) or ""
         health = BACKEND.container_health(container)
 
@@ -1190,15 +1657,17 @@ def wait_healthy(service: str) -> bool:
         elapsed += interval
         print(".", end="", flush=True)
 
-    print(f" timeout after {HEALTH_TIMEOUT}s{RESET}")
+    print(f" timeout after {deadline}s{RESET}")
     return False
 
 
-def wait_container_healthy(container: str, timeout: int = HEALTH_TIMEOUT) -> bool:
+def wait_container_healthy(container: str, timeout: int | None = None) -> bool:
     """Like wait_healthy but for one exact container name — no fuzzy matching,
     used by do_migrate to wait on a freshly-started <service>-db alone."""
     print(f"  {CYAN}waiting for {container} to be ready...", end="", flush=True)
 
+    if timeout is None:
+        timeout = health_deadline(container)
     elapsed = 0
     interval = 5
     while elapsed < timeout:
@@ -1226,13 +1695,44 @@ def wait_container_healthy(container: str, timeout: int = HEALTH_TIMEOUT) -> boo
 # ── Backup / snapshots ───────────────────────────────────────────────
 
 
+SNAPSHOT_NAME = re.compile(r"^\d{8}-\d{6}$")
+
+
 def list_snapshots(service: str) -> list[Path]:
     """Snapshot directories for a service, oldest first (names sort correctly
-    since they're YYYYMMDD-HHMMSS)."""
+    since they're YYYYMMDD-HHMMSS). Only timestamp-named directories count:
+    a hand-made folder next to them (e.g. nextcloud's
+    'pre-upgrade-fix-20260817-232941') sorts after every timestamp ('p' > '2'),
+    so it used to be taken as the *newest* snapshot — restore/auto-restore
+    would have loaded August's data, and pruning would have deleted real
+    recent snapshots first (found 2026-10-02). Such folders are left alone:
+    never restored by default, never pruned; restore one explicitly with
+    --snapshot <name>."""
     svc_dir = BACKUP_ROOT / service
     if not svc_dir.is_dir():
         return []
-    return sorted(p for p in svc_dir.iterdir() if p.is_dir())
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir() and SNAPSHOT_NAME.match(p.name))
+
+
+RESET_BACKUP_NAME = re.compile(r"^reset-backup-\d{8}-\d{6}$")
+
+
+def list_reset_backups(service: str) -> list[Path]:
+    """reset-backup-<ts> folders for a service, oldest first. Kept apart
+    from regular snapshots (list_snapshots ignores them), so neither
+    'restore <service>' nor BACKUP_RETENTION ever touches them."""
+    svc_dir = BACKUP_ROOT / service
+    if not svc_dir.is_dir():
+        return []
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir() and RESET_BACKUP_NAME.match(p.name))
+
+
+def prune_reset_backups(service: str) -> None:
+    if RESET_BACKUP_RETENTION == -1:
+        return
+    backups = list_reset_backups(service)
+    for old in backups[: max(0, len(backups) - RESET_BACKUP_RETENTION)]:
+        shutil.rmtree(old, ignore_errors=True)
 
 
 def prune_snapshots(service: str) -> None:
@@ -1249,8 +1749,9 @@ def backup_service(service: str) -> None:
     snapshot, then prune old snapshots beyond BACKUP_RETENTION."""
     vols = BACKEND.volumes_for_project(service)
     service_data_dir = SERVICE_DATA_ROOT / service
+    has_shared_db = bool(shared_db_creds(service)) and shared_db_exists(service)
 
-    if not vols and not service_data_dir.is_dir():
+    if not vols and not service_data_dir.is_dir() and not has_shared_db:
         return  # nothing to back up
 
     declared = declared_volumes(service)
@@ -1280,6 +1781,10 @@ def backup_service(service: str) -> None:
         fname = f"service_data_{ts}.tar.gz"
         BACKEND.tar_dir_to(service_data_dir, snap_dir, fname)
         success(f"  service_data -> service_data/backup/{service}/{ts}/{fname}")
+
+    # The app's own database(s) on its shared server, as logical dumps.
+    if has_shared_db:
+        dump_shared_db(service, snap_dir, ts)
 
     prune_snapshots(service)
 
@@ -1401,6 +1906,13 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
         return False
     ensure_wg_tunnel_ready(service, env)
 
+    # Start the app's shared database server (if it uses one) before the
+    # auto-restore check below, which needs to ask it whether the app's
+    # database exists. Provisioning waits until after that check — creating
+    # the database first would make a fresh app look like it has data.
+    if not shared_db_ready(service, env, provision=False):
+        return False
+
     if not fresh:
         service_data_dir = SERVICE_DATA_ROOT / service
         # Cheap dir check first — only pay for the docker-volume-ls call when
@@ -1411,11 +1923,18 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
         # back into do_up once if a live container's volume was deleted out
         # from under it — safe, terminates because restored state is no
         # longer "fresh" on that second pass.
-        if not service_data_dir.is_dir() and not BACKEND.volumes_for_project(service):
+        if (
+            not service_data_dir.is_dir()
+            and not BACKEND.volumes_for_project(service)
+            and not (shared_db_creds(service) and shared_db_exists(service))
+        ):
             snaps = list_snapshots(service)
             if snaps:
                 info(f"{service} has no live volumes or data on disk — restoring latest snapshot ({snaps[-1].name}) before starting (pass --fresh to start blank instead)...")
                 do_restore(service, env, profile)
+
+    if not provision_shared_db(service):
+        return False
 
     stop_proxy_conflict(service, env)
     # Landing bakes env vars into HTML at startup; nginx-plain runs envsubst
@@ -1505,15 +2024,24 @@ def do_precreate(service: str, env: str, profile: str | None, update: bool = Fal
     return ok
 
 
-def do_down(service: str, env: str, profile: str | None, no_backup: bool = False) -> bool:
+def do_down(service: str, env: str, profile: str | None, no_backup: bool = False, force_snapshot: bool = False) -> bool:
     # env is unused here (compose_files_all tears down both dev/prod
     # regardless) — kept in the signature so do_up/do_down/do_update/
     # do_restart/do_backup/do_restore all share one uniform call shape.
+    #
+    # Snapshot only if the service was actually running: a stopped service's
+    # last snapshot (taken when it stopped) is still current, and
+    # re-snapshotting it just churns BACKUP_RETENTION (pushing out older,
+    # different snapshots) and — for a shared-db app whose server is down —
+    # writes an incomplete one with no database dump (both seen 2026-10-02
+    # after a `down all`). do_backup/do_reset pass force_snapshot=True: an
+    # explicit backup, or a reset about to delete data, always snapshots.
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
 
+    was_running = any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in BACKEND.running_container_names())
     files = compose_files_all(service)
     cenv = compose_env(service)
 
@@ -1525,8 +2053,12 @@ def do_down(service: str, env: str, profile: str | None, no_backup: bool = False
 
     success(f"{service} stopped")
 
-    if not no_backup:
+    if no_backup:
+        pass
+    elif was_running or force_snapshot:
         backup_service(service)
+    else:
+        info(f"  {service} was already stopped — its last snapshot is still current, not taking another")
 
     return True
 
@@ -1539,6 +2071,9 @@ def do_update(service: str, env: str, profile: str | None = None) -> bool:
         error(f"Service '{service}' not found")
         return False
     if not check_data_mounts(service):
+        return False
+
+    if not shared_db_ready(service, env):
         return False
 
     files = compose_files(service, env)
@@ -1564,6 +2099,9 @@ def do_restart(service: str, env: str, profile: str | None) -> bool:
         error(f"Service '{service}' not found")
         return False
     if not check_data_mounts(service):
+        return False
+
+    if not shared_db_ready(service, env):
         return False
 
     files = compose_files(service, env)
@@ -1595,7 +2133,12 @@ def do_backup(service: str, env: str, profile: str | None) -> bool:
 
     was_running = service in get_running_services()
 
-    do_down(service, env, profile, no_backup=False)
+    # A stopped app's shared server may be down too; the snapshot needs it
+    # up to dump the app's database. main() releases it again afterwards.
+    if not shared_db_ready(service, env, provision=False):
+        return False
+
+    do_down(service, env, profile, no_backup=False, force_snapshot=True)
     if was_running:
         do_up(service, env, profile)
 
@@ -1628,15 +2171,18 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
 
     info(f"Restoring {service} from snapshot {backup_dir.name}...")
     ok = True
-    ts_suffix = f"_{backup_dir.name}"
+    # Archive names end in _<YYYYMMDD-HHMMSS> (the moment they were taken).
+    # Strip that from the file name itself, not "_<folder name>": a snapshot
+    # folder renamed to keep it out of pruning (e.g. pre-fresh-install-<ts>)
+    # would otherwise restore into volumes named "<vol>_<ts>".
+    ts_suffix_re = re.compile(r"_\d{8}-\d{6}$")
     for f in sorted(backup_dir.glob("*.tar.gz")):
         base = f.name[: -len(".tar.gz")]
         # Newer snapshots suffix the filename with the timestamp too (e.g.
         # 'service_data_20260730-071152.tar.gz') — strip it to recover the
         # plain name. Older snapshots (pre-dating this) have no suffix, so
         # this is a no-op for them — both forms restore correctly.
-        if base.endswith(ts_suffix):
-            base = base[: -len(ts_suffix)]
+        base = ts_suffix_re.sub("", base)
         if base == "service_data":
             service_data_dir = SERVICE_DATA_ROOT / service
             if BACKEND.untar_into_dir(f, service_data_dir):
@@ -1653,6 +2199,13 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
                 error(f"  failed to restore volume {base}")
                 ok = False
 
+    if any(backup_dir.glob(f"{service}_shareddb_*")):
+        if shared_db_ready(service, env, provision=False):
+            if not restore_shared_db(service, backup_dir):
+                ok = False
+        else:
+            ok = False
+
     # Mirror do_backup: put the service back the way it was found, so
     # 'restore' never leaves something the caller didn't ask to stop.
     if was_running:
@@ -1661,10 +2214,114 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
     return ok
 
 
+def do_reset(service: str, env: str, profile: str | None) -> bool:
+    """Fresh start with a safety net: snapshot everything the service owns,
+    verify the snapshot really holds it, then wipe exactly that service and
+    start it blank. 'restore <service>' undoes it.
+
+    Wipes: the service's named volumes, service_data/data/<service>/, and —
+    for an app on a shared database server — its own database(s) and login
+    there (other apps on that server are untouched). Does NOT touch secondary
+    data roots outside service_data/data (immich UPLOAD_LOCATION, jellyfin
+    MEDIA_ROOT, ...): those hold bulk media, not app state."""
+    if service in SHARED_DB_SERVICES.values():
+        error(f"{service} is a shared database server — reset the services that use it instead")
+        return False
+    d = SERVICES_DIR / service
+    if not d.is_dir():
+        error(f"Service '{service}' not found")
+        return False
+
+    c = shared_db_creds(service)
+    # The snapshot below needs the shared server up to dump the app's database.
+    if c and not shared_db_ready(service, env, provision=False):
+        return False
+
+    vols = BACKEND.volumes_for_project(service)
+    data_dir = SERVICE_DATA_ROOT / service
+    has_db = bool(c) and shared_db_exists(service)
+    before = set(list_snapshots(service))
+
+    # 1. Snapshot (do_down stops the service and snapshots it, whether or
+    #    not it was running — stopped containers still hold volumes).
+    info(f"Resetting {service}: snapshotting first...")
+    do_down(service, env, profile or "*", no_backup=False, force_snapshot=True)
+
+    # 2. Verify the snapshot holds everything about to be deleted. Pruning
+    #    can't remove it: it's the newest.
+    if vols or data_dir.is_dir() or has_db:
+        new = sorted(set(list_snapshots(service)) - before)
+        if not new:
+            error(f"  no snapshot was written for {service} — nothing deleted")
+            return False
+        names = {p.name for p in new[-1].iterdir()}
+        missing = [v for v in vols if not any(n.startswith(f"{v}_") for n in names)]
+        if data_dir.is_dir() and not any(n.startswith("service_data_") for n in names):
+            missing.append("service_data")
+        if has_db and not any(n.startswith(f"{service}_shareddb_") for n in names):
+            missing.append(f"{c['container']}/{c['db']}")
+        if missing:
+            error(f"  snapshot {new[-1].name} is missing {', '.join(missing)} — nothing deleted")
+            return False
+        success(f"  snapshot verified: service_data/backup/{service}/{new[-1].name}/")
+        # Keep it out of regular retention: it's the only copy of the data
+        # about to be wiped, and later downs/backups would otherwise push it
+        # out. Renamed, not copied — same data, no extra disk.
+        kept = new[-1].with_name(f"reset-backup-{new[-1].name}")
+        new[-1].rename(kept)
+        prune_reset_backups(service)
+        success(f"  kept as service_data/backup/{service}/{kept.name}/ (never pruned by BACKUP_RETENTION; newest {RESET_BACKUP_RETENTION} reset backups kept)")
+    else:
+        kept = None
+
+    # 3. Wipe exactly this service.
+    ok = True
+    for v in vols:
+        if BACKEND.volume_remove(v):
+            success(f"  removed volume {v}")
+        else:
+            error(f"  couldn't remove volume {v}")
+            ok = False
+    if data_dir.is_dir():
+        if BACKEND.remove_dir(data_dir):
+            success(f"  removed service_data/data/{service}/")
+        else:
+            error(f"  couldn't remove service_data/data/{service}/")
+            ok = False
+    if has_db and drop_shared_db(service):
+        success(f"  dropped {service}'s database and login on {c['container']}")
+    elif has_db:
+        ok = False
+    if not ok:
+        error(f"  {service} was only partly wiped — not starting it; 'restore {service}' brings the snapshot back")
+        return False
+
+    # 4. Start blank (provisioning creates a new empty database).
+    info(f"Starting {service} fresh...")
+    started = do_up(service, env, profile, fresh=True)
+    if kept:
+        info(f"  undo with: uv run homeserver.py {env} restore {service} --snapshot {kept.name}")
+    return started
+
+
 def do_dump(service: str, env: str, profile: str | None) -> bool:
     """Logical pg_dump of <service>-db into service_data/db_dump/<service>/<ts>/
     — the source dump 'migrate' restores from for a Debian->Alpine (or any
     other Postgres image) migration. Requires the DB container running."""
+    c = shared_db_creds(service)
+    if c:
+        if BACKEND.container_status(c["container"]) != "running":
+            error(f"{c['container']} is not running — start {service} first")
+            return False
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        dump_dir = DB_DUMP_ROOT / service / ts
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        info(f"Dumping {service}'s database(s) from {c['container']} -> service_data/db_dump/{service}/{ts}/")
+        # No roles file: the app's role is recreated from its .env by
+        # provision_shared_db, and a --roles-only dump of a shared server
+        # would carry every other app's role and password with it.
+        return dump_shared_db(service, dump_dir, ts) is not None
+
     db_container = f"{service}-db"
     if BACKEND.container_status(db_container) != "running":
         error(f"{db_container} is not running — start {service} first")
@@ -1729,6 +2386,9 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
     pgvector fork) is never auto-inferred — there's no way to know whether
     that specific fork even publishes an alpine (or any other) variant, so
     --image is required for those."""
+    if shared_db_creds(service):
+        error(f"{service} keeps its database on {shared_db_creds(service)['container']} — migrate only handles a per-service <service>-db container")
+        return False
     dumps = list_dumps(service)
     if not dumps:
         error(f"No dump found for {service} — run 'dump {service}' first")
@@ -1942,6 +2602,153 @@ def _compact_docker_vhdx(vhdx: Path) -> None:
     else:
         warn(f"VHDX barely shrank ({_gb(before):.2f}GB -> {_gb(after):.2f}GB)")
         warn("  If this persists, try the export/reimport procedure in docs/08-maintenance.md")
+
+
+# ── Archive: everything git doesn't hold, in one verified file ──────
+#
+# `archive <dest-dir>` packs what a fresh clone of this repo can't recreate:
+# every git-ignored file in the repo (all .env secrets, local-only notes),
+# service_data/ (snapshots — the only copy of the databases, which are named
+# Docker volumes — plus live data and db dumps), and a git bundle of the repo
+# itself so unpushed commits survive too. Regenerable things are left out.
+
+ARCHIVE_SKIP_IGNORED = ("service_data", ".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "node_modules/")
+ARCHIVE_EXCLUDES = ["service_data/cache", "*/__pycache__"]
+
+
+def archive_ignored_paths() -> list[str]:
+    """Git-ignored/untracked paths in the repo (directories collapsed), minus
+    regenerable ones and service_data (archived separately, from its real
+    location). Asks git, so new ignored files are covered automatically."""
+    proc = subprocess.run(
+        ["git", "-C", str(BASE_DIR), "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+        capture_output=True, text=True,
+    )
+    paths = []
+    for line in proc.stdout.splitlines():
+        if not line or any(line == skip.rstrip("/") or line.startswith(skip) or f"/{skip}" in f"/{line}" for skip in ARCHIVE_SKIP_IGNORED):
+            continue
+        paths.append(line.rstrip("/"))
+    # Drop entries already covered by a listed parent directory (git lists
+    # e.g. both services/photoprism and services/photoprism/.env), so no file
+    # lands in the archive twice.
+    paths = sorted(set(paths))
+    return [p for p in paths if not any(p.startswith(q + "/") for q in paths if q != p)]
+
+
+def archive_meta(meta_dir: Path, running: list[str]) -> None:
+    """README, MANIFEST and a git bundle, written into meta_dir."""
+    git = lambda *a: subprocess.run(["git", "-C", str(BASE_DIR), *a], capture_output=True, text=True).stdout.strip()  # noqa: E731
+    subprocess.run(["git", "-C", str(BASE_DIR), "bundle", "create", str(meta_dir / "homeserver.bundle"), "--all"], capture_output=True)
+    lines = [
+        f"created: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"git: branch {git('rev-parse', '--abbrev-ref', 'HEAD')} at {git('rev-parse', 'HEAD')}",
+        f"running when archived: {', '.join(running) or 'none'}",
+        "",
+        "latest snapshot per service:",
+    ]
+    for d in sorted(p for p in BACKUP_ROOT.iterdir() if p.is_dir()) if BACKUP_ROOT.is_dir() else []:
+        snaps = list_snapshots(d.name)
+        resets = list_reset_backups(d.name)
+        lines.append(f"  {d.name}: {snaps[-1].name if snaps else '-'}" + (f"  (+{len(resets)} reset-backup)" if resets else ""))
+    (meta_dir / "MANIFEST.txt").write_text("\n".join(lines) + "\n")
+    (meta_dir / "README.txt").write_text(
+        "homeserver archive\n\n"
+        "homeserver/      every git-ignored file of the repo (.env secrets, local notes)\n"
+        "service_data/    snapshots (incl. databases), live data, db dumps — not cache/\n"
+        "meta/homeserver.bundle   the git repo, incl. unpushed commits\n\n"
+        "Restore on a new machine (Docker, git and uv installed; see docs/08-maintenance.md):\n"
+        "  sha256sum -c <archive>.tar.gz.sha256\n"
+        "  sudo tar --numeric-owner -xpzf <archive>.tar.gz -C <staging dir>\n"
+        "      (as root, numerically: files belong to app uids like 472 or 10001)\n"
+        "  git clone <staging>/meta/homeserver.bundle homeserver\n"
+        "  git -C homeserver checkout <branch from MANIFEST.txt>\n"
+        "  cp -a <staging>/homeserver/. homeserver/   ('/.', not '/*': .env is a dotfile)\n"
+        "  sudo mv <staging>/service_data <data drive>/service_data\n"
+        "  ln -s <data drive>/service_data homeserver/service_data\n"
+        "  edit homeserver/.env for this machine (RUNTIME, DOCKER_SOCKET), then:\n"
+        "  uv run homeserver.py prod restore all -y   (volumes and databases from snapshots)\n"
+        "  uv run homeserver.py prod up all\n"
+        "Not included: media under /mnt/media (Immich photos, Nextcloud user files,\n"
+        "Jellyfin library), service_data/cache, .venv — all regenerable or separate.\n"
+    )
+
+
+def archive_verify(archive: Path) -> tuple[bool, str]:
+    """Read the whole archive back (which also validates gzip) and check the
+    three top-level parts are inside. Returns (ok, top-level names found)."""
+    proc = subprocess.run(["tar", "-tzf", str(archive)], capture_output=True, text=True)
+    tops = sorted({line.split("/", 1)[0] for line in proc.stdout.splitlines() if line})
+    ok = proc.returncode == 0 and {"homeserver", "service_data", "meta"} <= set(tops)
+    return ok, ", ".join(tops)
+
+
+def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def tree_size(path: Path) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(path, onerror=lambda e: None):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(root, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def do_archive(dest: str) -> int:
+    dest_dir = Path(dest).expanduser()
+    if not dest_dir.is_dir():
+        error(f"{dest_dir} doesn't exist — create it (or mount the drive) first")
+        return 1
+
+    running = get_running_services()
+    if running:
+        warn(f"Running now: {', '.join(running)}")
+        warn("  their live service_data/data may be mid-write; snapshots are always consistent.")
+        warn("  For a fully consistent archive: 'down all' (or 'backup <service>') first.")
+
+    data_real = (BASE_DIR / "service_data").resolve()
+    needed = tree_size(data_real) - tree_size(data_real / "cache")
+    free = shutil.disk_usage(dest_dir).free
+    if free < needed:
+        error(f"Not enough space in {dest_dir}: need up to {needed / 1e9:.1f} GB, {free / 1e9:.1f} GB free")
+        return 1
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    out = dest_dir / f"homeserver-archive-{ts}.tar.gz"
+    ignored = archive_ignored_paths()
+    with tempfile.TemporaryDirectory() as tmp:
+        meta = Path(tmp)
+        archive_meta(meta, running)
+        header(f"Archiving to {out}")
+        info(f"{len(ignored)} git-ignored path(s) from the repo, service_data (minus cache), meta (README, MANIFEST, git bundle)...")
+        ok, err = BACKEND.archive_paths(
+            {BASE_DIR: "homeserver", data_real: "service_data", meta: "meta"},
+            [f"homeserver/{p}" for p in ignored] + ["service_data", "meta"],
+            ARCHIVE_EXCLUDES,
+            out,
+        )
+    if not ok:
+        error(f"Archive failed: {err.strip()[-400:]}")
+        return 1
+
+    info("Verifying (reading the whole archive back)...")
+    ok, tops = archive_verify(out)
+    if not ok:
+        error(f"Verification failed — archive is incomplete or unreadable (found: {tops})")
+        return 1
+    digest = file_sha256(out)
+    (dest_dir / f"{out.name}.sha256").write_text(f"{digest}  {out.name}\n")
+    success(f"{out} ({out.stat().st_size / 1e9:.1f} GB) verified: {tops}")
+    success(f"checksum: {out.name}.sha256 — check later with: sha256sum -c {out.name}.sha256")
+    return 0
 
 
 def do_gc(assume_yes: bool = False) -> int:
@@ -2213,6 +3020,8 @@ def show_help() -> None:
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
     print("    python homeserver.py dev up mealie                   auto-restores the latest snapshot if data/volumes are missing")
     print("    python homeserver.py dev up mealie --fresh           start blank even if a snapshot exists")
+    print("    python homeserver.py dev reset mealie                snapshot, wipe and start blank (restore undoes it)")
+    print("    python homeserver.py archive /run/media/<you>/Drive   everything git doesn't hold, in one verified tar.gz")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
@@ -2323,6 +3132,8 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
                 success(f"{service} dumped")
             elif action_fn is do_migrate:
                 success(f"{service} migrated")
+            elif action_fn is do_reset:
+                success(f"{service} reset — fresh start")
         print()
 
     print(f"{BOLD}{'━' * 40}{RESET}")
@@ -2358,6 +3169,13 @@ def main() -> int:
     # Same reasoning again — each affected container's own compose labels
     # say which env it was started under (see do_fix_network), so this
     # doesn't need one passed in either.
+    # Not env-scoped either: it packs the whole repo + service_data.
+    if argv and argv[0] == "archive":
+        if len(argv) < 2:
+            error("usage: homeserver.py archive <destination-folder>")
+            return 1
+        return do_archive(argv[1])
+
     if argv and argv[0] == "fix-network":
         return do_fix_network(assume_yes="--yes" in argv or "-y" in argv)
 
@@ -2379,11 +3197,11 @@ def main() -> int:
 
     if action not in (
         "up", "-u", "down", "-d", "restart", "-r", "logs", "update",
-        "backup", "restore", "snapshots", "dump", "migrate", "precreate",
+        "backup", "restore", "snapshots", "dump", "migrate", "precreate", "reset",
     ):
         error(
             "Unknown action "
-            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, or precreate"
+            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, precreate, or reset"
         )
         show_help()
         return 1
@@ -2644,7 +3462,11 @@ def main() -> int:
     elif action in ("down", "-d"):
         if run_all:
             header("Stopping all services and profile containers (reverse order)...")
-            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
+            # MANUAL services are never auto-started, but 'down all' is the
+            # one command that stops everything, so include the ones actually
+            # running (not stopped ones, which would only churn snapshots).
+            running_manual = [s for s in SERVICES_MANUAL if s in get_running_services()]
+            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + running_manual + services_to_run))
         elif run_core:
             header("Stopping core services (reverse order) — min stays running...")
             lst = list(reversed(SERVICES_CORE + services_to_run))
@@ -2676,6 +3498,9 @@ def main() -> int:
         down_profile = "*"
         for service in lst:
             do_down(service, env, down_profile, no_backup=no_backup)
+        # Reference count: stop a shared database server once no running
+        # service uses it any more (see the Shared databases section).
+        release_shared_dbs(env)
         print()
         success("Done")
 
@@ -2843,6 +3668,9 @@ def main() -> int:
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_backup, services_to_run, env, profile, "Services")
+        # Backing up a stopped app starts its shared server to dump its
+        # database; stop it again if nothing running needs it.
+        release_shared_dbs(env)
 
     elif action == "restore":
         ensure_network()
@@ -2896,6 +3724,45 @@ def main() -> int:
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_restore, services_to_run, env, profile, "Services", snapshot=snapshot)
+        release_shared_dbs(env)
+
+    elif action == "reset":
+        # Same target semantics as 'down': a tier keyword means just that
+        # tier (never cascades into lower tiers). Order is startup order,
+        # since each service comes back up as part of its own reset.
+        if run_running:
+            error("reset takes services, tiers or groups — not 'running'")
+            return 1
+        if run_all:
+            lst = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + [s for s in SERVICES_MANUAL if s in get_running_services()] + services_to_run
+        elif run_core:
+            lst = SERVICES_CORE + services_to_run
+        elif run_daily:
+            lst = SERVICES_DAILY + services_to_run
+        elif run_browser:
+            lst = SERVICES_BROWSER + services_to_run
+        elif run_office:
+            lst = SERVICES_OFFICE + services_to_run
+        elif run_automation_ai:
+            lst = SERVICES_AUTOMATION_AI + services_to_run
+        elif run_min:
+            lst = SERVICES_MIN + services_to_run
+        else:
+            lst = services_to_run
+        header(f"Reset = snapshot, wipe, start blank ('restore <service>' undoes it): {' '.join(lst)}")
+        # Never auto-confirmed: unlike other tier commands, a non-interactive
+        # reset without -y refuses instead of proceeding (see the
+        # homeserver-py-no-dry-run note in docs/08-maintenance.md).
+        if not assume_yes:
+            if not sys.stdin.isatty():
+                error("reset deletes data — pass -y to confirm when not running interactively")
+                return 1
+            if input(f"Type 'reset' to snapshot and wipe {len(lst)} service(s): ").strip() != "reset":
+                warn("Aborted — nothing changed")
+                return 1
+        ensure_network()
+        run_list(do_reset, lst, env, profile, "Reset")
+        release_shared_dbs(env)
 
     elif action == "snapshots":
         if not services_to_run:

@@ -586,3 +586,93 @@ Preventive knowledge — things to know *before* they bite you, as opposed to th
 ---
 
 [← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)
+
+For every way to start and stop services, see [15 — Starting & Stopping Services](15-starting-services.md).
+
+## Off-machine copy (`archive`)
+
+```bash
+uv run homeserver.py archive "/run/media/raju/My Passport/homeserver-backup"
+```
+
+Writes `homeserver-archive-<timestamp>.tar.gz` and a `.sha256` next to it, containing everything a fresh clone can't recreate:
+- `homeserver/`: every git-ignored file in the repo (all `.env` secrets, `CLAUDE.md`/`AGENTS.md`/`.claude`, `research/`, …). The list comes from git itself, so new ignored files are covered automatically.
+- `service_data/`: every snapshot (the **only** copy of the databases, which are Docker named volumes), the `reset-backup-*` folders, live data and database dumps. `cache/` is left out, since it's regenerable.
+- `meta/`: README with restore steps, a MANIFEST (date, git commit, each service's latest snapshot) and a git bundle of the repo (keeps unpushed commits).
+
+Files are read through a throwaway root container, so root-owned files can't be silently skipped. The command refuses a missing destination or too little space, and only writes the checksum after reading the whole archive back and finding all three parts. If services are running it warns, because their live data may be mid-write (snapshots are always consistent); run it after `down all` for a fully consistent copy. Media under `/mnt/media` isn't included and needs its own sync.
+
+Check a copy later with `sha256sum -c homeserver-archive-<timestamp>.tar.gz.sha256`.
+
+### Restoring from an archive (new machine or a rebuilt disk)
+
+You need Docker (or Podman), git and [uv](https://docs.astral.sh/uv/), and a user that can run Docker. The archive's `meta/README.txt` has the same steps in short form.
+
+```bash
+A=homeserver-archive-<timestamp>.tar.gz
+sha256sum -c "$A.sha256"                           # the copy is intact
+
+# 1. Unpack as root, with numeric owners: most files belong to app uids
+#    (Grafana 472, Loki 10001, www-data 33, ...), not to you.
+sudo mkdir -p /restore
+sudo tar --numeric-owner -xpzf "$A" -C /restore
+
+# 2. The repo, including unpushed commits, from the bundle
+git clone /restore/meta/homeserver.bundle ~/homeserver
+git -C ~/homeserver checkout <branch>              # "git: branch ..." line in /restore/meta/MANIFEST.txt
+git -C ~/homeserver remote set-url origin <your GitHub URL>
+
+# 3. The git-ignored files: every .env, CLAUDE.md, .claude/, ...
+#    Use "/." and not "/*": the shell's * skips dotfiles such as the root .env.
+cp -a /restore/homeserver/. ~/homeserver/
+
+# 4. service_data on the data drive, symlinked into the repo (this host's layout)
+sudo mv /restore/service_data /mnt/mydata/service_data
+ln -s /mnt/mydata/service_data ~/homeserver/service_data
+```
+
+Then, in `~/homeserver`:
+
+1. Check the root `.env` for this machine (`RUNTIME`, `DOCKER_SOCKET`). `DOMAIN` and every service's secrets come back unchanged.
+2. Run `uv sync`.
+3. Run `uv run homeserver.py prod restore all -y`. It loads every service's named volumes (the databases) and data folder from its latest snapshot. Apps on a shared database server start [shared-postgres](services/shared-postgres.md)/[shared-mariadb](services/shared-mariadb.md), recreate their own login and database, and load their dump. Services without a snapshot are skipped and keep the live data that came out of the archive. GitLab is MANUAL-tier, so restore it separately with `restore gitlab` if you use it.
+4. Run `uv run homeserver.py prod up all`, or the tiers you actually want.
+5. Copy the media back on its own (`/mnt/media`: Immich photos, the Jellyfin library, Nextcloud user files). It isn't in the archive.
+
+Plain `up` would *not* restore here. Auto-restore only fires when a service has no volumes **and** no `service_data/data/<service>/`, and moving `service_data` into place above already put the data folders back. That's why `restore all` has to be run explicitly.
+
+## Fresh start of a service (`reset`)
+
+```bash
+uv run homeserver.py prod reset <service>      # type 'reset' to confirm
+uv run homeserver.py prod restore <service>    # undo
+```
+
+`reset` snapshots the service (volumes, `service_data/data/<service>/`, and its own database on a shared server) and verifies the snapshot holds all of it. It then keeps that snapshot as `service_data/backup/<service>/reset-backup-<timestamp>/`, wipes exactly that service and starts it blank. Reset backups sit outside the normal snapshot retention: regular `down` snapshots can never push them out, and the newest `RESET_BACKUP_RETENTION` (root `.env`, default 5) are kept per service. `reset` prints the exact undo command: `restore <service> --snapshot reset-backup-<timestamp>`. Plain `restore <service>` uses the newest *regular* snapshot instead. If the snapshot is incomplete, it deletes nothing. A tier target (`reset office`) means only that tier. It's never auto-confirmed: without a terminal it needs `-y`.
+
+`up --fresh` is different: it only skips the auto-restore of an existing snapshot and deletes nothing. Don't fake a reset with `--fresh` plus deleting volumes by hand. For an app on [shared-postgres](services/shared-postgres.md) or [shared-mariadb](services/shared-mariadb.md), that leaves its old database behind, so the app wouldn't actually start fresh.
+
+## Tests (`homeserver.py` and repo consistency)
+
+```bash
+uv sync            # once — installs pytest (dev dependency only; homeserver.py stays pure-stdlib)
+uv run pytest      # ~1s, never touches Docker
+```
+
+- **`tests/test_lifecycle.py`, `tests/test_shared_db.py`** run the real `homeserver.py` code (`main()`, `do_up`, `do_down`, backup/restore…) against `FakeBackend` (`tests/conftest.py`), an in-memory implementation of the `DockerBackend` interface. Any real `subprocess.run` fails the test, so the live stack can't be touched. They cover:
+  - the tier cascades and `down` semantics;
+  - bundles never stopping `requires` infra;
+  - snapshot retention and auto-restore;
+  - the shared-database reference counting, provisioning, dumps and restore.
+- **`tests/test_backend_interface.py`** checks that both backends implement the whole interface, and that nothing calls docker outside them.
+- **`tests/test_repo_invariants.py`** checks that `services.json`, the compose files, `.env.example`, the docs and the `CLAUDE.md` tier lists agree:
+  - prod ports are loopback-only and mirrored on `10.8.0.1`;
+  - every compose variable is in `.env.example`;
+  - every service has a doc;
+  - doc image tags aren't stale;
+  - `shared_db` apps are wired consistently.
+
+  Legitimate exceptions are listed in that file with a reason.
+
+Run it after any change to `homeserver.py`, `services.json`, a compose file, a `.env.example` or a doc. When you add a `DockerBackend` method, `FakeBackend` must implement it too: it subclasses the ABC, so the suite errors out until it does.
+

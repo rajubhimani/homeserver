@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Recipe manager and meal planner.
-**Port:** `9925` (host) → `9000` (container) | **Data:** `service_data/data/mealie/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~329MB total (app 278 + db 51)
+**Port:** `9925` (host) → `9000` (container) | **Data:** `service_data/data/mealie/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~329MB total (app 278 + db 51), measured before the 2026-10-01 move to the shared server
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/mealie/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 
@@ -35,7 +38,7 @@ There's no official Mealie mobile app — it's PWA-first: open `https://mealie.$
 
 ## Health endpoint
 
-No explicit `healthcheck:` on the main `mealie` container in `services/mealie/compose.yml` (only `mealie-db`'s `pg_isready` check exists) — `docker inspect mealie` won't report a health status unless the image bakes in its own, which wasn't confirmed here.
+No explicit `healthcheck:` on the main `mealie` container in `services/mealie/compose.yml` (its database is on `shared-postgres`, which has its own `pg_isready` check) — `docker inspect mealie` won't report a health status unless the image bakes in its own, which wasn't confirmed here.
 
 ---
 

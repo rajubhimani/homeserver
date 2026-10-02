@@ -7,6 +7,9 @@
 **Purpose:** Durable execution engine for reliable distributed workflows — automatic retries, state persistence, and long-running processes that survive crashes.
 **Port:** `8138` (host) → `8080` (container, `temporal-ui`) | **Data:** DB in a named volume; no `DATA_ROOT`-scoped app data | **Requires:** Postgres
 
+**Database:** on the shared Postgres server ([shared-postgres](../shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database plus `temporal_visibility` and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/temporal/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -22,9 +25,9 @@ code actually lives" below for the mechanism and how to opt out.
 
 Open `https://temporal.<domain>/` (or `http://<host>:8138` in dev) — no login/setup wizard, the UI is open to anyone who can reach it (see Notes).
 
-## Architecture — 7 containers; the deprecated `temporalio/auto-setup` image is no longer used
+## Architecture — 6 containers (database on `shared-postgres`); the deprecated `temporalio/auto-setup` image is no longer used
 
-- `temporal-db` — Postgres, `DB=postgres12` driver (works for any Postgres 12+, not a version pin — this repo uses `postgres:18.4-alpine` like every other service here, not the `postgres:16` the official `.env` happens to pin)
+- **Database:** two databases (`${POSTGRES_DB}` and `temporal_visibility`) on `shared-postgres`, `DB=postgres12` driver (works for any Postgres 12+, not a version pin — the shared server runs `postgres:18.6-alpine`, not the `postgres:16` the official `.env` happens to pin)
 - `temporal-schema-setup` — one-shot (`temporalio/admin-tools`, `restart: "no"`): runs `temporal-sql-tool create`/`setup-schema`/`update-schema` for both the main and visibility databases before the server starts. Replaces what the deprecated `temporalio/auto-setup` image used to do automatically at boot; idempotent (a no-op once already applied).
 - `temporal` — `temporalio/server` image (not `auto-setup`): runs the actual server (frontend/history/matching/internal-worker services bundled in one process); expects the schema to already exist, which `temporal-schema-setup` provides
 - `temporal-create-namespace` — one-shot (`temporalio/admin-tools`, `restart: "no"`): registers the `default`/`staging`/`production` namespaces (describe-then-create, idempotent) — replaces `auto-setup`'s automatic `default`-namespace registration, extended to three namespaces here
@@ -36,7 +39,7 @@ Open `https://temporal.<domain>/` (or `http://<host>:8138` in dev) — no login/
 flowchart LR
     Admin["temporal-admin-tools<br/>(CLI)"] -->|start/signal/query workflow| Srv
     UI["temporal-ui<br/>(web)"] -->|read state| Srv
-    Srv["temporal<br/>(frontend/history/matching)"] --> DB[("temporal-db<br/>Postgres")]
+    Srv["temporal<br/>(frontend/history/matching)"] --> DB[("shared-postgres<br/>temporal + temporal_visibility")]
     W["temporal-worker<br/>(your workflow/activity code)"] -->|"long-poll task queue<br/>(worker dials out — nothing dials in)"| Srv
 ```
 
@@ -137,15 +140,21 @@ Verified: this completed normally in `staging` (`"Order test-1 fulfilled: ..."`)
 
 ## Resource caps — deliberately conservative starting points
 
-Every container here has a `deploy.resources.limits.memory` cap (`temporal-db` 512M, `temporal` 768M, `temporal-ui` 256M, `temporal-admin-tools` 128M, `temporal-worker` 256M) — small enough that this doesn't crowd out the rest of the stack on a shared host, at the cost of being tight under real production workflow volume. If `temporal` (the server) gets OOM-killed under load (`docker inspect temporal --format '{{.State.OOMKilled}}'`), raise its cap first — it's the one actually doing frontend/history/matching work; the others are much less likely to need it.
+Every container here has a `deploy.resources.limits.memory` cap (`temporal` 768M, `temporal-ui` 256M, `temporal-admin-tools` 128M, `temporal-worker` 256M) — small enough that this doesn't crowd out the rest of the stack on a shared host, at the cost of being tight under real production workflow volume. If `temporal` (the server) gets OOM-killed under load (`docker inspect temporal --format '{{.State.OOMKilled}}'`), raise its cap first — it's the one actually doing frontend/history/matching work; the others are much less likely to need it.
 
 ## Upgrade gotchas hit going 1.29.1 → 1.30.4
 
 Two things broke on this bump, both fixed live and reflected in `compose.yml` already — worth knowing before bumping versions again:
 
-- **`temporal-db`'s `max_connections=50` was too low** — Temporal's bundled frontend/history/matching/worker roles plus `temporal-schema-setup`/`temporal-admin-tools`/`temporal-create-namespace` all dial in around the same time on a cold start, and 50 wasn't enough headroom: `temporal-db` started refusing connections with `sorry, too many clients already`, which kept `temporal` permanently unhealthy. Raised to 100 (matches what a stock `postgres` image ships with by default) — the extra memory cost is connection-slot bookkeeping only, not per-connection buffers, so it stays well inside the existing 512M cap.
+- **The old `temporal-db`'s `max_connections=50` was too low** (now on `shared-postgres`, `max_connections=300`) — Temporal's bundled frontend/history/matching/worker roles plus `temporal-schema-setup`/`temporal-admin-tools`/`temporal-create-namespace` all dial in around the same time on a cold start, and 50 wasn't enough headroom: `temporal-db` started refusing connections with `sorry, too many clients already`, which kept `temporal` permanently unhealthy. Raised to 100 (matches what a stock `postgres` image ships with by default) — the extra memory cost is connection-slot bookkeeping only, not per-connection buffers, so it stays well inside the existing 512M cap.
 - **The bundled `temporal` CLI is gone from `temporalio/server`** — somewhere after 1.29.1 the image stopped shipping a separate `temporal` binary (only `temporal-server` remains), so the old healthcheck (`CMD temporal operator cluster health ...`) failed with `exec: "temporal": executable file not found` and the container could never report healthy, independent of the Postgres issue above. Replaced with `nc -z temporal 7233` — verified `nc`/`wget` are present in this image, `temporal`/`temporal-server`/CLI tools are not. Also had to target the container's own name (`temporal`), not `localhost`: the frontend gRPC port binds only the container's actual network IP, not `127.0.0.1` — `nc -z localhost 7233` connection-refused every time even once the server was actually listening.
 - **`temporal-ui`'s own healthcheck had the same class of bug, separately** — `temporalio/ui:2.53.3` doesn't have `curl` either (`curl: not found`), so its `CMD-SHELL curl -f http://localhost:8080/ ...` healthcheck always failed and the container was permanently reported unhealthy even while serving requests fine. Unlike the server container above, `wget` alone was enough here (`wget -qO- http://localhost:8080/ || exit 1`) — no need for the `nc`/container-name workaround since this is a plain HTTP UI, not a gRPC port.
+
+**No `create` step in `temporal-schema-setup`:** both databases are created by `homeserver.py`'s provisioning on `shared-postgres`. `temporal-sql-tool create` would fail with "permission denied to create database", because the `temporal` role only owns its two databases. The step only runs `setup-schema` / `update-schema`, which are no-ops when already applied.
+
+## Upgrading across minor versions (1.30.6 → 1.32.0, 2026-09-30)
+
+Temporal only supports moving the server **one minor version at a time**, so step through each minor: set `TEMPORAL_VERSION`/`TEMPORAL_ADMINTOOLS_VERSION` in `.env` to the latest patch of the next minor (here `1.31.3`), `up temporal`, and check that `temporal-schema-setup` exited 0 (its log should end with `Schema updated from … to …` / `UpdateSchemaTask done`) and that `temporal` reports healthy. Then repeat for the next minor (`1.32.0`). A few `Not enough hosts to serve the request` lines in the first seconds after start are normal. After bumping `temporalio` in `worker/pyproject.toml`, run `uv lock` in `worker/` too, because the Dockerfile's `uv sync --locked` fails the build if the lockfile is stale.
 
 ## Watching a workflow run in the Web UI
 

@@ -1,28 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  plane-db:
-    image: postgres:18.6-alpine
-    container_name: plane-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    command: postgres -c shared_buffers=128MB -c max_connections=50 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=384MB
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    volumes:
-      - plane-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   plane-redis:
     image: valkey/valkey:9.1.2-alpine
     container_name: plane-redis
@@ -39,7 +18,7 @@ services:
       - homeserver
 
   plane-mq:
-    image: rabbitmq:4.3.5-alpine
+    image: rabbitmq:4.3.6-alpine
     container_name: plane-mq
     restart: unless-stopped
     env_file: .env
@@ -59,7 +38,7 @@ services:
       - homeserver
 
   plane-minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: plane-minio
     restart: unless-stopped
     env_file: .env
@@ -78,18 +57,16 @@ services:
       - homeserver
 
   plane-migrator:
-    image: makeplane/plane-backend:v1.4.1
+    image: makeplane/plane-backend:v1.4.2
     container_name: plane-migrator
     restart: "no"
     command: ./bin/docker-entrypoint-migrator.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       SECRET_KEY: ${SECRET_KEY}
     depends_on:
-      plane-db:
-        condition: service_healthy
       plane-redis:
         condition: service_healthy
       plane-mq:
@@ -98,13 +75,13 @@ services:
       - homeserver
 
   plane-api:
-    image: makeplane/plane-backend:v1.4.1
+    image: makeplane/plane-backend:v1.4.2
     container_name: plane-api
     restart: unless-stopped
     command: ./bin/docker-entrypoint-api.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       RABBITMQ_HOST: plane-mq
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
@@ -119,23 +96,30 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       GUNICORN_WORKERS: "2"
     depends_on:
-      plane-db:
-        condition: service_healthy
       plane-redis:
         condition: service_healthy
       plane-mq:
         condition: service_healthy
+    healthcheck:
+      # Plane Community Edition's documented health check: GET / returns
+      # {"status": "OK"} (developers.plane.so/self-hosting/manage/health-checks;
+      # /api/health/ etc. are Commercial Edition only).
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks:
       - homeserver
 
   plane-worker:
-    image: makeplane/plane-backend:v1.4.1
+    image: makeplane/plane-backend:v1.4.2
     container_name: plane-worker
     restart: unless-stopped
     command: ./bin/docker-entrypoint-worker.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       RABBITMQ_HOST: plane-mq
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
@@ -144,8 +128,6 @@ services:
       AWS_S3_BUCKET_NAME: uploads
       SECRET_KEY: ${SECRET_KEY}
     depends_on:
-      plane-db:
-        condition: service_healthy
       plane-redis:
         condition: service_healthy
       plane-mq:
@@ -154,19 +136,17 @@ services:
       - homeserver
 
   plane-beat:
-    image: makeplane/plane-backend:v1.4.1
+    image: makeplane/plane-backend:v1.4.2
     container_name: plane-beat
     restart: unless-stopped
     command: ./bin/docker-entrypoint-beat.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@plane-db/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       RABBITMQ_HOST: plane-mq
       SECRET_KEY: ${SECRET_KEY}
     depends_on:
-      plane-db:
-        condition: service_healthy
       plane-redis:
         condition: service_healthy
       plane-mq:
@@ -175,7 +155,7 @@ services:
       - homeserver
 
   plane-web:
-    image: makeplane/plane-frontend:v1.4.1
+    image: makeplane/plane-frontend:v1.4.2
     container_name: plane-web
     restart: unless-stopped
     env_file: .env
@@ -189,7 +169,7 @@ services:
       - homeserver
 
   plane-admin:
-    image: makeplane/plane-admin:v1.4.1
+    image: makeplane/plane-admin:v1.4.2
     container_name: plane-admin
     restart: unless-stopped
     env_file: .env
@@ -205,7 +185,7 @@ services:
       - homeserver
 
   plane-space:
-    image: makeplane/plane-space:v1.4.1
+    image: makeplane/plane-space:v1.4.2
     container_name: plane-space
     restart: unless-stopped
     env_file: .env
@@ -221,7 +201,7 @@ services:
       - homeserver
 
   plane-proxy:
-    image: makeplane/plane-proxy:v1.4.1
+    image: makeplane/plane-proxy:v1.4.2
     container_name: plane-proxy
     restart: unless-stopped
     env_file: .env
@@ -246,7 +226,6 @@ services:
       - homeserver
 
 volumes:
-  plane-postgres-alpine:
   plane-redis-alpine:
   plane-rabbitmq-alpine:
 

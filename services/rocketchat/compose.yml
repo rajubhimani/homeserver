@@ -79,6 +79,12 @@ services:
       resources:
         limits:
           memory: 128M
+    # NATS's own monitoring endpoint (enabled by --http_port 8222).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - homeserver
 
@@ -90,7 +96,7 @@ services:
   # uploads/ at startup -- but a real file/avatar upload would fail silently
   # against a root-owned dir left behind by a wipe/--fresh restart.
   rocketchat-permissions:
-    image: alpine:3.24.1
+    image: alpine:3.24.2
     container_name: rocketchat-permissions
     restart: "no"
     user: "0:0"

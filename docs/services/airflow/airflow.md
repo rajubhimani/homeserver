@@ -7,6 +7,9 @@
 **Purpose:** Programmatically author, schedule, and monitor workflows as Python DAGs — the industry-standard workflow orchestrator.
 **Port:** `8137` (host) → `8080` (container, `airflow-apiserver`) | **Data:** `service_data/data/airflow/` (`dags/`, `logs/`, `config/`, `plugins/`) | **Requires:** Postgres
 
+**Database:** on the shared Postgres server ([shared-postgres](../shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/airflow/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -27,13 +30,13 @@ Browse to `https://airflow.<domain>/` (or `http://<host>:8137` in dev) and log i
 
 The [official docker-compose.yaml](https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html) ships `CeleryExecutor` by default — an 8-container setup (`postgres`, `redis`, `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`, `airflow-worker`, `airflow-triggerer`, `airflow-init`, plus optional `flower`) built for distributed multi-worker task execution.
 
-This deployment uses `LocalExecutor` instead — tasks run directly inside the scheduler process, no separate task queue needed. Drops `redis`, `airflow-worker`, and `flower` entirely: 6 containers total (`airflow-db`, `airflow-init`, `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`, `airflow-triggerer`) instead of 8+. Airflow 3.x still requires `airflow-dag-processor` as a separate process regardless of executor (DAG parsing moved out of the scheduler for security/isolation in the 3.x rearchitecture) — it isn't Celery-specific, so it stays.
+This deployment uses `LocalExecutor` instead — tasks run directly inside the scheduler process, no separate task queue needed. Drops `redis`, `airflow-worker`, and `flower` entirely: 5 containers total (the database is on `shared-postgres`; `airflow-init`, `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`, `airflow-triggerer`) instead of 8+. Airflow 3.x still requires `airflow-dag-processor` as a separate process regardless of executor (DAG parsing moved out of the scheduler for security/isolation in the 3.x rearchitecture) — it isn't Celery-specific, so it stays.
 
 `airflow-init` is one-shot (`restart: "no"`) — runs `airflow db migrate`, creates the admin user, and registers an `smtp_default` Connection pointing at `mailpit`, then exits successfully. The other four app containers wait on `service_completed_successfully` before starting.
 
 ```mermaid
 flowchart TD
-    DB["airflow-db<br/>(Postgres)"] --> Init["airflow-init (one-shot)<br/>db migrate, create admin user,<br/>register smtp_default Connection"]
+    DB["shared-postgres<br/>(airflow db)"] --> Init["airflow-init (one-shot)<br/>db migrate, create admin user,<br/>register smtp_default Connection"]
     Init -->|service_completed_successfully| API["airflow-apiserver<br/>:8080, web UI"]
     Init -->|service_completed_successfully| Sched["airflow-scheduler<br/>runs tasks directly — LocalExecutor,<br/>no separate worker/queue"]
     Init -->|service_completed_successfully| DP["airflow-dag-processor<br/>parses DAG files"]

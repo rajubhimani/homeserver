@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Open-source invoicing and billing — the actively maintained community successor to Crater (same Laravel + MariaDB stack, same data format; the original `foralabs/crater` image was made private).
-**Port:** `8101` (host) → `8080` (container) | **Data:** `service_data/data/invoiceshelf/` | **Requires:** MariaDB | **Memory:** no hard limit set; measured idle ~172MB total (app 63 + db 109)
+**Port:** `8101` (host) → `8080` (container) | **Data:** `service_data/data/invoiceshelf/` | **Requires:** MariaDB | **Memory:** no hard limit set; measured idle ~172MB total (app 63 + db 109), measured before the 2026-10-01 move to the shared server
+
+**Database:** on the shared MariaDB server ([shared-mariadb](shared-mariadb.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-mariadb` before this service and creates its database and login from `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` in `services/invoiceshelf/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 
@@ -35,7 +38,7 @@ Browse to `http://<ip>:8101` — the setup wizard creates the admin account.
 
 | Field | Value |
 | --- | --- |
-| Database Host | `invoiceshelf-db` |
+| Database Host | `shared-mariadb` |
 | Database Port | `3306` |
 | Database Name | `MYSQL_DATABASE` from `.env` (default `invoiceshelf`) |
 | Database Username | `MYSQL_USER` from `.env` (default `invoiceshelf`) |

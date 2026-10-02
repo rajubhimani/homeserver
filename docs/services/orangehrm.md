@@ -7,6 +7,9 @@
 **Purpose:** Open-source HR management — employee records, leave, time tracking, recruitment.
 **Port:** `8125` (host) → `80` (container) | **Data:** ⚠ none persisted yet, see below | **Requires:** MariaDB
 
+**Database:** on the shared MariaDB server ([shared-mariadb](shared-mariadb.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-mariadb` before this service and creates its database and login from `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` in `services/orangehrm/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## ⚠ Best-effort setup — OrangeHRM's Docker packaging is weaker than every other service in this stack
 
 Two official-ish Docker paths exist for OrangeHRM, and neither is in great shape:
@@ -14,7 +17,7 @@ Two official-ish Docker paths exist for OrangeHRM, and neither is in great shape
 - **Bitnami's image** (`bitnami/orangehrm`) has proper env-var-driven DB wiring (matches this stack's usual pattern) but is **deprecated and archived** (`bitnami/orangehrm-archived`), stuck on an old PHP version with no further security patches. Not used here for that reason.
 - **The actual official `orangehrm/orangehrm` image** (used here) has sparse, dated documentation: the upstream wiki's own install instructions still describe finding the container's IP via `docker inspect` and connecting the database through the web installer UI rather than any documented env-var scheme. There's no confirmed `ORANGEHRM_DATABASE_*`-style env var support in the current image.
 
-This `compose.yml` uses standard container-name networking (`orangehrm-db` on the shared `homeserver` network) instead of the wiki's manual IP-lookup approach, which should work the same way every other multi-container service here does — but **the DB connection step still has to be completed through OrangeHRM's own web installer on first visit**, pointing it at host `orangehrm-db`, port `3306`, and the credentials from `.env`. This is not fully pre-wired like every other service in this stack.
+This `compose.yml` uses standard container-name networking (`shared-mariadb` on the shared `homeserver` network) instead of the wiki's manual IP-lookup approach, which should work the same way every other multi-container service here does — but **the DB connection step still has to be completed through OrangeHRM's own web installer on first visit**, pointing it at host `shared-mariadb`, port `3306`, and the `MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD` values from `.env` (homeserver.py has already created that database and user on the shared server; choose the installer's "existing empty database" option). This is not fully pre-wired like every other service in this stack.
 
 ### No persistent data volume — needs follow-up before real use
 
@@ -36,7 +39,7 @@ Open `https://orangehrm.<domain>/` (or `http://<host>:8125` in dev) and complete
 
 | Field | Value |
 | --- | --- |
-| Database Host Name | `orangehrm-db` |
+| Database Host Name | `shared-mariadb` |
 | Database Host Port | `3306` |
 | Database Name | `MYSQL_DATABASE` from `.env` |
 | OrangeHRM Database Username | `MYSQL_USER` from `.env` |
@@ -51,7 +54,7 @@ Only relevant if the database doesn't already exist yet — e.g. you're pointing
 
 | Field | Value |
 | --- | --- |
-| Database Host Name | `orangehrm-db` |
+| Database Host Name | `shared-mariadb` |
 | Database Host Port | `3306` |
 | Database Name | `MYSQL_DATABASE` from `.env` (or any new name) |
 | Use the same Database User for OrangeHRM | Leave unchecked — don't run the app as `root` day-to-day |
@@ -71,7 +74,7 @@ None — HR admin creates employee accounts from inside the app after setup. No 
 
 ## Notes
 
-- `orangehrm-db` uses `mariadb:11.4`, **not** the stack-wide `mariadb:12.3.3` default every other MariaDB-backed service uses — confirmed via the web installer's own compatibility check, OrangeHRM requires MariaDB `>5` and `<12`. Don't bump this one to match the stack-wide default without re-checking that requirement first.
+- OrangeHRM requires MariaDB `>5` and `<12` (confirmed via the web installer's own compatibility check). That's why the shared MariaDB server is pinned to the 11.8 LTS line: don't move `shared-mariadb` to 12+ while OrangeHRM uses it. (Before 2026-10-01 it ran its own `orangehrm-db` on 11.4 for the same reason.)
 - No confirmed health/status endpoint — both the compose healthcheck and the landing-page health route just check that `/` responds.
 
 ---

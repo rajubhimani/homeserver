@@ -25,7 +25,7 @@ services:
   # (Bichon itself always creates it as the public default 'admin@bichon').
   # Idempotent — see init-admin.sh. Exits after running; not a service.
   bichon-init:
-    image: curlimages/curl:8.21.0
+    image: curlimages/curl:8.22.0
     container_name: bichon-init
     restart: "no"
     environment:

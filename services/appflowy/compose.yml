@@ -37,7 +37,7 @@ services:
       - homeserver
 
   appflowy-minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: appflowy-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -56,7 +56,7 @@ services:
       - homeserver
 
   appflowy-minio-setup:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: appflowy-minio-setup
     restart: "no"
     env_file: .env
@@ -73,7 +73,7 @@ services:
       - homeserver
 
   appflowy-gotrue:
-    image: appflowyinc/gotrue:0.17.9
+    image: appflowyinc/gotrue:0.18.11
     container_name: appflowy-gotrue
     restart: unless-stopped
     env_file: .env
@@ -99,11 +99,18 @@ services:
     depends_on:
       appflowy-db:
         condition: service_healthy
+    # Same check as AppFlowy-Cloud's own docker-compose.yml.
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     networks:
       - homeserver
 
   appflowy-cloud:
-    image: appflowyinc/appflowy_cloud:0.18.3
+    image: appflowyinc/appflowy_cloud:0.18.11
     container_name: appflowy-cloud
     restart: unless-stopped
     env_file: .env
@@ -118,6 +125,10 @@ services:
       APPFLOWY_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       APPFLOWY_S3_BUCKET: appflowy
       APPFLOWY_S3_REGION: us-east-1
+      # Required since appflowy_cloud 0.18 ("Public Form uploads with MinIO
+      # require APPFLOWY_S3_PRESIGNED_URL_ENDPOINT"); served by the
+      # /minio-api/ block in nginx.conf. Value per AppFlowy-Cloud's deploy.env.
+      APPFLOWY_S3_PRESIGNED_URL_ENDPOINT: https://appflowy.${DOMAIN}/minio-api
       APPFLOWY_ENVIRONMENT: production
       APPFLOWY_WEB_URL: https://appflowy.${DOMAIN}
     healthcheck:
@@ -139,7 +150,7 @@ services:
       - homeserver
 
   appflowy-web:
-    image: appflowyinc/appflowy_web:0.17.1
+    image: appflowyinc/appflowy_web:0.18.5
     container_name: appflowy-web
     restart: unless-stopped
     environment:
@@ -149,11 +160,13 @@ services:
     depends_on:
       appflowy-cloud:
         condition: service_healthy
+    # No healthcheck, matching AppFlowy-Cloud's own docker-compose.yml (and the
+    # image): static frontend behind appflowy-nginx, whose check covers it.
     networks:
       - homeserver
 
   appflowy-admin:
-    image: appflowyinc/admin_frontend:0.17.9
+    image: appflowyinc/admin_frontend:0.18.2
     container_name: appflowy-admin
     restart: unless-stopped
     env_file: .env
@@ -163,11 +176,13 @@ services:
     depends_on:
       appflowy-cloud:
         condition: service_healthy
+    # No healthcheck, matching AppFlowy-Cloud's own docker-compose.yml (and the
+    # image): static frontend behind appflowy-nginx, whose check covers it.
     networks:
       - homeserver
 
   appflowy-nginx:
-    image: nginx:1.30-alpine
+    image: nginx:1.31-alpine
     container_name: appflowy-nginx
     restart: unless-stopped
     volumes:

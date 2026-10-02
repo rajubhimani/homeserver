@@ -30,26 +30,31 @@ Install the official [AppFlowy app](https://appflowy.io/download) (desktop: Mac/
 
 > The `appflowy-minio-setup` container runs once to create the `appflowy` S3 bucket, then exits — this is normal, not a crash.
 
+> **MinIO image: `pgsty/minio` (and `pgsty/mc`), since 2026-10-01.** Docker Hub stopped serving `minio/minio`/`minio/mc` ("pull access denied"), and `quay.io/minio/*` has no tags. `pgsty/*` is a community rebuild of the same MinIO binaries (same on-disk format, ships `curl` so the healthcheck is unchanged). Check its tags on Docker Hub when bumping.
+
 ## Architecture
 
 Multi-container: postgres (pgvector), redis, minio, gotrue, appflowy-cloud, appflowy-web, admin-frontend, nginx. `GOTRUE_JWT_SECRET` must be at least 32 chars and **identical** across gotrue and appflowy-cloud (`openssl rand -hex 32`).
 
 ### Compatible image versions
 
-All services below must stay in sync. `appflowy_web` uses its own versioning scheme — `0.15.5` is the current latest for the web frontend regardless of cloud version.
+All services below must stay in sync. `appflowy_web` uses its own versioning scheme. The 0.18 set below was bumped on 2026-09-30.
 
 | Service | Image | Version | Notes |
 | --- | --- | --- | --- |
-| Cloud backend | `appflowyinc/appflowy_cloud` | `0.18.3` | Pinned independently — not currently in lockstep with gotrue/admin |
-| Auth service | `appflowyinc/gotrue` | `0.17.9` | Must match admin — `admin_frontend` has no `0.18.x` release yet, capped at `0.17.9` |
-| Admin UI | `appflowyinc/admin_frontend` | `0.17.9` | Must match gotrue |
-| Web frontend | `appflowyinc/appflowy_web` | `0.17.1` | Own versioning scheme — nginx rewrite handles path differences |
+| Cloud backend | `appflowyinc/appflowy_cloud` | `0.18.11` | Same release line as gotrue |
+| Auth service | `appflowyinc/gotrue` | `0.18.11` | Bumped from `0.17.9` together with admin on 2026-09-30 once `admin_frontend` shipped a `0.18.x` |
+| Admin UI | `appflowyinc/admin_frontend` | `0.18.2` | Keep on the same `0.x` line as gotrue (patch numbers differ upstream) |
+| Web frontend | `appflowyinc/appflowy_web` | `0.18.5` | Own versioning scheme — nginx rewrite handles path differences |
 | Database | `pgvector/pgvector` | `pg16` | — |
 | Cache | `redis` | `8.10-alpine` | — |
 
 > **WebSocket path difference:** `appflowy_web:0.15.5` sends WebSocket requests to `/ws/{workspace_id}/` but `appflowy_cloud:0.16.x` changed to `/ws/v2/{workspace_id}`. The internal nginx (`appflowy/nginx.conf`) rewrites the path automatically.
 
 ## Known issues and fixes
+
+- **`appflowy_cloud` 0.18 needs `APPFLOWY_S3_PRESIGNED_URL_ENDPOINT`** and refuses to start without it ("Public Form uploads with MinIO require APPFLOWY_S3_PRESIGNED_URL_ENDPOINT"). It's set to `https://appflowy.${DOMAIN}/minio-api`, and `nginx.conf` has the matching `/minio-api/` block. Both are taken from AppFlowy-Cloud's own `deploy.env` and `nginx.conf`, including setting `Host` to the internal MinIO host, because the presigned URLs are signed against it. This was found on the 2026-10-02 fresh-install run, after the 0.17 → 0.18 bump.
+- **Healthchecks:** `appflowy-gotrue` uses `curl http://127.0.0.1:9999/health` (same as upstream). `appflowy-web` and `appflowy-admin` deliberately have **none**, matching AppFlowy-Cloud's own compose: they're static frontends behind `appflowy-nginx`, whose check covers them. A self-made check failed here, because web answers `/` with a 302 and admin answers `/` with a 404.
 
 ### "Database error finding user" on signup
 

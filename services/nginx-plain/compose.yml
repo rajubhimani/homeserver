@@ -1,6 +1,6 @@
 services:
   nginx-plain:
-    image: nginx:1.30.5-alpine
+    image: nginx:1.31.6-alpine
     container_name: nginx-plain
     restart: unless-stopped
     env_file: .env

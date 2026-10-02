@@ -1,5 +1,8 @@
 # Mattermost
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/mattermost/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
 
 ---
@@ -29,7 +32,7 @@ curl http://localhost:8141/api/v4/system/ping
 
 ## Connecting the Android app
 
-Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.10.1` (`.env.example`), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
+Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.11.1` (`.env.example`), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
 
 ## Registration
 

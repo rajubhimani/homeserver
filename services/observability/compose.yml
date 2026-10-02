@@ -1,6 +1,25 @@
 services:
+  # Same pattern as vikunja-permissions/firefly-permissions: the images run as
+  # non-root users (prom/prometheus = nobody 65534, grafana/loki = 10001,
+  # grafana/grafana = 472, per each image's own USER), so a data folder Docker
+  # (re)creates root-owned after a wipe/reset leaves them crash-looping on
+  # "permission denied". Documented fix: chown before start. Found by the
+  # 2026-10-02 fresh-install run; the folders had only ever been fixed by hand.
+  observability-permissions:
+    image: alpine:3.24.2
+    container_name: observability-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/prometheus:/prometheus
+      - ${DATA_ROOT}/loki:/loki
+      - ${DATA_ROOT}/grafana:/grafana
+    command: sh -c "chown -R 65534:65534 /prometheus && chown -R 10001:10001 /loki && chown -R 472:0 /grafana"
+    networks:
+      - homeserver
+
   prometheus:
-    image: prom/prometheus:v3.14.0
+    image: prom/prometheus:v3.15.0
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -16,11 +35,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    depends_on:
+      observability-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
   loki:
-    image: grafana/loki:3.7.7
+    image: grafana/loki:3.7.8
     container_name: loki
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
@@ -29,10 +51,19 @@ services:
     volumes:
       - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - ${DATA_ROOT}/loki:/loki
-    # No healthcheck: grafana/loki is a fully distroless image (confirmed —
-    # no /bin/sh, wget, curl, or nc present), so no CMD/CMD-SHELL probe can
-    # run inside the container. Dependents below use service_started instead
-    # of service_healthy.
+    # grafana/loki is distroless (no /bin/sh, wget, curl or nc), so the probe
+    # is Loki's own binary in exec form: `loki -health`, the same check
+    # grafana/loki's own compose files use. (Before 2026-10-02 this service
+    # had no healthcheck on the assumption none was possible.)
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      observability-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
@@ -42,7 +73,7 @@ services:
   # config needed since FastAPI services here already log Loki-compatible
   # JSON to stdout (queryable in Grafana via `| json` in LogQL).
   alloy:
-    image: grafana/alloy:v1.19.2
+    image: grafana/alloy:v1.20.1
     container_name: alloy
     restart: unless-stopped
     command:
@@ -70,7 +101,7 @@ services:
   # Needs broad host access (docker internals, cgroups) to read this data —
   # standard requirement for cAdvisor, not specific to this stack.
   cadvisor:
-    image: ghcr.io/google/cadvisor:v0.60.5
+    image: ghcr.io/google/cadvisor:v0.60.6
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
@@ -134,7 +165,7 @@ services:
       - homeserver
 
   grafana:
-    image: grafana/grafana-oss:13.0.2
+    image: grafana/grafana:13.2.3
     # container_name is "observability", not "grafana", so homeserver.py's
     # wait_healthy()/get_running_services() (which match on the service
     # *directory* name, "observability") find this container — same trick
@@ -162,6 +193,8 @@ services:
       - ${DATA_ROOT}/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
+      observability-permissions:
+        condition: service_completed_successfully
       prometheus:
         condition: service_healthy
       loki:
@@ -171,7 +204,12 @@ services:
       interval: 60s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      # A fresh Grafana runs ~530 database migrations before it opens port
+      # 3000: measured 5.5 minutes on this host's data drive (2026-10-02).
+      # Failures inside start_period don't count, and with start_interval a
+      # normal restart still turns healthy within ~10s (Docker 25+).
+      start_period: 600s
+      start_interval: 10s
     networks:
       - homeserver
 

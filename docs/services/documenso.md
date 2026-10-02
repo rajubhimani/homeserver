@@ -7,6 +7,9 @@
 **Purpose:** Self-hosted document e-signing (DocuSign alternative).
 **Port:** `8128` (host) → `3000` (container) | **Data:** `service_data/data/documenso/` | **Requires:** Postgres, plus a signing certificate (see below)
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/documenso/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup — a signing certificate is required before first start
 
 Documenso digitally signs documents with a PKCS#12 (`.p12`) certificate, and the container **will not start correctly without one** at `service_data/data/documenso/cert.p12`. A self-signed one is fine for personal/internal use (buy a real one only if documents need to be externally verifiable by third parties):

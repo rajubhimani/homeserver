@@ -45,9 +45,11 @@ File uploads (`/app/uploads`, also a declared `VOLUME` on the Rocket.Chat image 
 
 ## Connecting the Android app
 
-Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/details?id=chat.rocket.android)) — on first launch, tap **Join a workspace**, enter `https://rocketchat.${DOMAIN}` as the workspace address, **Connect**, then log in. This stack pins `ROCKETCHAT_VERSION=8.7.0`. A known category of complaint in Rocket.Chat's own community forums is the app failing to reach a self-hosted server *from inside the same LAN* over HTTPS while working fine from outside — if that's hit, it's a known issue to search for, not necessarily a config mistake on this stack's side.
+Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/details?id=chat.rocket.android)) — on first launch, tap **Join a workspace**, enter `https://rocketchat.${DOMAIN}` as the workspace address, **Connect**, then log in. This stack pins `ROCKETCHAT_VERSION=8.8.1`. A known category of complaint in Rocket.Chat's own community forums is the app failing to reach a self-hosted server *from inside the same LAN* over HTTPS while working fine from outside — if that's hit, it's a known issue to search for, not necessarily a config mistake on this stack's side.
 
 ## Health endpoint
+
+NATS checks its own monitoring endpoint (`wget http://localhost:8222/healthz`, enabled by `--http_port 8222`), and MongoDB pings itself with `mongosh` (added/verified 2026-10-02).
 
 `services/rocketchat/compose.yml`'s healthcheck hits `http://localhost:3000/api/info` (a Node one-liner, not `curl`/`wget` — the image has neither) — 200 means healthy. `mongodb`'s own healthcheck is a `mongosh` ping instead.
 

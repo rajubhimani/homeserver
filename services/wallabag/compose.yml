@@ -1,28 +1,7 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  wallabag-db:
-    image: postgres:18.6-alpine
-    container_name: wallabag-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - wallabag-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   wallabag:
     image: wallabag/wallabag:2.6.14
     container_name: wallabag
@@ -30,7 +9,7 @@ services:
     env_file: .env
     environment:
       SYMFONY__ENV__DATABASE_DRIVER: pdo_pgsql
-      SYMFONY__ENV__DATABASE_HOST: wallabag-db
+      SYMFONY__ENV__DATABASE_HOST: shared-postgres
       SYMFONY__ENV__DATABASE_PORT: 5432
       SYMFONY__ENV__DATABASE_NAME: ${POSTGRES_DB}
       SYMFONY__ENV__DATABASE_USER: ${POSTGRES_USER}
@@ -46,14 +25,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    depends_on:
-      wallabag-db:
-        condition: service_healthy
     networks:
       - homeserver
-
-volumes:
-  wallabag-postgres-alpine:
 
 networks:
   homeserver:

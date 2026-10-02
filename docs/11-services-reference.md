@@ -131,7 +131,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | BookStack | `bookstack` | 8115 | 80 | extra |
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
 | Mealie | `mealie` | 9925 | 9000 | extra |
-| Supabase | `supabase-kong` | 8133 | 8000 | extra |
+| Supabase | `supabase-envoy` (alias `supabase-kong`) | 8133 | 8000 | extra |
 | NocoDB | `nocodb` | 8126 | 8080 | extra |
 | Outline | `outline` | 8114 | 3000 | extra |
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
@@ -156,6 +156,8 @@ Observability's other four containers (`loki`, `alloy`, `cadvisor`, `node-export
 **In `prod` mode, every service above is also reachable at `10.8.0.1:<same port>`** over the WireGuard tunnel (whether the service is currently running or not — the binding is in `compose.prod.yml`, applied whenever it's next started) (in addition to `127.0.0.1`, not instead of it) — e.g. `10.8.0.1:2283` for Immich, `10.8.0.1:8096` for Jellyfin. See [09 — Firewall § Restoring fast direct access, safely](09-firewall.md#restoring-fast-direct-access-safely-the-10801-pattern) for why this is safe and how to add it to a new service.
 
 ---
+
+**Shared database servers** (`shared-postgres`, `shared-mariadb`) publish no ports. They're reached only over the `homeserver` network, and `homeserver.py` starts and stops them automatically for the services above CORE that use them. See [shared-postgres](services/shared-postgres.md).
 
 ## Reverse Proxy Config
 
@@ -246,7 +248,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `nocodb.yourdomain.com` | `nocodb` | `8080` | extra |
 | `documenso.yourdomain.com` | `documenso` | `3000` | extra |
 | `penpot.yourdomain.com` | `penpot-frontend` | `8080` | extra |
-| `supabase.yourdomain.com` | `supabase-kong` | `8000` | extra |
+| `supabase.yourdomain.com` | `supabase-kong` (alias of `supabase-envoy`) | `8000` | extra |
 | `gitlab.yourdomain.com` | `gitlab` | `80` | manual |
 
 ---

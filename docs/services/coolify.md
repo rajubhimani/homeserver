@@ -43,7 +43,7 @@ that no stable tag existed at all), then
 appearing between bumps — that's just Coolify comparing its own
 baked-in version string against the latest tagged release, harmless.
 
-Currently pinned to `coollabsio/coolify:4.3.16` (real semver tag,
+Currently pinned to `coollabsio/coolify:4.3.23` (real semver tag,
 confirmed compatible — Coolify's own upgrade-path check treats
 `4.3.0 → 4.3.16` as a valid forward upgrade, not a downgrade, and this
 image previously ran as `edge` self-reporting version `4.3.0`).
@@ -362,7 +362,7 @@ start" note in Setup above.
 ## Notes
 
 - `APP_ID`/`APP_KEY`/`DB_PASSWORD`/`REDIS_PASSWORD`/`PUSHER_*` are all one-time secrets — generate them once, keep them, never rotate casually (documented upstream behavior: changing them later can break the installation).
-- Health endpoint: `/api/health`.
+- Health endpoint: `/api/health`. The healthcheck timings (interval 5s, timeout 2s, 24 retries, `start_period: 60s`) are taken from coollabsio/coolify's own `docker-compose.prod.yml`. A fresh install runs its migrations for a few minutes, and the previous 30s/3-retries setting reported that as a failure (2026-10-02).
 - Since Coolify mounts the Docker socket, treat it with the same trust level as `portainer`/`dockge` in this stack — anything with socket access can affect any other container on the host.
 
 ---

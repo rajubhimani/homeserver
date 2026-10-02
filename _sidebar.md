@@ -19,6 +19,7 @@
   - [12 — Orchestration Services](/docs/12-orchestration.md "Airflow vs. Temporal vs. Dagster — what each is for and how they compose")
   - [13 — Auth Posture](/docs/13-auth-posture.md "Which services have real accounts, a shared password, or no login at all — and Authentik forward-auth candidacy")
   - [14 — Service Comparison](/docs/14-service-comparison.md "Overlapping apps grouped side by side with memory cost and version currency — what to prune")
+  - [15 — Starting & Stopping Services](/docs/15-starting-services.md "Every way to start/stop services — up, tiers, groups, restart, update, precreate, restore, reset — and what happens automatically")
   - [Docker Cheatsheet](/docs/docker-cheatsheet.md "Images, containers, volumes, networks, cleanup commands")
   - [Docker Resource Limits](/docker/README.md "Cap the Docker daemon's total CPU, memory, and disk usage on the host")
 

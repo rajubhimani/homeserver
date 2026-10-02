@@ -16,15 +16,21 @@ services:
       - --hide-scrollbars
       - --disable-blink-features=AutomationControlled
       - --window-size=1440,900
+    # No healthcheck, matching Karakeep's own docker/docker-compose.yml: the
+    # karakeep container is what reports whether the browser is reachable.
     networks:
       - homeserver
 
   karakeep-meilisearch:
-    image: getmeili/meilisearch:v1.53.1
+    image: getmeili/meilisearch:v1.41.0
     container_name: karakeep-meilisearch
     restart: unless-stopped
     environment:
       MEILI_NO_ANALYTICS: "true"
+      # Lets a newer Meilisearch minor open an index written by an older one
+      # in place, instead of refusing to start until a dump/import.
+      # No-op when the on-disk version already matches.
+      MEILI_UPGRADE_DB: "true"
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
     volumes:
       - karakeep-meilisearch:/meili_data

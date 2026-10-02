@@ -44,7 +44,7 @@ The official **GitLab** app ([Google Play](https://play.google.com/store/apps/de
 
 ## Health endpoint
 
-No `healthcheck:` is defined in `services/gitlab/compose.yml`. GitLab exposes its own `/-/readiness` and `/-/liveness` endpoints (JSON, 200 on healthy / 503 on failure) — both require either a token (`?token=...`, an instance-wide monitoring token set in the admin area) or the request coming from an IP on GitLab's monitoring allowlist (localhost by default), so they're not curl-from-outside-able without that setup.
+`services/gitlab/compose.yml` runs the Omnibus image's own `/opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10` (interval 60s, `start_period: 600s`, because first boot takes several minutes; verified healthy on a fresh install 2026-10-02). One known upstream gotcha: it can report unhealthy *during a backup restore*, so never let anything auto-restart an unhealthy GitLab while restoring. GitLab also exposes its own `/-/readiness` and `/-/liveness` endpoints (JSON, 200 on healthy / 503 on failure) — both require either a token (`?token=...`, an instance-wide monitoring token set in the admin area) or the request coming from an IP on GitLab's monitoring allowlist (localhost by default), so they're not curl-from-outside-able without that setup.
 
 ## Runner (optional)
 
