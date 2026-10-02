@@ -604,6 +604,43 @@ Files are read through a throwaway root container, so root-owned files can't be 
 
 Check a copy later with `sha256sum -c homeserver-archive-<timestamp>.tar.gz.sha256`.
 
+### Restoring from an archive (new machine or a rebuilt disk)
+
+You need Docker (or Podman), git and [uv](https://docs.astral.sh/uv/), and a user that can run Docker. The archive's `meta/README.txt` has the same steps in short form.
+
+```bash
+A=homeserver-archive-<timestamp>.tar.gz
+sha256sum -c "$A.sha256"                           # the copy is intact
+
+# 1. Unpack as root, with numeric owners: most files belong to app uids
+#    (Grafana 472, Loki 10001, www-data 33, ...), not to you.
+sudo mkdir -p /restore
+sudo tar --numeric-owner -xpzf "$A" -C /restore
+
+# 2. The repo, including unpushed commits, from the bundle
+git clone /restore/meta/homeserver.bundle ~/homeserver
+git -C ~/homeserver checkout <branch>              # "git: branch ..." line in /restore/meta/MANIFEST.txt
+git -C ~/homeserver remote set-url origin <your GitHub URL>
+
+# 3. The git-ignored files: every .env, CLAUDE.md, .claude/, ...
+#    Use "/." and not "/*": the shell's * skips dotfiles such as the root .env.
+cp -a /restore/homeserver/. ~/homeserver/
+
+# 4. service_data on the data drive, symlinked into the repo (this host's layout)
+sudo mv /restore/service_data /mnt/mydata/service_data
+ln -s /mnt/mydata/service_data ~/homeserver/service_data
+```
+
+Then, in `~/homeserver`:
+
+1. Check the root `.env` for this machine (`RUNTIME`, `DOCKER_SOCKET`). `DOMAIN` and every service's secrets come back unchanged.
+2. Run `uv sync`.
+3. Run `uv run homeserver.py prod restore all -y`. It loads every service's named volumes (the databases) and data folder from its latest snapshot. Apps on a shared database server start [shared-postgres](services/shared-postgres.md)/[shared-mariadb](services/shared-mariadb.md), recreate their own login and database, and load their dump. Services without a snapshot are skipped and keep the live data that came out of the archive. GitLab is MANUAL-tier, so restore it separately with `restore gitlab` if you use it.
+4. Run `uv run homeserver.py prod up all`, or the tiers you actually want.
+5. Copy the media back on its own (`/mnt/media`: Immich photos, the Jellyfin library, Nextcloud user files). It isn't in the archive.
+
+Plain `up` would *not* restore here. Auto-restore only fires when a service has no volumes **and** no `service_data/data/<service>/`, and moving `service_data` into place above already put the data folders back. That's why `restore all` has to be run explicitly.
+
 ## Fresh start of a service (`reset`)
 
 ```bash
