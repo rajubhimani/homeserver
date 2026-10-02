@@ -596,7 +596,7 @@ uv run homeserver.py prod reset <service>      # type 'reset' to confirm
 uv run homeserver.py prod restore <service>    # undo
 ```
 
-`reset` snapshots the service (volumes, `service_data/data/<service>/`, and its own database on a shared server), verifies the snapshot holds all of it, wipes exactly that service and starts it blank. If the snapshot is incomplete, it deletes nothing. A tier target (`reset office`) means only that tier. It's never auto-confirmed: without a terminal it needs `-y`.
+`reset` snapshots the service (volumes, `service_data/data/<service>/`, and its own database on a shared server) and verifies the snapshot holds all of it. It then keeps that snapshot as `service_data/backup/<service>/reset-backup-<timestamp>/`, wipes exactly that service and starts it blank. Reset backups sit outside the normal snapshot retention: regular `down` snapshots can never push them out, and the newest `RESET_BACKUP_RETENTION` (root `.env`, default 5) are kept per service. `reset` prints the exact undo command: `restore <service> --snapshot reset-backup-<timestamp>`. Plain `restore <service>` uses the newest *regular* snapshot instead. If the snapshot is incomplete, it deletes nothing. A tier target (`reset office`) means only that tier. It's never auto-confirmed: without a terminal it needs `-y`.
 
 `up --fresh` is different: it only skips the auto-restore of an existing snapshot and deletes nothing. Don't fake a reset with `--fresh` plus deleting volumes by hand. For an app on [shared-postgres](services/shared-postgres.md) or [shared-mariadb](services/shared-mariadb.md), that leaves its old database behind, so the app wouldn't actually start fresh.
 

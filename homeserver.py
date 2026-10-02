@@ -168,6 +168,9 @@ RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
 # Snapshots to keep per service before auto-pruning the oldest; -1 = unlimited
 BACKUP_RETENTION = int(_ROOT_ENV.get("BACKUP_RETENTION", "5"))
+# reset-backup-<ts> folders (each reset's verified pre-wipe snapshot) to keep
+# per service; they never count against BACKUP_RETENTION. -1 = unlimited.
+RESET_BACKUP_RETENTION = int(_ROOT_ENV.get("RESET_BACKUP_RETENTION", "5"))
 # 'subprocess' (default, zero extra deps) or 'python-on-whales' (optional —
 # uv sync --extra docker-sdk) for typed exceptions/structured errors instead
 # of parsed CLI text. Both call the same underlying docker/docker compose CLI
@@ -1677,6 +1680,27 @@ def list_snapshots(service: str) -> list[Path]:
     return sorted(p for p in svc_dir.iterdir() if p.is_dir() and SNAPSHOT_NAME.match(p.name))
 
 
+RESET_BACKUP_NAME = re.compile(r"^reset-backup-\d{8}-\d{6}$")
+
+
+def list_reset_backups(service: str) -> list[Path]:
+    """reset-backup-<ts> folders for a service, oldest first. Kept apart
+    from regular snapshots (list_snapshots ignores them), so neither
+    'restore <service>' nor BACKUP_RETENTION ever touches them."""
+    svc_dir = BACKUP_ROOT / service
+    if not svc_dir.is_dir():
+        return []
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir() and RESET_BACKUP_NAME.match(p.name))
+
+
+def prune_reset_backups(service: str) -> None:
+    if RESET_BACKUP_RETENTION == -1:
+        return
+    backups = list_reset_backups(service)
+    for old in backups[: max(0, len(backups) - RESET_BACKUP_RETENTION)]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def prune_snapshots(service: str) -> None:
     if BACKUP_RETENTION == -1:
         return
@@ -1966,15 +1990,24 @@ def do_precreate(service: str, env: str, profile: str | None, update: bool = Fal
     return ok
 
 
-def do_down(service: str, env: str, profile: str | None, no_backup: bool = False) -> bool:
+def do_down(service: str, env: str, profile: str | None, no_backup: bool = False, force_snapshot: bool = False) -> bool:
     # env is unused here (compose_files_all tears down both dev/prod
     # regardless) — kept in the signature so do_up/do_down/do_update/
     # do_restart/do_backup/do_restore all share one uniform call shape.
+    #
+    # Snapshot only if the service was actually running: a stopped service's
+    # last snapshot (taken when it stopped) is still current, and
+    # re-snapshotting it just churns BACKUP_RETENTION (pushing out older,
+    # different snapshots) and — for a shared-db app whose server is down —
+    # writes an incomplete one with no database dump (both seen 2026-10-02
+    # after a `down all`). do_backup/do_reset pass force_snapshot=True: an
+    # explicit backup, or a reset about to delete data, always snapshots.
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
 
+    was_running = any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in BACKEND.running_container_names())
     files = compose_files_all(service)
     cenv = compose_env(service)
 
@@ -1986,8 +2019,12 @@ def do_down(service: str, env: str, profile: str | None, no_backup: bool = False
 
     success(f"{service} stopped")
 
-    if not no_backup:
+    if no_backup:
+        pass
+    elif was_running or force_snapshot:
         backup_service(service)
+    else:
+        info(f"  {service} was already stopped — its last snapshot is still current, not taking another")
 
     return True
 
@@ -2067,7 +2104,7 @@ def do_backup(service: str, env: str, profile: str | None) -> bool:
     if not shared_db_ready(service, env, provision=False):
         return False
 
-    do_down(service, env, profile, no_backup=False)
+    do_down(service, env, profile, no_backup=False, force_snapshot=True)
     if was_running:
         do_up(service, env, profile)
 
@@ -2100,15 +2137,18 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
 
     info(f"Restoring {service} from snapshot {backup_dir.name}...")
     ok = True
-    ts_suffix = f"_{backup_dir.name}"
+    # Archive names end in _<YYYYMMDD-HHMMSS> (the moment they were taken).
+    # Strip that from the file name itself, not "_<folder name>": a snapshot
+    # folder renamed to keep it out of pruning (e.g. pre-fresh-install-<ts>)
+    # would otherwise restore into volumes named "<vol>_<ts>".
+    ts_suffix_re = re.compile(r"_\d{8}-\d{6}$")
     for f in sorted(backup_dir.glob("*.tar.gz")):
         base = f.name[: -len(".tar.gz")]
         # Newer snapshots suffix the filename with the timestamp too (e.g.
         # 'service_data_20260730-071152.tar.gz') — strip it to recover the
         # plain name. Older snapshots (pre-dating this) have no suffix, so
         # this is a no-op for them — both forms restore correctly.
-        if base.endswith(ts_suffix):
-            base = base[: -len(ts_suffix)]
+        base = ts_suffix_re.sub("", base)
         if base == "service_data":
             service_data_dir = SERVICE_DATA_ROOT / service
             if BACKEND.untar_into_dir(f, service_data_dir):
@@ -2171,7 +2211,7 @@ def do_reset(service: str, env: str, profile: str | None) -> bool:
     # 1. Snapshot (do_down stops the service and snapshots it, whether or
     #    not it was running — stopped containers still hold volumes).
     info(f"Resetting {service}: snapshotting first...")
-    do_down(service, env, profile or "*", no_backup=False)
+    do_down(service, env, profile or "*", no_backup=False, force_snapshot=True)
 
     # 2. Verify the snapshot holds everything about to be deleted. Pruning
     #    can't remove it: it's the newest.
@@ -2190,6 +2230,15 @@ def do_reset(service: str, env: str, profile: str | None) -> bool:
             error(f"  snapshot {new[-1].name} is missing {', '.join(missing)} — nothing deleted")
             return False
         success(f"  snapshot verified: service_data/backup/{service}/{new[-1].name}/")
+        # Keep it out of regular retention: it's the only copy of the data
+        # about to be wiped, and later downs/backups would otherwise push it
+        # out. Renamed, not copied — same data, no extra disk.
+        kept = new[-1].with_name(f"reset-backup-{new[-1].name}")
+        new[-1].rename(kept)
+        prune_reset_backups(service)
+        success(f"  kept as service_data/backup/{service}/{kept.name}/ (never pruned by BACKUP_RETENTION; newest {RESET_BACKUP_RETENTION} reset backups kept)")
+    else:
+        kept = None
 
     # 3. Wipe exactly this service.
     ok = True
@@ -2215,7 +2264,10 @@ def do_reset(service: str, env: str, profile: str | None) -> bool:
 
     # 4. Start blank (provisioning creates a new empty database).
     info(f"Starting {service} fresh...")
-    return do_up(service, env, profile, fresh=True)
+    started = do_up(service, env, profile, fresh=True)
+    if kept:
+        info(f"  undo with: uv run homeserver.py {env} restore {service} --snapshot {kept.name}")
+    return started
 
 
 def do_dump(service: str, env: str, profile: str | None) -> bool:

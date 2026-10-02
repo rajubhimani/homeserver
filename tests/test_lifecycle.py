@@ -193,3 +193,48 @@ def test_hand_made_backup_folders_are_never_the_latest_snapshot(fake, cli, monke
     hs.prune_snapshots(svc)
     assert (root / "pre-upgrade-fix-20250817-232941").is_dir(), "manual folders are never pruned"
     assert [p.name for p in hs.list_snapshots(svc)] == ["20260102-000000"]
+
+
+def test_down_of_an_already_stopped_service_takes_no_snapshot(fake, cli):
+    """Its last snapshot is still current; another one would only churn
+    retention (and, for a shared-db app, be incomplete)."""
+    svc = hs.SERVICES_DAILY[0]
+    fake.volumes.add(f"{svc}_data")
+    cli("prod", "down", svc)
+    assert not hs.list_snapshots(svc)
+
+
+def test_down_all_snapshots_only_what_was_running(fake, cli):
+    running_svc, stopped_svc = hs.SERVICES_DAILY[0], hs.SERVICES_DAILY[1]
+    for s in (running_svc, stopped_svc):
+        fake.volumes.add(f"{s}_data")
+    fake.running.add(running_svc)
+    cli("prod", "down", "all")
+    assert hs.list_snapshots(running_svc)
+    assert not hs.list_snapshots(stopped_svc)
+
+
+def test_explicit_backup_of_a_stopped_service_still_snapshots(fake, cli):
+    svc = hs.SERVICES_DAILY[0]
+    fake.volumes.add(f"{svc}_data")
+    cli("prod", "backup", svc)
+    assert hs.list_snapshots(svc), "backup was asked for explicitly"
+
+
+def test_reset_of_a_stopped_service_still_snapshots_before_wiping(fake, cli):
+    svc = hs.SERVICES_DAILY[0]
+    fake.volumes.add(f"{svc}_data")
+    cli("prod", "reset", svc, "-y")
+    snap = hs.list_reset_backups(svc)[0]
+    assert any(p.name.startswith(f"{svc}_data_") for p in snap.iterdir())
+
+
+def test_restore_from_a_renamed_snapshot_folder_uses_the_real_volume_names(fake, cli):
+    """A snapshot kept out of pruning under a descriptive name must restore
+    into the original volumes, not '<vol>_<timestamp>'."""
+    svc = hs.SERVICES_DAILY[0]
+    kept = hs.BACKUP_ROOT / svc / "pre-fresh-install-20261002-112217"
+    kept.mkdir(parents=True)
+    (kept / f"{svc}_data_20261002-112217.tar.gz").write_bytes(b"tar")
+    cli("prod", "restore", svc, "--snapshot", kept.name)
+    assert ("untar_volume", f"{svc}_data") in fake.events

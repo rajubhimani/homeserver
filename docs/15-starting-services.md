@@ -23,7 +23,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 | `update <target>` / `update running` | Pulls newer images, recreates and waits until healthy. `running` = only what's up now. |
 | `precreate <target> [--update]` | Creates containers **without starting them**, so they appear in Portainer. `--update` rebuilds stopped ones after config changes and never touches running ones. |
 | `restore <service> [--snapshot <ts>]` | Snapshots the current state first, loads the snapshot (latest by default), and starts the service again if it was running. |
-| `reset <service\|tier>` | Takes a verified snapshot, wipes that service only, and starts it empty. You must type `reset`, or pass `-y`. Undo with `restore`. See [08 — Maintenance](08-maintenance.md#fresh-start-of-a-service-reset). |
+| `reset <service\|tier>` | Takes a verified snapshot, keeps it as `reset-backup-<timestamp>` (outside normal retention, newest 5 kept), wipes that service only, and starts it empty. You must type `reset`, or pass `-y`. Undo with `restore <service> --snapshot reset-backup-<timestamp>` (printed at the end). See [08 — Maintenance](08-maintenance.md#fresh-start-of-a-service-reset). |
 
 ## Flags
 
@@ -48,7 +48,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 
 ## Stopping
 
-- **`down <target>`:** stops the service and takes a snapshot (`--no-backup` skips the snapshot). A tier keyword stops **only** that tier, in reverse order, never the lower ones. `down all` stops everything in reverse order, including running MANUAL services.
+- **`down <target>`:** stops the service and takes a snapshot, **if it was running** (`--no-backup` skips the snapshot). An already-stopped service isn't snapshotted again: its last snapshot is still current, and re-snapshotting would only push older snapshots out of retention. A tier keyword stops **only** that tier, in reverse order, never the lower ones. `down all` stops everything in reverse order, including running MANUAL services.
 - **`down group:<bundle>`:** never stops the bundle's `requires` infrastructure (e.g. `nginx-plain` keeps running after `down group:browser`).
 - **Shared database servers:** they stop automatically when the last service using them goes down. They're also kept up through `backup`/`restore` of a running app.
 

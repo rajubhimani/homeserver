@@ -36,9 +36,11 @@ def test_reset_snapshots_before_wiping_then_starts_blank(fake, cli):
     cli("prod", "reset", svc, "-y")
     kinds = [e[0] for e in fake.events]
     assert kinds.index("down") < kinds.index("volume_remove") < len(kinds) - 1 - kinds[::-1].index("up")
-    snap = hs.list_snapshots(svc)[-1]
+    snap = hs.list_reset_backups(svc)[-1]
+    assert not hs.list_snapshots(svc), "the pre-wipe snapshot moves out of regular retention"
     names = {p.name for p in snap.iterdir()}
-    assert f"{svc}_data_{snap.name}.tar.gz" in names and f"service_data_{snap.name}.tar.gz" in names
+    ts = snap.name.removeprefix("reset-backup-")
+    assert f"{svc}_data_{ts}.tar.gz" in names and f"service_data_{ts}.tar.gz" in names
     assert f"{svc}_data" not in fake.volumes
     assert not (hs.SERVICE_DATA_ROOT / svc).exists()
     assert svc in fake.running, "reset must leave the service running, blank"
@@ -64,7 +66,7 @@ def test_reset_drops_only_this_apps_database_on_the_shared_server(fake, cli, mon
     fake.events.clear()
     cli("prod", "reset", app, "-y")
     db = hs.shared_db_creds(app)["db"]
-    snap = hs.list_snapshots(app)[-1]
+    snap = hs.list_reset_backups(app)[-1]
     assert list(snap.glob(f"{app}_shareddb_{db}_*.dump")), "the app's database must be in the snapshot"
     kinds = [(e[0], e[2]) for e in fake.events if e[0] in ("pg_dump", "drop_db", "create_db")]
     assert kinds.index(("pg_dump", db)) < kinds.index(("drop_db", db)) < kinds.index(("create_db", db))
@@ -79,7 +81,7 @@ def test_reset_then_restore_brings_the_database_back(fake, cli):
     db = hs.shared_db_creds(app)["db"]
     cli("prod", "up", app)
     cli("prod", "reset", app, "-y")
-    reset_snap = hs.list_snapshots(app)[-1].name
+    reset_snap = hs.list_reset_backups(app)[-1].name
     fake.events.clear()
     cli("prod", "restore", app, "--snapshot", reset_snap)
     assert [e for e in fake.events if e[0] == "pg_restore"], "restore must load the database reset removed"
@@ -121,4 +123,20 @@ def test_reset_stops_cleanly_when_the_data_dir_cannot_be_removed(fake, cli, monk
     monkeypatch.setattr(fake, "remove_dir", lambda d: False)
     cli("prod", "reset", svc, "-y")
     assert svc not in fake.running, "a partly wiped service must not be started"
-    assert hs.list_snapshots(svc), "the pre-wipe snapshot is the way back"
+    assert hs.list_reset_backups(svc), "the pre-wipe snapshot is the way back"
+
+
+def test_reset_backups_are_kept_apart_and_capped(fake, cli, monkeypatch):
+    """Each reset keeps its pre-wipe snapshot as reset-backup-<ts>: never
+    counted by BACKUP_RETENTION, never 'latest' for restore, newest
+    RESET_BACKUP_RETENTION kept."""
+    svc = plain_service()
+    monkeypatch.setattr(hs, "RESET_BACKUP_RETENTION", 2)
+    stamps = iter(f"20261002-00000{i}" for i in range(9))
+    monkeypatch.setattr(hs.time, "strftime", lambda fmt: next(stamps))
+    for _ in range(3):
+        fake.volumes.add(f"{svc}_data")
+        cli("prod", "reset", svc, "-y")
+    names = [p.name for p in hs.list_reset_backups(svc)]
+    assert len(names) == 2 and names[-1] > names[0], names
+    assert not hs.list_snapshots(svc)
