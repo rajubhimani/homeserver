@@ -1658,13 +1658,23 @@ def wait_container_healthy(container: str, timeout: int | None = None) -> bool:
 # ── Backup / snapshots ───────────────────────────────────────────────
 
 
+SNAPSHOT_NAME = re.compile(r"^\d{8}-\d{6}$")
+
+
 def list_snapshots(service: str) -> list[Path]:
     """Snapshot directories for a service, oldest first (names sort correctly
-    since they're YYYYMMDD-HHMMSS)."""
+    since they're YYYYMMDD-HHMMSS). Only timestamp-named directories count:
+    a hand-made folder next to them (e.g. nextcloud's
+    'pre-upgrade-fix-20260817-232941') sorts after every timestamp ('p' > '2'),
+    so it used to be taken as the *newest* snapshot — restore/auto-restore
+    would have loaded August's data, and pruning would have deleted real
+    recent snapshots first (found 2026-10-02). Such folders are left alone:
+    never restored by default, never pruned; restore one explicitly with
+    --snapshot <name>."""
     svc_dir = BACKUP_ROOT / service
     if not svc_dir.is_dir():
         return []
-    return sorted(p for p in svc_dir.iterdir() if p.is_dir())
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir() and SNAPSHOT_NAME.match(p.name))
 
 
 def prune_snapshots(service: str) -> None:

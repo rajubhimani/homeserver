@@ -178,3 +178,18 @@ def test_backup_of_stopped_service_leaves_it_stopped(fake, cli):
 def test_unknown_env_is_rejected(fake, cli):
     assert cli("staging", "up", "core") == 1
     assert not fake.events
+
+
+def test_hand_made_backup_folders_are_never_the_latest_snapshot(fake, cli, monkeypatch):
+    """A manual folder like 'pre-upgrade-fix-20260817-232941' sorts after every
+    timestamp; it must never be restored as 'latest' or pruned (2026-10-02)."""
+    svc = hs.SERVICES_DAILY[0]
+    root = hs.BACKUP_ROOT / svc
+    for name in ("20260101-000000", "20260102-000000", "pre-upgrade-fix-20250817-232941"):
+        (root / name).mkdir(parents=True)
+        (root / name / f"{svc}_data_{name}.tar.gz").write_bytes(b"tar")
+    assert [p.name for p in hs.list_snapshots(svc)] == ["20260101-000000", "20260102-000000"]
+    monkeypatch.setattr(hs, "BACKUP_RETENTION", 1)
+    hs.prune_snapshots(svc)
+    assert (root / "pre-upgrade-fix-20250817-232941").is_dir(), "manual folders are never pruned"
+    assert [p.name for p in hs.list_snapshots(svc)] == ["20260102-000000"]
