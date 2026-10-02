@@ -364,6 +364,20 @@ def header(msg: str) -> None:
 # only to the BACKEND instance, never to subprocess/docker directly.
 
 
+def _healthcheck_seconds(hc: dict | None) -> dict:
+    """Docker's .Config.Healthcheck (durations in ns, 0 = unset) -> seconds
+    with Docker's documented defaults applied. {} when there's no check."""
+    if not hc or not hc.get("Test") or hc["Test"][0] == "NONE":
+        return {}
+    ns = 1_000_000_000
+    return {
+        "interval": (hc.get("Interval") or 30 * ns) / ns,
+        "timeout": (hc.get("Timeout") or 30 * ns) / ns,
+        "start_period": (hc.get("StartPeriod") or 0) / ns,
+        "retries": hc.get("Retries") or 3,
+    }
+
+
 class DockerBackend(ABC):
     @abstractmethod
     def compose_up(
@@ -450,6 +464,15 @@ class DockerBackend(ABC):
         """'healthy', 'unhealthy', 'starting', or 'none' (no HEALTHCHECK defined)."""
 
     @abstractmethod
+    def container_healthcheck(self, name: str) -> dict:
+        """The container's effective healthcheck settings in seconds:
+        {"interval", "timeout", "start_period", "retries"} — from compose or
+        the image's own HEALTHCHECK, with Docker's defaults (30s/30s/0s/3)
+        where unset. {} if the container has no healthcheck or doesn't exist.
+        wait_healthy uses it to wait as long as Docker itself would before
+        calling a container unhealthy."""
+
+    @abstractmethod
     def container_info(self, name: str) -> dict:
         """network_mode (HostConfig.NetworkMode), networks (list of network
         names currently in NetworkSettings.Networks — empty means the
@@ -503,6 +526,15 @@ class DockerBackend(ABC):
         corruption ("segments are not sequential") rather than just stale
         data. Confirmed as the root cause of a real incident against this
         stack's own observability service data."""
+
+    @abstractmethod
+    def remove_dir(self, host_dir: Path) -> bool:
+        """Delete host_dir entirely through a throwaway container running as
+        root. Containers create files under service_data/data/<service> as
+        root or their own uid, so a plain shutil.rmtree from homeserver.py
+        (running as the host user) fails with Permission denied — the bug
+        that broke the first 'reset' run on 2026-10-02. Mounts the parent and
+        removes the child, so the directory itself goes too."""
 
     @abstractmethod
     def system_prune(self) -> tuple[bool, str]:
@@ -641,6 +673,14 @@ class SubprocessBackend(DockerBackend):
         )
         return proc.stdout.strip() or "none"
 
+    def container_healthcheck(self, name: str) -> dict:
+        proc = self._run(["inspect", "--format={{json .Config.Healthcheck}}", name])
+        try:
+            hc = json.loads(proc.stdout.strip() or "null")
+        except json.JSONDecodeError:
+            return {}
+        return _healthcheck_seconds(hc)
+
     def container_info(self, name: str) -> dict:
         fmt = (
             '{"network_mode":{{json .HostConfig.NetworkMode}},'
@@ -719,6 +759,13 @@ class SubprocessBackend(DockerBackend):
             "sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to",
         ]
         return self._run(args).returncode == 0
+
+    def remove_dir(self, host_dir: Path) -> bool:
+        host_dir = host_dir.resolve()
+        if not host_dir.exists():
+            return True
+        args = ["run", "--rm", "-v", f"{host_dir.parent}:/parent", "alpine:3.21", "rm", "-rf", f"/parent/{host_dir.name}"]
+        return self._run(args).returncode == 0 and not host_dir.exists()
 
     def system_prune(self) -> tuple[bool, str]:
         proc = self._run(["system", "prune", "-a", "--volumes", "-f"])
@@ -900,6 +947,16 @@ class PythonOnWhalesBackend(DockerBackend):
         except Exception:
             return "none"
 
+    def container_healthcheck(self, name: str) -> dict:
+        # Raw inspect JSON rather than python-on-whales' model, which renames
+        # and type-converts these fields differently across versions.
+        proc = subprocess.run([RUNTIME, "inspect", "--format={{json .Config.Healthcheck}}", name], capture_output=True, text=True)
+        try:
+            hc = json.loads(proc.stdout.strip() or "null")
+        except json.JSONDecodeError:
+            return {}
+        return _healthcheck_seconds(hc)
+
     def container_info(self, name: str) -> dict:
         try:
             c = self._docker.container.inspect(name)
@@ -991,6 +1048,22 @@ class PythonOnWhalesBackend(DockerBackend):
         except Exception as e:
             error(f"  {e}")
             return False
+
+    def remove_dir(self, host_dir: Path) -> bool:
+        host_dir = host_dir.resolve()
+        if not host_dir.exists():
+            return True
+        try:
+            self._docker.run(
+                "alpine:3.21",
+                ["rm", "-rf", f"/parent/{host_dir.name}"],
+                volumes=[(host_dir.parent, "/parent")],
+                remove=True,
+            )
+        except Exception as e:
+            error(f"  {e}")
+            return False
+        return not host_dir.exists()
 
     def system_prune(self) -> tuple[bool, str]:
         # Raw subprocess rather than python-on-whales here — same reasoning
@@ -1495,6 +1568,19 @@ def do_status() -> int:
 # ── Wait for healthy ─────────────────────────────────────────────────
 
 
+def health_deadline(container: str) -> int:
+    """How long to wait for container to turn healthy: as long as Docker
+    itself would before calling it unhealthy (start_period plus retries
+    rounds of interval+timeout, from its compose or image healthcheck), but
+    never less than HEALTH_TIMEOUT. A fixed 180s made first boots that run
+    long migrations (Grafana, Coolify, GitLab) look like failures even
+    though they came up fine (2026-10-02 fresh-install run)."""
+    hc = BACKEND.container_healthcheck(container)
+    if not hc:
+        return HEALTH_TIMEOUT
+    return int(max(HEALTH_TIMEOUT, hc["start_period"] + hc["retries"] * (hc["interval"] + hc["timeout"]) + 30))
+
+
 def wait_healthy(service: str) -> bool:
     all_names = BACKEND.all_container_names()
 
@@ -1508,11 +1594,12 @@ def wait_healthy(service: str) -> bool:
     if not container:
         container = service
 
+    deadline = health_deadline(container)
     print(f"  {CYAN}waiting for {service} to be ready...", end="", flush=True)
 
     elapsed = 0
     interval = 5
-    while elapsed < HEALTH_TIMEOUT:
+    while elapsed < deadline:
         status = BACKEND.container_status(container) or ""
         health = BACKEND.container_health(container)
 
@@ -1533,15 +1620,17 @@ def wait_healthy(service: str) -> bool:
         elapsed += interval
         print(".", end="", flush=True)
 
-    print(f" timeout after {HEALTH_TIMEOUT}s{RESET}")
+    print(f" timeout after {deadline}s{RESET}")
     return False
 
 
-def wait_container_healthy(container: str, timeout: int = HEALTH_TIMEOUT) -> bool:
+def wait_container_healthy(container: str, timeout: int | None = None) -> bool:
     """Like wait_healthy but for one exact container name — no fuzzy matching,
     used by do_migrate to wait on a freshly-started <service>-db alone."""
     print(f"  {CYAN}waiting for {container} to be ready...", end="", flush=True)
 
+    if timeout is None:
+        timeout = health_deadline(container)
     elapsed = 0
     interval = 5
     while elapsed < timeout:
@@ -2101,8 +2190,11 @@ def do_reset(service: str, env: str, profile: str | None) -> bool:
             error(f"  couldn't remove volume {v}")
             ok = False
     if data_dir.is_dir():
-        shutil.rmtree(data_dir)
-        success(f"  removed service_data/data/{service}/")
+        if BACKEND.remove_dir(data_dir):
+            success(f"  removed service_data/data/{service}/")
+        else:
+            error(f"  couldn't remove service_data/data/{service}/")
+            ok = False
     if has_db and drop_shared_db(service):
         success(f"  dropped {service}'s database and login on {c['container']}")
     elif has_db:
@@ -2796,6 +2888,8 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
                 success(f"{service} dumped")
             elif action_fn is do_migrate:
                 success(f"{service} migrated")
+            elif action_fn is do_reset:
+                success(f"{service} reset — fresh start")
         print()
 
     print(f"{BOLD}{'━' * 40}{RESET}")

@@ -58,6 +58,7 @@ It 301-redirects `/god-mode` → `/god-mode/` and `/spaces` → `/spaces/`, then
 
 ## Operational notes
 
+- **`plane-api` healthcheck:** `GET /` must return 200 (Plane Community Edition's documented health check, which returns `{"status": "OK"}`; the `/api/health/` family is Commercial Edition only), via Python's `urllib`. `plane-web`, `plane-admin` and `plane-space` use their images' built-in checks. `plane-worker` and `plane-beat` have no listener, so no check (2026-10-02).
 - `plane-mq` (RabbitMQ) needs `start_period: 90s` on its healthcheck — a fresh vhost/mnesia init can take >30s, especially on a loaded host, and the default was too tight
 - After editing `plane/Caddyfile`, run `docker restart plane-proxy` — compose only recreates a container when the *service definition* changes, not when a bind-mounted file's contents change, so editing the Caddyfile alone does **not** reload the proxy
 

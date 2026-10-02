@@ -15,25 +15,15 @@
 
 ```bash
 cp services/erpnext/.env.example services/erpnext/.env
-# set DB_PASSWORD (MariaDB root password — also used for the one-time
-# `bench new-site` command below)
+# set DB_PASSWORD (MariaDB root password) and ERPNEXT_ADMIN_PASSWORD
+# (the site's Administrator login, used when the site is first created)
 
 uv run homeserver.py dev up erpnext
 ```
 
-This brings up 9 containers: `erpnext-db` (MariaDB), `erpnext-redis-cache`, `erpnext-redis-queue`, `erpnext-configurator` (one-shot — writes DB/Redis connection info into the shared `sites` volume, then exits), `erpnext-backend` (Gunicorn), `erpnext-websocket`, `erpnext-queue-short`, `erpnext-queue-long`, `erpnext-scheduler`, and `erpnext` itself (the nginx frontend everything else sits behind — this is the one `nginx-plain` proxies to and the one with the published port).
+This brings up 10 containers (including the one-shot `erpnext-create-site`, below): `erpnext-db` (MariaDB), `erpnext-redis-cache`, `erpnext-redis-queue`, `erpnext-configurator` (one-shot — writes DB/Redis connection info into the shared `sites` volume, then exits), `erpnext-backend` (Gunicorn), `erpnext-websocket`, `erpnext-queue-short`, `erpnext-queue-long`, `erpnext-scheduler`, and `erpnext` itself (the nginx frontend everything else sits behind — this is the one `nginx-plain` proxies to and the one with the published port).
 
-**First boot only — create the site.** Unlike single-container apps with a web install wizard, Frappe/ERPNext provisions a "site" via a CLI command run once inside the already-running `erpnext-backend` container:
-
-```bash
-docker compose -f services/erpnext/compose.yml -f services/erpnext/compose.dev.yml \
-  --env-file services/erpnext/.env exec erpnext-backend \
-  bench new-site --mariadb-user-host-login-scope=% \
-  --db-root-password "$DB_PASSWORD" --install-app erpnext \
-  --admin-password <choose-an-admin-password> erpnext.${DOMAIN}
-```
-
-Replace `${DOMAIN}` with the actual value from the root `.env`, and pick a real admin password (this is the one you'll actually log in with — it's not read from any `.env` file). This takes a few minutes (installs the ERPNext app's full schema/fixtures into a fresh database). Run it exactly once — running it again for the same site name fails because the site already exists.
+**The site is created automatically on first boot.** Frappe/ERPNext keeps each site in the `erpnext-sites` volume, so a fresh install (or a `reset`) has no site until one is made. The one-shot `erpnext-create-site` container does it: it waits for MariaDB and both Redis containers, then runs `bench new-site --install-app erpnext --set-default erpnext.${DOMAIN}`, using `DB_PASSWORD` as the MariaDB root password and `ERPNEXT_ADMIN_PASSWORD` for the `Administrator` login. It skips straight away when the site already exists, so every later `up` is unaffected. The `erpnext` front container only starts after it succeeds, so its health check never runs against a site-less install. The first run takes a few minutes (it installs ERPNext's full schema and fixtures). This is adapted from frappe_docker's own `pwd.yml` `create-site` service (added 2026-10-02; before that it was a manual `bench new-site` after every wipe).
 
 **Public hostname (prod):** the Cloudflare tunnel is dashboard-managed, so `erpnext.${DOMAIN}` returns a Cloudflare **502** until you add it: [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → Networks → Tunnels → this tunnel → **Public Hostname** → add `erpnext.${DOMAIN}` → `http://nginx-plain:80` (see [cloudflared's doc](cloudflared.md)). nginx-plain's `erpnext` vhost only takes effect after nginx-plain restarts (`uv run homeserver.py prod up nginx-plain`).
 
@@ -47,7 +37,7 @@ Browse to `http://<ip>:8153` (dev) or `https://erpnext.${DOMAIN}` (prod, once `n
 
 ## Administrator and admin users
 
-**The `Administrator` account is created by `bench new-site`** — its password is whatever `--admin-password` was passed there. It is **not stored anywhere** in this repo or any `.env` (unlike `DB_PASSWORD`), so save it in Vaultwarden straight away. Change it later from the UI: avatar (top right) → **My Settings** → **Change Password**.
+**The `Administrator` account is created with `ERPNEXT_ADMIN_PASSWORD` from `services/erpnext/.env`** (by `erpnext-create-site` on a fresh install). Changing the `.env` value later does nothing to an existing site: change it in the UI or with `set-admin-password` below, and keep `.env` in step if you want a future fresh install to use the same password. Change it later from the UI: avatar (top right) → **My Settings** → **Change Password**.
 
 All commands below run against the live site from the host — no old password needed. `<site>` is `erpnext.${DOMAIN}` with the real domain substituted (e.g. `erpnext.example.com`); `-it` is only there so a password prompt works if you leave the password argument out.
 
@@ -80,7 +70,7 @@ Install **ERPNext Mobile** (`com.createchsoft.erpnextmobile` on Google Play) or 
 
 ## Health endpoint
 
-`services/erpnext/compose.yml`'s healthcheck on the `erpnext` (frontend) container hits `http://localhost:8080/api/method/ping` — this is Frappe's standard unauthenticated liveness endpoint (returns `{"message":"pong"}`), not a generic root-path check.
+`services/erpnext/compose.yml`'s healthcheck on the `erpnext` (frontend) container hits `http://localhost:8080/api/method/ping` — this is Frappe's standard unauthenticated liveness endpoint (returns `{"message":"pong"}`), not a generic root-path check. Backend and websocket use the image's own `wait-for-it` on their ports (8000 / 9000), as community frappe_docker setups do; both Redis containers use `redis-cli ping`. The queue workers and scheduler have no listener to probe and deliberately have no check.
 
 ## Notes
 

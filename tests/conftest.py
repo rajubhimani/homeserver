@@ -86,6 +86,11 @@ class FakeBackend(hs.DockerBackend):
     def container_health(self, name):
         return "healthy" if name in self.running else "none"
 
+    healthchecks: dict = {}
+
+    def container_healthcheck(self, name):
+        return self.healthchecks.get(name, {})
+
     def container_info(self, name):
         return {}
 
@@ -126,6 +131,12 @@ class FakeBackend(hs.DockerBackend):
     def untar_into_dir(self, archive_path, dest_dir):
         self.events.append(("untar_dir", str(dest_dir)))
         return True
+
+    def remove_dir(self, host_dir):
+        import shutil
+        shutil.rmtree(host_dir, ignore_errors=True)
+        self.events.append(("remove_dir", str(host_dir)))
+        return not Path(host_dir).exists()
 
     def system_prune(self):
         return True, ""

@@ -43,6 +43,7 @@ Once connected, the mobile app's share-sheet ("Share → Karakeep" from any othe
 ## Notes
 
 - AI auto-tagging is optional and off by default. This stack already runs Ollama — point Karakeep at it instead of paying for OpenAI by uncommenting the `OPENAI_BASE_URL`/`OPENAI_API_KEY`/`INFERENCE_*` block in `.env` (see the comments there). Requires `ollama` to be running (`uv run homeserver.py dev up ollama`).
+- `karakeep-chrome` has no healthcheck, matching Karakeep's own `docker/docker-compose.yml` (the image ships no wget/curl, and a self-made bash probe didn't pass on 2026-10-02). The `karakeep` container is the one to watch: it reports when the browser is unreachable.
 - Health endpoint: `/api/health` (already baked into the image's own Dockerfile `HEALTHCHECK`; the `compose.yml` entry here just mirrors it for `docker ps`/`depends_on` visibility).
 
 ---

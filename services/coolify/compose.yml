@@ -154,9 +154,13 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      # Timings from coollabsio/coolify's own docker-compose.prod.yml: a fresh
+      # install runs its migrations for a few minutes, and 30s/3 retries
+      # reported it as failed. (Upstream also curls the realtime server's
+      # /up; here realtime is its own container with its own check.)
+      interval: 5s
+      timeout: 2s
+      retries: 24
       start_period: 60s
     depends_on:
       coolify-db:

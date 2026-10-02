@@ -142,3 +142,9 @@ Confirmed against Grafana's own current docs (Explore).
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## Permissions and healthchecks (fresh installs)
+
+- **`observability-permissions`** (one-shot, runs before Prometheus, Loki and Grafana) sets ownership of their data folders to each image's own user: Prometheus `nobody` (65534), Loki 10001, Grafana 472. Without it, a data folder Docker recreates root-owned (fresh machine, wipe or `reset`) leaves Prometheus and Loki crash-looping on "permission denied". Until 2026-10-02 these folders had only ever been fixed by hand, which the fresh-install run exposed.
+- **Loki** checks itself with `loki -health` in exec form. The image is distroless (no shell, wget or curl), and this is what grafana/loki's own compose files use. The old note that "no probe is possible" was wrong.
+- **Grafana** keeps `wget /api/health`, with `start_period: 600s` and `start_interval: 10s`. A fresh Grafana runs about 530 database migrations before opening its port, which measured 5.5 minutes on this host's data drive. Failures inside the start period don't count, and `start_interval` still lets a normal restart turn healthy within about 10 seconds.

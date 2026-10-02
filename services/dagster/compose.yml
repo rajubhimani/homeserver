@@ -11,6 +11,7 @@ services:
     image: homeserver/dagster-user-code:1.13.24
     container_name: dagster-user-code
     restart: unless-stopped
+    init: true
     env_file: .env
     environment:
       DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
@@ -31,6 +32,12 @@ services:
     volumes:
       - ${DATA_ROOT}/user-code:/opt/dagster/app
       - dagster-io-manager-storage:/tmp/io_manager_storage
+    healthcheck:
+      test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - homeserver
 
@@ -39,6 +46,7 @@ services:
     image: homeserver/dagster:1.13.24
     container_name: dagster-webserver
     restart: unless-stopped
+    init: true
     entrypoint: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     env_file: .env
     environment:
@@ -75,6 +83,7 @@ services:
     image: homeserver/dagster:1.13.24
     container_name: dagster-daemon
     restart: unless-stopped
+    init: true
     entrypoint: ["dagster-daemon", "run"]
     env_file: .env
     environment:
@@ -91,6 +100,15 @@ services:
     depends_on:
       dagster-user-code:
         condition: service_started
+    # Fails if the daemon stops writing heartbeats.
+    healthcheck:
+      test: ["CMD", "dagster-daemon", "liveness-check"]
+      # liveness-check reads heartbeats from Postgres and is slow; 120s/60s/2
+      # is the commonly used setting (60s/20s timed out under load).
+      interval: 120s
+      timeout: 60s
+      retries: 2
+      start_period: 60s
     networks:
       - homeserver
 

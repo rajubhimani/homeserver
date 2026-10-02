@@ -47,6 +47,11 @@ services:
     image: redis:8.10-alpine
     container_name: erpnext-redis-cache
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
     networks:
       - homeserver
 
@@ -56,6 +61,11 @@ services:
     restart: unless-stopped
     volumes:
       - erpnext-redis-queue-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
     networks:
       - homeserver
 
@@ -96,6 +106,14 @@ services:
       GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+    # frappe/erpnext's own wait-for-it on the gunicorn port, as community
+    # frappe_docker setups do (no dedicated health endpoint exists).
+    healthcheck:
+      test: ["CMD", "wait-for-it", "-t", "5", "127.0.0.1:8000"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
 
   erpnext-websocket:
     <<: *bench_defaults
@@ -103,6 +121,11 @@ services:
     command:
       - node
       - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    healthcheck:
+      test: ["CMD", "wait-for-it", "-t", "5", "127.0.0.1:9000"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   erpnext-queue-short:
     <<: *bench_defaults
@@ -118,6 +141,46 @@ services:
     <<: *bench_defaults
     container_name: erpnext-scheduler
     command: bench schedule
+
+  # One-shot: creates the site on a fresh install, so ERPNext comes up usable
+  # without a manual `bench new-site` (the site lives in the erpnext-sites
+  # volume, so after a wipe/reset it's gone and used to need re-creating by
+  # hand). Adapted from frappe_docker's own pwd.yml `create-site` service:
+  # same idempotent skip-if-exists check and same new-site flags. Differences:
+  # waits on the configurator via depends_on instead of polling its JSON, and
+  # takes the Administrator password from .env (ERPNEXT_ADMIN_PASSWORD)
+  # instead of upstream's hard-coded "admin". Keep `bench new-site` on ONE
+  # line: in a YAML folded block (>), deeper-indented lines keep their line
+  # breaks, which split the flags into separate shell commands (2026-10-02).
+  erpnext-create-site:
+    <<: *erpnext_image
+    container_name: erpnext-create-site
+    restart: "no"
+    env_file: .env
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        wait-for-it -t 120 erpnext-db:3306;
+        wait-for-it -t 120 erpnext-redis-cache:6379;
+        wait-for-it -t 120 erpnext-redis-queue:6379;
+        if [ -d "sites/erpnext.${DOMAIN}" ]; then
+          echo "Site erpnext.${DOMAIN} already exists, skipping creation";
+        else
+          bench new-site --mariadb-user-host-login-scope='%' --db-root-username=root --db-root-password="$$DB_PASSWORD" --admin-password="$$ERPNEXT_ADMIN_PASSWORD" --install-app erpnext --set-default "erpnext.${DOMAIN}";
+        fi
+    volumes:
+      - erpnext-sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      erpnext-configurator:
+        condition: service_completed_successfully
+      erpnext-redis-cache:
+        condition: service_healthy
+      erpnext-redis-queue:
+        condition: service_healthy
+    networks:
+      - homeserver
 
   # Serves the site — this is the container fronted by nginx-plain
   # (services/nginx-plain/templates/default.conf.template).
@@ -138,9 +201,16 @@ services:
       CLIENT_MAX_BODY_SIZE: 50m
     volumes:
       - erpnext-sites:/home/frappe/frappe-bench/sites
+    # Starts only once the site exists, so its /api/method/ping check never
+    # runs against a site-less fresh install (that's what showed this
+    # container "unhealthy" after the 2026-10-02 reset).
     depends_on:
-      - erpnext-backend
-      - erpnext-websocket
+      erpnext-backend:
+        condition: service_started
+      erpnext-websocket:
+        condition: service_started
+      erpnext-create-site:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/api/method/ping || exit 1"]
       interval: 30s

@@ -49,6 +49,8 @@ Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/d
 
 ## Health endpoint
 
+NATS checks its own monitoring endpoint (`wget http://localhost:8222/healthz`, enabled by `--http_port 8222`), and MongoDB pings itself with `mongosh` (added/verified 2026-10-02).
+
 `services/rocketchat/compose.yml`'s healthcheck hits `http://localhost:3000/api/info` (a Node one-liner, not `curl`/`wget` — the image has neither) — 200 means healthy. `mongodb`'s own healthcheck is a `mongosh` ping instead.
 
 ## Notes

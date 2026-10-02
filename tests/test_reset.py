@@ -96,3 +96,29 @@ def test_reset_refuses_a_shared_server(fake, cli):
     fake.running.add(PG)
     assert hs.do_reset(PG, "prod", None) is False
     assert PG in fake.running
+
+
+def test_reset_removes_root_owned_data_through_the_backend(fake, cli, monkeypatch):
+    """Container-created files are root-owned; homeserver.py must never try
+    to delete them itself (shutil.rmtree -> PermissionError crashed the first
+    real reset run). It goes through BACKEND.remove_dir instead."""
+    import shutil
+    def denied(*a, **k):
+        raise PermissionError("root-owned")
+    monkeypatch.setattr(shutil, "rmtree", denied)
+    svc = plain_service()
+    seed(fake, svc)
+    removed = []
+    monkeypatch.setattr(fake, "remove_dir", lambda d: removed.append(str(d)) or True)
+    cli("prod", "reset", svc, "-y")
+    assert str(hs.SERVICE_DATA_ROOT / svc) in removed
+    assert svc in fake.running
+
+
+def test_reset_stops_cleanly_when_the_data_dir_cannot_be_removed(fake, cli, monkeypatch):
+    svc = plain_service()
+    seed(fake, svc)
+    monkeypatch.setattr(fake, "remove_dir", lambda d: False)
+    cli("prod", "reset", svc, "-y")
+    assert svc not in fake.running, "a partly wiped service must not be started"
+    assert hs.list_snapshots(svc), "the pre-wipe snapshot is the way back"

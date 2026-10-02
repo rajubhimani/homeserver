@@ -104,3 +104,28 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 ---
 
 [← Firewall](09-firewall.md) | [Home](../setup.md) | [Next: Services Reference →](11-services-reference.md)
+
+## How fixes are chosen
+
+The same rule applies to adding a service, fixing an issue, adding a healthcheck, or bumping a version: **research first, then change once.**
+
+1. **Reproduce and read the real error**: container logs, the healthcheck's own output (`docker inspect <c> --format '{{json .State.Health}}'`), and not just "unhealthy" or "exited".
+2. **Look up how the project does it**, in this order:
+   1. Its official compose file / `.env.example` / `deploy.env`.
+   2. The image's own `HEALTHCHECK`: `docker image inspect <img> --format '{{json .Config.Healthcheck}}'`, or `skopeo inspect --config` if the image isn't pulled.
+   3. Its documentation.
+   4. Its issue tracker, which is often where breaking changes in a new release are explained.
+   5. Widely used community setups.
+3. **Use the documented answer.** Only design your own when nothing upstream exists, and record that in the service's doc and in a comment next to the change, so it's clear it's a local choice.
+4. **Change once, verify live, then write it down** in `docs/services/<service>.md`, in the same commit.
+
+Things learned the hard way on 2026-10-02 (above-CORE fresh-install run):
+- **Healthcheck tool order:**
+  1. The app's own binary or subcommand, in exec form (`loki -health`, `dagster api grpc-health-check`, `ak healthcheck`).
+  2. The app's runtime (`node -e fetch(...)`, `python3 -c urllib...`).
+  3. A bundled tool (`wait-for-it` in frappe).
+  4. bash `/dev/tcp`, only as a last resort.
+
+  Don't assume `curl`/`wget` exist: images move to slim and distroless bases between releases (Penpot 2.18, Karakeep Chrome).
+- **Image-provided healthchecks:** prefer the one the image already ships (Immich, Jellyfin, Vaultwarden, Uptime Kuma, …). A compose `healthcheck:` silently replaces it.
+- **Fresh-install paths need their own test:** data folders recreated by Docker are root-owned (Prometheus runs as uid 65534, Loki as 10001), and new releases add required settings (AppFlowy 0.18's `APPFLOWY_S3_PRESIGNED_URL_ENDPOINT`). `reset <service>` then `up` is the way to test that path.

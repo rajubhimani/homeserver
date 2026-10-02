@@ -16,6 +16,8 @@ services:
       - --hide-scrollbars
       - --disable-blink-features=AutomationControlled
       - --window-size=1440,900
+    # No healthcheck, matching Karakeep's own docker/docker-compose.yml: the
+    # karakeep container is what reports whether the browser is reachable.
     networks:
       - homeserver
 

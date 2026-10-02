@@ -73,6 +73,15 @@ flowchart LR
 
 **Health check needs a real `Host` header** — Zulip validates `Host` strictly against its configured `EXTERNAL_HOST`; a bare `proxy_pass` (which forwards the container name, `zulip`, as `Host`) gets a permanent 400. `services/landing/nginx.conf`'s `/health/zulip` location sets `proxy_set_header Host zulip.DOMAIN_PLACEHOLDER` — and since `landing`'s `nginx.conf` previously had no domain-templating mechanism (only `index.html` did), this required extending `entrypoint.sh` to template `nginx.conf` through the same `DOMAIN_PLACEHOLDER` substitution, so the real domain is never hardcoded into a git-tracked file.
 
+## Healthchecks
+
+Every long-running container has one (added 2026-10-02, verified healthy on a fresh install):
+- `zulip` curls its own `/health` endpoint, first over https (self-signed) and then over http. `start_period: 300s`, because first boot runs the migrations.
+- `zulip-db` uses `pg_isready -U zulip`.
+- `zulip-redis` uses `redis-cli ping` with the password read from its secret file.
+- `zulip-rabbitmq` uses `rabbitmq-diagnostics -q ping`.
+- `zulip-memcached` uses a TCP check (`nc -z 127.0.0.1 11211`), because memcached is SASL-protected here, so a stats query would need credentials.
+
 ## Connecting the Android app
 
 Official **Zulip** app ([Google Play](https://play.google.com/store/apps/details?id=com.zulipmobile)) — on first launch (or via profile picture → **Switch account** → **Add new account** if adding a second organization), enter the organization's URL — `https://zulip.${DOMAIN}` if the realm was created at the root domain, or `https://<realm-subdomain>.${DOMAIN}` if a named realm/organization was created (see the "No organization found" note below) — then log in normally.

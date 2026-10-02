@@ -53,6 +53,9 @@ All services below must stay in sync. `appflowy_web` uses its own versioning sch
 
 ## Known issues and fixes
 
+- **`appflowy_cloud` 0.18 needs `APPFLOWY_S3_PRESIGNED_URL_ENDPOINT`** and refuses to start without it ("Public Form uploads with MinIO require APPFLOWY_S3_PRESIGNED_URL_ENDPOINT"). It's set to `https://appflowy.${DOMAIN}/minio-api`, and `nginx.conf` has the matching `/minio-api/` block. Both are taken from AppFlowy-Cloud's own `deploy.env` and `nginx.conf`, including setting `Host` to the internal MinIO host, because the presigned URLs are signed against it. This was found on the 2026-10-02 fresh-install run, after the 0.17 → 0.18 bump.
+- **Healthchecks:** `appflowy-gotrue` uses `curl http://127.0.0.1:9999/health` (same as upstream). `appflowy-web` and `appflowy-admin` deliberately have **none**, matching AppFlowy-Cloud's own compose: they're static frontends behind `appflowy-nginx`, whose check covers them. A self-made check failed here, because web answers `/` with a 302 and admin answers `/` with a 404.
+
 ### "Database error finding user" on signup
 
 GoTrue's own migrations always fully-qualify their schema (`{{Namespace}}.users`, baked into the Go template, default namespace `auth`), so they're unaffected by `search_path`. But GoTrue's everyday runtime queries (login, etc.) and its own internal migration-tracking table lookup are unqualified and depend on the DB connection's `search_path` resolving to `auth` — without it you get `relation "users" does not exist` on login even though the tables clearly exist.

@@ -27,7 +27,7 @@ mechanism.
 
 Open `https://dagster.<domain>/` (or `http://<host>:8139` in dev) — no login/setup wizard, the UI is open to anyone who can reach it (see Notes).
 
-**Health endpoint:** `dagster-webserver`'s own `compose.yml` healthcheck hits `GET /server_info` (port `3000` internally, `8139` on the dev host port) via `python3 -c "import urllib.request; ..."` rather than `curl` — `python:3.14-slim` (the base in both Dockerfiles) doesn't ship `curl`, and adding a package just for the healthcheck wasn't worth it. The database's readiness is covered by `shared-postgres`'s own `pg_isready` check, which `homeserver.py` waits on before starting Dagster.
+**Healthchecks:** `dagster-user-code` runs `dagster api grpc-health-check -p 4000`. `dagster-daemon` runs `dagster-daemon liveness-check` at 120s interval / 60s timeout / 2 retries: it reads heartbeats from Postgres and is slow, and those are the commonly used timings. All three Dagster containers set `init: true` (2026-10-02, verified healthy on a fresh install). **Health endpoint:** `dagster-webserver`'s own `compose.yml` healthcheck hits `GET /server_info` (port `3000` internally, `8139` on the dev host port) via `python3 -c "import urllib.request; ..."` rather than `curl` — `python:3.14-slim` (the base in both Dockerfiles) doesn't ship `curl`, and adding a package just for the healthcheck wasn't worth it. The database's readiness is covered by `shared-postgres`'s own `pg_isready` check, which `homeserver.py` waits on before starting Dagster.
 
 ## Architecture — no official pre-built webserver/daemon image, unlike Airflow or Temporal
 

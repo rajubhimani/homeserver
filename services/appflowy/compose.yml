@@ -99,6 +99,13 @@ services:
     depends_on:
       appflowy-db:
         condition: service_healthy
+    # Same check as AppFlowy-Cloud's own docker-compose.yml.
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     networks:
       - homeserver
 
@@ -118,6 +125,10 @@ services:
       APPFLOWY_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       APPFLOWY_S3_BUCKET: appflowy
       APPFLOWY_S3_REGION: us-east-1
+      # Required since appflowy_cloud 0.18 ("Public Form uploads with MinIO
+      # require APPFLOWY_S3_PRESIGNED_URL_ENDPOINT"); served by the
+      # /minio-api/ block in nginx.conf. Value per AppFlowy-Cloud's deploy.env.
+      APPFLOWY_S3_PRESIGNED_URL_ENDPOINT: https://appflowy.${DOMAIN}/minio-api
       APPFLOWY_ENVIRONMENT: production
       APPFLOWY_WEB_URL: https://appflowy.${DOMAIN}
     healthcheck:
@@ -149,6 +160,8 @@ services:
     depends_on:
       appflowy-cloud:
         condition: service_healthy
+    # No healthcheck, matching AppFlowy-Cloud's own docker-compose.yml (and the
+    # image): static frontend behind appflowy-nginx, whose check covers it.
     networks:
       - homeserver
 
@@ -163,6 +176,8 @@ services:
     depends_on:
       appflowy-cloud:
         condition: service_healthy
+    # No healthcheck, matching AppFlowy-Cloud's own docker-compose.yml (and the
+    # image): static frontend behind appflowy-nginx, whose check covers it.
     networks:
       - homeserver
 

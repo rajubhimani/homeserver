@@ -79,6 +79,12 @@ services:
       resources:
         limits:
           memory: 128M
+    # NATS's own monitoring endpoint (enabled by --http_port 8222).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - homeserver
 
