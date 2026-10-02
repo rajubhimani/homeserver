@@ -589,6 +589,21 @@ Preventive knowledge — things to know *before* they bite you, as opposed to th
 
 For every way to start and stop services, see [15 — Starting & Stopping Services](15-starting-services.md).
 
+## Off-machine copy (`archive`)
+
+```bash
+uv run homeserver.py archive "/run/media/raju/My Passport/homeserver-backup"
+```
+
+Writes `homeserver-archive-<timestamp>.tar.gz` and a `.sha256` next to it, containing everything a fresh clone can't recreate:
+- `homeserver/`: every git-ignored file in the repo (all `.env` secrets, `CLAUDE.md`/`AGENTS.md`/`.claude`, `research/`, …). The list comes from git itself, so new ignored files are covered automatically.
+- `service_data/`: every snapshot (the **only** copy of the databases, which are Docker named volumes), the `reset-backup-*` folders, live data and database dumps. `cache/` is left out, since it's regenerable.
+- `meta/`: README with restore steps, a MANIFEST (date, git commit, each service's latest snapshot) and a git bundle of the repo (keeps unpushed commits).
+
+Files are read through a throwaway root container, so root-owned files can't be silently skipped. The command refuses a missing destination or too little space, and only writes the checksum after reading the whole archive back and finding all three parts. If services are running it warns, because their live data may be mid-write (snapshots are always consistent); run it after `down all` for a fully consistent copy. Media under `/mnt/media` isn't included and needs its own sync.
+
+Check a copy later with `sha256sum -c homeserver-archive-<timestamp>.tar.gz.sha256`.
+
 ## Fresh start of a service (`reset`)
 
 ```bash

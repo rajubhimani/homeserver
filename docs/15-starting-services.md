@@ -61,6 +61,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 | `dump <service>` | Logical database dump to `service_data/db_dump/<service>/`, for a per-service `<service>-db` or the app's own database on a shared server. |
 | `migrate <service> [--image <repo:tag>]` | Moves a per-service `<service>-db` to a different Postgres image via dump and restore (refuses shared-database apps). |
 | `logs <service>` | Follows the service's logs. |
+| `archive <folder>` | One verified `tar.gz` of everything git doesn't hold (`.env` secrets, `service_data` snapshots and data, git bundle) for an off-machine copy. See [08 — Maintenance](08-maintenance.md#off-machine-copy-archive). |
 | `status` / `ps` | What's running, by tier and group, plus the shared database servers and who uses them. |
 
 ## Tests

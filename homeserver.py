@@ -101,6 +101,7 @@ shell at all, so none of that applies here — no workarounds needed.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -531,6 +532,15 @@ class DockerBackend(ABC):
         stack's own observability service data."""
 
     @abstractmethod
+    def archive_paths(self, mounts: dict[Path, str], members: list[str], excludes: list[str], dest_file: Path) -> tuple[bool, str]:
+        """tar+gzip `members` (paths relative to /src inside a throwaway root
+        container, where each mounts[host_path] is bind-mounted read-only at
+        /src/<name>) into dest_file. Root so container-owned files (root, or
+        an app's own uid) are readable — a host-user tar would silently skip
+        them. excludes are tar --exclude patterns. Used by `archive`.
+        Returns (success, stderr_text)."""
+
+    @abstractmethod
     def remove_dir(self, host_dir: Path) -> bool:
         """Delete host_dir entirely through a throwaway container running as
         root. Containers create files under service_data/data/<service> as
@@ -762,6 +772,18 @@ class SubprocessBackend(DockerBackend):
             "sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to",
         ]
         return self._run(args).returncode == 0
+
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        # Raw subprocess in both backends: the member list goes in on stdin,
+        # which python-on-whales' run() doesn't expose.
+        args = [RUNTIME, "run", "--rm", "-i"]
+        for host, name in mounts.items():
+            args += ["-v", f"{Path(host).resolve()}:/src/{name}:ro"]
+        args += ["-v", f"{dest_file.parent.resolve()}:/out", "alpine:3.21", "sh", "-c",
+                 "cd /src && tar " + " ".join(f"--exclude='{e}'" for e in excludes)
+                 + f" -cf - -T - | gzip -1 > '/out/{dest_file.name}'"]
+        proc = subprocess.run(args, input="\n".join(members).encode(), capture_output=True)
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
     def remove_dir(self, host_dir: Path) -> bool:
         host_dir = host_dir.resolve()
@@ -1051,6 +1073,18 @@ class PythonOnWhalesBackend(DockerBackend):
         except Exception as e:
             error(f"  {e}")
             return False
+
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        # Raw subprocess in both backends: the member list goes in on stdin,
+        # which python-on-whales' run() doesn't expose.
+        args = [RUNTIME, "run", "--rm", "-i"]
+        for host, name in mounts.items():
+            args += ["-v", f"{Path(host).resolve()}:/src/{name}:ro"]
+        args += ["-v", f"{dest_file.parent.resolve()}:/out", "alpine:3.21", "sh", "-c",
+                 "cd /src && tar " + " ".join(f"--exclude='{e}'" for e in excludes)
+                 + f" -cf - -T - | gzip -1 > '/out/{dest_file.name}'"]
+        proc = subprocess.run(args, input="\n".join(members).encode(), capture_output=True)
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
     def remove_dir(self, host_dir: Path) -> bool:
         host_dir = host_dir.resolve()
@@ -2570,6 +2604,146 @@ def _compact_docker_vhdx(vhdx: Path) -> None:
         warn("  If this persists, try the export/reimport procedure in docs/08-maintenance.md")
 
 
+# ── Archive: everything git doesn't hold, in one verified file ──────
+#
+# `archive <dest-dir>` packs what a fresh clone of this repo can't recreate:
+# every git-ignored file in the repo (all .env secrets, local-only notes),
+# service_data/ (snapshots — the only copy of the databases, which are named
+# Docker volumes — plus live data and db dumps), and a git bundle of the repo
+# itself so unpushed commits survive too. Regenerable things are left out.
+
+ARCHIVE_SKIP_IGNORED = ("service_data", ".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "node_modules/")
+ARCHIVE_EXCLUDES = ["service_data/cache", "*/__pycache__"]
+
+
+def archive_ignored_paths() -> list[str]:
+    """Git-ignored/untracked paths in the repo (directories collapsed), minus
+    regenerable ones and service_data (archived separately, from its real
+    location). Asks git, so new ignored files are covered automatically."""
+    proc = subprocess.run(
+        ["git", "-C", str(BASE_DIR), "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+        capture_output=True, text=True,
+    )
+    paths = []
+    for line in proc.stdout.splitlines():
+        if not line or any(line == skip.rstrip("/") or line.startswith(skip) or f"/{skip}" in f"/{line}" for skip in ARCHIVE_SKIP_IGNORED):
+            continue
+        paths.append(line.rstrip("/"))
+    # Drop entries already covered by a listed parent directory (git lists
+    # e.g. both services/photoprism and services/photoprism/.env), so no file
+    # lands in the archive twice.
+    paths = sorted(set(paths))
+    return [p for p in paths if not any(p.startswith(q + "/") for q in paths if q != p)]
+
+
+def archive_meta(meta_dir: Path, running: list[str]) -> None:
+    """README, MANIFEST and a git bundle, written into meta_dir."""
+    git = lambda *a: subprocess.run(["git", "-C", str(BASE_DIR), *a], capture_output=True, text=True).stdout.strip()  # noqa: E731
+    subprocess.run(["git", "-C", str(BASE_DIR), "bundle", "create", str(meta_dir / "homeserver.bundle"), "--all"], capture_output=True)
+    lines = [
+        f"created: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"git: branch {git('rev-parse', '--abbrev-ref', 'HEAD')} at {git('rev-parse', 'HEAD')}",
+        f"running when archived: {', '.join(running) or 'none'}",
+        "",
+        "latest snapshot per service:",
+    ]
+    for d in sorted(p for p in BACKUP_ROOT.iterdir() if p.is_dir()) if BACKUP_ROOT.is_dir() else []:
+        snaps = list_snapshots(d.name)
+        resets = list_reset_backups(d.name)
+        lines.append(f"  {d.name}: {snaps[-1].name if snaps else '-'}" + (f"  (+{len(resets)} reset-backup)" if resets else ""))
+    (meta_dir / "MANIFEST.txt").write_text("\n".join(lines) + "\n")
+    (meta_dir / "README.txt").write_text(
+        "homeserver archive\n\n"
+        "homeserver/      every git-ignored file of the repo (.env secrets, local notes)\n"
+        "service_data/    snapshots (incl. databases), live data, db dumps — not cache/\n"
+        "meta/homeserver.bundle   the git repo, incl. unpushed commits\n\n"
+        "Restore on a new machine:\n"
+        "  git clone meta/homeserver.bundle homeserver   (or clone from GitHub)\n"
+        "  copy homeserver/* over the clone (puts the .env files back)\n"
+        "  put service_data/ next to it (or symlink it), then for each service:\n"
+        "  uv run homeserver.py prod restore <service>\n"
+        "Not included: media under /mnt/media (Immich photos, Nextcloud user files,\n"
+        "Jellyfin library), service_data/cache, .venv — all regenerable or separate.\n"
+    )
+
+
+def archive_verify(archive: Path) -> tuple[bool, str]:
+    """Read the whole archive back (which also validates gzip) and check the
+    three top-level parts are inside. Returns (ok, top-level names found)."""
+    proc = subprocess.run(["tar", "-tzf", str(archive)], capture_output=True, text=True)
+    tops = sorted({line.split("/", 1)[0] for line in proc.stdout.splitlines() if line})
+    ok = proc.returncode == 0 and {"homeserver", "service_data", "meta"} <= set(tops)
+    return ok, ", ".join(tops)
+
+
+def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def tree_size(path: Path) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(path, onerror=lambda e: None):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(root, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def do_archive(dest: str) -> int:
+    dest_dir = Path(dest).expanduser()
+    if not dest_dir.is_dir():
+        error(f"{dest_dir} doesn't exist — create it (or mount the drive) first")
+        return 1
+
+    running = get_running_services()
+    if running:
+        warn(f"Running now: {', '.join(running)}")
+        warn("  their live service_data/data may be mid-write; snapshots are always consistent.")
+        warn("  For a fully consistent archive: 'down all' (or 'backup <service>') first.")
+
+    data_real = (BASE_DIR / "service_data").resolve()
+    needed = tree_size(data_real) - tree_size(data_real / "cache")
+    free = shutil.disk_usage(dest_dir).free
+    if free < needed:
+        error(f"Not enough space in {dest_dir}: need up to {needed / 1e9:.1f} GB, {free / 1e9:.1f} GB free")
+        return 1
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    out = dest_dir / f"homeserver-archive-{ts}.tar.gz"
+    ignored = archive_ignored_paths()
+    with tempfile.TemporaryDirectory() as tmp:
+        meta = Path(tmp)
+        archive_meta(meta, running)
+        header(f"Archiving to {out}")
+        info(f"{len(ignored)} git-ignored path(s) from the repo, service_data (minus cache), meta (README, MANIFEST, git bundle)...")
+        ok, err = BACKEND.archive_paths(
+            {BASE_DIR: "homeserver", data_real: "service_data", meta: "meta"},
+            [f"homeserver/{p}" for p in ignored] + ["service_data", "meta"],
+            ARCHIVE_EXCLUDES,
+            out,
+        )
+    if not ok:
+        error(f"Archive failed: {err.strip()[-400:]}")
+        return 1
+
+    info("Verifying (reading the whole archive back)...")
+    ok, tops = archive_verify(out)
+    if not ok:
+        error(f"Verification failed — archive is incomplete or unreadable (found: {tops})")
+        return 1
+    digest = file_sha256(out)
+    (dest_dir / f"{out.name}.sha256").write_text(f"{digest}  {out.name}\n")
+    success(f"{out} ({out.stat().st_size / 1e9:.1f} GB) verified: {tops}")
+    success(f"checksum: {out.name}.sha256 — check later with: sha256sum -c {out.name}.sha256")
+    return 0
+
+
 def do_gc(assume_yes: bool = False) -> int:
     header(f"Reclaiming Docker disk space (runtime: {RUNTIME})...")
 
@@ -2840,6 +3014,7 @@ def show_help() -> None:
     print("    python homeserver.py dev up mealie                   auto-restores the latest snapshot if data/volumes are missing")
     print("    python homeserver.py dev up mealie --fresh           start blank even if a snapshot exists")
     print("    python homeserver.py dev reset mealie                snapshot, wipe and start blank (restore undoes it)")
+    print("    python homeserver.py archive /run/media/<you>/Drive   everything git doesn't hold, in one verified tar.gz")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
@@ -2987,6 +3162,13 @@ def main() -> int:
     # Same reasoning again — each affected container's own compose labels
     # say which env it was started under (see do_fix_network), so this
     # doesn't need one passed in either.
+    # Not env-scoped either: it packs the whole repo + service_data.
+    if argv and argv[0] == "archive":
+        if len(argv) < 2:
+            error("usage: homeserver.py archive <destination-folder>")
+            return 1
+        return do_archive(argv[1])
+
     if argv and argv[0] == "fix-network":
         return do_fix_network(assume_yes="--yes" in argv or "-y" in argv)
 

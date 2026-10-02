@@ -132,6 +132,11 @@ class FakeBackend(hs.DockerBackend):
         self.events.append(("untar_dir", str(dest_dir)))
         return True
 
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        self.events.append(("archive", sorted(mounts.values()), list(members), list(excludes)))
+        Path(dest_file).write_text("\n".join(members))
+        return True, ""
+
     def remove_dir(self, host_dir):
         import shutil
         shutil.rmtree(host_dir, ignore_errors=True)
