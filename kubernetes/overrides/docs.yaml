@@ -1,0 +1,14 @@
+# docs serves repo folders (docs/, docker/, kubernetes/, the docsify vendor
+# bundle: ~5 MB, over the 1 MiB ConfigMap limit). They're cloned from the
+# public GitHub repo by git-sync at pod start; single files come from a
+# ConfigMap. Changing docs in git -> restart the pod (or ArgoCD sync).
+containers:
+  docs:
+    git:
+      repo: https://github.com/rajubhimani/homeserver.git
+      ref: develop
+    mounts:
+      /usr/share/nginx/html/vendor: {from: git}
+      /usr/share/nginx/html/docs: {from: git}
+      /usr/share/nginx/html/docker: {from: git}
+      /usr/share/nginx/html/kubernetes: {from: git}

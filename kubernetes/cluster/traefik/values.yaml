@@ -30,13 +30,22 @@ gateway:
 # edit here. v3.7.10+ is also the version this cluster's Gateway API CRDs
 # (v1.6.1) were verified against — see kubernetes/TROUBLESHOOTING.md's
 # Gateway API section.
-image:
-  tag: v3.7.11
 
 # On the original Docker-Desktop-backed pilot box, LoadBalancer Services
 # auto-exposed on localhost with no extra setup. This branch has since moved
 # to a plain-`kind`-on-Linux host, which has no such magic — MetalLB
 # (kubernetes/cluster/metallb/) now provides the real IP this Service gets,
 # same as every other LoadBalancer Service in this cluster.
+
+# The image comes from the chart (41.6.1 ships Traefik v3.7.13, its tested
+# version); the chart version is pinned in kubernetes/versions.env.
+
+# kind maps these NodePorts to 127.0.0.1:${K8S_HTTP_PORT}/${K8S_HTTPS_PORT} on the host.
 service:
-  type: LoadBalancer
+  spec:
+    type: NodePort   # chart 41.x: the Service type lives under service.spec
+ports:
+  web:
+    nodePort: 30080
+  websecure:
+    nodePort: 30443

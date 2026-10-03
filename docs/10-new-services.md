@@ -172,6 +172,10 @@ Airflow, Dagster and Temporal have managed cloud counterparts, and this stack ke
 - Apps reach these only through env/config (host, port, credentials, S3 endpoint), never a hardcoded address, so switching is a `.env` change plus a data copy (`dump`/snapshot).
 - Apps that have their own hosted edition (n8n Cloud, GitLab.com, Mattermost Cloud, Rocket.Chat Cloud, Supabase Cloud, Plausible, Grafana Cloud…) need nothing extra. The hosted edition always runs the same or a newer version, and their export/import goes from older to newer.
 
+### Kubernetes is generated, never hand-edited
+
+`kubernetes/generated/` is rendered from Compose by `kubernetes/generate.py`. After any Compose, `.env.example` or route change to a ported service, run `uv run kubernetes/generate.py` and commit the result; `tests/test_k8s_sync.py` fails until you do. Kubernetes-only details go in `kubernetes/overrides/<svc>.yaml`, and a new service is added to `kubernetes/scope.yaml` (ported, or skipped with a reason). Guide: [17 — Moving from Docker Compose to Kubernetes](17-docker-to-kubernetes.md).
+
 ## How fixes are chosen
 
 The same rule applies to adding a service, fixing an issue, adding a healthcheck, or bumping a version: **research first, then change once.**

@@ -75,8 +75,69 @@ helm version
 
 On macOS, use the `darwin-arm64`/`darwin-amd64` downloads, or `brew install kind kubectl helm` (then check the versions match `versions.env`). On Windows, use WSL2 and follow the Linux steps.
 
-## Step 1 — Generate the Kubernetes manifests *(coming in phase 1)*
-## Step 2 — Create the test cluster *(coming in phase 1)*
+## Step 1 — Generate the Kubernetes manifests
+
+Kubernetes files are **generated from Compose**, never written by hand:
+
+```bash
+uv run kubernetes/generate.py           # writes kubernetes/generated/
+uv run kubernetes/generate.py --check   # is generated/ up to date? (the test suite runs this)
+```
+
+- **Inputs:** each `services/<svc>/compose.yml` + `compose.prod.yml` (read through `docker compose config`, so everything resolves exactly as Docker sees it), `.env.example`, `services.json`, and nginx-plain's route template.
+- **Kubernetes-only details** live in small `kubernetes/overrides/<svc>.yaml` files (e.g. "clone the docs folders with git-sync", "the agent runs on every node").
+- **Which services are done:** [`kubernetes/scope.yaml`](../kubernetes/scope.yaml) lists what's ported so far, what's skipped and why.
+- **Output, per service:**
+  - `kubernetes/generated/apps/<svc>/`: workloads, Services, ConfigMaps, volume claims;
+  - `kubernetes/generated/envs/test|prod/<svc>/`: that plus routes, with `*.k8s.local` hostnames for test and your real `DOMAIN` for prod.
+- **No secrets** in any generated file. `.env` values only become `$(VAR)` references to a Secret; a test checks no secret value ever appears.
+
+After changing a service's Compose file, re-run the generator and commit both. `uv run pytest` fails until you do.
+
+## Step 2 — Create the test cluster
+
+Set this machine's paths and ports (not secret):
+
+```bash
+cp kubernetes/.env.example kubernetes/.env
+$EDITOR kubernetes/.env
+```
+
+| Setting | Meaning | This host |
+|---|---|---|
+| `K8S_HTTP_PORT` / `K8S_HTTPS_PORT` | Where the cluster's router listens (loopback only) | `18080` / `18443` |
+| `K8S_FAST_PATH` | SSD folder for databases and small data (storage class `fast`) | `~/k8s-data/fast` |
+| `K8S_BULK_PATH` | HDD folder for big data, backups, logs (storage class `bulk`) | `/mnt/mydata/k8s-data/bulk` |
+| `K8S_IMAGES_PATH` | Where the cluster keeps its copy of every image. kind stores images a second time, so keep this off a small SSD | `/mnt/mydata/k8s-data/containerd` |
+
+Then:
+
+```bash
+uv run kubernetes/cluster.py create     # kind cluster, Kubernetes 1.35.8 (takes ~3 min)
+uv run kubernetes/cluster.py install    # Gateway API, namespaces, Traefik, storage classes fast/bulk
+uv run kubernetes/cluster.py secrets    # each services/<svc>/.env -> Secret <svc>-env (piped, never written to disk)
+uv run kubernetes/cluster.py apply      # every ported service (or name some: apply docs landing)
+uv run kubernetes/cluster.py status     # pods, services, volume claims, routes
+```
+
+- **The test cluster uses `DOMAIN=k8s.local`**, so apps build their links for the test hostnames, not your real domain.
+- **cloudflared is prod-only:** it is never deployed to the test cluster, and its tunnel token isn't copied there. Your public sites keep pointing at Docker.
+
+**Try it:** every route answers on `127.0.0.1:18080` with its test hostname:
+
+```bash
+curl -H "Host: www.k8s.local"  http://127.0.0.1:18080/      # landing page
+curl -H "Host: docs.k8s.local" http://127.0.0.1:18080/      # docs
+```
+
+For a browser, add the hostnames to `/etc/hosts` (`127.0.0.1 www.k8s.local docs.k8s.local beszel.k8s.local`) and open `http://docs.k8s.local:18080`.
+
+**Where data lives:** volumes appear as readable folders, e.g. `~/k8s-data/fast/apps/beszel-data/`.
+
+**Remove it all:** `uv run kubernetes/cluster.py delete` (the data folders are kept; delete them by hand if you want).
+
+**Verified on this host (2026-10-03):** MIN (landing, docs, beszel + agent) runs next to the live Compose stack, which was unchanged (48 containers, public sites still served by Docker).
+
 ## Step 3 — Secrets from your `.env` files *(coming in phase 2)*
 ## Step 4 — Databases: shared and own *(coming in phase 2)*
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*

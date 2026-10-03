@@ -1,0 +1,22 @@
+# Which services kubernetes/generate.py renders, grown phase by phase
+# (research/kubernetes-compose-parity-plan.md). A managed service is either
+# ported, skipped with a reason, or still pending; tests/test_k8s_sync.py
+# checks this list against services.json.
+
+# Phase 1 — MIN
+ported:
+  - beszel
+  - cloudflared
+  - docs
+  - landing
+
+# Rendered only for the prod environment. The test cluster must never run
+# the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
+# split live traffic between Docker and the test cluster.
+prod_only:
+  - cloudflared
+
+# Not run on Kubernetes, each with the replacement.
+skipped:
+  nginx-plain: "Routing is Traefik's Gateway + generated HTTPRoutes (from nginx-plain's own template)."
+  portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
