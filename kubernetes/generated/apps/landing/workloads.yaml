@@ -32,6 +32,9 @@ spec:
             name: homeserver-root
         - secretRef:
             name: landing-env
+        env:
+        - name: UPSTREAM_SUFFIX
+          value: .apps.svc.cluster.local
         ports:
         - containerPort: 80
         readinessProbe:

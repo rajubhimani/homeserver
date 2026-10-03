@@ -1,0 +1,6 @@
+containers:
+  landing:
+    env:
+      # nginx's resolver doesn't apply the pod's search domains, so the
+      # health-check upstreams need the full in-cluster name.
+      UPSTREAM_SUFFIX: .apps.svc.cluster.local
