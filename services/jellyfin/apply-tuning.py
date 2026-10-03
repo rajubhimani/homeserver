@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply verified Jellyfin performance/reliability tuning to database.xml and system.xml.
+"""Apply verified Jellyfin performance/reliability tuning to database.xml, system.xml and every library's options.xml.
 
 Usage: uv run jellyfin/apply-tuning.py   (from repo root, or `python jellyfin/apply-tuning.py`)
 
@@ -13,6 +13,7 @@ Background/rationale for each value: docs/services/jellyfin.md
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -26,6 +27,10 @@ REPO_ROOT = SERVICE_DIR.parent
 DEFAULT_LOCKING_BEHAVIOR = "Optimistic"
 DEFAULT_IMAGE_EXTRACTION_TIMEOUT_MS = "30000"
 DEFAULT_TRICKPLAY_PROCESS_PRIORITY = "Normal"
+# compose.yml mounts MEDIA_ROOT read-only (:ro), so saving uploaded/downloaded subtitles
+# next to the video fails with "Read-only file system". False stores them under
+# /config/metadata instead.
+DEFAULT_SAVE_SUBTITLES_WITH_MEDIA = "false"
 
 
 def load_env(env_path: Path) -> dict[str, str]:
@@ -105,6 +110,26 @@ def apply_changes(path: Path, edits: list[tuple[str, str, str]]) -> list[tuple[s
     return report
 
 
+def apply_library_options(config_root: Path, value: str) -> list[tuple[str, str, str]]:
+    """Set <SaveSubtitlesWithMedia> in every library's options.xml. Returns (library, old, new).
+
+    Regex, not ElementTree: options.xml carries xsi/xsd namespace attributes that
+    ElementTree would rewrite as ns0:, and only this one tag changes.
+    """
+    report = []
+    for options_xml in sorted((config_root / "root" / "default").glob("*/options.xml")):
+        text = options_xml.read_text(encoding="utf-8-sig")
+        match = re.search(r"<SaveSubtitlesWithMedia>(true|false)</SaveSubtitlesWithMedia>", text)
+        if match is None:
+            continue
+        old = match.group(1)
+        if old != value:
+            new_text = text.replace(match.group(0), f"<SaveSubtitlesWithMedia>{value}</SaveSubtitlesWithMedia>")
+            options_xml.write_text(new_text, encoding="utf-8")
+        report.append((options_xml.parent.name, old, value))
+    return report
+
+
 def main() -> int:
     env = load_env(SERVICE_DIR / ".env")
     data_root = resolve_data_root(env)
@@ -124,12 +149,17 @@ def main() -> int:
     image_extraction_timeout_ms = env.get("JELLYFIN_IMAGE_EXTRACTION_TIMEOUT_MS") or DEFAULT_IMAGE_EXTRACTION_TIMEOUT_MS
     trickplay_process_priority = env.get("JELLYFIN_TRICKPLAY_PROCESS_PRIORITY") or DEFAULT_TRICKPLAY_PROCESS_PRIORITY
 
+    save_subtitles_with_media = (env.get("JELLYFIN_SAVE_SUBTITLES_WITH_MEDIA") or DEFAULT_SAVE_SUBTITLES_WITH_MEDIA).lower()
+    if save_subtitles_with_media not in ("true", "false"):
+        sys.exit(f"JELLYFIN_SAVE_SUBTITLES_WITH_MEDIA must be true or false, got {save_subtitles_with_media!r}")
+
     env_name = detect_running_env()
     print(f"Detected env: {env_name}")
     print(f"Concurrency: {concurrency}  (trickplay threads: {trickplay_threads})")
     print(f"LockingBehavior: {locking_behavior}")
     print(f"ImageExtractionTimeoutMs: {image_extraction_timeout_ms}")
     print(f"TrickplayOptions/ProcessPriority: {trickplay_process_priority}")
+    print(f"Libraries/SaveSubtitlesWithMedia: {save_subtitles_with_media}")
 
     run_homeserver(env_name, "down")
 
@@ -146,6 +176,8 @@ def main() -> int:
         ("TrickplayOptions", "ProcessPriority", trickplay_process_priority),
     ])
 
+    library_report = apply_library_options(data_root / "config", save_subtitles_with_media)
+
     print("\nApplied:")
     for tag, old, new in report:
         marker = "  (unchanged)" if old == new else ""
@@ -153,6 +185,10 @@ def main() -> int:
     for tag, old, new in system_report:
         marker = "  (unchanged)" if old == new else ""
         print(f"  {system_xml.name}: {tag}: {old} -> {new}{marker}")
+
+    for library, old, new in library_report:
+        marker = "  (unchanged)" if old == new else ""
+        print(f"  {library}/options.xml: SaveSubtitlesWithMedia: {old} -> {new}{marker}")
 
     run_homeserver(env_name, "up")
     print("\nDone.")

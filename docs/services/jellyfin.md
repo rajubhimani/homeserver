@@ -82,7 +82,7 @@ Confirmed against Jellyfin's own current documentation, not assumed from memory.
 uv run jellyfin/apply-tuning.py
 ```
 
-Stops Jellyfin, applies the five settings below (each documented with its own symptom/root-cause under Troubleshooting), restarts it in whatever mode (dev/prod) it was already running in. Idempotent — safe to re-run any time, e.g. after tweaking a `JELLYFIN_*` value in `.env`. All five have sensible defaults baked into the script if left unset in `.env`:
+Stops Jellyfin, applies the settings below (each documented with its own symptom/root-cause under Troubleshooting), restarts it in whatever mode (dev/prod) it was already running in. Idempotent — safe to re-run any time, e.g. after tweaking a `JELLYFIN_*` value in `.env`. All have sensible defaults baked into the script if left unset in `.env`:
 
 | `.env` var | Default | Controls |
 | --- | --- | --- |
@@ -90,6 +90,19 @@ Stops Jellyfin, applies the five settings below (each documented with its own sy
 | `JELLYFIN_LOCKING_BEHAVIOR` | `Optimistic` | `database.xml` → `LockingBehavior` |
 | `JELLYFIN_IMAGE_EXTRACTION_TIMEOUT_MS` | `30000` | `system.xml` → `ImageExtractionTimeoutMs` |
 | `JELLYFIN_TRICKPLAY_PROCESS_PRIORITY` | `Normal` | `system.xml` → `TrickplayOptions/ProcessPriority` |
+| `JELLYFIN_SAVE_SUBTITLES_WITH_MEDIA` | `false` | every library's `options.xml` → `SaveSubtitlesWithMedia` (see Troubleshooting: subtitle upload) |
+
+**If the tuning seems to have gone away** (subtitle upload fails again, `database is locked` or `ffmpeg image extraction timed out` errors return, scans slow down): Jellyfin rewrites its own config files, so a UI save, a first-run wizard, a version upgrade or restoring a snapshot can put defaults back. Nothing is lost permanently, since the script sets the same target values every time:
+
+1. Check what is currently set (run from the repo root):
+   ```bash
+   grep -o '<LockingBehavior>[A-Za-z]*' service_data/data/jellyfin/config/config/database.xml
+   grep -o -E '<(ImageExtractionTimeoutMs|LibraryScanFanoutConcurrency)>[0-9]*' service_data/data/jellyfin/config/config/system.xml
+   grep -H -o '<SaveSubtitlesWithMedia>[a-z]*' service_data/data/jellyfin/config/root/default/*/options.xml
+   ```
+   Expected: `Optimistic`, `30000`, your core count, and `false` for every library (unless you changed the `.env` values).
+2. Re-run `uv run jellyfin/apply-tuning.py`. It stops Jellyfin, rewrites the values, and restarts it.
+3. Re-run it again after adding a library, and avoid saving a library's settings in the web UI. That save resets `SaveSubtitlesWithMedia` to `true`.
 
 Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct-attached storage — high concurrency is hard on network shares (SMB/NFS).
 
@@ -108,6 +121,14 @@ Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct
 **Root cause:** same underlying SQLite contention as the scan issue above, triggered instead by a burst of concurrent write-heavy activity outside of scans — e.g. a SyncPlay group with 2+ users pausing/seeking together, concurrent transcode sessions, and subtitle-extraction ffmpeg jobs all landing on the DB at once. `Optimistic` mode (the fix above) retries these writes with a fixed ~30s backoff instead of failing, so the request eventually succeeds, but the client is left waiting the whole time — that wait is what reads as a hang.
 
 **Tried and reverted: `JELLYFIN_LOCKING_BEHAVIOR=Pessimistic`.** This is the next escalation Jellyfin's own docs suggest, and it was tested live in this deployment. **Result: worse, not better.** Under the same kind of rapid-seek/concurrent-transcode load, `Pessimistic`'s single-writer serialization caused an outright failed request — `Jellyfin.Api.Middleware.ExceptionMiddleware: Error processing request: Unexpected end of request content. URL POST /Sessions/Playing/Progress` — instead of `Optimistic`'s slow-but-eventually-successful retry. The client gave up waiting on the serialized write queue before it was serviced. **Bottom line: stick with `Optimistic`.** A `Pessimistic` write queue is worse for this deployment's actual load pattern (multiple concurrent playback/transcode sessions) than occasional multi-retry stalls are — don't re-try `Pessimistic` for this symptom without a materially different load pattern to justify re-testing.
+
+## Troubleshooting: uploading a subtitle fails with `Read-only file system`
+
+**Symptom:** *Edit Subtitles → Upload* in the web UI fails, and `docker logs jellyfin` shows `SubtitleManager: Saving subtitles to /media/Movies/<file>.eng.srt` followed by `Error processing request: Read-only file system ... POST /Videos/<id>/Subtitles`.
+
+**Root cause:** `compose.yml` mounts `${MEDIA_ROOT}:/media:ro`, and each library defaults to `SaveSubtitlesWithMedia=true`, so Jellyfin tries to write the subtitle next to the video, which the read-only mount forbids. The library's *Subtitle Downloads* section in the web UI (where this is normally switched) is only shown when a subtitle-provider plugin is installed, so on a stock install there is no UI toggle.
+
+**Fix:** `uv run jellyfin/apply-tuning.py` sets `<SaveSubtitlesWithMedia>false</SaveSubtitlesWithMedia>` in every library's `config/root/default/<library>/options.xml` (override with `JELLYFIN_SAVE_SUBTITLES_WITH_MEDIA` in `.env`). Subtitles are then stored under `/config/metadata`, so they work with the read-only library, but other players such as VLC won't see them beside the video. Libraries added later default to `true` again, and so does a library whose settings you open and save in the web UI (the form writes the whole options file back, with the hidden checkbox at its default), so re-run the script after adding or editing a library. Seen live 2026-10-03: saving the Movies library flipped it back to `true` and the upload failed again. To keep subtitles beside the files instead, change the mount to `:rw` and set the variable to `true`; Jellyfin can then modify the library too. Confirmed live 2026-10-03 on 12.1 for the Movies and Shows libraries.
 
 ## Scan speed / CPU utilization tuning
 
