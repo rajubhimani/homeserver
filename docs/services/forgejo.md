@@ -155,3 +155,9 @@ Reset to an empty install, came up healthy, then restored from its `reset-backup
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## Version line: on 16.x until the next LTS
+
+The stack rule is **LTS, always** ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)). Forgejo's current LTS is 15 (15.0.9), but this instance has run 16 since at least 2026-08-06, and Forgejo can't be downgraded: v15 refuses a v16 database (schema 305). A rebuild on 15 was weighed on 2026-10-03 and declined. It would have meant recreating the user, the mirrors, the `CD_DEPLOY_TOKEN` secret and 4 tokens, re-publishing 2 packages, and losing 37 Actions runs.
+
+So it stays on the supported 16.x/17.x stable releases (each is supported for 3 months) and moves straight onto Forgejo's next yearly LTS when it ships (first quarter, so about Q1 2027). From then on it's pinned to LTS lines only ([release schedule](https://endoflife.date/forgejo)).

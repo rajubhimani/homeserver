@@ -105,6 +105,26 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 
 [← Firewall](09-firewall.md) | [Home](../setup.md) | [Next: Services Reference →](11-services-reference.md)
 
+## Which version to run: LTS, always
+
+**Every component runs its project's LTS line**: apps, databases, proxies, scanners and monitoring alike. LTS here means whatever the project calls its long-supported track: LTS, ESR, a "stable" branch next to "mainline", or a yearly major next to short rapid releases. This holds for new services, updates and audits.
+
+- **Pin the LTS line, then take every patch inside it.** LTS doesn't mean frozen.
+  | Project | LTS line in use |
+  | --- | --- |
+  | MariaDB | 11.8, 12.3 |
+  | ClickHouse | the `.3`/`.8` lines (26.8) |
+  | MongoDB | the yearly major (8.0), never rapid releases like 8.1/8.2/8.3 |
+  | ClamAV | 1.4 |
+  | Prometheus | 3.13 |
+  | Mattermost | the ESR (11.7) |
+  | Forgejo | the LTS (15) |
+  | nginx | the stable branch (1.30), not mainline |
+- **No LTS track at all** (Postgres, where every major gets 5 years; Redis, Valkey and RabbitMQ community; Immich, Nextcloud community, Authentik and most apps): run the newest release the project still supports for the community. RabbitMQ, for example, patches only its latest minor series.
+- **Never downgrade across data migrations.** A service already past its LTS (Forgejo 16 while the LTS is 15) stays on its supported stable line until the next LTS ships, then pins it. A service holding no data can be reset onto the LTS straight away.
+- **Combined with the next section:** pick the LTS line first, then the exact version inside it that upstream's compose/docs test.
+- Sources: the vendors' own policies ([ClamAV](https://docs.clamav.net/faq/faq-eol.html), [Prometheus](https://prometheus.io/docs/introduction/release-cycle/), [Mattermost](https://docs.mattermost.com/product-overview/release-policy.html), [Forgejo](https://endoflife.date/forgejo), [RabbitMQ](https://www.rabbitmq.com/docs/versions), [MongoDB](https://mongodb.com/support-policy/lifecycles), [MariaDB](https://mariadb.com/resources/blog/announcing-yearly-lts-releases-for-mariadb-community-server/)).
+
 ## How fixes are chosen
 
 The same rule applies to adding a service, fixing an issue, adding a healthcheck, or bumping a version: **research first, then change once.**
