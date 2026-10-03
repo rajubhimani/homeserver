@@ -46,6 +46,7 @@ Confirmed against Firefly III's own current documentation, not assumed from memo
 - `APP_URL` must be `https://firefly.${DOMAIN}` and `TRUSTED_PROXIES` must be `"**"` — both required by Firefly III's own docs for it to generate `https://` links instead of `http://` (a mismatched scheme gets blocked by the browser's CSP `connect-src`, e.g. on the transaction-delete API call)
 - Includes an alpine `firefly-cron` container that triggers recurring transactions daily at 03:00
 - Healthchecks: `firefly` and `firefly-importer` use their images' own `HEALTHCHECK` (curl `$HEALTHCHECK_PATH`, `/healthcheck` for the core app, with a 300s start period for first-boot migrations). Upstream's compose defines none, so `compose.yml` doesn't either.
+- The landing page's status checks (`/health/firefly`, `/health/firefly-importer`) call that same `/healthcheck`. Until 2026-10-04 they called `/`, which redirects a logged-out request to `/login`, and Laravel logged `production.ERROR: Unauthenticated.` every 30 seconds while the landing page was open.
 
 ## Data Importer
 

@@ -30,6 +30,24 @@ spec:
             name: homeserver-root
         - secretRef:
             name: immich-env
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - python3 healthcheck.py
+          timeoutSeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - python3 healthcheck.py
+          timeoutSeconds: 30
+          periodSeconds: 30
+          failureThreshold: 6
         volumeMounts:
         - name: v-immich-immich-model-cache
           mountPath: /cache
@@ -163,6 +181,24 @@ spec:
           value: $(CACHE_PORT)
         ports:
         - containerPort: 2283
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - immich-healthcheck
+          timeoutSeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - immich-healthcheck
+          timeoutSeconds: 30
+          periodSeconds: 30
+          failureThreshold: 6
         volumeMounts:
         - name: h-usr-src-app-upload
           mountPath: /usr/src/app/upload

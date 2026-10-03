@@ -119,6 +119,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: plausible
         app.kubernetes.io/name: plausible-events-db
+      annotations:
+        homeserver/config-sha256: b0b73316238adedda72444968d510258c36d98f3cec07db6b4cc30ac1bc1ed79
     spec:
       enableServiceLinks: false
       containers:

@@ -1,0 +1,28 @@
+containers:
+  firefly-importer:
+    # The image's own HEALTHCHECK (fireflyiii/data-importer:version-2.3.5), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD
+      - sh
+      - -c
+      - curl --insecure --silent --location --show-error --fail http://localhost:${NGINX_HTTP_PORT}${HEALTHCHECK_PATH} || exit 1
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      start_interval: 3s
+      retries: 3
+  firefly:
+    # The image's own HEALTHCHECK (fireflyiii/core:version-6.7.6), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD
+      - sh
+      - -c
+      - curl --insecure --silent --location --show-error --fail http://localhost:8080$HEALTHCHECK_PATH || exit 1
+      interval: 5s
+      timeout: 3s
+      start_period: 300s
+      retries: 3

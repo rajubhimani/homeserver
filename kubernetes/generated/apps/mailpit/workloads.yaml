@@ -40,6 +40,30 @@ spec:
         ports:
         - containerPort: 1025
         - containerPort: 8025
+        readinessProbe:
+          exec:
+            command:
+            - /mailpit
+            - readyz
+          timeoutSeconds: 30
+          periodSeconds: 15
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - /mailpit
+            - readyz
+          timeoutSeconds: 30
+          periodSeconds: 15
+          failureThreshold: 6
+        startupProbe:
+          exec:
+            command:
+            - /mailpit
+            - readyz
+          timeoutSeconds: 30
+          periodSeconds: 1
+          failureThreshold: 13
         resources:
           limits:
             memory: 128Mi

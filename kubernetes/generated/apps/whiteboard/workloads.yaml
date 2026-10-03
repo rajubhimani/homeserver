@@ -37,3 +37,33 @@ spec:
           value: http://nextcloud
         ports:
         - containerPort: 3002
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - 'node -e "require(''http'').get(''http://localhost:3002'', (res) => { process.exit(res.statusCode === 200 ?
+              0 : 1) })"'
+          timeoutSeconds: 3
+          periodSeconds: 30
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - 'node -e "require(''http'').get(''http://localhost:3002'', (res) => { process.exit(res.statusCode === 200 ?
+              0 : 1) })"'
+          timeoutSeconds: 3
+          periodSeconds: 30
+          failureThreshold: 6
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - 'node -e "require(''http'').get(''http://localhost:3002'', (res) => { process.exit(res.statusCode === 200 ?
+              0 : 1) })"'
+          timeoutSeconds: 3
+          periodSeconds: 10
+          failureThreshold: 4

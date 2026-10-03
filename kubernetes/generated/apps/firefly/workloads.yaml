@@ -88,6 +88,33 @@ spec:
           value: Asia/Kolkata
         ports:
         - containerPort: 8080
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl --insecure --silent --location --show-error --fail http://localhost:8080$HEALTHCHECK_PATH || exit 1
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl --insecure --silent --location --show-error --fail http://localhost:8080$HEALTHCHECK_PATH || exit 1
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 6
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl --insecure --silent --location --show-error --fail http://localhost:8080$HEALTHCHECK_PATH || exit 1
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 63
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -200,6 +227,36 @@ spec:
           value: https://firefly.$(DOMAIN)
         ports:
         - containerPort: 8080
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - sh -c "curl --insecure --silent --location --show-error --fail http://localhost:${NGINX_HTTP_PORT}${HEALTHCHECK_PATH}
+              || exit 1"
+          timeoutSeconds: 3
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - sh -c "curl --insecure --silent --location --show-error --fail http://localhost:${NGINX_HTTP_PORT}${HEALTHCHECK_PATH}
+              || exit 1"
+          timeoutSeconds: 3
+          periodSeconds: 10
+          failureThreshold: 6
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - sh -c "curl --insecure --silent --location --show-error --fail http://localhost:${NGINX_HTTP_PORT}${HEALTHCHECK_PATH}
+              || exit 1"
+          timeoutSeconds: 3
+          periodSeconds: 3
+          failureThreshold: 23
         volumeMounts:
         - name: v-firefly-firefly-importer-upload
           mountPath: /var/www/html/storage/upload

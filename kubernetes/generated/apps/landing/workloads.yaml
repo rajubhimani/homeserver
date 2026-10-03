@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: landing
         app.kubernetes.io/name: landing
+      annotations:
+        homeserver/config-sha256: ae1106a33ed1d6d7ce618569102d2f2b7043d7a99f9ff6ffa0ca8d966b39f415
     spec:
       enableServiceLinks: false
       containers:

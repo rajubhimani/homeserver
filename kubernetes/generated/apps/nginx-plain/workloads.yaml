@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: nginx-plain
         app.kubernetes.io/name: browser-hub
+      annotations:
+        homeserver/config-sha256: 5f61a0d4fa4478506d8f87fcfc647afbc3c3ae80deff5765dd33fd46ed2e4d74
     spec:
       enableServiceLinks: false
       containers:

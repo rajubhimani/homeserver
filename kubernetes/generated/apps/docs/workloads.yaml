@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: docs
         app.kubernetes.io/name: docs
+      annotations:
+        homeserver/config-sha256: 7cdf60426fcb0a02d4399eff258ffd01d6f25c4a3a68f2914f00896fa858742b
     spec:
       enableServiceLinks: false
       initContainers:

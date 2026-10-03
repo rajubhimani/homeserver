@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: clamav
         app.kubernetes.io/name: clamav
+      annotations:
+        homeserver/config-sha256: b53b0b8e63aa0c73cc00d4dfe299132c92142dafb3dee0ec2a16a676955f27f2
     spec:
       enableServiceLinks: false
       containers:

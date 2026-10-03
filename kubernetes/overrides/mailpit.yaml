@@ -1,0 +1,12 @@
+containers:
+  mailpit:
+    # The image's own HEALTHCHECK (axllent/mailpit:v1.31.4), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD
+      - /mailpit
+      - readyz
+      interval: 15s
+      start_period: 10s
+      start_interval: 1s

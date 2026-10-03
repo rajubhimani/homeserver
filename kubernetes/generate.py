@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import hashlib
 import json
 import math
 import re
@@ -328,6 +329,16 @@ def ensure_env_defined(container: dict, env_keys: set[str], secret: str, has_env
         container["env"] = add + (container.get("env") or [])
 
 
+def config_checksum(data: dict[str, str]) -> dict:
+    """Pod-template annotation with a hash of the pod's ConfigMap files, so
+    changing a repo file rolls the pod: Kubernetes never updates a subPath
+    mount in a running pod (Helm's documented checksum/config pattern)."""
+    if not data:
+        return {}
+    h = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+    return {"annotations": {"homeserver/config-sha256": h}}
+
+
 def data_volume(svc: str, kind: str, key: str, mo: dict, ov: dict, pvcs: dict) -> tuple[str, str, str | None]:
     """-> (pod volume name, PVC name, subPath). Compose's ${DATA_ROOT} is one
     folder per service, its subfolders mounted separately: here one PVC
@@ -451,7 +462,10 @@ def convert(svc: str) -> dict[str, list[dict]]:
         if listen[n] or udp.get(n):
             container["ports"] = [{"containerPort": p} for p in listen[n]] + \
                 [{"containerPort": p, "protocol": "UDP"} for p in sorted(udp.get(n) or [])]
-        container.update(probe_set(s.get("healthcheck"), env_keys, where))
+        # Compose's healthcheck, or (Kubernetes ignores image HEALTHCHECKs) the
+        # image's own, copied verbatim into the override in Docker's format.
+        container.update(probe_set(s.get("healthcheck") if (s.get("healthcheck") or {}).get("test")
+                                   else co.get("image_healthcheck"), env_keys, where))
         container.update(co.get("probes") or {})
         lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
         if lim.get("memory") or s.get("mem_limit"):
@@ -608,7 +622,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
         kind = co.get("kind") or ("Job" if n in oneshots else "Deployment")
         obj: dict = {"apiVersion": "batch/v1" if kind == "Job" else "apps/v1", "kind": kind,
                      "metadata": {"name": c, "labels": labels}}
-        tmpl = {"metadata": {"labels": labels}, "spec": pod}
+        tmpl = {"metadata": {"labels": labels, **config_checksum(files_cm)}, "spec": pod}
         if kind == "Job":
             pod["restartPolicy"] = "OnFailure"
             obj["spec"] = {"backoffLimit": 6, "template": tmpl}
@@ -1080,10 +1094,11 @@ def nginx_plain() -> dict[str, list[dict]]:
         html_dir = SERVICES_DIR / svc / conf["html"]
         html = {f.name: f.read_text() for f in sorted(html_dir.iterdir()) if f.is_file()}
         root = re.search(r"root\s+([^;]+);", block).group(1)
+        cm_data = {"default.conf.template": "\n".join(
+            ln.rstrip() for ln in (header + "\n" + health + "\n\n" + block).splitlines()) + "\n", **html}
         files.setdefault("configmaps.yaml", []).append({
             "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": f"{site}-files", "labels": labels},
-            "data": {"default.conf.template": "\n".join(
-                ln.rstrip() for ln in (header + "\n" + health + "\n\n" + block).splitlines()) + "\n", **html}})
+            "data": cm_data})
         container = {
             "name": site, "image": s["image"],
             "env": [{"name": "DOMAIN", "valueFrom": {"configMapKeyRef": {"name": ROOT_CONFIGMAP, "key": "DOMAIN"}}},
@@ -1098,7 +1113,7 @@ def nginx_plain() -> dict[str, list[dict]]:
             "apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": site, "labels": labels},
             "spec": {"replicas": 1, "revisionHistoryLimit": 3,
                      "selector": {"matchLabels": {"app.kubernetes.io/name": site}},
-                     "template": {"metadata": {"labels": labels}, "spec": {
+                     "template": {"metadata": {"labels": labels, **config_checksum(cm_data)}, "spec": {
                          "enableServiceLinks": False, "containers": [container],
                          "volumes": [{"name": "files", "configMap": {"name": f"{site}-files"}}]}}}})
         files.setdefault("services.yaml", []).append({

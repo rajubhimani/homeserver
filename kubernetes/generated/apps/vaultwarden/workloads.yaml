@@ -39,6 +39,20 @@ spec:
           value: $(SIGNUPS_ALLOWED)
         ports:
         - containerPort: 80
+        readinessProbe:
+          exec:
+            command:
+            - /healthcheck.sh
+          timeoutSeconds: 10
+          periodSeconds: 60
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - /healthcheck.sh
+          timeoutSeconds: 10
+          periodSeconds: 60
+          failureThreshold: 6
         volumeMounts:
         - name: v-vaultwarden-data
           mountPath: /data

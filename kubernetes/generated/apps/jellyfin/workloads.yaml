@@ -32,6 +32,33 @@ spec:
             name: jellyfin-env
         ports:
         - containerPort: 8096
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+          timeoutSeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+          timeoutSeconds: 30
+          periodSeconds: 30
+          failureThreshold: 6
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+          timeoutSeconds: 30
+          periodSeconds: 10
+          failureThreshold: 4
         volumeMounts:
         - name: v-jellyfin-data
           mountPath: /config

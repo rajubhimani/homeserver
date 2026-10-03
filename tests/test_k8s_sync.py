@@ -290,3 +290,45 @@ def test_env_endpoints_reach_a_service_port():
                 if ex.get(pk, "").isdigit() and int(ex[pk]) not in ports[v]:
                     gaps.append(f"{svc}: {pk}={ex[pk]} -> {v}")
     assert not gaps, "ports missing from generated Services (add `expose:` in compose.yml): " + ", ".join(gaps)
+
+
+def _image_healthcheck(image: str) -> dict | None:
+    """The image's HEALTHCHECK from the local Docker cache, or None."""
+    p = subprocess.run(["docker", "image", "inspect", image, "--format", "{{json .Config.Healthcheck}}"],
+                       capture_output=True, text=True)
+    return json.loads(p.stdout) if p.returncode == 0 and p.stdout.strip() not in ("", "null") else None
+
+
+def test_image_healthchecks_are_carried_and_current():
+    """Kubernetes ignores image HEALTHCHECKs, so a container Compose leaves
+    on its image's check (test_healthchecks.IMAGE_HEALTHCHECK) needs that
+    check in its override (image_healthcheck), and it must still equal the
+    image's: a version bump that changes the check fails here. Images not
+    pulled on this host are only checked for presence."""
+    from test_healthchecks import IMAGE_HEALTHCHECK
+    missing, stale = [], []
+    for svc in PORTED:
+        ov = gen.load_overrides(svc).get("containers") or {}
+        for n, s in gen.load_compose(svc)["services"].items():
+            c = s.get("container_name") or n
+            if c not in IMAGE_HEALTHCHECK or (ov.get(c) or {}).get("skip") or (s.get("healthcheck") or {}).get("test"):
+                continue
+            ovs = gen.load_overrides(svc)
+            if gen.own_postgres(svc, n, s, ovs) or gen.own_mariadb(svc, n, s, ovs):
+                continue  # operator-run database: CloudNativePG/mariadb-operator probe it
+            hc = (ov.get(c) or {}).get("image_healthcheck")
+            if not hc and not (ov.get(c) or {}).get("probes"):
+                missing.append(f"{svc}/{c}")
+                continue
+            img = _image_healthcheck(gen.image_ref(svc, s["image"], svc)) if hc else None
+            if img:
+                want = {"test": img["Test"], **{k: gen.seconds(img[ik]) for ik, k in (
+                    ("Interval", "interval"), ("Timeout", "timeout"), ("StartPeriod", "start_period"),
+                    ("StartInterval", "start_interval")) if img.get(ik)},
+                    **({"retries": img["Retries"]} if img.get("Retries") else {})}
+                have = {k: (gen.seconds(v) if k in ("interval", "timeout", "start_period", "start_interval") else v)
+                        for k, v in hc.items()}
+                if have != want:
+                    stale.append(f"{svc}/{c}")
+    assert not missing, f"image healthcheck not carried to Kubernetes: {missing}"
+    assert not stale, f"image_healthcheck differs from the image's HEALTHCHECK (re-copy it): {stale}"

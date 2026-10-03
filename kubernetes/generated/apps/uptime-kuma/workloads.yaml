@@ -54,6 +54,33 @@ spec:
           value: $(MYSQL_USER)
         ports:
         - containerPort: 3001
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - extra/healthcheck
+          timeoutSeconds: 30
+          periodSeconds: 60
+          failureThreshold: 5
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - extra/healthcheck
+          timeoutSeconds: 30
+          periodSeconds: 60
+          failureThreshold: 10
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - extra/healthcheck
+          timeoutSeconds: 30
+          periodSeconds: 10
+          failureThreshold: 23
         volumeMounts:
         - name: v-uptime-kuma-data
           mountPath: /app/data
