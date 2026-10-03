@@ -27,12 +27,14 @@ services:
       - homeserver
 
   nextcloud-redis:
-    image: redis:8.10.2-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: nextcloud-redis
     restart: unless-stopped
-    command: redis-server --save "" --stop-writes-on-bgsave-error no
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 60s
       timeout: 5s
       retries: 5

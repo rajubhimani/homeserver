@@ -80,6 +80,11 @@ Browser-only for this deployment, by design of the app rather than a limitation 
 - Health endpoint: `/_health`.
 - Needs both Postgres and Redis — its database is on `shared-postgres` and Redis is one extra container (`outline-redis`), heavier than most services in this stack.
 
+
+## Cache
+
+`outline-redis` runs `valkey/valkey:9.1.2-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged. Its data moved to the fresh `outline-valkey` volume, since Valkey cannot read Redis 8 RDB files.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

@@ -19,17 +19,19 @@ services:
       - homeserver
 
   appflowy-redis:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: appflowy-redis
     restart: unless-stopped
-    command: redis-server --save "" --stop-writes-on-bgsave-error no
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
     volumes:
       # --save "" disables persistence, so nothing is actually written here —
       # this mount exists only so the image's own `VOLUME /data` declaration
       # doesn't cause Docker to silently create an anonymous volume instead.
-      - appflowy-redis-alpine:/data
+      - appflowy-valkey:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 60s
       timeout: 5s
       retries: 5
@@ -203,7 +205,7 @@ services:
 
 volumes:
   appflowy-postgres:
-  appflowy-redis-alpine:
+  appflowy-valkey:
 
 networks:
   homeserver:

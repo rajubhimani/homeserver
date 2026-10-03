@@ -5,14 +5,16 @@ services:
   # Cache only (market-data lookups, job queue) — nothing here needs to
   # survive a restart, so no volume and persistence turned off.
   ghostfolio-redis:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: ghostfolio-redis
     restart: unless-stopped
     env_file: .env
     command: >-
-      sh -c 'redis-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
+      sh -c 'valkey-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
       interval: 60s
       timeout: 5s
       retries: 5

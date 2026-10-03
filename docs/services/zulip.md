@@ -36,7 +36,7 @@ Defaults to **on** here (`SETTING_OPEN_REALM_CREATION` in `compose.yml`, sourced
 
 ## Architecture
 
-Five containers: `zulip-db` (Zulip's own `zulip-postgresql` image, rebuilt on PostgreSQL 18 locally — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.6-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis`, and `zulip` itself.
+Five containers: `zulip-db` (Zulip's own `zulip-postgresql` image, rebuilt on PostgreSQL 18 locally — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.6-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis` (`valkey/valkey:9.1.2-alpine` since 2026-10-03, data on the fresh `zulip-valkey` volume), and `zulip` itself.
 
 ```mermaid
 flowchart LR

@@ -134,16 +134,18 @@ Airflow, Dagster and Temporal have managed cloud counterparts, and this stack ke
 - **Temporal:** the server version doesn't matter, since [Temporal Cloud runs the same server and every SDK supports every server](https://docs.temporal.io/cloud/overview.md). Workers connect through Temporal's [environment configuration](https://docs.temporal.io/develop/environment-configuration) (`TEMPORAL_ADDRESS`, `TEMPORAL_API_KEY`, `TEMPORAL_TLS*`, plus `TEMPORAL_NAMESPACES` here), never a hardcoded address. Moving to Temporal Cloud is then a `.env` change, and the [automated migration](https://docs.temporal.io/cloud/migrate/automated) moves running workflows.
 - **On every update** of these three, re-check the managed services first and record the result in the service doc.
 
-**The same holds for the backing services underneath every app.** A database, cache, queue or object store version only goes where the matching AWS managed service already runs it, so any app can move its data tier there:
+**The same holds for the backing services underneath every app, on any cloud**: AWS, Azure or GCP, or a cloud-neutral managed service. A database, cache, queue or object store version only moves where the managed equivalents already run it:
 
-| Component | Managed equivalent | Checked 2026-10-03 |
-| --- | --- | --- |
-| Postgres 18.6 | [Amazon RDS for PostgreSQL](https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-rds-postgresql-18-6-17-11-16-15-15-19-14-24/) | ✅ 18.6 |
-| MariaDB 11.8 / 12.3 | [Amazon RDS for MariaDB](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-rds-mariadb-community-versions/) | ✅ 11.8.9 / 12.3.3 |
-| Valkey 9.1 / Redis 8.x | [ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html) Valkey (Redis OSS frozen at 7.1) | ✅ Valkey up to 9.1 |
-| RabbitMQ 4.3 | [Amazon MQ](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-mq-rabbitmq-43/) | ✅ 4.3 |
-| MongoDB 8.0 | MongoDB Atlas | ✅ 8.0 |
-| MinIO (S3 API) | Amazon S3 | ✅ endpoint and keys only |
+| Component (here) | AWS | Azure | GCP | Checked 2026-10-03 |
+| --- | --- | --- | --- | --- |
+| **Postgres 18.6** | [RDS](https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-rds-postgresql-18-6-17-11-16-15-15-19-14-24/) | [Flexible Server](https://techcommunity.microsoft.com/blog/adforpostgresql/august-2026-recap-azure-database-for-postgresql/4556436) | [Cloud SQL](https://docs.cloud.google.com/sql/docs/postgres/db-versions) | ✅ all three run 18.6. **The most portable database: prefer it** |
+| **MariaDB 11.8 / 12.3** | [RDS](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-rds-mariadb-community-versions/) | ❌ [retired 2025](https://techcommunity.microsoft.com/blog/adformysql/azure-database-for-mariadb-is-being-retired-on-19-september-2025/3935681) | ❌ none | AWS only; [MariaDB Cloud](https://mariadb.com/products/cloud/) on all three. Only for apps that require MariaDB |
+| **Valkey 9.1** (every cache here) | [ElastiCache Valkey](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html) ≤9.1 | [Azure Managed Redis](https://learn.microsoft.com/en-us/azure/redis/migrate/migrate-basic-standard-premium-understand) (Redis 7.4) | [Memorystore Valkey](https://docs.cloud.google.com/memorystore/docs/valkey/supported-versions) 7.2–9.1 | ✅ same engine on AWS/GCP; same core commands on Azure. Keep to the Redis 7.2 command set, and keep one cache per app on database 0 (clustered managed caches only have database 0) |
+| **RabbitMQ 4.3** | [Amazon MQ](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-mq-rabbitmq-43/) | — | — | ✅ AWS; [CloudAMQP](https://www.cloudamqp.com/) on all three |
+| **MongoDB 8.0** | Atlas | Atlas | Atlas | ✅ |
+| **Object storage (MinIO, S3 API)** | S3 | Blob (**no S3 API**) | GCS ([S3-interoperable, HMAC keys](https://docs.cloud.google.com/storage/docs/interoperability)) | ✅ AWS/GCP by endpoint and keys; Azure needs the app's native Blob support or a gateway |
+| **Orchestrators** | MWAA · Temporal Cloud · Dagster+ | Astronomer · Temporal Cloud · Dagster+ | Composer · Temporal Cloud · Dagster+ | ✅ (above) |
+| **Containers** | EKS | AKS | GKE | via the Kubernetes pilot (`kubernetes/`) |
 
 - Apps reach these only through env/config (host, port, credentials, S3 endpoint), never a hardcoded address, so switching is a `.env` change plus a data copy (`dump`/snapshot).
 - Apps that have their own hosted edition (n8n Cloud, GitLab.com, Mattermost Cloud, Rocket.Chat Cloud, Supabase Cloud, Plausible, Grafana Cloud…) need nothing extra. The hosted edition always runs the same or a newer version, and their export/import goes from older to newer.

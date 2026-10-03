@@ -44,11 +44,13 @@ services:
       - homeserver
 
   erpnext-redis-cache:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: erpnext-redis-cache
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -56,13 +58,15 @@ services:
       - homeserver
 
   erpnext-redis-queue:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: erpnext-redis-queue
     restart: unless-stopped
     volumes:
-      - erpnext-redis-queue-data:/data
+      - erpnext-valkey-queue-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -223,7 +227,7 @@ services:
 volumes:
   erpnext-sites:
   erpnext-db-data:
-  erpnext-redis-queue-data:
+  erpnext-valkey-queue-data:
 
 networks:
   homeserver:

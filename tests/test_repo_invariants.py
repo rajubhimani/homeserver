@@ -259,3 +259,16 @@ def test_starting_services_doc_covers_every_action_and_flag():
     flags = set(re.findall(r'tok (?:==|in) \(?"(--[a-z-]+)"', src)) | set(re.findall(r'tok == "(--[a-z-]+)"', src))
     missing = sorted(a for a in actions if f"`{a}" not in doc) + sorted(f for f in flags if f not in doc)
     assert not missing, f"docs/15-starting-services.md doesn't mention: {missing}"
+
+
+def test_cache_containers_use_valkey_not_redis():
+    """Managed-cloud parity (docs/10): AWS ElastiCache and GCP Memorystore run
+    Valkey (ElastiCache's Redis OSS is frozen at 7.1), so every Redis-protocol
+    cache here is Valkey, the engine a move would land on."""
+    offenders = sorted(
+        f"{p.parent.name}: {line.strip()}"
+        for p in (REPO / "services").glob("*/compose.yml")
+        for line in p.read_text().splitlines()
+        if re.match(r"^\s*image:\s*[\"']?(docker\.io/)?(library/)?redis[:@\"'\s]", line)
+    )
+    assert not offenders, f"use valkey/valkey instead of redis: {offenders}"

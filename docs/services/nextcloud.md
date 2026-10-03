@@ -6,7 +6,7 @@
 
 **Purpose:** File storage + sharing, replaces Google Drive.
 **Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres-alpine` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
-**Pinned versions (as of this pass):** `nextcloud:34.0.4` (app + cron), `postgres:18.6-alpine` (db), `redis:8.10.2-alpine` (cache/locking). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
+**Pinned versions (as of this pass):** `nextcloud:34.0.4` (app + cron), `postgres:18.6-alpine` (db), `valkey/valkey:9.1.2-alpine` (cache/locking; Valkey, the Redis-protocol drop-in that AWS and GCP run, since 2026-10-03, [managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
 
 ## Setup
 
