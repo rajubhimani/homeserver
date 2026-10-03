@@ -57,7 +57,7 @@ Everything happens in the hub web UI (`http://<ip>:8106`), confirmed against Bes
 
 ## Network monitors (0.20.0+)
 
-Pinned image: `henrygd/beszel:0.20.0` / `henrygd/beszel-agent:0.20.0-alpine` — hub and agent should be bumped together. 0.20.0 added **Network Monitors** ("Response time monitoring from agents"): an agent periodically probes a target and reports response time + packet loss to the hub (live, plus 1h avg/min/max rollups). The hub hides the feature for agents older than 0.20.0.
+Pinned image: `henrygd/beszel:0.21.0` / `henrygd/beszel-agent:0.21.0-alpine` (updated 2026-10-03 from 0.20.0; 0.21.0 adds pending package updates, TLS-expiry checks on HTTPS monitors and many disk-I/O and reconnect fixes) — hub and agent should be bumped together. 0.20.0 added **Network Monitors** ("Response time monitoring from agents"): an agent periodically probes a target and reports response time + packet loss to the hub (live, plus 1h avg/min/max rollups). The hub hides the feature for agents older than 0.20.0.
 
 **The page is empty after upgrading — that's expected, not a bug.** Nothing is auto-discovered; each monitor is added by hand: Network Monitors page (or the command palette, `Ctrl+K`) → add → pick the **system** (which agent runs the probe), **protocol** (ICMP ping / TCP / HTTP(S) / DNS), **target** (+ port for TCP), and **interval**.
 
@@ -85,7 +85,7 @@ ICMP needs no extra config here: the agent runs as root with Docker's default `C
 
 The system page's S.M.A.R.T. panel ("Click on a device to view more information") shows per-disk health, temperature, power-on hours and the raw attribute table. It needs three things on `beszel-agent`, all set in `compose.yml`:
 
-- **The `:alpine` image variant** (`henrygd/beszel-agent:0.20.0-alpine`). The bare image is scratch-based with no `smartctl`, so the panel stays empty without any error. Keep the `-alpine` suffix when bumping versions.
+- **The `:alpine` image variant** (`henrygd/beszel-agent:0.21.0-alpine`). The bare image is scratch-based with no `smartctl`, so the panel stays empty without any error. Keep the `-alpine` suffix when bumping versions.
 - **`devices:`**: each disk is passed through by its stable `/dev/disk/by-id/...` path and mapped onto an `sdX` name inside the container, so a reboot reordering `sdX` on the host can't mix up which drive is which. Pass the whole disk, never a partition (`sda`, not `sda1`). Currently mapped: WD Green 240GB SSD → `sda`, Seagate ST2000LM015 2TB → `sdb`. The USB WD My Passport 2TB is deliberately left out (see below). Find IDs for a new disk with `ls -l /dev/disk/by-id/`.
 - **`cap_add: SYS_RAWIO`** for SATA. An NVMe drive would also need `SYS_ADMIN`, and should be mapped as `/dev/nvme0n1:/dev/nvme0` (controller path in the container, namespace device on the host).
 
