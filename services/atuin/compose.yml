@@ -50,7 +50,7 @@ services:
     env_file: .env
     environment:
       ATUIN_HOST: "0.0.0.0"
-      ATUIN_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@atuin-db/${POSTGRES_DB}
+      ATUIN_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
     volumes:
       - ${DATA_ROOT}/config:/config
     # No healthcheck here on purpose: the image ships its own (curl /healthz, 30s interval), and

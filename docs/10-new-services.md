@@ -125,6 +125,28 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 - **Combined with the next section:** pick the LTS line first, then the exact version inside it that upstream's compose/docs test.
 - Sources: the vendors' own policies ([ClamAV](https://docs.clamav.net/faq/faq-eol.html), [Prometheus](https://prometheus.io/docs/introduction/release-cycle/), [Mattermost](https://docs.mattermost.com/product-overview/release-policy.html), [Forgejo](https://endoflife.date/forgejo), [RabbitMQ](https://www.rabbitmq.com/docs/versions), [MongoDB](https://mongodb.com/support-policy/lifecycles), [MariaDB](https://mariadb.com/resources/blog/announcing-yearly-lts-releases-for-mariadb-community-server/)).
 
+### Configuration lives in `.env` (twelve-factor)
+
+Everything that can differ between deployments lives in the service's `.env`, following [twelve-factor "config in the environment"](https://12factor.net/config). That covers backing-service endpoints, ports, credentials, URLs and versions. Compose files keep only wiring that's the same everywhere. The same values map one-to-one onto Kubernetes ConfigMaps and Secrets.
+
+Backing-service endpoints use the same variable names in every service, defaulting to the local container:
+
+| Variable | What | Example default |
+| --- | --- | --- |
+| `DB_HOST` / `DB_PORT` | main database | `shared-postgres` / `5432`, `nextcloud-db` / `5432` |
+| `CACHE_HOST` / `CACHE_PORT` | Valkey cache | `nextcloud-redis` / `6379` |
+| `QUEUE_HOST` / `QUEUE_PORT` | a separate Valkey queue (ERPNext) | `erpnext-redis-queue` / `6379` |
+| `MQ_HOST` | RabbitMQ | `zulip-rabbitmq` |
+| `S3_ENDPOINT` | object storage (S3 API) | `http://plane-minio:9000` |
+| `MONGO_HOST` / `MONGO_PORT` | MongoDB | `mongodb` / `27017` |
+| `EVENTS_DB_HOST` / `EVENTS_DB_PORT` | ClickHouse (Plausible) | `plausible-events-db` / `8123` |
+| `MEMCACHED_HOST` / `MEMCACHED_PORT` | memcached (Zulip) | `zulip-memcached` / `11211` |
+
+- The app's own setting names (`REDIS_HOST`, `AUTHENTIK_POSTGRESQL__HOST`, `SETTING_REDIS_HOST`…) stay in compose and read these, so nothing inside the app is renamed.
+- `tests/test_external_db.py` fails if an app's environment or command names one of its project's backing containers directly.
+- Excluded on purpose: the backing containers themselves and their setup jobs (MinIO bucket init, MongoDB replica-set init), and Supabase, a tested upstream set whose managed equivalent is Supabase Cloud.
+- **Install-time-only settings:** a few apps copy the database host into their own config at first install, so changing `.env` alone doesn't move them. Nextcloud uses `config.php`'s `dbhost` (`occ config:system:set dbhost --value=…`). OrangeHRM's is set through its web installer. Each service doc's move section says so.
+
 ### Managed-cloud parity (orchestrators and backing services)
 
 Airflow, Dagster and Temporal have managed cloud counterparts, and this stack keeps each one movable there without code changes. That takes precedence over "newest" (none of the three publishes an LTS line).

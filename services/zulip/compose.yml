@@ -125,10 +125,17 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      SETTING_REMOTE_POSTGRES_HOST: zulip-db
-      SETTING_MEMCACHED_LOCATION: zulip-memcached:11211
-      SETTING_RABBITMQ_HOST: zulip-rabbitmq
-      SETTING_REDIS_HOST: zulip-redis
+      # env_file passes .env's DB_HOST (the stack-wide convention) into this
+      # container too, and Zulip 12's entrypoint refuses to start while its
+      # legacy DB_HOST is non-empty (renamed to SETTING_REMOTE_POSTGRES_HOST).
+      # Blank it here; the host reaches Zulip through the setting above.
+      DB_HOST: ""
+      SETTING_REMOTE_POSTGRES_HOST: ${DB_HOST}
+      SETTING_REMOTE_POSTGRES_PORT: ${DB_PORT}
+      SETTING_MEMCACHED_LOCATION: ${MEMCACHED_HOST}:${MEMCACHED_PORT}
+      SETTING_RABBITMQ_HOST: ${MQ_HOST}
+      SETTING_REDIS_HOST: ${CACHE_HOST}
+      SETTING_REDIS_PORT: ${CACHE_PORT}
       SETTING_EXTERNAL_HOST: zulip.${DOMAIN}
       SETTING_ZULIP_ADMINISTRATOR: ${ZULIP_ADMIN_EMAIL}
       # Off by default upstream — anyone who can reach zulip.${DOMAIN} could

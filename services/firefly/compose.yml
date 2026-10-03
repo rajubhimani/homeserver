@@ -45,8 +45,8 @@ services:
     environment:
       APP_URL: https://firefly.${DOMAIN}
       DB_CONNECTION: pgsql
-      DB_HOST: firefly-db
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}

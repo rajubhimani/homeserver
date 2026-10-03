@@ -87,3 +87,50 @@ def test_shared_db_apps_never_hardcode_the_shared_host():
         ex = (d / ".env.example").read_text()
         assert re.search(rf"^DB_HOST={re.escape(host)}$", ex, re.M), f"{s['slug']}/.env.example: DB_HOST={host}"
     assert not offenders, "use ${DB_HOST}/${DB_PORT}:\n" + "\n".join(offenders)
+
+
+BACKING_IMAGE = re.compile(r"(postgres|pgvector|mariadb|mysql|valkey|redis|rabbitmq|memcached|minio|mongo|clickhouse)", re.I)
+# Containers that set up their own project's backing service (bucket/replica-set
+# init) legitimately name it; Supabase is a tested upstream set whose managed
+# equivalent is Supabase Cloud, not a generic database.
+SETUP_IMAGES = re.compile(r"(minio/mc|pgsty/mc|mongodb-community-server|admin-tools)", re.I)
+SKIP_SERVICES = {"supabase"}
+
+
+def _backing_names(doc: dict) -> set[str]:
+    names = set()
+    for name, s in (doc.get("services") or {}).items():
+        s = s or {}
+        if BACKING_IMAGE.search(str(s.get("image", ""))) and not SETUP_IMAGES.search(str(s.get("image", ""))):
+            names |= {name, s.get("container_name", name)}
+    return names
+
+
+@pytest.mark.parametrize("svc", sorted(p.parent.name for p in (REPO / "services").glob("*/compose.yml")))
+def test_apps_reach_backing_services_through_env(svc):
+    """Twelve-factor config: an app's database/cache/queue/storage endpoint
+    comes from its .env (DB_HOST, CACHE_HOST, MQ_HOST, S3_ENDPOINT, ...),
+    never a container name written into compose, so any tier can move to a
+    managed service (or a Kubernetes ConfigMap) without editing compose."""
+    if svc in SKIP_SERVICES or svc.startswith("shared-"):
+        return
+    import yaml
+    doc = yaml.safe_load((REPO / "services" / svc / "compose.yml").read_text()) or {}
+    names = _backing_names(doc)
+    if not names:
+        return
+    pat = re.compile(r"(?<![\w$.{-])(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")(?=[:/;\"'\s]|$)")
+    offenders = []
+    for name, s in (doc.get("services") or {}).items():
+        s = s or {}
+        img = str(s.get("image", ""))
+        if BACKING_IMAGE.search(img) or SETUP_IMAGES.search(img):
+            continue  # the backing service itself, or its own setup job
+        env = s.get("environment") or {}
+        values = list(env.values()) if isinstance(env, dict) else [e.split("=", 1)[-1] for e in env]
+        cmd = s.get("command") or ""
+        values += cmd if isinstance(cmd, list) else [cmd]
+        for v in values:
+            if isinstance(v, str) and pat.search(v):
+                offenders.append(f"{name}: {pat.search(v).group(1)} in {v.strip()[:80]!r}")
+    assert not offenders, "move these endpoints into .env:\n" + "\n".join(offenders)

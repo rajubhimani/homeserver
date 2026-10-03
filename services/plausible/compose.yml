@@ -62,8 +62,8 @@ services:
     env_file: .env
     environment:
       BASE_URL: https://plausible.${DOMAIN}
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@plausible-db:5432/plausible
-      CLICKHOUSE_DATABASE_URL: http://plausible:${CLICKHOUSE_PASSWORD}@plausible-events-db:8123/plausible_events_db
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/plausible
+      CLICKHOUSE_DATABASE_URL: http://plausible:${CLICKHOUSE_PASSWORD}@${EVENTS_DB_HOST}:${EVENTS_DB_PORT}/plausible_events_db
     ulimits:
       nofile:
         soft: 65535

@@ -10,7 +10,8 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_DATABASE_NAME: ${DB_DATABASE_NAME}
       IMMICH_SECRET: ${IMMICH_SECRET}
-      REDIS_HOSTNAME: immich-redis
+      REDIS_HOSTNAME: ${CACHE_HOST}
+      REDIS_PORT: ${CACHE_PORT}
       # Windows Docker Desktop bind mounts have been observed failing Immich's
       # own create->read->overwrite mount-integrity check on `upload/` (a
       # write succeeds, the very next read of the same file returns ENOENT) —
