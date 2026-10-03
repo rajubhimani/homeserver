@@ -213,7 +213,7 @@ def cmd_apply(a) -> None:
         kubectl("apply", "-k", str(d))
 
 
-def snapshot_dir(svc: str, ts: str | None) -> Path:
+def snapshot_dir(svc: str, ts: str | None) -> Path | None:
     """The service's newest regular Compose snapshot (timestamp-named folders
     only, as homeserver.py's restore picks them), or the one asked for."""
     root = REPO / "service_data/backup" / svc
@@ -223,7 +223,7 @@ def snapshot_dir(svc: str, ts: str | None) -> Path:
             sys.exit(f"{svc}: no snapshot {ts} in {root}")
         return root / ts
     if not snaps:
-        sys.exit(f"{svc}: no snapshot in {root} (homeserver.py takes one on every 'down')")
+        return None  # e.g. clamav: no data, only copy_from folders
     return root / snaps[-1]
 
 
@@ -272,8 +272,8 @@ def cmd_import(a) -> None:
     LIVE_DB = a.live_db
     for svc in services(a.services):
         snap = snapshot_dir(svc, a.snapshot)
-        print(f"== {svc}: snapshot {snap.name}")
-        data_tar = next(snap.glob("service_data_*.tar.gz"), None)
+        print(f"== {svc}: " + (f"snapshot {snap.name}" if snap else "no snapshot (homeserver.py takes one on every 'down'); copy_from folders only"))
+        data_tar = next(snap.glob("service_data_*.tar.gz"), None) if snap else None
         scale(svc, 0)
         if data_tar and has_pvc(svc, f"{svc}-data"):
             unpack(data_tar, pvc_host_path(f"{svc}-data"))
@@ -289,7 +289,7 @@ def cmd_import(a) -> None:
             for mo in (co.get("mounts") or {}).values():
                 if mo.get("volume") and mo.get("copy_from"):
                     copy_folder(Path(host_path(svc, mo["copy_from"])), pvc_host_path(f"{svc}-{slug(mo['volume'])}"))
-        for vol_tar in sorted(snap.glob(f"{svc}_*.tar.gz")):
+        for vol_tar in sorted(snap.glob(f"{svc}_*.tar.gz")) if snap else []:
             import_volume(svc, vol_tar)
         scale(svc, 1)
         # DaemonSets can't scale to 0: restart them to pick up the restored files.

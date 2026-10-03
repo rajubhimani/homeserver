@@ -76,18 +76,21 @@ spec:
             port: 9000
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 3
           failureThreshold: 60
         livenessProbe:
           httpGet:
             path: /-/health/live/
             port: 9000
           periodSeconds: 10
+          timeoutSeconds: 3
           failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /-/health/ready/
             port: 9000
           periodSeconds: 10
+          timeoutSeconds: 3
           failureThreshold: 3
         volumeMounts:
         - name: v-authentik-data
@@ -177,6 +180,7 @@ spec:
             - healthcheck
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 3
           failureThreshold: 60
         livenessProbe:
           exec:
@@ -184,6 +188,7 @@ spec:
             - ak
             - healthcheck
           periodSeconds: 10
+          timeoutSeconds: 3
           failureThreshold: 3
         readinessProbe:
           exec:
@@ -191,6 +196,7 @@ spec:
             - ak
             - healthcheck
           periodSeconds: 10
+          timeoutSeconds: 3
           failureThreshold: 3
         volumeMounts:
         - name: v-authentik-data
