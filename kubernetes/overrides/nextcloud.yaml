@@ -1,10 +1,9 @@
 containers:
   nextcloud:
-    git:
-      repo: https://github.com/rajubhimani/homeserver.git
-      ref: develop
     mounts:
-      /docker-entrypoint-hooks.d/before-starting: {from: git}
+      # 4 small hook scripts: a ConfigMap (exec bits from git), versioned with
+      # these manifests rather than cloned from a branch at start.
+      /docker-entrypoint-hooks.d/before-starting: {from: configmap}
       # External storage Nextcloud writes to: a copy of USER_DATA_ROOT.
       /mnt/seagate: {volume: user-data, size: 50Gi, class: bulk, copy_from: USER_DATA_ROOT}
       # OS images, read-only from the host (cluster.py create mounts OS_ISO_ROOT).

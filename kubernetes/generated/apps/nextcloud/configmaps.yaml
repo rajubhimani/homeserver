@@ -3,6 +3,53 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: nextcloud-before-starting
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: nextcloud
+data:
+  00-fix-permissions-sh: |
+    #!/bin/sh
+    # Fix ownership on bind-mounted directories that may have been written by Podman rootless
+    # (Podman maps host UIDs into subuids like 524320; Docker needs www-data/33).
+    # Best-effort: Docker Desktop's Windows host-path bind mounts reject chown
+    # entirely (EPERM) regardless of target UID, so a hard failure here would
+    # crash-loop the container on Windows even though no chown was ever needed
+    # there in the first place.
+    chown -R www-data:www-data \
+      /var/www/html/config \
+      /var/www/html/data \
+      /var/www/html/custom_apps \
+      2>/dev/null || true
+  00-sync-php-sh: |
+    #!/bin/sh
+    rsync -rlDog --chown www-data:www-data --delete --exclude-from=/upgrade.exclude /usr/src/nextcloud/ /var/www/html/ || true
+  01-run-upgrade-sh: |
+    #!/bin/sh
+    # Only run upgrade when Nextcloud is already installed (config.php is non-empty)
+    [ -s /var/www/html/config/config.php ] && php /var/www/html/occ upgrade --no-interaction || true
+  02-configure-proxy-sh: |
+    #!/bin/sh
+    # Skip if Nextcloud isn't installed yet (first-run)
+    php /var/www/html/occ config:system:get installed 2>/dev/null | grep -q 'true' || exit 0
+
+    php /var/www/html/occ config:system:set overwrite.cli.url --value="https://nextcloud.${DOMAIN:-localhost}"
+    php /var/www/html/occ config:system:set overwriteprotocol --value="https"
+
+    # Trusted domains — localhost + the configured domain
+    php /var/www/html/occ config:system:set trusted_domains 0 --value="localhost"
+    php /var/www/html/occ config:system:set trusted_domains 1 --value="nextcloud.${DOMAIN:-localhost}"
+    php /var/www/html/occ config:system:set trusted_domains 2 --value="*.${DOMAIN:-localhost}"
+
+    # Trust all RFC 1918 private ranges — works with both Docker and Podman networks
+    php /var/www/html/occ config:system:set trusted_proxies 0 --value="127.0.0.1"
+    php /var/www/html/occ config:system:set trusted_proxies 1 --value="10.0.0.0/8"
+    php /var/www/html/occ config:system:set trusted_proxies 2 --value="172.16.0.0/12"
+    php /var/www/html/occ config:system:set trusted_proxies 3 --value="192.168.0.0/16"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: nextcloud-files
   labels:
     app.kubernetes.io/part-of: homeserver

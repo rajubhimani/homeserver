@@ -21,22 +21,10 @@ spec:
         homeserver/service: nextcloud
         app.kubernetes.io/name: nextcloud
       annotations:
-        homeserver/config-sha256: 9f3966ebb99087d3f389aafa7c6f7e0abde63107d1bf2dc54d678b8114d74ca7
+        homeserver/config-sha256: 4ae32c4d8af9514525386d0748d632d50c67dd4a5b6ea2e2caac79bf0be4792c
     spec:
       enableServiceLinks: false
       initContainers:
-      - name: git-clone
-        image: registry.k8s.io/git-sync/git-sync:v4.7.1
-        args:
-        - --repo=https://github.com/rajubhimani/homeserver.git
-        - --ref=develop
-        - --root=/git
-        - --link=repo
-        - --depth=1
-        - --one-time
-        volumeMounts:
-        - name: repo
-          mountPath: /git
       - name: wait-nextcloud-db
         image: alpine:3.24.2
         command:
@@ -122,9 +110,8 @@ spec:
           mountPath: /var/www/html/data
         - name: v-nextcloud-nextcloud-custom-apps
           mountPath: /var/www/html/custom_apps
-        - name: repo
+        - name: d-nextcloud-before-starting
           mountPath: /docker-entrypoint-hooks.d/before-starting
-          subPath: repo/services/nextcloud/hooks/before-starting
           readOnly: true
         - name: v-nextcloud-user-data
           mountPath: /mnt/seagate
@@ -144,6 +131,22 @@ spec:
       - name: v-nextcloud-nextcloud-custom-apps
         persistentVolumeClaim:
           claimName: nextcloud-nextcloud-custom-apps
+      - name: d-nextcloud-before-starting
+        configMap:
+          name: nextcloud-before-starting
+          items:
+          - key: 00-fix-permissions-sh
+            path: 00-fix-permissions.sh
+            mode: 493
+          - key: 00-sync-php-sh
+            path: 00-sync-php.sh
+            mode: 493
+          - key: 01-run-upgrade-sh
+            path: 01-run-upgrade.sh
+            mode: 493
+          - key: 02-configure-proxy-sh
+            path: 02-configure-proxy.sh
+            mode: 493
       - name: v-nextcloud-user-data
         persistentVolumeClaim:
           claimName: nextcloud-user-data
@@ -158,8 +161,6 @@ spec:
           - key: services-nextcloud-config-db-config-php
             path: services-nextcloud-config-db-config-php
             mode: 420
-      - name: repo
-        emptyDir: {}
   strategy:
     type: Recreate
 ---

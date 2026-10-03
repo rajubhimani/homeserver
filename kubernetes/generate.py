@@ -329,6 +329,12 @@ def ensure_env_defined(container: dict, env_keys: set[str], secret: str, has_env
         container["env"] = add + (container.get("env") or [])
 
 
+def git_modes(rel: str) -> dict[str, str]:
+    """{path: git file mode} under a repo folder: the modes a fresh clone gets."""
+    out = subprocess.run(["git", "ls-files", "-s", "--", rel], cwd=REPO, capture_output=True, text=True, check=True).stdout
+    return {ln.split("\t", 1)[1]: ln.split()[0] for ln in out.splitlines() if "\t" in ln}
+
+
 def config_checksum(data: dict[str, str]) -> dict:
     """Pod-template annotation with a hash of the pod's ConfigMap files, so
     changing a repo file rolls the pod: Kubernetes never updates a subPath
@@ -489,6 +495,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
         pod_vols: list[dict] = []
         mounts: list[dict] = []
         files_cm: dict[str, str] = {}
+        checksum_extra: dict[str, str] = {}  # folder ConfigMaps: in the pod's checksum too
         exec_keys: set[str] = set()
         git_paths: list[tuple[str, str]] = []
         for i, m in enumerate(s.get("volumes") or []):
@@ -511,10 +518,32 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 if p.stat().st_mode & 0o111:
                     exec_keys.add(k)  # e.g. entrypoint.sh: ConfigMap files default to 0644
                 mounts.append({"name": "files", "mountPath": tgt, "subPath": k, "readOnly": True})
+            elif kind == "repo-dir" and mo.get("from") == "configmap":
+                # A small repo folder (e.g. hook scripts) as a ConfigMap: versioned
+                # with the manifests, exec bits from git (what a fresh clone
+                # gets), and the config checksum rolls the pod on a change.
+                rel = Path(key).relative_to(REPO).as_posix()
+                files_dir = sorted(f for f in Path(key).rglob("*") if f.is_file())
+                if sum(f.stat().st_size for f in files_dir) > 900_000:
+                    raise GenError(f"{where}: {rel} is too big for a ConfigMap (1 MiB); use {{from: git}}")
+                modes = git_modes(rel)
+                dir_cm = f"{c}-{slug(Path(rel).name)}"[:63]
+                data = {slug(f.relative_to(key).as_posix().replace("/", "-").replace(".", "-")): f.read_text() for f in files_dir}
+                checksum_extra.update({f"{dir_cm}/{k}": v for k, v in data.items()})
+                files.setdefault("configmaps.yaml", []).append({
+                    "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": dir_cm, "labels": labels_svc},
+                    "data": dict(sorted(data.items()))})
+                vname = f"d-{slug(dir_cm)}"[:63]
+                pod_vols.append({"name": vname, "configMap": {"name": dir_cm, "items": [
+                    {"key": slug(f.relative_to(key).as_posix().replace("/", "-").replace(".", "-")),
+                     "path": f.relative_to(key).as_posix(),
+                     "mode": 0o755 if modes.get(f"{rel}/{f.relative_to(key).as_posix()}") == "100755" else 0o644}
+                    for f in files_dir]}})
+                mounts.append({"name": vname, "mountPath": tgt, "readOnly": True})
             elif kind == "repo-dir":
                 if mo.get("from") != "git":
                     raise GenError(f"{where}: mounts repo folder {key}; add overrides/{svc}.yaml "
-                                   f"containers.{c}.mounts.{tgt}: {{from: git}} to clone it with git-sync")
+                                   f"containers.{c}.mounts.{tgt}: {{from: git}} (git-sync) or {{from: configmap}} (small folders)")
                 rel = Path(key).relative_to(REPO).as_posix()
                 git_paths.append((rel, tgt))
                 mounts.append({"name": "repo", "mountPath": tgt, "subPath": f"repo/{rel}", "readOnly": True})
@@ -622,7 +651,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
         kind = co.get("kind") or ("Job" if n in oneshots else "Deployment")
         obj: dict = {"apiVersion": "batch/v1" if kind == "Job" else "apps/v1", "kind": kind,
                      "metadata": {"name": c, "labels": labels}}
-        tmpl = {"metadata": {"labels": labels, **config_checksum(files_cm)}, "spec": pod}
+        tmpl = {"metadata": {"labels": labels, **config_checksum({**files_cm, **checksum_extra})}, "spec": pod}
         if kind == "Job":
             pod["restartPolicy"] = "OnFailure"
             obj["spec"] = {"backoffLimit": 6, "template": tmpl}
