@@ -1,5 +1,7 @@
 # kubernetes/ — parallel Kubernetes experiment
 
+> **Status (2026-10-03): being rebuilt.** The hand-written pilot below drifted from Compose and has been moved to `kubernetes/legacy/` (reference only, not applied). Kubernetes is now **generated from Compose** so the two can't drift, with the same shared/own database layout. Plan: [`research/kubernetes-compose-parity-plan.md`](../research/kubernetes-compose-parity-plan.md); step-by-step guide with every command: [17 — Moving from Docker Compose to Kubernetes](../docs/17-docker-to-kubernetes.md). Pinned versions: [`kubernetes/versions.env`](versions.env). Sections below describe the old pilot until each phase replaces them.
+
 A separate, parallel setup to the Docker Compose stack that makes up the rest
 of this repo — not a replacement for it. The compose stack keeps running
 as-is; this folder is where the same services get ported to Kubernetes
