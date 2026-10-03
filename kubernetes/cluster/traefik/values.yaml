@@ -49,5 +49,12 @@ service:
 ports:
   web:
     nodePort: 30080
+    # The Cloudflare tunnel (cloudflared, a pod) forwards the visitor's
+    # X-Forwarded-Proto: https. Traefik trusts X-Forwarded-* only from listed
+    # sources (doc.traefik.io: entryPoints forwardedHeaders.trustedIPs), so
+    # trust the pod network (kind's default podSubnet). nginx-plain does the
+    # same job under Compose by setting X-Forwarded-Proto https.
+    forwardedHeaders:
+      trustedIPs: ["10.244.0.0/16"]
   websecure:
     nodePort: 30443

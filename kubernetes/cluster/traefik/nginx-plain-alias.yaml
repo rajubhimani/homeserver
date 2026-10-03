@@ -1,0 +1,17 @@
+# The Cloudflare tunnel's public hostnames point at http://nginx-plain:80
+# (set on Cloudflare's dashboard, shared with Compose). On Kubernetes, Traefik
+# does nginx-plain's job, so this name resolves to Traefik's Service: the
+# tunnel works unchanged in both runtimes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-plain
+  namespace: apps
+  labels:
+    app.kubernetes.io/part-of: homeserver
+spec:
+  type: ExternalName
+  externalName: traefik.infra.svc.cluster.local
+  ports:
+    - name: http
+      port: 80
