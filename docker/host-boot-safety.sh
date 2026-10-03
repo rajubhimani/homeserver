@@ -32,6 +32,14 @@
 #    Docker's own rules first, so VMs/VPN clients still can't reach
 #    unpublished container ports directly. See docs/09-firewall.md
 #    "Docker vs. VMs and the VPN".
+# 5. SATA link power management kept at max_performance. With power saving
+#    on (Fedora's tuned 'balanced' profile sets alpm=med_power_with_dipm, and
+#    overrides the kernel's ahci.mobile_lpm_policy), the system SSD (WD Green)
+#    failed to wake its link: 98 'SError: { PHYRdyChg CommWake }' / 'hard
+#    resetting link' errors in a day, then the OS disk dropped and the host
+#    froze (2026-10-02). SMART was clean. A tuned child profile keeps tuned
+#    from re-enabling it; a udev rule covers hosts without tuned. See
+#    docs/08-maintenance.md "System freezes / SSD drops off the bus".
 set -euo pipefail
 
 REQUIRED_MOUNTS="/mnt/mydata"
@@ -49,6 +57,11 @@ FWD_UNIT=/etc/systemd/system/homeserver-docker-forward.service
 # Non-Docker interfaces that must keep forwarding through Docker's DROP policy.
 # Missing interfaces are fine (rules match by name, no error) -- e.g. no VMs yet.
 FORWARD_ALLOW_IFACES="virbr0 wg0"
+ALPM_RULE=/etc/udev/rules.d/90-homeserver-sata-alpm.rules
+TUNED_PROFILE=balanced-nolpm
+PPD_CONF=/etc/tuned/ppd.conf
+# Newer tuned (2.23+) reads custom profiles from /etc/tuned/profiles/, older from /etc/tuned/.
+if [ -d /etc/tuned/profiles ]; then TUNED_DIR=/etc/tuned/profiles/$TUNED_PROFILE; else TUNED_DIR=/etc/tuned/$TUNED_PROFILE; fi
 
 [ "$(id -u)" -eq 0 ] || { echo "Run as root: sudo $0 $*" >&2; exit 1; }
 
@@ -56,10 +69,19 @@ if [ "${1:-}" = "--remove" ]; then
   systemctl disable --now homeserver-mount-watch.timer 2>/dev/null || true
   if [ -x "$FWD_BIN" ]; then "$FWD_BIN" undo || true; fi
   systemctl disable homeserver-docker-forward.service 2>/dev/null || true
-  rm -f "$DROPIN" "$SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT"
+  rm -f "$DROPIN" "$SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT" "$ALPM_RULE"
   sysctl -w net.ipv4.ip_nonlocal_bind=0 >/dev/null
+  if command -v tuned-adm >/dev/null; then
+    if [ -f "$PPD_CONF" ] && grep -q "^balanced=$TUNED_PROFILE$" "$PPD_CONF"; then
+      sed -i "s/^balanced=$TUNED_PROFILE$/balanced=balanced/" "$PPD_CONF"
+    elif tuned-adm active 2>/dev/null | grep -q ": $TUNED_PROFILE$"; then
+      tuned-adm profile balanced
+    fi
+    rm -rf "$TUNED_DIR"
+    systemctl try-restart tuned-ppd tuned 2>/dev/null || true
+  fi
   systemctl daemon-reload
-  echo "Removed. (docker.service ordering takes effect on next boot.)"
+  echo "Removed. (docker.service ordering takes effect on next boot; SATA link power is back to the tuned/kernel default.)"
   exit 0
 fi
 
@@ -193,8 +215,48 @@ systemctl daemon-reload
 systemctl enable homeserver-docker-forward.service >/dev/null
 systemctl restart homeserver-docker-forward.service
 echo "✔ homeserver-docker-forward.service enabled + applied ($FORWARD_ALLOW_IFACES)"
+
+# ── 5. SATA link power management: max_performance ──
+# udev: applies to every SATA host as it appears (all hosts, tuned or not).
+cat >"$ALPM_RULE" <<'EOF'
+# Installed by homeserver docker/host-boot-safety.sh -- see that script, item 5.
+ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}="max_performance"
+EOF
+for p in /sys/class/scsi_host/host*/link_power_management_policy; do
+  [ -e "$p" ] && echo max_performance >"$p" 2>/dev/null || true
+done
+echo "✔ $ALPM_RULE (applied now to every SATA port)"
+
+# tuned re-applies its profile's alpm= after udev, so it needs its own profile.
+if command -v tuned-adm >/dev/null; then
+  mkdir -p "$TUNED_DIR"
+  cat >"$TUNED_DIR/tuned.conf" <<'EOF'
+# Installed by homeserver docker/host-boot-safety.sh -- see that script, item 5.
+[main]
+summary=balanced, but SATA links stay at max_performance (link power saving froze the host)
+include=balanced
+
+[scsi_host]
+alpm=max_performance
+EOF
+  if [ -f "$PPD_CONF" ]; then
+    # tuned-ppd: the desktop's "Balanced" power mode maps to this profile.
+    # Only the [profiles] line; [battery]'s balanced=balanced-battery is untouched.
+    sed -i "s/^balanced=balanced$/balanced=$TUNED_PROFILE/" "$PPD_CONF"
+    systemctl try-restart tuned-ppd tuned 2>/dev/null || true
+  elif tuned-adm active 2>/dev/null | grep -q ": balanced$"; then
+    tuned-adm profile "$TUNED_PROFILE"
+  fi
+  active=$(tuned-adm active 2>/dev/null | sed -n 's/^Current active profile: //p' || true)
+  if [ "$active" = "$TUNED_PROFILE" ]; then
+    echo "✔ tuned profile $TUNED_PROFILE active ($TUNED_DIR)"
+  else
+    echo "⚠ tuned's active profile is '$active', not $TUNED_PROFILE -- if it sets alpm= (balanced/powersave do), switch: tuned-adm profile $TUNED_PROFILE"
+  fi
+fi
 echo
 echo "Done. Docker's mount ordering applies from the next boot; check with:"
 echo "  systemctl show docker -p RequiresMountsFor -p After | tr ' ' '\\n' | grep mnt"
 echo "  journalctl -u homeserver-mount-watch -n 5"
 echo "  sudo iptables -S DOCKER-USER     # VM/VPN forwarding rules (item 4)"
+echo "  grep . /sys/class/scsi_host/host*/link_power_management_policy   # item 5: max_performance"

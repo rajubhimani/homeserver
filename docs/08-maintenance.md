@@ -528,6 +528,7 @@ It installs:
 - `/etc/sysctl.d/90-homeserver-nonlocal-bind.conf` — `net.ipv4.ip_nonlocal_bind=1`, so docker-proxy can bind `10.8.0.1` before `wg0` exists. The firewall still gates who can reach it.
 - `homeserver-docker-forward.service` (+ `/usr/local/bin/homeserver-docker-forward`) — re-allows forwarding for libvirt VMs (`virbr0`) and WireGuard clients (`wg0`) past Docker's `FORWARD` DROP policy, re-applied every time Docker (re)starts. Without it a VM gets a DHCP lease but no internet (hit 2026-09-26 on the `win11` VM right after a Docker restart). See [09-firewall.md](09-firewall.md#docker-vs-vms-and-the-vpn).
 - `homeserver-mount-watch.timer` — every 5 min, a script copied to `/usr/local/bin/` (so it still runs if `/mnt/mydata` itself is missing) checks each data drive is mounted and read-write, and alerts via ntfy's `homeserver-alerts` topic (token reused from `services/clamav/.env`, re-alerts at most every 6h). Caveat: ntfy's own data lives on `/mnt/mydata`, so a missing `/mnt/mydata` only reaches the journal (`journalctl -u homeserver-mount-watch`) — but with the drop-in above, Docker doesn't start at all in that case either.
+- `/etc/udev/rules.d/90-homeserver-sata-alpm.rules`, plus the tuned profile `balanced-nolpm` where tuned is installed. These keep every SATA link at `max_performance`, so the system SSD can't drop off the bus and freeze the host. See [System freezes / SSD drops off the bus](#system-freezes--ssd-drops-off-the-bus-sata-link-power).
 
 **Repo-side guard (no setup needed):** `homeserver.py up`/`update`/`restart` refuse to start a service whose `DATA_ROOT` — or any path-valued var in its own `.env` (`UPLOAD_LOCATION`, `MEDIA_ROOT`, `OS_ISO_ROOT`, …) — sits on an `/etc/fstab` mount that is unmounted or read-only. This only covers starts through `homeserver.py`, not dockerd's own autostart — hence the host fix above.
 
@@ -547,6 +548,69 @@ uv run homeserver.py prod up immich nextcloud jellyfin
 real=$(mountpoint -d /mnt/mydata); for c in $(docker ps -q); do n=$(docker inspect $c --format '{{.Name}}'); for s in $(docker inspect $c --format '{{range .Mounts}}{{if eq .Type "bind"}}{{.Destination}}|{{.Source}} {{end}}{{end}}'); do dst=${s%%|*}; src=${s#*|}; case $src in /mnt/mydata/*) d=$(docker exec $c sh -c "grep -F ' $dst ' /proc/self/mountinfo | head -1 | cut -d' ' -f3" 2>/dev/null); [ -n "$d" ] && [ "$d" != "$real" ] && echo "BAD $n $dst dev=$d";; esac; done; done
 ```
 
+### System freezes / SSD drops off the bus (SATA link power)
+
+**Symptom:** the whole machine freezes and the screen goes dark. Only a forced reboot helps, and the previous boot's journal just stops, with no error at the end, because the disk it would log to is gone. Before that, the same boot's kernel log has repeated link errors on one SATA port:
+
+```text
+ata8: SError: { PHYRdyChg CommWake UnrecFIS DevExch }
+ata8.00: failed command: DATA SET MANAGEMENT ... (ATA bus error)
+ata8: hard resetting link
+```
+
+On this host on 2026-10-02 there were 98 of these in a day on the system SSD (WD Green 240GB, which holds the OS, `/home` and every Docker volume), until a final drop froze the host.
+
+**Cause:** SATA link power management (ALPM). With power saving on, the link sleeps between commands, and some drives (budget SSDs in particular) sometimes fail to wake it up (`PHYRdyChg CommWake`). Fedora's default **tuned** `balanced` power profile sets `alpm=med_power_with_dipm` on every port, overriding the kernel's own setting (even `ahci.mobile_lpm_policy=1` on the boot line). Others report the same failure with the same fix: [Fedora Discussion](https://discussion.fedoraproject.org/t/fc44-problem-with-link-power-management-policy-type-med-power-with-dipm-on-wd-gold-hdd/190748), [Arch forums](https://bbs.archlinux.org/viewtopic.php?id=303095), [Arch forums (WD drive)](https://bbs.archlinux.org/viewtopic.php?id=298023).
+
+**Diagnose** (rule out the drive and cable before blaming power management):
+
+```bash
+# 1. Link errors in the previous boot (-b -1), per port
+journalctl -k -b -1 | grep -E 'ata[0-9]+.*(hard resetting|SError|exception)' | grep -oE 'ata[0-9]+' | sort | uniq -c
+
+# 2. Which disk is on that port
+for p in /sys/class/ata_port/ata*; do d=$(ls -d $p/device/host*/target*/*/block/* 2>/dev/null | xargs -rn1 basename); [ -n "$d" ] && echo "$(basename $p) -> $d"; done
+
+# 3. Drive health. UDMA_CRC_Error_Count > 0 means the cable/port;
+#    reallocated/pending/grown bad blocks > 0 mean the drive is failing;
+#    all 0 points to link power management.
+sudo smartctl -A /dev/sdX | grep -E 'Reallocated|Pending|Grown_Bad|UDMA_CRC|Unexpected_Power_Loss'
+
+# 4. Current policy: anything but max_performance on that port means power saving is on
+grep . /sys/class/scsi_host/host*/link_power_management_policy
+tuned-adm active
+```
+
+**Fix (permanent, item 5 of the boot-safety script):**
+
+```bash
+sudo bash docker/host-boot-safety.sh      # idempotent; --remove undoes it
+```
+
+It keeps every SATA link at `max_performance` in two ways:
+- **A udev rule**, `/etc/udev/rules.d/90-homeserver-sata-alpm.rules`, for any distro. It is applied right away as well.
+- **A tuned child profile** where tuned is installed (Fedora/RHEL). The profile, `/etc/tuned/profiles/balanced-nolpm/tuned.conf`, is `include=balanced` plus `[scsi_host] alpm=max_performance`. It's needed because tuned re-applies its own `alpm=` after udev. With tuned-ppd, `balanced=balanced-nolpm` in `/etc/tuned/ppd.conf` makes the desktop's "Balanced" power mode use it.
+
+The equivalent by hand, for reference:
+
+```bash
+echo max_performance | sudo tee /sys/class/scsi_host/host*/link_power_management_policy   # until reboot
+sudo mkdir -p /etc/tuned/profiles/balanced-nolpm
+printf '[main]\ninclude=balanced\n\n[scsi_host]\nalpm=max_performance\n' | sudo tee /etc/tuned/profiles/balanced-nolpm/tuned.conf
+sudo sed -i 's/^balanced=balanced$/balanced=balanced-nolpm/' /etc/tuned/ppd.conf
+sudo systemctl restart tuned-ppd tuned && tuned-adm active      # -> balanced-nolpm
+```
+
+**Verify:** every port with a policy shows `max_performance`. Ports showing `keep_firmware_settings` have no ALPM support, so leave those alone. A day later this should print `0`, where before it was several per hour:
+
+```bash
+journalctl -k -b 0 | grep -c 'hard resetting link'
+```
+
+If errors continue at `max_performance`, the cause is hardware: reseat or replace the SATA data and power cables, try another port, and watch `UDMA_CRC_Error_Count` and `Unexpected_Power_Loss` in SMART.
+
+**Trade-off:** about 1W per drive. Picking "Power Saver" in the desktop's power menu (tuned's `powersave` profile) turns ALPM back on, so stay on Balanced or Performance. On a laptop running on battery, tuned-ppd's `[battery]` mapping still uses `balanced-battery`, with ALPM on.
+
 ---
 
 ## Troubleshooting
@@ -558,6 +622,7 @@ Reactive fixes, keyed by symptom:
 | Container not starting | `uv run homeserver.py dev up <service>` then check `uv run homeserver.py dev logs <service>` |
 | `network homeserver not found` | `homeserver.py` auto-creates it — or run `docker network create homeserver` manually |
 | Data drive not mounted / read-only; `homeserver.py` says "Not starting … fix the mount first" | See [Boot safety](#boot-safety) below |
+| Host freezes and needs a forced reboot; `ata*: hard resetting link` / `PHYRdyChg CommWake` in the kernel log | SATA link power management. See [System freezes / SSD drops off the bus](#system-freezes--ssd-drops-off-the-bus-sata-link-power) |
 | Tunnel not routing | `sudo systemctl restart cloudflared` → `journalctl -u cloudflared -f` |
 | Nextcloud/Postgres data directory ownership or corruption error | **Do not delete the data to "fix" this** — Postgres/MariaDB/RabbitMQ data lives in a named Docker volume (not a bind mount), so this class of error shouldn't occur under normal operation. If it does, first `uv run homeserver.py dev restore <service>` from the last snapshot rather than resetting; see the `homeserver-postgres` skill for why bind-mounting DB data is unsafe and never worth reintroducing |
 | Nextcloud trusted domain error | Should self-heal on next restart — `nextcloud/hooks/before-starting/02-configure-proxy.sh` sets `trusted_domains`/`trusted_proxies` via `occ` automatically on every startup. If it persists, check the hook actually ran: `docker exec nextcloud php occ config:system:get trusted_domains`; see [`docs/services/nextcloud.md`](services/nextcloud.md) |
