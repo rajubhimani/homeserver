@@ -65,6 +65,22 @@ sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | bash -s -- --version "${HELM_VERSION}"
 ```
 
+### Raise the inotify limits first (required next to Docker)
+
+Docker's containers and the kind node all use inotify, and Linux's defaults (128 instances) run out quickly. The symptom is `Too many open files`, even from `systemd`, which broadcasts `Failed to allocate manager object: Too many open files` to your terminals. Set this once:
+
+```bash
+sudo tee /etc/sysctl.d/99-inotify.conf <<'SYSCTL'
+# Many containers (Docker + a kind Kubernetes node) each need inotify instances
+# and watches; the defaults (128 / ~270k) run out ("Too many open files").
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+SYSCTL
+sudo sysctl --system | grep inotify     # takes effect immediately, survives reboots
+```
+
+Check: `sysctl fs.inotify.max_user_instances fs.inotify.max_user_watches` should print `1024` and `524288`. Details: [08 — Maintenance](08-maintenance.md#host-inotify-limits-hit-when-running-many-containers-at-once), [kind's known issues](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files).
+
 Check:
 
 ```bash

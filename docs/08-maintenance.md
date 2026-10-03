@@ -422,14 +422,16 @@ Raise it (`max_user_instances` is a separate, much lower-ceiling limit
 than `max_user_watches` — raising the latter doesn't help here):
 
 ```bash
-sudo sysctl -w fs.inotify.max_user_instances=1024   # takes effect immediately, no restart needed
-
-# Persist across reboots:
-sudo tee /etc/sysctl.d/99-docker-inotify.conf <<'EOF'
-fs.inotify.max_user_instances=1024
-EOF
-sudo sysctl --system
+sudo tee /etc/sysctl.d/99-inotify.conf <<'SYSCTL'
+# Many containers (Docker + a kind Kubernetes node) each need inotify instances
+# and watches; the defaults (128 / ~270k) run out ("Too many open files").
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+SYSCTL
+sudo sysctl --system | grep inotify     # takes effect immediately, survives reboots
 ```
+
+Running a **kind** Kubernetes node next to the Compose stack makes this **required**, not optional. On 2026-10-03, with the defaults still in place, `systemd` started failing with `Failed to allocate manager object: Too many open files` minutes after the test cluster came up. [kind's known issues](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files) recommend raising both limits.
 
 Verify:
 
