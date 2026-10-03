@@ -36,12 +36,12 @@ Defaults to **on** here (`SETTING_OPEN_REALM_CREATION` in `compose.yml`, sourced
 
 ## Architecture
 
-Five containers: `zulip-db` (Zulip's own `zulip/zulip-postgresql` image — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.6-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis`, and `zulip` itself.
+Five containers: `zulip-db` (Zulip's own `zulip-postgresql` image, rebuilt on PostgreSQL 18 locally — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.6-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis`, and `zulip` itself.
 
 ```mermaid
 flowchart LR
     subgraph Backing["Backing services, one each"]
-        DB["zulip-db<br/>(zulip/zulip-postgresql)"]
+        DB["zulip-db<br/>(zulip-postgresql, PG 18)"]
         MC[zulip-memcached]
         RMQ[zulip-rabbitmq]
         RD[zulip-redis]
@@ -95,7 +95,7 @@ Official **Zulip** app ([Google Play](https://play.google.com/store/apps/details
 ## Version line
 
 - `zulip-rabbitmq` runs `rabbitmq:4.3.6`. RabbitMQ patches only its latest minor series for the community, and 4.2 (upstream docker-zulip's pin) left community support on 2026-07-31 ([RabbitMQ versions](https://www.rabbitmq.com/docs/versions)). There's no LTS track, so this is the newest supported release ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)).
-- **Open: `zulip/zulip-postgresql:14`.** Postgres 14 reaches end of life on 2026-11-12, and Zulip publishes no newer image yet (tags stop at 14). Follow Zulip's own Postgres upgrade path when docker-zulip ships one.
+- **`zulip-db` runs PostgreSQL 18**, built from Zulip's own `Dockerfile-postgresql` (zulip/zulip tag 12.3) in `services/zulip/postgresql/` as `homeserver/zulip-postgresql:18-pgroonga4.0.9`. Upstream publishes `zulip/zulip-postgresql` only up to `:14` (EOL 2026-11-12), but Zulip 12.x supports PostgreSQL 14–18 and its docs say Docker installs upgrade PostgreSQL "via image bumps" ([upgrade docs](https://zulip.readthedocs.io/en/stable/production/upgrade.html), [docker-zulip `upgrade-postgresql`](https://github.com/zulip/docker-zulip/blob/main/upgrade-postgresql)). The image is the same thing upstream's is: `groonga/pgroonga:<v>-alpine-<pg>-slim` plus hunspell-en, Zulip's stop words and its init SQL, with the three files vendored verbatim. Moved on 2026-10-03 while Zulip was empty, so no dump/restore was needed. The new volume `zulip-postgres-18` is mounted at `/var/lib/postgresql`, where PostgreSQL 18 images declare their `VOLUME`. On a Zulip upgrade, re-fetch those files from the new tag. Moving an instance *with data* across Postgres majors needs a dump/restore, as in upstream's `upgrade-postgresql` script.
 
 ---
 

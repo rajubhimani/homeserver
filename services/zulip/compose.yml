@@ -3,7 +3,9 @@ services:
   # default) — bakes in extensions/config Zulip specifically requires, same
   # reasoning as immich's custom Postgres image (see homeserver-postgres skill).
   zulip-db:
-    image: zulip/zulip-postgresql:14
+    # Zulip's Dockerfile-postgresql rebuilt on PostgreSQL 18 (see postgresql/Dockerfile).
+    build: ./postgresql
+    image: homeserver/zulip-postgresql:18-pgroonga4.0.9
     container_name: zulip-db
     restart: unless-stopped
     secrets:
@@ -13,7 +15,7 @@ services:
       POSTGRES_USER: zulip
       POSTGRES_PASSWORD_FILE: /run/secrets/zulip__postgres_password
     volumes:
-      - zulip-postgres:/var/lib/postgresql/data
+      - zulip-postgres-18:/var/lib/postgresql
     deploy:
       resources:
         limits:
@@ -205,7 +207,7 @@ secrets:
     environment: "ZULIP__EMAIL_PASSWORD"
 
 volumes:
-  zulip-postgres:
+  zulip-postgres-18:
   zulip-rabbitmq:
   zulip-redis:
   zulip-data:
