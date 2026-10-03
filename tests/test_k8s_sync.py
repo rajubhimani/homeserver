@@ -198,3 +198,15 @@ def test_external_db_host_emits_no_database_objects(monkeypatch):
     monkeypatch.setattr(gen, "load_env", lambda p: {**real(p), "DB_HOST": "db.example.rds.amazonaws.com"}
                         if Path(p).parent.name == svc else real(p))
     assert gen.external_db(svc)
+
+
+def test_nginx_redirects_become_gateway_redirects():
+    """nginx-plain's bare domain -> www 301 must exist on Kubernetes too."""
+    if "landing" not in PORTED:
+        pytest.skip("landing not ported")
+    assert ("${DOMAIN}", "www.${DOMAIN}", 301) in gen.nginx_redirects()
+    docs = [d for d in yaml.safe_load_all((GENERATED / "envs/test/landing/routes.yaml").read_text()) if d]
+    (r,) = [d for d in docs if d["metadata"]["name"] == "landing-redirect"]
+    assert r["spec"]["hostnames"] == [gen.TEST_DOMAIN if hasattr(gen, "TEST_DOMAIN") else "k8s.local"]
+    assert r["spec"]["rules"][0]["filters"][0]["requestRedirect"] == {
+        "scheme": "https", "hostname": "www.k8s.local", "statusCode": 301}

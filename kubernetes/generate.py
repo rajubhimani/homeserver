@@ -127,6 +127,20 @@ def nginx_routes() -> dict[str, list[tuple[str, int]]]:
     return routes
 
 
+def nginx_redirects() -> list[tuple[str, str, int]]:
+    """[(hostname, target hostname, status)] for nginx-plain's redirect-only
+    server blocks (server_name X; return 301 https://Y$request_uri;), e.g.
+    the bare domain -> www."""
+    text = (SERVICES_DIR / "nginx-plain/templates/default.conf.template").read_text()
+    out = []
+    for block in re.split(r"\n\s*server\s*\{", text):
+        names = re.search(r"server_name\s+([^;]+);", block)
+        ret = re.search(r"^\s*return (30[1278]) https://([^$/\s]+(?:\$\{DOMAIN\})?)\$request_uri;", block, re.M)
+        if names and ret and "set $upstream" not in block:
+            out += [(h, ret.group(2), int(ret.group(1))) for h in names.group(1).split()]
+    return out
+
+
 # ── value helpers ─────────────────────────────────────────────────────────
 
 VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
@@ -512,6 +526,20 @@ def route_objects(svc: str, domain: str) -> list[dict]:
             "metadata": {"name": c, "labels": {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}},
             "spec": {"parentRefs": [GATEWAY], "hostnames": hosts,
                      "rules": [{"backendRefs": [{"name": c, "port": port}]}]}})
+        # nginx-plain's redirect-only blocks that point at this container's
+        # hostnames -> Gateway API's standard RequestRedirect filter (path and
+        # query are kept, like $request_uri).
+        own = {h for h, _ in routes[c]}
+        redirects = [(f, to, code) for f, to, code in nginx_redirects() if to in own]
+        if redirects:
+            out.append({
+                "apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
+                "metadata": {"name": f"{c}-redirect", "labels": {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}},
+                "spec": {"parentRefs": [GATEWAY],
+                         "hostnames": sorted({f.replace("${DOMAIN}", domain) for f, _, _ in redirects}),
+                         "rules": [{"filters": [{"type": "RequestRedirect", "requestRedirect": {
+                             "scheme": "https", "hostname": redirects[0][1].replace("${DOMAIN}", domain),
+                             "statusCode": redirects[0][2]}}]}]}})
     return out
 
 
