@@ -10,6 +10,11 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
     volumes:
       - ${DATA_ROOT}/data:/data
+    # SMTP for the other services (MAIL_HOST=mailpit, port 1025). Docker
+    # reaches it without this line (the image EXPOSEs it); it's declared so
+    # the generated Kubernetes Service carries it too.
+    expose:
+      - "1025"
     # No healthcheck here on purpose: the image ships its own (/mailpit readyz, 15s interval, 1s while starting), and
     # upstream's compose defines none, so a compose one would only replace it.
     deploy:

@@ -11,6 +11,9 @@ spec:
   selector:
     app.kubernetes.io/name: mailpit
   ports:
+  - name: p1025
+    port: 1025
+    targetPort: 1025
   - name: p8025
     port: 8025
     targetPort: 8025

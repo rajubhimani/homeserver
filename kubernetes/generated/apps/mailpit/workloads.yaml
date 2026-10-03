@@ -38,6 +38,7 @@ spec:
         - name: MP_SMTP_AUTH_ALLOW_INSECURE
           value: '1'
         ports:
+        - containerPort: 1025
         - containerPort: 8025
         resources:
           limits:

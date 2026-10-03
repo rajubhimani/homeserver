@@ -252,3 +252,41 @@ def test_image_versions_in_env_match_env_example():
             for var in gen.VAR.findall(s["image"]):
                 if var[0] in ex:
                     assert env.get(var[0]) == ex[var[0]], f"{svc}: .env {var[0]} differs from .env.example"
+
+
+def _service_ports() -> dict[str, set[int]]:
+    """Every in-cluster Service name -> its ports (apps + operator-run DBs)."""
+    out: dict[str, set[int]] = {}
+    for f in GENERATED.glob("apps/*/services.yaml"):
+        for d in yaml.safe_load_all(f.read_text()):
+            if d:
+                out[d["metadata"]["name"]] = {p["port"] for p in d["spec"]["ports"]}
+    for f in GENERATED.glob("apps/*/database.yaml"):
+        for d in yaml.safe_load_all(f.read_text()):
+            if d and d["kind"] == "Cluster":
+                for a in d["spec"]["managed"]["services"]["additional"]:
+                    out[a["serviceTemplate"]["metadata"]["name"]] = {5432}
+            elif d and d["kind"] == "MariaDB":
+                out[d["metadata"]["name"]] = {3306}
+    return out
+
+
+def test_env_endpoints_reach_a_service_port():
+    """A ported service's .env.example endpoint (X_HOST=<container> + X_PORT,
+    or <container>:<port> in a URL) must hit a port the target's Service has.
+    Docker reaches any port an image EXPOSEs; Kubernetes only declared ones,
+    so a missing `expose:` silently breaks the call (Mailpit's SMTP 1025
+    hung Firefly's login, 2026-10-04)."""
+    ports = _service_ports()
+    gaps = []
+    for svc in PORTED:
+        ex = gen.load_env(REPO / "services" / svc / ".env.example")
+        for k, v in ex.items():
+            for host, port in re.findall(r"(?:^|//|@)([a-z][a-z0-9-]+):(\d{2,5})\b", v):
+                if host in ports and int(port) not in ports[host]:
+                    gaps.append(f"{svc}: {k} -> {host}:{port}")
+            if re.search(r"HOST(NAME)?$", k) and v in ports:
+                pk = re.sub(r"HOST(NAME)?$", "PORT", k)
+                if ex.get(pk, "").isdigit() and int(ex[pk]) not in ports[v]:
+                    gaps.append(f"{svc}: {pk}={ex[pk]} -> {v}")
+    assert not gaps, "ports missing from generated Services (add `expose:` in compose.yml): " + ", ".join(gaps)

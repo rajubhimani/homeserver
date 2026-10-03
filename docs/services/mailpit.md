@@ -38,6 +38,8 @@ Point that service's SMTP settings at:
 
 Airflow's `.env` (`SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_FROM_EMAIL=...`) is the worked example — copy that pattern for any other service that supports a configurable SMTP relay.
 
+`compose.yml` declares `expose: ["1025"]`. Docker doesn't need it, because containers on the network already reach the image's exposed ports. The generated Kubernetes Service only carries declared ports, though. Without it, Kubernetes' `mailpit` Service had only 8025, every mail send timed out, and Firefly's login hung until its "new login" notification gave up (2026-10-04).
+
 ## Architecture
 
 Single container, `axllent/mailpit`. Persistent message storage via `MP_DATABASE=/data/mailpit.db` (bind-mounted to `DATA_ROOT/data`) — caught mail survives a container restart, unlike Mailpit's own default (an auto-generated temporary file, deleted when the process stops). `MP_SMTP_AUTH_ACCEPT_ANY`/`MP_SMTP_AUTH_ALLOW_INSECURE` are both set so any sender's config "just works" without matching credentials — appropriate here because nothing this container touches is a real inbox; there's no delivery to protect.
