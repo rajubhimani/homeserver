@@ -91,7 +91,8 @@ def test_images_match_compose_exactly():
         for n, s in compose["services"].items():
             key = (svc, s.get("container_name") or n)
             if key in gen_images:
-                assert gen_images[key] == s["image"].replace("$$", "$"), f"{key}: {gen_images[key]} != compose {s['image']}"
+                want = gen.image_ref(svc, s["image"], svc)  # ${VERSION} pinned from .env.example
+                assert gen_images[key] == want, f"{key}: {gen_images[key]} != compose {s['image']} ({want})"
 
 
 def test_every_workload_is_probed_or_explained():
@@ -237,3 +238,17 @@ def test_browser_hub_block_has_no_nginx_auth_left():
     assert "auth_request" not in conf and "goauthentik" not in conf
     assert conf.count("location = /_status/") == 10
     assert ".apps.svc.cluster.local:3000" in conf
+
+
+def test_image_versions_in_env_match_env_example():
+    """Generated images pin ${..._VERSION} from .env.example; the host's real
+    .env must run the same version, or Compose and Kubernetes would differ."""
+    for svc in PORTED:
+        env_file = REPO / "services" / svc / ".env"
+        if not env_file.is_file():
+            continue
+        env, ex = gen.load_env(env_file), gen.load_env(REPO / "services" / svc / ".env.example")
+        for s in gen.load_compose(svc)["services"].values():
+            for var in gen.VAR.findall(s["image"]):
+                if var[0] in ex:
+                    assert env.get(var[0]) == ex[var[0]], f"{svc}: .env {var[0]} differs from .env.example"

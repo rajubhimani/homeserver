@@ -1,0 +1,18 @@
+containers:
+  nextcloud:
+    git:
+      repo: https://github.com/rajubhimani/homeserver.git
+      ref: develop
+    mounts:
+      /docker-entrypoint-hooks.d/before-starting: {from: git}
+      # External storage Nextcloud writes to: a copy of USER_DATA_ROOT.
+      /mnt/seagate: {volume: user-data, size: 50Gi, class: bulk, copy_from: USER_DATA_ROOT}
+      # OS images, read-only from the host (cluster.py create mounts OS_ISO_ROOT).
+      /mnt/os-iso: {hostPath: /var/k8s/host/nextcloud-os-iso, env: OS_ISO_ROOT, readOnly: true}
+  nextcloud-cron:
+    mounts:
+      /mnt/os-iso: {hostPath: /var/k8s/host/nextcloud-os-iso, env: OS_ISO_ROOT, readOnly: true}
+  nextcloud-redis:
+    ports: [6379]   # valkey's default port; Compose never publishes it
+storage:
+  nextcloud-data: {size: 20Gi, class: bulk}

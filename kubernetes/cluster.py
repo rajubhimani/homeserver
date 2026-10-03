@@ -33,7 +33,7 @@ import yaml
 K8S = Path(__file__).resolve().parent
 REPO = K8S.parent
 sys.path.insert(0, str(K8S))
-from generate import load_compose, load_env, load_scope, own_db_keys, own_postgres, shared_db_apps, slug  # noqa: E402
+from generate import load_compose, load_env, load_overrides, load_scope, own_db_keys, own_mariadb, own_postgres, shared_db_apps, slug  # noqa: E402
 
 VERSIONS = load_env(K8S / "versions.env")
 NAMESPACE = "apps"
@@ -69,12 +69,42 @@ def cmd_create(_a) -> None:
     for key in ("K8S_FAST_PATH", "K8S_BULK_PATH", "K8S_IMAGES_PATH"):
         Path(c[key]).mkdir(parents=True, exist_ok=True)
     text = string.Template((K8S / "cluster/kind-config.template.yaml").read_text()).substitute(c)
+    # Host folders services read from (overrides with hostPath + env): the
+    # real path from that service's .env, at the fixed node path the
+    # generated manifests use. kind can only add mounts at create time.
+    for node_path, host, ro in host_mounts():
+        text += (f"      - hostPath: {host}\n        containerPath: {node_path}\n"
+                 + ("        readOnly: true\n" if ro else ""))
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
         f.write(text)
     try:
         run(["kind", "create", "cluster", "--config", f.name, "--wait", "300s"])
     finally:
         os.unlink(f.name)
+
+
+def host_mounts() -> list[tuple[str, str, bool]]:
+    """[(node path, host path, read-only)] from every ported service's
+    overrides; the host path is the .env value Compose uses."""
+    out: dict[str, tuple[str, bool]] = {}
+    for svc in load_scope().get("ported") or []:
+        for co in (load_overrides(svc).get("containers") or {}).values():
+            for mo in (co.get("mounts") or {}).values():
+                if mo.get("hostPath") and mo.get("env"):
+                    host = host_path(svc, mo["env"])
+                    if not Path(host).is_dir():
+                        sys.exit(f"{svc}: {mo['env']}={host} is not a folder on this host")
+                    out[mo["hostPath"]] = (host, bool(mo.get("readOnly")))
+    return [(k, v[0], v[1]) for k, v in sorted(out.items())]
+
+
+def host_path(svc: str, key: str) -> str:
+    """A path from services/<svc>/.env, resolved like Compose does (relative
+    to the service folder)."""
+    val = load_env(REPO / "services" / svc / ".env").get(key, "")
+    if not val:
+        sys.exit(f"{svc}: {key} isn't set in services/{svc}/.env")
+    return str((REPO / "services" / svc / val).resolve())
 
 
 def cmd_install(_a) -> None:
@@ -163,7 +193,9 @@ def cmd_secrets(a) -> None:
                                                          env.get("POSTGRES_PASSWORD", "")))
         if (own := own_db_keys(svc)):
             # A CORE app's own CNPG cluster: its database owner login.
-            kubectl("apply", "-f", "-", input=basic_auth(f"{svc}-db-owner", env.get(own[0], ""), env.get(own[1], "")))
+            # (<svc>-db-superuser for apps that log in as postgres.)
+            user = env.get(own["user_key"], own["user"]) if own["user_key"] else own["user"]
+            kubectl("apply", "-f", "-", input=basic_auth(own["secret"], user, env.get(own["password_key"], "")))
         if spec and spec["engine"] == "postgres":
             # Same values homeserver.py's shared_db_creds reads from this .env.
             val = lambda k: k[1:] if k.startswith("=") else env.get(k, "")  # noqa: E731
@@ -237,11 +269,12 @@ def cmd_import(a) -> None:
         data_tar = next(snap.glob("service_data_*.tar.gz"), None)
         scale(svc, 0)
         if data_tar:
-            dest = pvc_host_path(f"{svc}-data")
-            # Replace the folder's contents with the snapshot's.
-            for child in dest.iterdir():
-                run(["rm", "-rf", str(child)])
-            run(["tar", "xzf", str(data_tar), "-C", str(dest), "--no-same-owner", "--no-overwrite-dir"])
+            unpack(data_tar, pvc_host_path(f"{svc}-data"))
+        # Host folders Compose keeps outside DATA_ROOT (copy_from overrides).
+        for co in (load_overrides(svc).get("containers") or {}).values():
+            for mo in (co.get("mounts") or {}).values():
+                if mo.get("volume") and mo.get("copy_from"):
+                    copy_folder(Path(host_path(svc, mo["copy_from"])), pvc_host_path(f"{svc}-{slug(mo['volume'])}"))
         for vol_tar in sorted(snap.glob(f"{svc}_*.tar.gz")):
             import_volume(svc, vol_tar)
         scale(svc, 1)
@@ -252,14 +285,95 @@ def cmd_import(a) -> None:
 LIVE_DB = False
 
 
+def as_root(mounts: list[str], script: str) -> None:
+    """Run a shell script as root in a throwaway container (no network), so
+    copies keep every file's owner (postgres 999, clickhouse 101, ...)."""
+    args = ["docker", "run", "--rm", "--network", "none"]
+    for m in mounts:
+        args += ["-v", m]
+    run(args + [VERSIONS["WAIT_IMAGE"], "sh", "-c", script])
+
+
+def unpack(tar: Path, dest: Path) -> None:
+    """Replace a volume folder's contents with a snapshot tar's."""
+    as_root([f"{tar}:/in.tgz:ro", f"{dest}:/dst"],
+            "find /dst -mindepth 1 -maxdepth 1 -exec rm -rf {} + && tar xzf /in.tgz -C /dst")
+
+
+def copy_folder(src: Path, dest: Path) -> None:
+    """Copy a host folder into a volume folder (owners and times kept)."""
+    if not src.is_dir():
+        sys.exit(f"copy_from source {src} is not a folder")
+    print(f"+ copy {src} -> {dest}", flush=True)
+    as_root([f"{src}:/src:ro", f"{dest}:/dst"],
+            "find /dst -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a /src/. /dst/")
+
+
 def restore_pg(cname: str, db: str, user: str, dump: Path) -> None:
+    """Load a pg_dump into the CNPG cluster: recreate the database owned by
+    the app's role, create the dump's extensions as superuser (an app role
+    may not), then restore everything else as the app's role
+    (pg_restore -L with the EXTENSION entries left out)."""
     pod = f"{cname}-1"  # CNPG names the first instance <cluster>-1
     kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"cluster/{cname}", "--timeout=300s")
-    print(f"+ pg_restore into {pod} ({db}, owned by {user})", flush=True)
-    with dump.open("rb") as f:
-        subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec", "-i",
-                        pod, "-c", "postgres", "--", "pg_restore", "--clean", "--if-exists", "--no-owner",
-                        f"--role={user}", "-d", db], stdin=f, check=False)
+    ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec", "-i", pod, "-c", "postgres", "--"]
+    toc = subprocess.run(ctx + ["sh", "-c", "cat > /controller/restore.dump && pg_restore -l /controller/restore.dump"],
+                         stdin=dump.open("rb"), capture_output=True, check=True).stdout.decode()
+    exts = sorted({ln.split()[-2] for ln in toc.splitlines() if " EXTENSION - " in ln and not ln.startswith(";")})
+    keep = "\n".join(ln for ln in toc.splitlines() if " EXTENSION - " not in ln and " COMMENT - EXTENSION " not in ln)
+    sql = (f'DROP DATABASE IF EXISTS "{db}" WITH (FORCE);\nCREATE DATABASE "{db}" OWNER "{user}";\n')
+    subprocess.run(ctx + ["psql", "-v", "ON_ERROR_STOP=1", "-d", "postgres"], input=sql.encode(), check=True)
+    if exts:
+        subprocess.run(ctx + ["psql", "-v", "ON_ERROR_STOP=1", "-d", db], check=True,
+                       input="".join(f'CREATE EXTENSION IF NOT EXISTS "{e}" CASCADE;\n' for e in exts).encode())
+    print(f"+ pg_restore into {pod} ({db}, owned by {user}; extensions: {', '.join(exts) or 'none'})", flush=True)
+    subprocess.run(ctx + ["sh", "-c", f"cat > /controller/restore.list && pg_restore --no-owner --role={user} "
+                                      f"-L /controller/restore.list -d {db} /controller/restore.dump; "
+                                      "rc=$?; rm -f /controller/restore.dump /controller/restore.list; exit $rc"],
+                   input=keep.encode(), check=False)
+
+
+def import_mariadb(svc: str, owner: tuple, vol: str, vol_tar: Path, mdb: dict) -> None:
+    """Own MariaDB volume -> mariadb-dump -> the operator's MariaDB: from a
+    throwaway container of the Compose image on the unpacked snapshot, or
+    (--live-db) from the running Compose container."""
+    n, s = owner
+    cname = s.get("container_name") or n
+    env = load_env(REPO / "services" / svc / ".env")
+    root_pw = env.get(mdb["spec"]["rootPasswordSecretKeyRef"]["key"], "")
+    db = mdb["spec"]["database"]
+    with tempfile.TemporaryDirectory(prefix=f"k8s-import-{svc}-") as tmp:
+        dump = Path(tmp) / "db.sql"
+        src = cname
+        if not LIVE_DB:
+            data = Path(tmp) / "data"
+            data.mkdir()
+            run(["tar", "xzf", str(vol_tar), "-C", str(data), "--no-same-owner"])
+            src = f"k8s-import-{svc}"
+            mount = next(m["target"] for m in s["volumes"] if str(m.get("source")) == vol)
+            run(["docker", "run", "-d", "--rm", "--name", src, "--network", "none", "--user", f"{os.getuid()}:{os.getgid()}",
+                 "-v", f"{data}:{mount}", s["image"]])
+        try:
+            for _ in range(60):
+                if subprocess.run(["docker", "exec", "-e", f"MYSQL_PWD={root_pw}", src, "mariadb-admin", "-uroot", "ping"],
+                                  capture_output=True).returncode == 0:
+                    break
+                time.sleep(2)
+            else:
+                sys.exit(f"{svc}: MariaDB source {src} didn't answer")
+            print(f"+ mariadb-dump {db} from {src}" + (" (running Compose container, read-only)" if LIVE_DB else ""), flush=True)
+            with dump.open("wb") as f:
+                subprocess.run(["docker", "exec", "-e", f"MYSQL_PWD={root_pw}", src, "mariadb-dump", "-uroot",
+                                "--single-transaction", "--routines", "--triggers", db], stdout=f, check=True)
+        finally:
+            if not LIVE_DB:
+                subprocess.run(["docker", "stop", src], capture_output=True)
+        kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"mariadb/{cname}", "--timeout=300s")
+        print(f"+ load into {cname}-0 ({db})", flush=True)
+        with dump.open("rb") as f:
+            subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec", "-i",
+                            f"{cname}-0", "--", "sh", "-c", f'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" {db}'],
+                           stdin=f, check=True)
 
 
 def import_volume(svc: str, vol_tar: Path) -> None:
@@ -272,13 +386,13 @@ def import_volume(svc: str, vol_tar: Path) -> None:
     vol = vol_tar.name[len(svc) + 1:].rsplit("_", 1)[0].removeprefix(f"{svc}_")
     owner = next(((n, s) for n, s in compose["services"].items()
                   if any(str(m.get("source")) == vol for m in s.get("volumes") or [])), None)
-    if owner and own_postgres(svc, owner[0], owner[1], {}):
+    if owner and own_postgres(svc, owner[0], owner[1], load_overrides(svc)):
         n, s = owner
         cname = s.get("container_name") or n
         env = load_env(REPO / "services" / svc / ".env")
-        user_key, _ = own_db_keys(svc)
-        db = env.get("POSTGRES_DB", "")
-        user = env.get(user_key, "")
+        own = own_db_keys(svc)
+        db = own["db"]
+        user = env.get(own["user_key"], own["user"]) if own["user_key"] else own["user"]
         with tempfile.TemporaryDirectory(prefix=f"k8s-import-{svc}-") as tmp:
             dump = Path(tmp) / "db.dump"
             if LIVE_DB:
@@ -311,10 +425,10 @@ def import_volume(svc: str, vol_tar: Path) -> None:
                 subprocess.run(["docker", "stop", name], capture_output=True)
             restore_pg(cname, db, user, dump)
         return
-    dest = pvc_host_path(f"{svc}-{slug(vol)}")
-    for child in dest.iterdir():
-        run(["rm", "-rf", str(child)])
-    run(["tar", "xzf", str(vol_tar), "-C", str(dest), "--no-same-owner", "--no-overwrite-dir"])
+    if owner and (mdb := own_mariadb(svc, owner[0], owner[1], {})):
+        import_mariadb(svc, owner, vol, vol_tar, mdb)
+        return
+    unpack(vol_tar, pvc_host_path(f"{svc}-{slug(vol)}"))
 
 
 def cmd_status(_a) -> None:

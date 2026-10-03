@@ -1,0 +1,4 @@
+containers:
+  forgejo-runner:
+    skip: true
+    reason: "CI runner: needs a Docker engine for jobs. Forgejo's own Kubernetes example (code.forgejo.org/forgejo/runner, examples/kubernetes) runs it with a Docker-in-Docker sidecar; ported separately. Forgejo itself works without it."

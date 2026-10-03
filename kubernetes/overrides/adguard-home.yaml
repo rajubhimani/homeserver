@@ -1,0 +1,4 @@
+containers:
+  adguard-watchdog:
+    skip: true
+    reason: "Restarts AdGuard through the Docker socket when it stops answering; on Kubernetes the liveness probe does that."

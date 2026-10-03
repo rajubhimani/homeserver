@@ -1,0 +1,23 @@
+containers:
+  immich-db:
+    # Immich's own Kubernetes recommendation (immich-charts local/cloudnative-pg.yaml):
+    # CloudNativePG's standard image + VectorChord as an image-volume extension,
+    # pinned to the VectorChord release Compose runs (vectorchord0.5.3).
+    # pgvector ships in CNPG's standard image.
+    cnpg:
+      shared_preload_libraries: [vchord.so]
+      extensions:
+        - name: vchord
+          image: {reference: "ghcr.io/tensorchord/vchord-scratch:pg18-v0.5.3"}
+          dynamic_library_path: [/usr/lib/postgresql/18/lib]
+          extension_control_path: [/usr/share/postgresql/18/]
+      database_extensions: [vector, vchord, earthdistance, cube]
+  immich-server:
+    mounts:
+      # Photos: a copy of UPLOAD_LOCATION (Immich writes thumbnails and
+      # encoded video into it), on the HDD class.
+      /usr/src/app/upload: {volume: upload, size: 400Gi, class: bulk, copy_from: UPLOAD_LOCATION}
+  immich-redis:
+    ports: [6379]   # valkey's default port; Compose never publishes it
+storage:
+  immich-db: {size: 10Gi}

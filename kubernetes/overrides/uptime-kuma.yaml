@@ -1,0 +1,6 @@
+containers:
+  uptime-kuma:
+    mounts:
+      /var/run/docker.sock:
+        skip: true
+        reason: "Only for Uptime Kuma's 'Docker container' monitor type, which reads Docker's API. Kubernetes has none; HTTP/TCP monitors work unchanged."

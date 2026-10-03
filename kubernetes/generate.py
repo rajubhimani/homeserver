@@ -174,6 +174,21 @@ def nginx_redirects() -> list[tuple[str, str, int]]:
 VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
 
 
+def image_ref(svc: str, image: str, where: str) -> str:
+    """Images can't use $(VAR) (Kubernetes expands it only in command, args
+    and env), so a version kept in .env (twelve-factor) is pinned here from
+    .env.example; tests check the real .env agrees."""
+    ex = {**load_env(REPO / ".env.example"), **load_env(SERVICES_DIR / svc / ".env.example")}
+
+    def sub(m: re.Match) -> str:
+        if m.group(1) in ex:
+            return ex[m.group(1)]
+        if m.group(2) is not None:
+            return m.group(2)
+        raise GenError(f"{where}: image variable ${{{m.group(1)}}} isn't in .env.example")
+    return VAR.sub(sub, image.replace("$$", "$"))
+
+
 def k8s_value(text: str, env_keys: set[str], where: str) -> str:
     """Compose ${VAR} / ${VAR:-default} -> Kubernetes $(VAR) (resolved from the
     service's Secret or the root ConfigMap at runtime). A variable that comes
@@ -329,6 +344,21 @@ def data_volume(svc: str, kind: str, key: str, mo: dict, ov: dict, pvcs: dict) -
     return f"v-{slug(pvc)}"[:63], pvc, sub
 
 
+def compose_ports(s: dict) -> tuple[set[int], set[int]]:
+    """(tcp, udp) container ports. Long-syntax entries are dicts; ports that
+    hold a ${VAR} stay short strings under --no-interpolate
+    ("${IP}:53:53/udp"), so the container port is the last field."""
+    tcp, udp = set(), set()
+    for p in s.get("ports") or []:
+        if isinstance(p, dict):
+            target, proto = int(p["target"]), p.get("protocol", "tcp")
+        else:
+            spec, _, proto = str(p).partition("/")
+            target, proto = int(spec.rsplit(":", 1)[-1]), proto or "tcp"
+        (udp if proto == "udp" else tcp).add(target)
+    return tcp, udp
+
+
 def wait_container(target: str, port: int) -> dict:
     return {
         "name": f"wait-{target}"[:63],
@@ -352,21 +382,43 @@ def convert(svc: str) -> dict[str, list[dict]]:
 
     # Ports each container listens on (for Services and depends_on waits).
     listen: dict[str, list[int]] = {}
+    udp: dict[str, set[int]] = {}
     for n, s in services.items():
-        ports = sorted({int(p["target"]) for p in (s.get("ports") or [])} | {int(x) for x in (s.get("expose") or [])})
+        tcp_ports, udp[n] = compose_ports(s)
+        ports = sorted(tcp_ports | {int(x) for x in (s.get("expose") or [])})
         ports += [int(p) for p in (ov_c.get(cname[n], {}).get("ports") or []) if int(p) not in ports]
         ports += [p for _, p in routes.get(cname[n], []) if p not in ports]
         listen[n] = sorted(set(ports))
 
     oneshots = {n for n, s in services.items() if str(s.get("restart", "")).strip('"') in ("no", "on-failure")}
 
-    # A CORE app's own Postgres -> its own CloudNativePG cluster (same name).
+    # A CORE app's own Postgres / MariaDB -> its own operator-run database
+    # (CloudNativePG / mariadb-operator), under the container's name.
     own_db = {}
     for n, s in services.items():
-        if not (ov_c.get(cname[n]) or {}).get("skip") and (cl := own_postgres(svc, n, s, ov)):
-            own_db[n] = cl
+        if (ov_c.get(cname[n]) or {}).get("skip"):
+            continue
+        if cl := own_postgres(svc, n, s, ov):
             listen[n] = [5432]
-            files.setdefault("database.yaml", []).append(cl)
+            dbx = ((ov_c.get(cname[n]) or {}).get("cnpg") or {}).get("database_extensions")
+            if dbx:
+                spec = pg_owner(svc, s)
+                files.setdefault("database.yaml", []).append({
+                    "apiVersion": "postgresql.cnpg.io/v1", "kind": "Database",
+                    "metadata": {"name": f"{cname[n]}-{slug(spec['db'])}", "labels": labels_svc},
+                    "spec": {"name": spec["db"], "owner": spec["user"], "cluster": {"name": cname[n]},
+                             "databaseReclaimPolicy": "retain",
+                             "extensions": [{"name": e, "ensure": "present"} for e in dbx]}})
+        elif cl := own_mariadb(svc, n, s, ov):
+            listen[n] = [3306]
+        else:
+            continue
+        if n != cname[n] and cl["kind"] == "Cluster":
+            # The Compose service name too (Docker's DNS answers to both).
+            cl["spec"]["managed"]["services"]["additional"].append(
+                {"selectorType": "rw", "serviceTemplate": {"metadata": {"name": n, "labels": labels_svc}}})
+        own_db[n] = cl
+        files.setdefault("database.yaml", []).append(cl)
 
     for n, s in services.items():
         c = cname[n]
@@ -380,7 +432,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
         if n in own_db:
             continue  # rendered as a CNPG Cluster above
         where = f"{svc}/{c}"
-        container: dict = {"name": c, "image": k8s_value(s["image"], env_keys, where)}
+        container: dict = {"name": c, "image": image_ref(svc, s["image"], where)}
         if s.get("entrypoint"):
             ep = s["entrypoint"]
             container["command"] = [k8s_value(a, env_keys, where) for a in (shlex.split(ep) if isinstance(ep, str) else ep)]
@@ -396,8 +448,9 @@ def convert(svc: str) -> dict[str, list[dict]]:
             env[k] = v
         if env:
             container["env"] = env_list(env, env_keys, f"{svc}-env", bool(s.get("env_file")), where)
-        if listen[n]:
-            container["ports"] = [{"containerPort": p} for p in listen[n]]
+        if listen[n] or udp.get(n):
+            container["ports"] = [{"containerPort": p} for p in listen[n]] + \
+                [{"containerPort": p, "protocol": "UDP"} for p in sorted(udp.get(n) or [])]
         container.update(probe_set(s.get("healthcheck"), env_keys, where))
         container.update(co.get("probes") or {})
         lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
@@ -457,14 +510,24 @@ def convert(svc: str) -> dict[str, list[dict]]:
                     pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
                 mounts.append({"name": vname, "mountPath": tgt, **({"subPath": sub} if sub else {}),
                                **({"readOnly": True} if ro else {})})
+            elif mo.get("volume"):
+                # A host folder Compose keeps outside DATA_ROOT (cache, uploads,
+                # metadata): its own PVC here; cluster.py import can copy the
+                # folder in (copy_from: the .env key).
+                pvc = f"{svc}-{slug(mo['volume'])}"
+                pvcs.setdefault(pvc, {"size": mo.get("size") or "1Gi", "class": mo.get("class") or "fast"})
+                vname = f"v-{slug(pvc)}"[:63]
+                if not any(v["name"] == vname for v in pod_vols):
+                    pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
+                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
             else:
                 hp = mo.get("hostPath")
                 if not hp:
                     raise GenError(f"{where}: host path {key} -> {tgt}; add overrides/{svc}.yaml "
                                    f"containers.{c}.mounts.{tgt}: {{hostPath: <path on the node>}} or skip it")
                 vname = f"h-{slug(tgt)}"[:63]
-                pod_vols.append({"name": vname, "hostPath": {"path": hp}})
-                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
+                pod_vols.append({"name": vname, "hostPath": {"path": hp, "type": "Directory"}})
+                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro or mo.get("readOnly") else {})})
         if s.get("devices") and co.get("devices") == "skip" and not co.get("devices_reason"):
             raise GenError(f"{where}: devices: skip needs devices_reason")
         for dev in ([] if co.get("devices") == "skip" else s.get("devices") or []):
@@ -500,7 +563,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 continue
             if dep in oneshots:
                 ds = services[dep]
-                ic = {"name": cname[dep], "image": k8s_value(ds["image"], env_keys, where)}
+                ic = {"name": cname[dep], "image": image_ref(svc, ds["image"], where)}
                 if ds.get("entrypoint"):
                     ep = ds["entrypoint"]
                     ic["command"] = [k8s_value(a, env_keys, where) for a in (shlex.split(ep) if isinstance(ep, str) else ep)]
@@ -559,12 +622,17 @@ def convert(svc: str) -> dict[str, list[dict]]:
             obj["spec"] = spec
         files.setdefault("workloads.yaml", []).append(obj)
 
-        if listen[n] and kind != "Job" and not pod.get("hostNetwork"):
+        for sname in ([c] + ([n] if n != c and re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", n) else [])) \
+                if (listen[n] or udp.get(n)) and kind != "Job" and not pod.get("hostNetwork") else []:
+            # Docker's DNS answers to the container name and the Compose
+            # service name; some .env values use the latter (Immich's DB_URL).
             files.setdefault("services.yaml", []).append({
                 "apiVersion": "v1", "kind": "Service",
-                "metadata": {"name": c, "labels": labels_svc},
+                "metadata": {"name": sname, "labels": labels_svc},
                 "spec": {"selector": {"app.kubernetes.io/name": c},
-                         "ports": [{"name": f"p{p}", "port": p, "targetPort": p} for p in listen[n]]}})
+                         "ports": [{"name": f"p{p}", "port": p, "targetPort": p} for p in listen[n]] +
+                                  [{"name": f"p{p}-udp", "port": p, "targetPort": p, "protocol": "UDP"}
+                                   for p in sorted(udp.get(n) or [])]}})
 
     for name, spec in sorted(pvcs.items()):
         files.setdefault("storage.yaml", []).append({
@@ -700,13 +768,23 @@ def compose_limit(svc: str) -> str | None:
     return mem(lim["memory"]) if lim.get("memory") else None
 
 
+# Settings CloudNativePG manages itself and refuses in `parameters`
+# (cloudnative-pg.io/docs/1.30/postgresql_conf, "Fixed parameters").
+CNPG_FIXED = {"config_file", "hba_file", "ident_file", "data_directory", "listen_addresses", "port",
+              "unix_socket_directories", "unix_socket_group", "unix_socket_permissions", "log_destination",
+              "log_directory", "log_filename", "logging_collector", "ssl", "ssl_cert_file", "ssl_key_file",
+              "ssl_ca_file", "archive_command", "archive_mode", "restore_command", "recovery_target",
+              "primary_conninfo", "hot_standby", "wal_level", "shared_preload_libraries"}
+
+
 def pg_params(args: list[str]) -> dict[str, str]:
     """postgres -c k=v flags from a Compose command -> CNPG parameters."""
     params = {}
     for i, a in enumerate(args):
         if a == "-c" and i + 1 < len(args) and "=" in args[i + 1]:
             k, v = args[i + 1].split("=", 1)
-            params[k] = v
+            if k not in CNPG_FIXED:
+                params[k] = v
     return dict(sorted(params.items()))
 
 
@@ -716,6 +794,7 @@ def cnpg_cluster(name: str, svc: str, params: dict, limit: str | None, size: str
     labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
     extra = dict(extra)
     hba = extra.pop("pg_hba", None)
+    pg_extra = extra.pop("postgresql_extra", {})
     return {
         "apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
         "metadata": {"name": name, "labels": labels},
@@ -723,7 +802,7 @@ def cnpg_cluster(name: str, svc: str, params: dict, limit: str | None, size: str
             "instances": 1,
             "imageName": VERSIONS["CNPG_POSTGRES_IMAGE"],
             **extra,
-            "postgresql": {"parameters": params, **({"pg_hba": hba} if hba else {})},
+            "postgresql": {"parameters": params, **({"pg_hba": hba} if hba else {}), **pg_extra},
             "storage": {"size": size, "storageClass": "fast"},
             **({"resources": {"limits": {"memory": limit}}} if limit else {}),
             "inheritedMetadata": {"labels": labels},
@@ -739,32 +818,116 @@ def own_postgres(svc: str, n: str, s: dict, ov: dict) -> dict | None:
     (POSTGRES_DB/POSTGRES_USER), password from Secret <svc>-db-owner."""
     c = s.get("container_name") or n
     ex = load_env(SERVICES_DIR / svc / ".env.example")
-    if not re.match(r"(docker\.io/(library/)?)?postgres:", s["image"]) or ex.get("DB_HOST") != c:
+    co = ((ov.get("containers") or {}).get(c) or {}).get("cnpg")
+    if not co and (ex.get("DB_HOST") != c or not re.match(r"(docker\.io/(library/)?)?postgres:", s["image"])):
         return None
-    env = s.get("environment") or {}
-    key = lambda k: (re.fullmatch(r"\$\{(\w+)\}", str(env.get(k, ""))) or [None, k])[1]  # noqa: E731
-    db, user = ex.get(key("POSTGRES_DB")), ex.get(key("POSTGRES_USER"))
-    if not db or not user:
-        raise GenError(f"{svc}/{c}: can't resolve POSTGRES_DB/POSTGRES_USER from .env.example")
+    spec = pg_owner(svc, s)
     cm = s.get("command") or []
     lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
     size = ((ov.get("storage") or {}).get(c) or {}).get("size", "5Gi")
-    # The app's role owns its database but isn't a superuser (unlike the
-    # Compose container, where POSTGRES_USER is): the same split managed
-    # Postgres (RDS, Cloud SQL, Azure) has.
+    extra: dict = {}
+    if spec["superuser"]:
+        # The app logs in as `postgres` (no POSTGRES_USER in Compose, e.g.
+        # Plausible, which creates its own database): CNPG's superuser, with
+        # the password from the app's .env.
+        extra |= {"enableSuperuserAccess": True, "superuserSecret": {"name": f"{svc}-db-superuser"},
+                  "bootstrap": {"initdb": {"database": spec["db"], "owner": spec["db"]}}}
+    else:
+        # The app's role owns its database but isn't a superuser (unlike the
+        # Compose container, where POSTGRES_USER is): the same split managed
+        # Postgres (RDS, Cloud SQL, Azure) has.
+        extra["bootstrap"] = {"initdb": {"database": spec["db"], "owner": spec["user"],
+                                         "secret": {"name": f"{svc}-db-owner"}}}
+    if s.get("shm_size"):
+        extra["ephemeralVolumesSizeLimit"] = {"shm": mem(s["shm_size"])}
+    if co and co.get("extensions"):
+        # Extensions as image volumes (CNPG 1.27+), as Immich's own example does.
+        extra["postgresql_extra"] = {"shared_preload_libraries": co.get("shared_preload_libraries") or [],
+                                     "extensions": co["extensions"]}
     return cnpg_cluster(c, svc, pg_params(shlex.split(cm) if isinstance(cm, str) else list(cm)),
-                        mem(lim["memory"]) if lim.get("memory") else None, size,
-                        {"bootstrap": {"initdb": {"database": db, "owner": user, "secret": {"name": f"{svc}-db-owner"}}}})
+                        mem(lim["memory"]) if lim.get("memory") else None, size, extra)
 
 
-def own_db_keys(svc: str) -> tuple[str, str] | None:
-    """(user key, password key) in the service's .env for its own CNPG
-    database owner, or None: what cluster.py turns into <svc>-db-owner."""
+def pg_owner(svc: str, s: dict) -> dict:
+    """{db, user, user_key, password_key, superuser} for an own Postgres from
+    the Compose environment it gets (POSTGRES_DB/USER/PASSWORD, as ${KEY} or
+    literal), the same values the app connects with."""
+    ex = load_env(SERVICES_DIR / svc / ".env.example")
+    env = s.get("environment") or {}
+
+    def val(name: str) -> tuple[str | None, str | None]:
+        raw = env.get(name)
+        if raw is None:
+            return (None, ex.get(name)) if name in ex else (None, None)
+        m = re.fullmatch(r"\$\{(\w+)\}", str(raw))
+        return (m.group(1), ex.get(m.group(1))) if m else (None, str(raw))
+    db_key, db = val("POSTGRES_DB")
+    user_key, user = val("POSTGRES_USER")
+    pw_key, _ = val("POSTGRES_PASSWORD")
+    superuser = user in (None, "postgres")
+    db = db or user or "postgres"
+    if not db or not pw_key:
+        raise GenError(f"{svc}: can't resolve the own Postgres database/password from Compose + .env.example")
+    return {"db": db, "user": user or "postgres", "user_key": user_key, "password_key": pw_key, "superuser": superuser}
+
+
+def env_ref(s: dict, *names: str) -> str | None:
+    """The .env key a Compose environment entry reads (`X: ${KEY}`), for the
+    first of names that's set; a name with no environment entry is the key."""
+    env = s.get("environment") or {}
+    for name in names:
+        if name in env:
+            m = re.fullmatch(r"\$\{(\w+)\}", str(env[name]))
+            return m.group(1) if m else None
+    return None
+
+
+def own_mariadb(svc: str, n: str, s: dict, ov: dict) -> dict | None:
+    """A CORE app's own `mariadb:` container (named by its DB_HOST) -> a
+    mariadb-operator MariaDB with the same image, my.cnf flags, database and
+    user; passwords from the app's <svc>-env Secret keys Compose reads.
+    The operator's Service carries the CR name, so DB_HOST is unchanged."""
+    c = s.get("container_name") or n
+    ex = load_env(SERVICES_DIR / svc / ".env.example")
+    if not re.match(r"(docker\.io/(library/)?)?mariadb:", s["image"]) or ex.get("DB_HOST") != c:
+        return None
+    root_k = env_ref(s, "MARIADB_ROOT_PASSWORD", "MYSQL_ROOT_PASSWORD")
+    db_k, user_k = env_ref(s, "MARIADB_DATABASE", "MYSQL_DATABASE"), env_ref(s, "MARIADB_USER", "MYSQL_USER")
+    pw_k = env_ref(s, "MARIADB_PASSWORD", "MYSQL_PASSWORD")
+    if not all((root_k, db_k, user_k, pw_k)) or not ex.get(db_k) or not ex.get(user_k):
+        raise GenError(f"{svc}/{c}: can't resolve the MariaDB root/database/user/password keys")
+    cm = s.get("command") or []
+    args = shlex.split(cm) if isinstance(cm, str) else list(cm)
+    lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    sec = f"{svc}-env"
+    return {
+        "apiVersion": "k8s.mariadb.com/v1alpha1", "kind": "MariaDB",
+        "metadata": {"name": c, "labels": labels},
+        "spec": {
+            "image": s["image"],
+            "rootPasswordSecretKeyRef": {"name": sec, "key": root_k},
+            "database": ex[db_k], "username": ex[user_k],
+            "passwordSecretKeyRef": {"name": sec, "key": pw_k},
+            **({"myCnf": "\n".join(["[mariadb]"] + [a[2:] for a in args if a.startswith("--")]) + "\n"}
+               if any(a.startswith("--") for a in args) else {}),
+            "storage": {"size": ((ov.get("storage") or {}).get(c) or {}).get("size", "5Gi"), "storageClassName": "fast"},
+            **({"resources": {"limits": {"memory": mem(lim["memory"])}}} if lim.get("memory") else {}),
+            "inheritMetadata": {"labels": labels},
+        },
+    }
+
+
+def own_db_keys(svc: str) -> dict | None:
+    """What cluster.py turns into the own Postgres login Secret: pg_owner()
+    plus the Secret name (<svc>-db-owner, or <svc>-db-superuser for apps
+    that log in as postgres), or None."""
+    ov = load_overrides(svc)
     for n, s in (load_compose(svc).get("services") or {}).items():
-        if own_postgres(svc, n, s, {}):
-            env = s.get("environment") or {}
-            key = lambda k: (re.fullmatch(r"\$\{(\w+)\}", str(env.get(k, ""))) or [None, k])[1]  # noqa: E731
-            return key("POSTGRES_USER"), key("POSTGRES_PASSWORD")
+        if own_postgres(svc, n, s, ov):
+            spec = pg_owner(svc, s)
+            return {**spec, "secret": f"{svc}-db-{'superuser' if spec['superuser'] else 'owner'}",
+                    "container": s.get("container_name") or n}
     return None
 
 

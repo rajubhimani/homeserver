@@ -24,6 +24,25 @@ ported:
   # only its self-served sites (Browser Hub) run (overrides/nginx-plain.yaml)
   - nginx-plain
 
+  # Phase 3 — the rest of CORE
+  - ntfy
+  - uptime-kuma
+  - adguard-home
+  - vaultwarden
+  - firefly
+  - immich
+  - clamav
+  - nextcloud
+  - onlyoffice
+  - whiteboard
+  - jellyfin
+  - forgejo
+  - atuin
+  - guacamole
+  - it-tools
+  - mailpit
+  - plausible
+
 # Rendered only for the prod environment. The test cluster must never run
 # the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
 # split live traffic between Docker and the test cluster.
@@ -32,4 +51,5 @@ prod_only:
 
 # Not run on Kubernetes, each with the replacement.
 skipped:
+  wg-easy: "Stays on Docker until the real cutover: it holds UDP 51820 on the host and is the VPN (10.8.0.1) other machines use to reach this one; a second copy can't share the port."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."

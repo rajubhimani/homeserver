@@ -1,0 +1,10 @@
+containers:
+  jellyfin:
+    mounts:
+      # The real library, read-only (Compose mounts it :ro too). cluster.py
+      # create mounts MEDIA_ROOT from services/jellyfin/.env at this node path.
+      /media: {hostPath: /var/k8s/host/jellyfin-media, env: MEDIA_ROOT, readOnly: true}
+      # Jellyfin writes metadata: a copy of METADATA_ROOT.
+      /config/metadata: {volume: metadata, size: 10Gi, copy_from: METADATA_ROOT}
+storage:
+  data: {size: 5Gi}
