@@ -43,7 +43,7 @@ services:
 
   dagster-webserver:
     build: ./webserver-daemon
-    image: homeserver/dagster:1.13.25
+    image: homeserver/dagster:1.13.25-dbhost
     container_name: dagster-webserver
     restart: unless-stopped
     init: true
@@ -80,7 +80,7 @@ services:
   # submitted to QueuedRunCoordinator.
   dagster-daemon:
     build: ./webserver-daemon
-    image: homeserver/dagster:1.13.25
+    image: homeserver/dagster:1.13.25-dbhost
     container_name: dagster-daemon
     restart: unless-stopped
     init: true

@@ -63,7 +63,7 @@ services:
     command: ./bin/docker-entrypoint-migrator.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       SECRET_KEY: ${SECRET_KEY}
     depends_on:
@@ -81,7 +81,7 @@ services:
     command: ./bin/docker-entrypoint-api.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       RABBITMQ_HOST: plane-mq
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
@@ -119,7 +119,7 @@ services:
     command: ./bin/docker-entrypoint-worker.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       RABBITMQ_HOST: plane-mq
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
@@ -142,7 +142,7 @@ services:
     command: ./bin/docker-entrypoint-beat.sh
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
       REDIS_URL: redis://plane-redis:6379/
       RABBITMQ_HOST: plane-mq
       SECRET_KEY: ${SECRET_KEY}

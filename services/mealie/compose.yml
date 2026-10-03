@@ -9,7 +9,7 @@ services:
     env_file: .env
     environment:
       DB_ENGINE: postgres
-      POSTGRES_SERVER: shared-postgres
+      POSTGRES_SERVER: ${DB_HOST}
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

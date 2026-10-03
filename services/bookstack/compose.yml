@@ -12,7 +12,7 @@ services:
       PGID: 1000
       APP_URL: https://bookstack.${DOMAIN}
       APP_KEY: ${APP_KEY}
-      DB_HOST: shared-mariadb
+      DB_HOST: ${DB_HOST}
       DB_PORT: 3306
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}

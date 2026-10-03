@@ -26,10 +26,10 @@ services:
       - |
         set -eu
         for db in ${POSTGRES_DB} temporal_visibility; do
-          temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db "$$db" setup-schema -v 0.0
+          temporal-sql-tool --plugin postgres12 --ep ${DB_HOST} -u ${POSTGRES_USER} -p ${DB_PORT} --db "$$db" setup-schema -v 0.0
         done
-        temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db ${POSTGRES_DB} update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
-        temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+        temporal-sql-tool --plugin postgres12 --ep ${DB_HOST} -u ${POSTGRES_USER} -p ${DB_PORT} --db ${POSTGRES_DB} update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
+        temporal-sql-tool --plugin postgres12 --ep ${DB_HOST} -u ${POSTGRES_USER} -p ${DB_PORT} --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
     networks:
       - homeserver
 
@@ -51,7 +51,7 @@ services:
       DB_PORT: "5432"
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PWD: ${POSTGRES_PASSWORD}
-      POSTGRES_SEEDS: shared-postgres
+      POSTGRES_SEEDS: ${DB_HOST}
       # Explicit, not left to temporalio/server's built-in defaults ("temporal"/
       # "temporal_visibility" in its embedded config template): must name the
       # same two databases homeserver.py provisions on shared-postgres

@@ -32,7 +32,7 @@ services:
       - no-new-privileges:true
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}?connect_timeout=300
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}?connect_timeout=300
       REDIS_HOST: ghostfolio-redis
       REDIS_PORT: 6379
       ROOT_URL: https://ghostfolio.${DOMAIN}

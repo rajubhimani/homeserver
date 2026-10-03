@@ -27,6 +27,9 @@ run_launcher:
       - DAGSTER_POSTGRES_USER
       - DAGSTER_POSTGRES_PASSWORD
       - DAGSTER_POSTGRES_DB
+      # Run containers resolve the storage hostname/port from these too.
+      - DB_HOST
+      - DB_PORT
     network: homeserver
     container_kwargs:
       mem_limit: "512m"
@@ -56,39 +59,45 @@ run_storage:
   class: PostgresRunStorage
   config:
     postgres_db:
-      hostname: shared-postgres
+      hostname:
+        env: DB_HOST
       username:
         env: DAGSTER_POSTGRES_USER
       password:
         env: DAGSTER_POSTGRES_PASSWORD
       db_name:
         env: DAGSTER_POSTGRES_DB
-      port: 5432
+      port:
+        env: DB_PORT
 
 schedule_storage:
   module: dagster_postgres.schedule_storage
   class: PostgresScheduleStorage
   config:
     postgres_db:
-      hostname: shared-postgres
+      hostname:
+        env: DB_HOST
       username:
         env: DAGSTER_POSTGRES_USER
       password:
         env: DAGSTER_POSTGRES_PASSWORD
       db_name:
         env: DAGSTER_POSTGRES_DB
-      port: 5432
+      port:
+        env: DB_PORT
 
 event_log_storage:
   module: dagster_postgres.event_log
   class: PostgresEventLogStorage
   config:
     postgres_db:
-      hostname: shared-postgres
+      hostname:
+        env: DB_HOST
       username:
         env: DAGSTER_POSTGRES_USER
       password:
         env: DAGSTER_POSTGRES_PASSWORD
       db_name:
         env: DAGSTER_POSTGRES_DB
-      port: 5432
+      port:
+        env: DB_PORT

@@ -9,7 +9,7 @@ services:
     env_file: .env
     environment:
       SYMFONY__ENV__DATABASE_DRIVER: pdo_pgsql
-      SYMFONY__ENV__DATABASE_HOST: shared-postgres
+      SYMFONY__ENV__DATABASE_HOST: ${DB_HOST}
       SYMFONY__ENV__DATABASE_PORT: 5432
       SYMFONY__ENV__DATABASE_NAME: ${POSTGRES_DB}
       SYMFONY__ENV__DATABASE_USER: ${POSTGRES_USER}

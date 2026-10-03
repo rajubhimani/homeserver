@@ -1278,13 +1278,29 @@ SHARED_DB_SERVICES = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"
 _SERVICES_BY_SLUG = {s["slug"]: s for s in _SERVICES_DATA["services"]}
 
 
+def shared_db_external(service: str) -> str | None:
+    """The outside database host a "shared_db" app is pointed at, or None.
+    Every shared_db app reads its database host from DB_HOST in its own .env
+    (default: the shared server's container name). Any other value, e.g. an
+    RDS / Azure / Cloud SQL endpoint, means the database lives outside this
+    stack. See docs/10-new-services.md "Managed-cloud parity"."""
+    spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_db")
+    if not spec:
+        return None
+    host = load_env_file(SERVICES_DIR / service / ".env").get("DB_HOST", "").strip()
+    return host if host and host != SHARED_DB_SERVICES[spec["engine"]] else None
+
+
 def shared_db_creds(service: str) -> dict | None:
     """Resolve a service's "shared_db" spec into concrete values. Spec values
     are key names in services/<service>/.env, or '=literal' for values the
     app hard-codes (e.g. penpot's db/user). Returns None if the service
-    doesn't use a shared database."""
+    doesn't use a shared database, and also when its DB_HOST points outside
+    the stack (shared_db_external). Every caller already treats None as "no
+    shared server": nothing is started, provisioned, counted, dumped,
+    restored or dropped for it."""
     spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_db")
-    if not spec:
+    if not spec or shared_db_external(service):
         return None
     env_vals = load_env_file(SERVICES_DIR / service / ".env")
 
@@ -1420,6 +1436,10 @@ def shared_db_ready(service: str, env: str, provision: bool = True) -> bool:
     provision its database. No-op for services without "shared_db". Safe to
     call from anywhere — starting is idempotent; only stopping is
     reference-counted (release_shared_dbs, from main())."""
+    ext = shared_db_external(service)
+    if ext:
+        info(f"{service}: database on outside host {ext} (DB_HOST) — shared server not used")
+        return True
     c = shared_db_creds(service)
     if not c:
         return True
@@ -1750,6 +1770,9 @@ def backup_service(service: str) -> None:
     vols = BACKEND.volumes_for_project(service)
     service_data_dir = SERVICE_DATA_ROOT / service
     has_shared_db = bool(shared_db_creds(service)) and shared_db_exists(service)
+    ext = shared_db_external(service)
+    if ext:
+        warn(f"{service}: database is on outside host {ext} (DB_HOST) — not in this snapshot; use that provider's backups")
 
     if not vols and not service_data_dir.is_dir() and not has_shared_db:
         return  # nothing to back up
@@ -2233,6 +2256,10 @@ def do_reset(service: str, env: str, profile: str | None) -> bool:
         return False
 
     c = shared_db_creds(service)
+    ext = shared_db_external(service)
+    if ext:
+        warn(f"{service}: its database on outside host {ext} (DB_HOST) is NOT wiped or snapshotted by reset —")
+        warn("  reset it on that provider if a truly fresh start is wanted.")
     # The snapshot below needs the shared server up to dump the app's database.
     if c and not shared_db_ready(service, env, provision=False):
         return False
@@ -2308,6 +2335,10 @@ def do_dump(service: str, env: str, profile: str | None) -> bool:
     """Logical pg_dump of <service>-db into service_data/db_dump/<service>/<ts>/
     — the source dump 'migrate' restores from for a Debian->Alpine (or any
     other Postgres image) migration. Requires the DB container running."""
+    ext = shared_db_external(service)
+    if ext:
+        error(f"{service}'s database is on outside host {ext} (DB_HOST) — dump it with that provider's tools (pg_dump/mariadb-dump against {ext})")
+        return False
     c = shared_db_creds(service)
     if c:
         if BACKEND.container_status(c["container"]) != "running":

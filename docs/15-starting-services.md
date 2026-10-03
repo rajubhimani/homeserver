@@ -39,7 +39,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 
 ## What happens automatically during any start
 
-1. **Shared database:** if the service uses one (`"shared_db"` in `services.json`), [shared-postgres](services/shared-postgres.md) or [shared-mariadb](services/shared-mariadb.md) starts first if it isn't already running, and the service's own database and login are created if missing. An existing database is never wiped.
+1. **Shared database:** if the service uses one (`"shared_db"` in `services.json`), [shared-postgres](services/shared-postgres.md) or [shared-mariadb](services/shared-mariadb.md) starts first if it isn't already running, and the service's own database and login are created if missing. An existing database is never wiped. An app whose `DB_HOST` (in its `.env`) points outside the stack, such as a managed database, is skipped: the shared server isn't started or touched for it.
 2. **Auto-restore:** if the service has **no** volumes, **no** `service_data/data/<service>/` folder and **no** database on its shared server, but a snapshot exists, `up` restores the snapshot before starting. `--fresh` skips this.
 3. **WireGuard:** in `prod`, `wg-easy` starts first if its tunnel address isn't up yet, because every service binds a port to `10.8.0.1`.
 4. **Proxy swap:** starting `nginx-plain` stops `nginx` (Nginx Proxy Manager), and vice versa. Only one proxy can hold ports 80/443.
