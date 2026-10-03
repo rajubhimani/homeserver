@@ -21,6 +21,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import string
 import subprocess
 import sys
@@ -332,7 +333,9 @@ def restore_pg(cname: str, db: str, user: str, dump: Path) -> None:
     ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec", "-i", pod, "-c", "postgres", "--"]
     toc = subprocess.run(ctx + ["sh", "-c", "cat > /controller/restore.dump && pg_restore -l /controller/restore.dump"],
                          stdin=dump.open("rb"), capture_output=True, check=True).stdout.decode()
-    exts = sorted({ln.split()[-2] for ln in toc.splitlines() if " EXTENSION - " in ln and not ln.startswith(";")})
+    # TOC lines look like "4185; 3079 16384 EXTENSION - vchord" (+ owner, if any)
+    exts = sorted({m.group(1) for ln in toc.splitlines() if not ln.startswith(";")
+                   for m in [re.search(r" EXTENSION - (\S+)", ln)] if m})
     keep = "\n".join(ln for ln in toc.splitlines() if " EXTENSION - " not in ln and " COMMENT - EXTENSION " not in ln)
     sql = (f'DROP DATABASE IF EXISTS "{db}" WITH (FORCE);\nCREATE DATABASE "{db}" OWNER "{user}";\n')
     subprocess.run(ctx + ["psql", "-v", "ON_ERROR_STOP=1", "-d", "postgres"], input=sql.encode(), check=True)
