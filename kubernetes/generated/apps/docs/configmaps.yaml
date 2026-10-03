@@ -8,9 +8,15 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: docs
 data:
-  services-docs-entrypoint-sh: "#!/bin/sh\nset -e\nsed \\\n  -e \"s/SITE_TITLE_PLACEHOLDER/${SITE_TITLE}/g\" \\\n  -e \"s/DOMAIN_PLACEHOLDER/${DOMAIN}/g\"\
-    \ \\\n  -e \"s/PLAUSIBLE_SCRIPT_PLACEHOLDER/${PLAUSIBLE_SCRIPT}/g\" \\\n  /template/index.html > /usr/share/nginx/html/index.html\n\
-    exec nginx -g 'daemon off;'\n"
+  services-docs-entrypoint-sh: |
+    #!/bin/sh
+    set -e
+    sed \
+      -e "s/SITE_TITLE_PLACEHOLDER/${SITE_TITLE}/g" \
+      -e "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" \
+      -e "s/PLAUSIBLE_SCRIPT_PLACEHOLDER/${PLAUSIBLE_SCRIPT}/g" \
+      /template/index.html > /usr/share/nginx/html/index.html
+    exec nginx -g 'daemon off;'
   services-docs-index-html: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>SITE_TITLE_PLACEHOLDER</title>\n\
     \  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, minimum-scale=1.0\">\n  <meta name=\"robots\"\
     \ content=\"noindex, nofollow\">\n  <link rel=\"stylesheet\" href=\"/vendor/docsify-vue.css\">\n  <link rel=\"stylesheet\"\

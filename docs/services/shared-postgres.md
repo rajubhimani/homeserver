@@ -77,6 +77,10 @@ Setting `DB_HOST` back to `shared-postgres` reverses all of this.
 
 Managed databases often require TLS. Add the app's own SSL option where its connection string has one (`sslmode=require` in Postgres URLs, for example). A few apps set it to `disable` for the local server today.
 
+## On Kubernetes
+
+Generated from this service by `kubernetes/generate.py` as a [CloudNativePG](https://cloudnative-pg.io) `Cluster` named `shared-postgres` (PostgreSQL 18.6, the same `-c` settings and 2Gi limit), plus a Service of the same name so every app's `DB_HOST=shared-postgres` works unchanged. Each `shared_db` app gets a `DatabaseRole` and `Database` (owner = its role, public schema handed to it, `retain` so deleting a manifest never drops data). CloudNativePG doesn't manage privileges, so the `REVOKE ALL … FROM PUBLIC` step becomes generated `pg_hba` rules: an app's login can connect only to its own database(s). The admin login comes from this `.env` (`POSTGRES_USER`/`POSTGRES_PASSWORD`). Commands: [docs/17](../17-docker-to-kubernetes.md) step 4.
+
 ## Healthcheck
 
 `pg_isready -h 127.0.0.1 -U postgres`, over TCP rather than the Unix socket. On a fresh volume, the postgres image's entrypoint first runs a temporary server that listens only on the socket, to run initdb and the init scripts, then stops it and starts the real one. A socket probe reports "ready" during that window, so an app waiting on `service_healthy` starts and gets `connection refused` once the temporary server stops ([postgresql.org BUG #15222](https://postgresql.org/message-id/152778474106.26722.11024944991637906220%40wrigleys.postgresql.org), [healthcheck guide](https://www.ssdnodes.com/learn/docker-compose-postgres-healthcheck)). A TCP probe only answers once the real server listens.

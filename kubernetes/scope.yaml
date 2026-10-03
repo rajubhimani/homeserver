@@ -10,6 +10,13 @@ ported:
   - docs
   - landing
 
+  # Phase 2 — databases: the shared servers (operator-managed) + one pilot
+  # app on each
+  - shared-postgres
+  - shared-mariadb
+  - miniflux
+  - bookstack
+
 # Rendered only for the prod environment. The test cluster must never run
 # the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
 # split live traffic between Docker and the test cluster.

@@ -2,7 +2,7 @@
 """Create and drive the kind test cluster that runs the generated manifests.
 
     uv run kubernetes/cluster.py create            # kind cluster from cluster/kind-config.template.yaml + kubernetes/.env
-    uv run kubernetes/cluster.py install           # Gateway API, namespaces, Traefik, storage classes
+    uv run kubernetes/cluster.py install           # Gateway API, namespaces, Traefik, storage classes, DB operators
     uv run kubernetes/cluster.py secrets [svc...]  # services/<svc>/.env -> Secret <svc>-env; root .env -> ConfigMap
     uv run kubernetes/cluster.py apply   [svc...]  # kubectl apply -k kubernetes/generated/envs/<env>/<svc>
     uv run kubernetes/cluster.py status
@@ -17,6 +17,7 @@ piped to kubectl: never written to disk or git. Guide: docs/17.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import string
@@ -31,7 +32,7 @@ import yaml
 K8S = Path(__file__).resolve().parent
 REPO = K8S.parent
 sys.path.insert(0, str(K8S))
-from generate import load_env, load_scope  # noqa: E402
+from generate import load_env, load_scope, shared_db_apps  # noqa: E402
 
 VERSIONS = load_env(K8S / "versions.env")
 NAMESPACE = "apps"
@@ -83,20 +84,48 @@ def cmd_install(_a) -> None:
     run(["helm", "--kube-context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "upgrade", "--install", "traefik", "traefik",
          "--repo", "https://traefik.github.io/charts", "--version", v["TRAEFIK_CHART_VERSION"],
          "--namespace", "infra", "-f", str(K8S / "cluster/traefik/values.yaml"), "--wait", "--timeout", "5m"])
-    kubectl("apply", "-f", str(K8S / "cluster/traefik/gateway.yaml"))
     # kind's local-path provisioner: allow the fast/bulk folders, then the classes.
     conf = {"nodePathMap": [{"node": "DEFAULT_PATH_FOR_NON_LISTED_NODES",
                              "paths": ["/var/local-path-provisioner", "/var/k8s/fast", "/var/k8s/bulk"]}]}
     kubectl("-n", "local-path-storage", "patch", "configmap", "local-path-config", "--type", "merge",
             "-p", json.dumps({"data": {"config.json": json.dumps(conf, indent=1)}}))
     kubectl("apply", "-f", str(K8S / "cluster/storage.yaml"))
+    # Database operators: CloudNativePG (shared + own Postgres) and
+    # mariadb-operator (shared MariaDB). Both watch every namespace.
+    kubectl("apply", "--server-side", "-f",
+            f"https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v{v['CNPG_VERSION']}/cnpg-{v['CNPG_VERSION']}.yaml")
+    kubectl("-n", "cnpg-system", "rollout", "status", "deployment/cnpg-controller-manager", "--timeout=5m")
+    for chart in ("mariadb-operator-crds", "mariadb-operator"):
+        run(["helm", "--kube-context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "upgrade", "--install", chart, chart,
+             "--repo", "https://helm.mariadb.com/mariadb-operator", "--version", v["MARIADB_OPERATOR_VERSION"],
+             "--namespace", "mariadb-operator", "--create-namespace", "--wait", "--timeout", "5m"])
 
 
-def secret_manifest(name: str, data: dict[str, str]) -> str:
-    return yaml.safe_dump({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+def env_hash(data: dict[str, str]) -> str:
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def secret_manifest(name: str, data: dict[str, str], kind: str = "Opaque", labels: dict | None = None) -> str:
+    return yaml.safe_dump({"apiVersion": "v1", "kind": "Secret", "type": kind,
                            "metadata": {"name": name, "namespace": NAMESPACE,
-                                        "labels": {"app.kubernetes.io/part-of": "homeserver"}},
+                                        "labels": {"app.kubernetes.io/part-of": "homeserver", **(labels or {})},
+                                        "annotations": {"homeserver/env-sha256": env_hash(data)}},
                            "stringData": data})
+
+
+def current_hash(name: str) -> str | None:
+    """The env hash on the Secret in the cluster, or None if it doesn't exist."""
+    p = subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "get", "secret",
+                        name, "-o", "jsonpath={.metadata.annotations.homeserver/env-sha256}"],
+                       capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+def basic_auth(name: str, user: str, password: str) -> str:
+    """CNPG reads logins from kubernetes.io/basic-auth Secrets; the reload
+    label makes it apply a changed password (rotation = edit .env, re-run)."""
+    return secret_manifest(name, {"username": user, "password": password},
+                           "kubernetes.io/basic-auth", {"cnpg.io/reload": "true"})
 
 
 def cmd_secrets(a) -> None:
@@ -112,8 +141,29 @@ def cmd_secrets(a) -> None:
         env_file = REPO / "services" / svc / ".env"
         if a.env == "test" and svc in prod_only:
             continue  # e.g. cloudflared: its tunnel token never goes to the test cluster
-        if env_file.is_file():
-            kubectl("apply", "-f", "-", input=secret_manifest(f"{svc}-env", load_env(env_file)))
+        if not env_file.is_file():
+            continue
+        env = load_env(env_file)
+        spec = shared_db_apps().get(svc)
+        # mariadb-operator re-reads a password Secret only when it carries
+        # this label (User.passwordSecretKeyRef docs), so rotation = edit .env.
+        watch = {"k8s.mariadb.com/watch": ""} if svc == "shared-mariadb" or (spec and spec["engine"] == "mariadb") else None
+        before = current_hash(f"{svc}-env")
+        kubectl("apply", "-f", "-", input=secret_manifest(f"{svc}-env", env, labels=watch))
+        # (Operator-run servers are left to their operator.)
+        if before and before != env_hash(env) and svc not in ("shared-postgres", "shared-mariadb"):
+            # Pods read env only at start: restart this service's workloads,
+            # the kubectl form of Helm's documented checksum/config roll.
+            kubectl("rollout", "restart", "deployment,statefulset,daemonset", "-n", NAMESPACE,
+                    "-l", f"homeserver/service={svc}", check=False)
+        if svc == "shared-postgres":
+            kubectl("apply", "-f", "-", input=basic_auth(f"{svc}-superuser", env.get("POSTGRES_USER", "postgres"),
+                                                         env.get("POSTGRES_PASSWORD", "")))
+        if spec and spec["engine"] == "postgres":
+            # Same values homeserver.py's shared_db_creds reads from this .env.
+            val = lambda k: k[1:] if k.startswith("=") else env.get(k, "")  # noqa: E731
+            kubectl("apply", "-f", "-", input=basic_auth(f"{svc}-db-role", val(spec["user_key"]),
+                                                         val(spec["password_key"])))
 
 
 def cmd_apply(a) -> None:

@@ -61,7 +61,7 @@ spec:
             - ready
           timeoutSeconds: 10
           periodSeconds: 30
-          failureThreshold: 3
+          failureThreshold: 6
         startupProbe:
           exec:
             command:

@@ -60,7 +60,7 @@ spec:
             - http://localhost:8090
           timeoutSeconds: 5
           periodSeconds: 60
-          failureThreshold: 5
+          failureThreshold: 10
         startupProbe:
           exec:
             command:
@@ -165,7 +165,7 @@ spec:
             - health
           timeoutSeconds: 5
           periodSeconds: 60
-          failureThreshold: 5
+          failureThreshold: 10
         startupProbe:
           exec:
             command:
@@ -192,3 +192,15 @@ spec:
       - name: v-socket
         persistentVolumeClaim:
           claimName: beszel-socket
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 100%

@@ -57,6 +57,15 @@ class _Dumper(yaml.SafeDumper):
         return True
 
 
+def _str(dumper, data):
+    # Multi-line text (my.cnf, scripts) as a readable | block.
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_Dumper.add_representer(str, _str)
+
+
 # ── inputs ────────────────────────────────────────────────────────────────
 
 def load_env(path: Path) -> dict[str, str]:
@@ -164,9 +173,14 @@ def slug(text: str) -> str:
 # ── conversion ────────────────────────────────────────────────────────────
 
 def probe_set(hc: dict | None, env_keys: set[str], where: str) -> dict:
-    """Compose healthcheck -> readiness + liveness + startup probes. Docker
-    marks a container unhealthy after `retries` failures; Kubernetes restarts
-    it at the same point (liveness), which is what the watchdogs used to do."""
+    """Compose healthcheck -> readiness + liveness + startup probes. Readiness
+    fails where Docker marks the container unhealthy (after `retries`).
+    Liveness uses the same check with a doubled failureThreshold, the
+    pattern Kubernetes documents ("the same low-cost endpoint as readiness,
+    but with a higher failureThreshold", kubernetes.io/docs/concepts/
+    configuration/liveness-readiness-startup-probes): the pod is taken out
+    of traffic first and restarted only if it stays unhealthy, so a brief
+    database blip doesn't restart every app that checks its database."""
     if not hc or hc.get("disable") or not hc.get("test"):
         return {}
     test = hc["test"]
@@ -188,7 +202,7 @@ def probe_set(hc: dict | None, env_keys: set[str], where: str) -> dict:
     base = {"exec": {"command": cmd}, "timeoutSeconds": timeout}
     out = {
         "readinessProbe": {**base, "periodSeconds": period, "failureThreshold": retries},
-        "livenessProbe": {**base, "periodSeconds": period, "failureThreshold": retries},
+        "livenessProbe": {**base, "periodSeconds": period, "failureThreshold": retries * 2},
     }
     start = seconds(hc.get("start_period"))
     if start:
@@ -434,6 +448,9 @@ def convert(svc: str) -> dict[str, list[dict]]:
                                    f"add overrides/{svc}.yaml containers.{cname[dep]}.ports")
                 init.append(wait_container(cname[dep], listen[dep][0]))
 
+        dw = db_wait(svc)
+        if dw and n not in oneshots and s.get("env_file"):
+            init.insert(0, dw)
         pod: dict = {"enableServiceLinks": False}
         if init:
             pod["initContainers"] = init
@@ -443,6 +460,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
             pod["dnsPolicy"] = "ClusterFirstWithHostNet"
         if pod_vols:
             pod["volumes"] = pod_vols
+        pod.update(co.get("pod") or {})
         labels = {**labels_svc, "app.kubernetes.io/name": c}
         kind = co.get("kind") or ("Job" if n in oneshots else "Deployment")
         obj: dict = {"apiVersion": "batch/v1" if kind == "Job" else "apps/v1", "kind": kind,
@@ -457,6 +475,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 spec = {"replicas": 1, "revisionHistoryLimit": 3, **spec}
                 if any("persistentVolumeClaim" in v for v in pod_vols):
                     spec["strategy"] = {"type": "Recreate"}  # RWO volumes: never two pods at once
+            spec.update(co.get("workload") or {})
             obj["spec"] = spec
         files.setdefault("workloads.yaml", []).append(obj)
 
@@ -496,6 +515,179 @@ def route_objects(svc: str, domain: str) -> list[dict]:
     return out
 
 
+
+# ── databases (phase 2) ───────────────────────────────────────────────────
+# The shared servers become operator-managed clusters, provisioned from the
+# same services.json "shared_db" entries homeserver.py uses:
+#   shared-postgres -> CloudNativePG Cluster + per app DatabaseRole/Database
+#   shared-mariadb  -> mariadb-operator MariaDB + per app User/Database/Grant
+# Names come from .env.example (tests check the real .env agrees); passwords
+# only ever come from Secrets built from the app's .env at apply time.
+
+SHARED = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}
+PORTS = {"postgres": 5432, "mariadb": 3306}
+
+
+def services_json() -> list[dict]:
+    return json.loads((REPO / "services.json").read_text())["services"]
+
+
+def shared_db_apps() -> dict[str, dict]:
+    """slug -> resolved spec {engine, db, user, password_key, dbs} for every
+    app on a shared server (names from .env.example, '=literal' honoured)."""
+    out = {}
+    for s in services_json():
+        sd = s.get("shared_db")
+        if not sd:
+            continue
+        ex = load_env(SERVICES_DIR / s["slug"] / ".env.example")
+        val = lambda k: k[1:] if k.startswith("=") else ex.get(k, "")  # noqa: E731
+        db = val(sd["db"])
+        out[s["slug"]] = {"engine": sd["engine"], "db": db, "user": val(sd["user"]),
+                          "user_key": sd["user"], "password_key": sd["password"], "dbs": [db] + list(sd.get("extra_dbs") or [])}
+    return out
+
+
+def compose_args(svc: str) -> list[str]:
+    s = next(iter(load_compose(svc)["services"].values()))
+    cm = s.get("command") or []
+    return shlex.split(cm) if isinstance(cm, str) else list(cm)
+
+
+def compose_limit(svc: str) -> str | None:
+    s = next(iter(load_compose(svc)["services"].values()))
+    lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
+    return mem(lim["memory"]) if lim.get("memory") else None
+
+
+def shared_postgres() -> dict[str, list[dict]]:
+    svc = "shared-postgres"
+    ov = load_overrides(svc)
+    args = compose_args(svc)
+    params = {}
+    for i, a in enumerate(args):
+        if a == "-c" and i + 1 < len(args) and "=" in args[i + 1]:
+            k, v = args[i + 1].split("=", 1)
+            params[k] = v
+    apps = {a: s for a, s in shared_db_apps().items() if s["engine"] == "postgres"}
+    # Each app's login may connect only to its own database(s): the declarative
+    # equivalent of homeserver.py's REVOKE ALL ON DATABASE ... FROM PUBLIC,
+    # which CNPG can't declare (it doesn't manage privileges).
+    hba = [f"host {','.join(s['dbs'])} {s['user']} all scram-sha-256" for _, s in sorted(apps.items())]
+    hba.append(f"host all {','.join(sorted({s['user'] for s in apps.values()}))} all reject")
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    lim = compose_limit(svc)
+    cluster = {
+        "apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+        "metadata": {"name": svc, "labels": labels},
+        "spec": {
+            "instances": 1,
+            # The admin login Compose has (POSTGRES_USER=postgres), from a
+            # basic-auth Secret cluster.py builds from shared-postgres/.env.
+            "enableSuperuserAccess": True,
+            "superuserSecret": {"name": f"{svc}-superuser"},
+            "imageName": VERSIONS["CNPG_POSTGRES_IMAGE"],
+            "postgresql": {"parameters": dict(sorted(params.items())), "pg_hba": hba},
+            "storage": {"size": (ov.get("storage") or {}).get("size", "5Gi"), "storageClass": "fast"},
+            **({"resources": {"limits": {"memory": lim}}} if lim else {}),
+            "inheritedMetadata": {"labels": labels},
+            # The name the apps' DB_HOST uses under Compose, pointing at the
+            # primary: CNPG's own additional-service mechanism
+            # (cloudnative-pg.io/docs/1.30/service_management).
+            "managed": {"services": {"additional": [
+                {"selectorType": "rw", "serviceTemplate": {"metadata": {"name": svc, "labels": labels}}}]}},
+        },
+    }
+    return {"database.yaml": [cluster]}
+
+
+def shared_mariadb() -> dict[str, list[dict]]:
+    svc = "shared-mariadb"
+    ov = load_overrides(svc)
+    s = next(iter(load_compose(svc)["services"].values()))
+    cnf = ["[mariadb]"] + [a[2:] for a in compose_args(svc) if a.startswith("--")]
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    lim = compose_limit(svc)
+    mdb = {
+        "apiVersion": "k8s.mariadb.com/v1alpha1", "kind": "MariaDB",
+        "metadata": {"name": svc, "labels": labels},
+        "spec": {
+            "image": s["image"],  # the exact image Compose runs (official mariadb)
+            "rootPasswordSecretKeyRef": {"name": f"{svc}-env", "key": "MARIADB_ROOT_PASSWORD"},
+            "myCnf": "\n".join(cnf) + "\n",
+            "env": [{"name": "MARIADB_AUTO_UPGRADE", "value": "1"}],  # as in Compose
+            "storage": {"size": (ov.get("storage") or {}).get("size", "5Gi"), "storageClassName": "fast"},
+            **({"resources": {"limits": {"memory": lim}}} if lim else {}),
+            "inheritMetadata": {"labels": labels},
+        },
+    }
+    return {"database.yaml": [mdb]}
+
+
+def app_database(svc: str) -> list[dict]:
+    """Per-app login + database(s) on the shared server, plus nothing else:
+    exactly what homeserver.py's provision_shared_db creates under Compose."""
+    spec = shared_db_apps().get(svc)
+    if not spec:
+        return []
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    server = SHARED[spec["engine"]]
+    if spec["engine"] == "postgres":
+        objs = [{"apiVersion": "postgresql.cnpg.io/v1", "kind": "DatabaseRole",
+                 "metadata": {"name": f"{svc}-role", "labels": labels},
+                 "spec": {"cluster": {"name": server}, "name": spec["user"], "login": True,
+                          "passwordSecret": {"name": f"{svc}-db-role"},
+                          "databaseRoleReclaimPolicy": "retain"}}]
+        for db in spec["dbs"]:
+            objs.append({"apiVersion": "postgresql.cnpg.io/v1", "kind": "Database",
+                         "metadata": {"name": f"{svc}-db-{slug(db)}", "labels": labels},
+                         "spec": {"cluster": {"name": server}, "name": db, "owner": spec["user"],
+                                  "databaseReclaimPolicy": "retain",
+                                  "schemas": [{"name": "public", "owner": spec["user"]}]}})
+        return objs
+    ref = {"name": server}
+    objs = [{"apiVersion": "k8s.mariadb.com/v1alpha1", "kind": "User",
+             "metadata": {"name": f"{svc}-user", "labels": labels},
+             "spec": {"mariaDbRef": ref, "name": spec["user"], "host": "%",
+                      "passwordSecretKeyRef": {"name": f"{svc}-env", "key": spec["password_key"]},
+                      # Compose sets no per-user cap; the operator defaults to
+                      # 10. 0 = MariaDB's "no limit" (server max-connections applies).
+                      "maxUserConnections": 0,
+                      "cleanupPolicy": "Skip"}}]
+    for db in spec["dbs"]:
+        objs.append({"apiVersion": "k8s.mariadb.com/v1alpha1", "kind": "Database",
+                     "metadata": {"name": f"{svc}-db-{slug(db)}", "labels": labels},
+                     "spec": {"mariaDbRef": ref, "name": db, "characterSet": "utf8mb4",
+                              "collate": "utf8mb4_unicode_ci", "cleanupPolicy": "Skip"}})
+        objs.append({"apiVersion": "k8s.mariadb.com/v1alpha1", "kind": "Grant",
+                     "metadata": {"name": f"{svc}-grant-{slug(db)}", "labels": labels},
+                     "spec": {"mariaDbRef": ref, "username": spec["user"], "host": "%",
+                              "privileges": ["ALL PRIVILEGES"], "database": db, "table": "*",
+                              "cleanupPolicy": "Skip"}})
+    return objs
+
+
+def external_db(svc: str) -> bool:
+    """DB_HOST pointing outside the stack (RDS, Cloud SQL, ...): emit no
+    database objects for the app, like homeserver.py's shared_db_external()."""
+    spec = shared_db_apps().get(svc)
+    if not spec:
+        return False
+    host = load_env(SERVICES_DIR / svc / ".env.example").get("DB_HOST", "")
+    return bool(host) and host != SHARED[spec["engine"]]
+
+
+def db_wait(svc: str) -> dict | None:
+    """Apps on a shared server wait for it (homeserver.py starts it first under
+    Compose). Host/port come from the app's own DB_HOST/DB_PORT, so an app
+    pointed at a managed database waits for that instead."""
+    if svc not in shared_db_apps():
+        return None
+    return {"name": "wait-db", "image": VERSIONS["WAIT_IMAGE"],
+            "envFrom": [{"secretRef": {"name": f"{svc}-env"}}],
+            "command": ["sh", "-c", 'until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done']}
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
@@ -517,7 +709,15 @@ def render(out: Path) -> list[str]:
     domain = load_env(REPO / ".env").get("DOMAIN") or load_env(REPO / ".env.example").get("DOMAIN", "example.com")
     written = []
     for svc in ported:
-        files = convert(svc)
+        if svc == "shared-postgres":
+            files = shared_postgres()
+        elif svc == "shared-mariadb":
+            files = shared_mariadb()
+        else:
+            files = convert(svc)
+            dbo = app_database(svc)
+            if dbo and not external_db(svc):
+                files["database.yaml"] = dbo
         d = out / "apps" / svc
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(files.items()):

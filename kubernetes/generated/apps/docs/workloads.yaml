@@ -64,7 +64,7 @@ spec:
             - curl -f http://localhost/ || exit 1
           timeoutSeconds: 5
           periodSeconds: 10
-          failureThreshold: 5
+          failureThreshold: 10
         startupProbe:
           exec:
             command:

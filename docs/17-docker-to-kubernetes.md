@@ -154,10 +154,86 @@ For a browser, add the hostnames to `/etc/hosts` (`127.0.0.1 www.k8s.local docs.
 
 **Verified on this host (2026-10-03):** MIN (landing, docs, beszel + agent) runs next to the live Compose stack, which was unchanged (48 containers, public sites still served by Docker).
 
-## Step 3 — Secrets from your `.env` files *(coming in phase 2)*
-## Step 4 — Databases: shared and own *(coming in phase 2)*
+## Step 3 — Secrets from your `.env` files
+
+The same `.env` files Docker uses are the only source of secrets. Nothing secret is in git or in `kubernetes/generated/`; a test fails if a value from any `.env` shows up there.
+
+```bash
+uv run kubernetes/cluster.py secrets                 # every ported service
+uv run kubernetes/cluster.py secrets miniflux        # or just some
+```
+
+What it creates in namespace `apps` (built in memory, piped to `kubectl`, never written to disk):
+
+| From | Secret | Used by |
+|---|---|---|
+| `services/<svc>/.env` | `<svc>-env` (every key) | the app's containers (`envFrom`) |
+| `services/shared-postgres/.env` `POSTGRES_USER`/`POSTGRES_PASSWORD` | `shared-postgres-superuser` (basic-auth) | CloudNativePG's admin login |
+| a shared-Postgres app's `.env` user/password keys (`services.json` `shared_db`) | `<svc>-db-role` (basic-auth) | CloudNativePG creates the app's login with it |
+| root `.env` `DOMAIN`, `TZ` | ConfigMap `homeserver-root` (`DOMAIN=k8s.local` in test) | every app |
+
+**Changing a value or password:** edit the `.env` and run `secrets` again. Each Secret carries a hash of its `.env`; when it changes, `secrets` restarts that service's pods so they read the new values (the kubectl form of [Helm's `checksum/config` pattern](https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments)). Database logins follow by themselves: the role Secrets carry the `cnpg.io/reload` label, and the MariaDB apps' `<svc>-env` Secrets carry `k8s.mariadb.com/watch`, the labels each operator needs before it re-reads a changed password.
+
+**Later, in a cloud:** the External Secrets Operator can fill the same Secret names from AWS Secrets Manager, Azure Key Vault or GCP Secret Manager. No manifest changes.
+
+## Step 4 — Databases: shared and own
+
+Same layout as Docker: apps above CORE share one Postgres and one MariaDB; CORE apps keep their own (phase 3). Two operators run them, installed by `cluster.py install`:
+
+| Docker | Kubernetes | Operator |
+|---|---|---|
+| `shared-postgres` container (`postgres:18.6`) | CloudNativePG `Cluster` `shared-postgres` (PostgreSQL 18.6, same settings from the Compose `command`), plus a Service named `shared-postgres` | [CloudNativePG](https://cloudnative-pg.io) 1.30 |
+| `shared-mariadb` container (`mariadb:11.8`) | `MariaDB` `shared-mariadb`, the same official image and `my.cnf` settings | [mariadb-operator](https://github.com/mariadb-operator/mariadb-operator) 26.10 |
+| `homeserver.py` creates each app's login and database on `up` (`provision_shared_db`) | generated `DatabaseRole` + `Database` (Postgres), or `User` + `Database` + `Grant` (MariaDB), from the same `services.json` `shared_db` entries | — |
+
+Apps keep their `.env` unchanged: `DB_HOST=shared-postgres` / `shared-mariadb` is the Service name in Kubernetes too, and each app waits for it before starting (`wait-db`).
+
+```bash
+uv run kubernetes/cluster.py secrets shared-postgres shared-mariadb miniflux bookstack
+uv run kubernetes/cluster.py apply   shared-postgres shared-mariadb       # the servers first
+kubectl -n apps get cluster,mariadb                                        # wait: "Cluster in healthy state" / Ready True
+uv run kubernetes/cluster.py apply   miniflux bookstack                   # then the apps
+kubectl -n apps get databaserole,databases.postgresql.cnpg.io,users,grants,databases.k8s.mariadb.com
+```
+
+Things that work differently from Docker, on purpose:
+
+- **Isolation between apps.** Docker runs `REVOKE ALL ON DATABASE … FROM PUBLIC`; CloudNativePG doesn't manage privileges, so the generator writes `pg_hba` rules instead: each app's login may connect only to its own database(s), and is rejected everywhere else.
+- **Deleting a manifest never drops data.** Roles and databases use `retain` (CloudNativePG) and `cleanupPolicy: Skip` (mariadb-operator, whose default is to drop). Remove a database by hand if you really mean it.
+- **A database outside the cluster** (RDS, Cloud SQL, Azure): point `DB_HOST` in the app's `.env.example` at it and regenerate; the generator then emits no role or database for that app, like `homeserver.py`'s `shared_db_external()`.
+- **Names come from `.env.example`.** The generated output can't depend on one machine's `.env`, so a test checks your `.env` uses the same database/user names.
+
+**Verified on this host (2026-10-03):** shared-postgres (CloudNativePG, 18.6) and shared-mariadb (11.8) run next to Docker. miniflux (14 tables created as its own role) and bookstack connect with their unchanged `.env`. The miniflux login is rejected on every other database (`pg_hba.conf rejects connection … database "postgres"`). Bookstack's grants match what `homeserver.py` creates: `ALL PRIVILEGES ON bookstack.*`, no connection cap.
+
+**Check an app's login:**
+
+```bash
+kubectl -n apps exec shared-postgres-1 -- psql -c '\du'                  # roles
+kubectl -n apps exec shared-postgres-1 -- psql -c '\l'                   # databases + owners
+```
+
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
 ## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
 ## Step 8 — Testing with your real data (planned window) *(after phase 3)*
 ## Step 9 — Going back to Docker *(written with step 8)*
+
+## Why it's built this way (sources)
+
+Every Kubernetes choice here follows the upstream project's documented way. Where none exists, the row says so and gives the reason. Checked 2026-10-03.
+
+| Choice | Source / reason |
+|---|---|
+| Probes: readiness = the Compose healthcheck; liveness = the same check with twice the `failureThreshold`; a startup probe covers `start_period` | [Kubernetes probe guidance](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/): "the same low-cost endpoint as for readiness probes, but with a higher `failureThreshold`". A short database outage takes apps out of traffic without restarting them all |
+| `depends_on: service_healthy` becomes an init container looping on `nc -z <service> <port>` | [Kubernetes init containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) document the same `until …; sleep 2; done` loop with `nslookup`. A TCP connect is stricter: a Service only accepts connections once a pod behind it is ready, which matches Compose's "healthy" |
+| Shared Postgres: CloudNativePG `Cluster`, `DatabaseRole`, `Database`; the `shared-postgres` name via `managed.services.additional` | [CloudNativePG 1.30](https://cloudnative-pg.io/docs/1.30/service_management/) |
+| Per-app isolation with `pg_hba` rules instead of `REVOKE CONNECT` | CloudNativePG doesn't manage privileges. [PostgreSQL's shared-hosting guide](https://wiki.postgresql.org/wiki/Shared_Database_Hosting) recommends restricting connections in `pg_hba.conf` |
+| Shared MariaDB: mariadb-operator `MariaDB`, `User`, `Database`, `Grant`; `cleanupPolicy: Skip`, `maxUserConnections: 0`, the `k8s.mariadb.com/watch` label | [mariadb-operator docs](https://github.com/mariadb-operator/mariadb-operator/tree/main/docs) and its API (`user_types.go`): the defaults are `Delete` and 10 connections, and Secret changes are only picked up with the label |
+| Traefik creates the Gateway itself (`gateway.enabled`, `namespacePolicy: All`) | The Traefik chart's own values (`helm show values traefik --version 41.6.1`) |
+| Beszel agent: DaemonSet, `hostNetwork`, control-plane tolerations, `maxUnavailable: 100%` | [Beszel's Kubernetes example](https://beszel.dev/guide/advanced-deployment) |
+| docs: git-sync runs once at pod start, not as a live sidecar | [git-sync](https://github.com/kubernetes/git-sync) "can pull one time". The paths are `subPath` mounts, which Kubernetes never updates after start, so a sidecar's later syncs wouldn't reach the app |
+| Storage classes `fast`/`bulk` | [local-path-provisioner](https://github.com/rancher/local-path-provisioner): `nodePath` (listed in `nodePathMap`) and `pathPattern` per StorageClass |
+| Restart on `.env` change | [Helm's `checksum/config` pattern](https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments), done with `kubectl rollout restart` when the Secret's hash changes |
+| Secrets parsed with the same `.env` rules as Compose, not `kubectl --from-env-file` | **Own design:** kubectl's env-file parser keeps quotes literally, while Compose strips them. Apps must see the same values in both runtimes |
+| kind node's image store on the HDD (`K8S_IMAGES_PATH` mounted at `/var/lib/containerd`) | **Own design:** [kind extraMounts](https://kind.sigs.k8s.io/docs/user/configuration/#extra-mounts) are documented, but not for containerd's store. kind keeps a second copy of every image, which the small SSD can't hold. Verified on ext4 |
+| Host access through NodePort + `extraPortMappings` on `127.0.0.1` | kind's docs now recommend [cloud-provider-kind](https://github.com/kubernetes-sigs/cloud-provider-kind) (real LoadBalancer IPs). **Open:** switching is pending a decision, because it changes which address the test hostnames use |

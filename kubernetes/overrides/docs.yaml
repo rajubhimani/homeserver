@@ -2,6 +2,10 @@
 # bundle: ~5 MB, over the 1 MiB ConfigMap limit). They're cloned from the
 # public GitHub repo by git-sync at pod start; single files come from a
 # ConfigMap. Changing docs in git -> restart the pod (or ArgoCD sync).
+# git-sync runs once at start (its README: "can pull one time"), not as the
+# usual live sidecar: these paths are subPath mounts, and Kubernetes never
+# updates a subPath mount after the pod starts, so a sidecar's later syncs
+# (it swaps a symlink) would never reach the docs container.
 containers:
   docs:
     git:

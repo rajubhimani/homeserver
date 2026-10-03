@@ -105,3 +105,96 @@ def test_every_workload_is_probed_or_explained():
             if "readinessProbe" not in c:
                 assert c["name"] in IMAGE_HEALTHCHECK or c["name"] in NO_HEALTHCHECK, \
                     f"{f.parent.name}/{c['name']}: no probe and no documented reason"
+
+
+# ── phase 2: databases ────────────────────────────────────────────────────
+
+SHARED_APPS = {svc: spec for svc, spec in gen.shared_db_apps().items() if svc in PORTED}
+
+
+def _db_objects(svc: str) -> list[dict]:
+    f = GENERATED / "apps" / svc / "database.yaml"
+    return [d for d in yaml.safe_load_all(f.read_text()) if d] if f.is_file() else []
+
+
+def test_env_db_names_match_env_example():
+    """The generator takes db/user names from .env.example (generated output
+    can't depend on one host's .env); the real .env must agree, or the app
+    would log in as a role Kubernetes never created."""
+    for svc, spec in gen.shared_db_apps().items():
+        env_file = REPO / "services" / svc / ".env"
+        if not env_file.is_file():
+            continue
+        env = gen.load_env(env_file)
+        for key in ("db", "user"):
+            k = hs._SERVICES_BY_SLUG[svc]["shared_db"][key]
+            if not k.startswith("="):
+                assert env.get(k) == spec[key], f"{svc}: .env {k} differs from .env.example"
+
+
+@pytest.mark.parametrize("svc", sorted(SHARED_APPS))
+def test_shared_db_objects_mirror_compose_provisioning(svc):
+    """Same role/user, database(s) and ownership as homeserver.py's
+    provision_shared_db, and nothing an operator could ever drop."""
+    spec = SHARED_APPS[svc]
+    objs = _db_objects(svc)
+    want_dbs = [spec["db"]] + list(hs._SERVICES_BY_SLUG[svc]["shared_db"].get("extra_dbs", []))
+    dbs = [o for o in objs if o["kind"] == "Database"]
+    assert [d["spec"]["name"] for d in dbs] == want_dbs
+    if spec["engine"] == "postgres":
+        (role,) = [o for o in objs if o["kind"] == "DatabaseRole"]
+        assert role["spec"]["name"] == spec["user"] and role["spec"]["login"] is True
+        assert role["spec"]["databaseRoleReclaimPolicy"] == "retain"
+        assert role["spec"]["passwordSecret"]["name"] == f"{svc}-db-role"
+        for d in dbs:
+            assert d["spec"]["owner"] == spec["user"] and d["spec"]["databaseReclaimPolicy"] == "retain"
+            assert {"name": "public", "owner": spec["user"]} in d["spec"]["schemas"]
+    else:
+        (user,) = [o for o in objs if o["kind"] == "User"]
+        assert user["spec"]["name"] == spec["user"] and user["spec"]["host"] == "%"
+        assert user["spec"]["maxUserConnections"] == 0, "Compose has no per-user connection cap"
+        grants = [o for o in objs if o["kind"] == "Grant"]
+        assert sorted(g["spec"]["database"] for g in grants) == sorted(want_dbs)
+        assert all(g["spec"]["privileges"] == ["ALL PRIVILEGES"] for g in grants)
+        # mariadb-operator's default cleanupPolicy (Delete) drops the
+        # database when the CR goes away; data must outlive manifests.
+        assert all(o["spec"]["cleanupPolicy"] == "Skip" for o in objs)
+
+
+def test_shared_postgres_isolates_every_app_role():
+    """pg_hba stands in for REVOKE ALL ON DATABASE ... FROM PUBLIC: each app
+    role reaches only its own database(s), then a reject for the rest."""
+    if "shared-postgres" not in PORTED:
+        pytest.skip("shared-postgres not ported")
+    (cluster,) = _db_objects("shared-postgres")
+    hba = cluster["spec"]["postgresql"]["pg_hba"]
+    pg = {s: v for s, v in gen.shared_db_apps().items() if v["engine"] == "postgres"}
+    for svc, spec in pg.items():
+        assert f"host {','.join(spec['dbs'])} {spec['user']} all scram-sha-256" in hba, svc
+    assert hba[-1].startswith("host all ") and hba[-1].endswith(" all reject")
+    assert set(hba[-1].split()[2].split(",")) == {v["user"] for v in pg.values()}
+
+
+def test_shared_servers_match_compose():
+    """MariaDB runs the exact Compose image; CNPG's Postgres the same release
+    (bump CNPG_POSTGRES_IMAGE in kubernetes/versions.env with Compose's)."""
+    if "shared-mariadb" in PORTED:
+        (mdb,) = _db_objects("shared-mariadb")
+        assert mdb["spec"]["image"] == next(iter(gen.load_compose("shared-mariadb")["services"].values()))["image"]
+    if "shared-postgres" in PORTED:
+        (cluster,) = _db_objects("shared-postgres")
+        compose_img = next(iter(gen.load_compose("shared-postgres")["services"].values()))["image"]
+        release = re.search(r":(\d+\.\d+)", compose_img).group(1)
+        assert re.search(r":(\d+\.\d+)-", cluster["spec"]["imageName"]).group(1) == release, (compose_img, cluster["spec"]["imageName"])
+
+
+def test_external_db_host_emits_no_database_objects(monkeypatch):
+    """DB_HOST pointing at RDS / Cloud SQL / Azure: no role or database is
+    created in-cluster, matching homeserver.py's shared_db_external()."""
+    svc = next(iter(SHARED_APPS), None)
+    if not svc:
+        pytest.skip("no shared-db app ported")
+    real = gen.load_env
+    monkeypatch.setattr(gen, "load_env", lambda p: {**real(p), "DB_HOST": "db.example.rds.amazonaws.com"}
+                        if Path(p).parent.name == svc else real(p))
+    assert gen.external_db(svc)
