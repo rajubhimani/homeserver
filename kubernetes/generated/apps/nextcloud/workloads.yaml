@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: nextcloud
         app.kubernetes.io/name: nextcloud
+      annotations:
+        homeserver/config-sha256: 9f3966ebb99087d3f389aafa7c6f7e0abde63107d1bf2dc54d678b8114d74ca7
     spec:
       enableServiceLinks: false
       initContainers:
@@ -112,6 +114,10 @@ spec:
           mountPath: /var/www/html
         - name: v-nextcloud-nextcloud-config
           mountPath: /var/www/html/config
+        - name: files
+          mountPath: /var/www/html/config/db.config.php
+          subPath: services-nextcloud-config-db-config-php
+          readOnly: true
         - name: v-nextcloud-nextcloud-data
           mountPath: /var/www/html/data
         - name: v-nextcloud-nextcloud-custom-apps
@@ -145,6 +151,13 @@ spec:
         hostPath:
           path: /var/k8s/host/nextcloud-os-iso
           type: Directory
+      - name: files
+        configMap:
+          name: nextcloud-files
+          items:
+          - key: services-nextcloud-config-db-config-php
+            path: services-nextcloud-config-db-config-php
+            mode: 420
       - name: repo
         emptyDir: {}
   strategy:
@@ -170,6 +183,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: nextcloud
         app.kubernetes.io/name: nextcloud-cron
+      annotations:
+        homeserver/config-sha256: 9f3966ebb99087d3f389aafa7c6f7e0abde63107d1bf2dc54d678b8114d74ca7
     spec:
       enableServiceLinks: false
       initContainers:
@@ -206,6 +221,10 @@ spec:
           mountPath: /var/www/html
         - name: v-nextcloud-nextcloud-config
           mountPath: /var/www/html/config
+        - name: files
+          mountPath: /var/www/html/config/db.config.php
+          subPath: services-nextcloud-config-db-config-php
+          readOnly: true
         - name: v-nextcloud-nextcloud-data
           mountPath: /var/www/html/data
         - name: v-nextcloud-nextcloud-custom-apps
@@ -230,6 +249,13 @@ spec:
         hostPath:
           path: /var/k8s/host/nextcloud-os-iso
           type: Directory
+      - name: files
+        configMap:
+          name: nextcloud-cron-files
+          items:
+          - key: services-nextcloud-config-db-config-php
+            path: services-nextcloud-config-db-config-php
+            mode: 420
   strategy:
     type: Recreate
 ---
