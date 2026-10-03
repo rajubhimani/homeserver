@@ -27,7 +27,7 @@ curl -u youruser -d "test message" https://ntfy.<domain>/mytopic
 
 ## `homeserver-alerts` topic — watchdog notifications
 
-Used by [ClamAV](clamav.md)'s watchdog (`clamav-watchdog`, `services/clamav/watchdog.sh`) to push a real notification when the signature database goes stale instead of that only being visible via `docker inspect`. An admin account (`admin`) and an access token for this (labeled `homeserver-alerts`, stored as `NTFY_ALERT_TOKEN` in `services/clamav/.env`) already exist — this section is about **subscribing to actually receive** what gets published there, which only you can do (same category of thing as clicking through an OAuth consent screen — no way to do this on your behalf).
+Used by the stack's own monitors to push real notifications: [Uptime Kuma](uptime-kuma.md)'s ntfy channel (any container down or unhealthy, including ClamAV's stale-signature check), `adguard-watchdog` (each network repair) and the host's data-drive watch (`docker/host-boot-safety.sh`). An admin account (`admin`) and an access token for this (labeled `homeserver-alerts`) already exist. The publish URL and token are `NTFY_ALERT_URL`/`NTFY_ALERT_TOKEN` in `services/ntfy/.env`, the canonical copy; `services/adguard-home/.env` holds the same values for its watchdog. this section is about **subscribing to actually receive** what gets published there, which only you can do (same category of thing as clicking through an OAuth consent screen — no way to do this on your behalf).
 
 **To subscribe on your phone:** install the ntfy app (link above), tap **+**, server `https://ntfy.${DOMAIN}`, topic `homeserver-alerts`, log in with the `admin` account, **Subscribe**.
 
@@ -43,6 +43,11 @@ Any future watchdog in this stack can reuse the same topic (same pattern as `adg
 - Health endpoint: `/v1/health`.
 - `NTFY_BEHIND_PROXY=true` is required so ntfy trusts `X-Forwarded-For` from nginx-plain for correct rate-limiting/IP logging.
 - **Reverse proxy needs WebSocket upgrade headers and buffering disabled, or push is not instant.** Subscribers (the phone app, the web UI) hold a long-lived connection open — either a real WebSocket (`/<topic>/ws`) or a chunked JSON stream (`/<topic>/json`) — with a keepalive ping every ~30s, and only pick up new messages the moment they arrive on that connection. `nginx-plain`'s `ntfy.${DOMAIN}` block was missing `proxy_set_header Upgrade`/`Connection $connection_upgrade` (breaking the WebSocket handshake outright — confirmed live, `curl` got a hung connection instead of `101 Switching Protocols` before the fix) and `proxy_buffering off` (without it, nginx holds the streamed response in its own buffer instead of flushing it to the client immediately, so messages only show up once the app happens to reconnect — e.g. on a manual pull-to-refresh). Both fixed in the same block as the rest of nginx-plain's websocket-upgrade services; verified after the fix with a real WebSocket handshake over the public domain (`101 Switching Protocols`) and a published message arriving on an open stream within ~1s.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: users, tokens and topics restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

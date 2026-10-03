@@ -182,6 +182,11 @@ Before teardown, the watch history/favorites that had accumulated on the test in
 
 The `jellyfin-pgsql-test` container, its Postgres volume, `service_data/data/jellyfin-pgsql-test/`, `service_data/cache/jellyfin-pgsql-test/`, and the `jellyfin-pgsql-test/` compose directory have all been removed.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: config restored (setup wizard already completed). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

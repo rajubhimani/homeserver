@@ -26,7 +26,7 @@ Browse to `http://<ip>:8088/if/admin/` — set the password for the default admi
 
 ## Health endpoint
 
-`authentik-server`'s compose healthcheck runs `ak healthcheck` inside the container, which itself hits `http://localhost:9000/-/health/live/` — confirmed live in the container's own logs (`"event":"/-/health/live/","status":200`). Both `/-/health/live/` and `/-/health/ready/` on port 9000 return HTTP 200 with an empty body — confirmed directly with `docker exec authentik-server python3 -c "..."` (this image has no `curl`/`wget`, only its own bundled Python, so `docker exec ... curl` won't work — use `ak healthcheck` or a short Python one-liner instead). `authentik-worker` has no compose healthcheck of its own; its health is inferred from the shared Postgres dependency and its own log output.
+`authentik-server` and `authentik-worker` both use the image's own `HEALTHCHECK` (`ak healthcheck`, 30s interval, 120s start period); upstream's compose defines none for them, so `compose.yml` doesn't either. `authentik-db` uses upstream's check (`pg_isready -d $POSTGRES_DB -U $POSTGRES_USER`, 30s/5s/5 retries/20s start) plus `-h 127.0.0.1` and `start_interval: 2s` (see [shared-postgres](shared-postgres.md#healthcheck) for why every CORE `pg_isready` probes TCP). `ak healthcheck` itself hits `http://localhost:9000/-/health/live/` — confirmed live in the container's own logs (`"event":"/-/health/live/","status":200`). Both `/-/health/live/` and `/-/health/ready/` on port 9000 return HTTP 200 with an empty body — confirmed directly with `docker exec authentik-server python3 -c "..."` (this image has no `curl`/`wget`, only its own bundled Python, so `docker exec ... curl` won't work — use `ak healthcheck` or a short Python one-liner instead).
 
 ## End-user self-service — password and MFA
 
@@ -170,6 +170,11 @@ They open the link, pick their own username, set their own password, fill in nam
 ### Access is open by default
 
 None of the five forward-auth apps above, nor Outline's OIDC application, have any group/policy restrictions configured — every application has zero bindings, which in Authentik means *any* authenticated user can reach it. A freshly-enrolled account gets access to everything immediately, no per-app step needed. The flip side: those five apps have no internal user/role system of their own, so anyone you invite gets full access to all of them (e.g. can read every captured email in Mailpit, see all Docker logs in Dozzle). Restricting *which* people can reach *which* app would need group-based policy bindings added per-application — not set up today.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 4 users and 2 applications restored; the empty install needs about 50s for its first migrations. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

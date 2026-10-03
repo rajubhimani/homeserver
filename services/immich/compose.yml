@@ -58,6 +58,8 @@ services:
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -78,13 +80,9 @@ services:
     volumes:
       - immich-postgres:/var/lib/postgresql
     shm_size: 128mb
-    healthcheck:
-      test: >-
-        pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1
-      interval: 60s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # No healthcheck here on purpose: the image ships its own
+    # (/usr/local/bin/healthcheck.sh, 5s while starting, then every 300s), and
+    # upstream's compose only says 'disable: false' to keep it.
     networks:
       - homeserver
 

@@ -17,10 +17,13 @@ services:
       - authentik-postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
+      # Upstream's own (lifecycle/container/compose.yml).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
       timeout: 5s
       retries: 5
+      start_period: 20s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -59,12 +62,8 @@ services:
     volumes:
       - ${DATA_ROOT}/media:/media
       - ${DATA_ROOT}/templates:/templates
-    healthcheck:
-      test: ["CMD-SHELL", "ak healthcheck || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    # No healthcheck here on purpose: the image ships its own (ak healthcheck, 30s interval, 120s start period), and
+    # upstream's compose defines none, so a compose one would only replace it.
     depends_on:
       authentik-db:
         condition: service_healthy

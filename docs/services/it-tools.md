@@ -33,6 +33,11 @@ Verified live against the running container: `GET /` returns `200 OK` with the a
 - The upstream `corentinth/it-tools` image doesn't publish semver tags, only dated commit-hash tags (e.g. `2024.10.22-7ca5933`, confirmed as GitHub release tag `v2024.10.22-7ca5933`) and a `latest`/`nightly` that track newer builds without a fixed version — pinned here to the dated tag rather than `latest`, but expect to re-check for a newer dated tag manually rather than relying on Watchtower-style auto-update conventions used elsewhere. `2024.10.22-7ca5933` is still the newest dated tag as of this check (~2 years old) — the project has otherwise gone quiet upstream aside from the unversioned `nightly` tag.
 - No runtime environment variables exist to configure — confirmed against the upstream Dockerfile: production stage is `nginx:stable-alpine` serving a prebuilt static `dist/` with a fixed `nginx.conf`, no `ARG`/`ENV` exposed at runtime (build-stage-only `NPM_CONFIG_LOGLEVEL`/`CI` vars don't survive into the shipped image). Nothing genuinely useful to add to `.env.example` or a compose `environment:` block — this isn't an oversight, there's nothing upstream exposes to configure.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless, nothing to restore. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

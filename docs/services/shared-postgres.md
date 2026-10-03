@@ -53,6 +53,12 @@ Provisioning (`provision_shared_db`) is idempotent: it creates the role (or rese
 
 Above CORE, apps are opt-in, mostly low-traffic, and nearly all happy on "a current Postgres", which is where one shared server's savings (one set of buffers and background workers instead of ~20) are worth it.
 
+## Healthcheck
+
+`pg_isready -h 127.0.0.1 -U postgres`, over TCP rather than the Unix socket. On a fresh volume, the postgres image's entrypoint first runs a temporary server that listens only on the socket, to run initdb and the init scripts, then stops it and starts the real one. A socket probe reports "ready" during that window, so an app waiting on `service_healthy` starts and gets `connection refused` once the temporary server stops ([postgresql.org BUG #15222](https://postgresql.org/message-id/152778474106.26722.11024944991637906220%40wrigleys.postgresql.org), [healthcheck guide](https://www.ssdnodes.com/learn/docker-compose-postgres-healthcheck)). A TCP probe only answers once the real server listens.
+
+Every MIN/CORE `<service>-db` uses the same `-h 127.0.0.1` form, plus `start_interval: 2s` so the first check comes within seconds instead of after a full `interval`. `tests/test_healthchecks.py` (`test_pg_isready_probes_tcp_not_the_socket`) enforces it. Above-CORE apps that keep their own database copy upstream's compose verbatim and keep upstream's form.
+
 ## Users
 
 [wallabag](wallabag.md), [vikunja](vikunja.md), [plane](plane.md), [calcom](calcom.md), [listmonk](listmonk.md), [miniflux](miniflux.md), [airflow](airflow/airflow.md), [dagster](dagster/dagster.md), [temporal](temporal/temporal.md), [n8n](n8n.md), [paperless](paperless.md), [mealie](mealie.md), [nocodb](nocodb.md), [outline](outline.md), [penpot](penpot.md), [documenso](documenso.md), [ghostfolio](ghostfolio.md), [mattermost](mattermost.md), [mail-archiver](mail-archiver.md) (19 services, all above CORE). Special cases:

@@ -10,6 +10,15 @@ services:
       SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED:-false}
     volumes:
       - ${DATA_ROOT}/data:/data
+    healthcheck:
+      # Timing only, no 'test': the image's own /healthcheck.sh is kept. Its
+      # 60s interval with no start period means the first check comes a full
+      # minute after start (measured 2026-10-03: every start waited 60s).
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
     networks:
       - homeserver
 

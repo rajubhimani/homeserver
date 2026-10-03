@@ -23,7 +23,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 | `update <target>` / `update running` | Pulls newer images, recreates and waits until healthy. `running` = only what's up now. |
 | `precreate <target> [--update]` | Creates containers **without starting them**, so they appear in Portainer. `--update` rebuilds stopped ones after config changes and never touches running ones. |
 | `restore <service> [--snapshot <ts>]` | Snapshots the current state first, loads the snapshot (latest by default), and starts the service again if it was running. |
-| `reset <service\|tier>` | Takes a verified snapshot, keeps it as `reset-backup-<timestamp>` (outside normal retention, newest 5 kept), wipes that service only, and starts it empty. You must type `reset`, or pass `-y`. Undo with `restore <service> --snapshot reset-backup-<timestamp>` (printed at the end). See [08 — Maintenance](08-maintenance.md#fresh-start-of-a-service-reset). |
+| `reset <service\|tier>` | Takes a verified snapshot, keeps it as `reset-backup-<timestamp>` (outside normal retention, newest 5 kept), wipes that service only, and starts it empty. You must type `reset`, or pass `-y`. Undo with `restore <service> --snapshot reset-backup-<timestamp>` (printed at the end). See [08 — Maintenance](08-maintenance.md#fresh-start-of-a-service-reset), and [16 — MIN/CORE reset runbook](16-min-core-reset-runbook.md) for resetting live services and restoring their data. |
 
 ## Flags
 

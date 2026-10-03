@@ -147,6 +147,11 @@ See `docs/services/forgejo-examples/` for a matching CI workflow template and re
 
 **Mirrored repos**: Forgejo Actions only triggers on `.forgejo/workflows/` (or `.gitea/workflows/` for compat) — never `.github/workflows/`. If the repo is a pull mirror (`is_mirror` in Forgejo's DB), you also can't add that file directly in Forgejo — mirror syncs force-reset tracked branches to match the upstream exactly (and prune anything else), so a locally-added file gets silently wiped at the next sync. Add `.forgejo/workflows/` to the *source* repo instead (e.g. on GitHub, if that's what's being mirrored) so it comes down with the next sync.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 3 repositories restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

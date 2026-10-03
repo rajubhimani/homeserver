@@ -280,6 +280,11 @@ Via `uv run homeserver.py dev dump nextcloud` + `dev migrate nextcloud` — see 
 
 **Second round, same incident:** the first fix (creating `oc_admin` via the roles dump) was necessary but not sufficient on its own — the restore also ran with `--no-privileges`, which skips the dump's captured `GRANT` statements entirely. That meant `oc_admin` could log in but had zero table privileges (`SQLSTATE[42501]: permission denied for table oc_appconfig`), since `pg_restore` connects and creates everything as `POSTGRES_USER` (`nextcloud`), not `oc_admin`. `--no-privileges` was the wrong fix for the original error — the actual fix was sequencing (apply roles *before* the restore, which was already correct), so once that ordering is right the dump's own `GRANT ... TO oc_admin` statements succeed naturally and `--no-privileges` isn't needed at all. Removed it; `pg_restore` now runs with `--no-owner --clean --if-exists` only. Re-verified end-to-end from a fresh plain-Postgres baseline afterward with zero manual steps needed.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: installed state, users, the `/OS-ISOs` external storage and the OnlyOffice connection restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

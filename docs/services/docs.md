@@ -44,6 +44,11 @@ One container: `nginx:1.31.6-alpine` with a custom `entrypoint.sh` (same `DOMAIN
 - **`CLAUDE.md` and `TODO.md` are deliberately not served** — `CLAUDE.md` is AI-agent instructions, not user-facing reference material; `TODO.md` is a private working list, not linked from `setup.md`'s own doc tree. Both now live outside the repo tree entirely (symlinked in from `/mnt/mydata/homeserver-local/`, gitignored — see `CLAUDE.md`'s own "Data directory convention" section), so they're structurally unreachable from this container's bind mount, not just unlinked.
 - If a doc you expect to find isn't reachable from the homepage or search, check whether it's actually linked from `setup.md` and `_sidebar.md` — an unlinked doc is still reachable directly by URL, just not discoverable via browsing. (`docs/00-services-overview.md` was exactly this case — stale and unlinked — and was deleted rather than fixed, since `setup.md`'s "What's in the stack" section already covered the same ground accurately.)
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless, nothing to restore. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

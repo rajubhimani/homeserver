@@ -153,7 +153,7 @@ docker network connect homeserver adguard-home
 
 (if the container *is* still marked as connected but broken, `docker network disconnect homeserver adguard-home --force` first, then `connect`.)
 
-**Permanent fix:** `adguard-watchdog` (added in `compose.yml`, same pattern as `cloudflared-watchdog`) polls the Docker API every `WATCHDOG_CHECK_INTERVAL` seconds (default 60s) for whether `adguard-home` actually has an `IPAddress` on the network, and runs the disconnect+connect repair automatically after `WATCHDOG_FAIL_THRESHOLD` consecutive misses (default 2). See `services/adguard-home/watchdog.sh` and the `WATCHDOG_*` vars in `.env.example`.
+**Permanent fix:** `adguard-watchdog` (added in `compose.yml`, same pattern as `cloudflared-watchdog`) polls the Docker API every `WATCHDOG_CHECK_INTERVAL` seconds (default 60s) for whether `adguard-home` actually has an `IPAddress` on the network, and runs the disconnect+connect repair automatically after `WATCHDOG_FAIL_THRESHOLD` consecutive misses (default 2). Each repair is also pushed to ntfy's `homeserver-alerts` topic (`NTFY_ALERT_URL`/`NTFY_ALERT_TOKEN` in `.env`), so it's never silent. **Likely root cause, found later:** a reboot race where Docker autostarts containers before `wg0` exists, so the `10.8.0.1` port binds fail. That failure can leave a container with no network endpoint, and `docker/host-boot-safety.sh` has fixed it since 2026-09-25 ([Boot safety](../08-maintenance.md#boot-safety)). If no repair alert arrives for several weeks, the watchdog can be removed with evidence rather than on a guess. See `services/adguard-home/watchdog.sh` and the `WATCHDOG_*` vars in `.env.example`.
 
 ## Port 53 conflicts with the host's own DNS resolver — on both Windows and Linux
 
@@ -176,6 +176,11 @@ Error response from daemon: failed to set up container networking: driver failed
 `systemd-resolved`'s stub listener holds `127.0.0.53:53` (and `127.0.0.54:53`) by default (`ss -tulnp | grep :53` shows it). A wildcard `0.0.0.0:53` bind conflicts with that even though the addresses look different — Linux treats a wildcard bind as overlapping any more-specific bind already on the same port.
 
 **Fix used here:** bind DNS to the host's actual LAN IP instead of the wildcard — set `DNS_BIND_IP` in `.env` (see `.env.example` for how to find it via `ip -4 addr`) and both `compose.dev.yml`/`compose.prod.yml` publish `${DNS_BIND_IP}:53:53` rather than `0.0.0.0:53:53`. Avoids the conflict on both platforms without touching host DNS config. Caveat: if the host's LAN IP changes (DHCP lease renewal), `DNS_BIND_IP` needs updating and the container restarting — set a DHCP reservation on your router for this host to avoid that. The web UI (port 8123/3000) is unaffected by any of this either way — it starts and passes its healthcheck regardless of the DNS port's fate.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: config restored, answering DNS on the LAN IP. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

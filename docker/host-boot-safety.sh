@@ -105,17 +105,17 @@ sysctl -q -p "$SYSCTL"
 echo "✔ $SYSCTL (net.ipv4.ip_nonlocal_bind=$(sysctl -n net.ipv4.ip_nonlocal_bind))"
 
 # ── 3. Mount watchdog → ntfy ──
-# Reuses clamav's ntfy alert token/topic. Its URL points at the container name
+# Uses the stack's ntfy alert token/topic (services/ntfy/.env). Its URL points at the container name
 # (http://ntfy/...), which the host can't resolve -- use ntfy's published port.
-token=$(sed -n 's/^NTFY_ALERT_TOKEN=//p' "$REPO_ROOT/services/clamav/.env" 2>/dev/null || true)
-topic=$(sed -n 's|^NTFY_ALERT_URL=.*/||p' "$REPO_ROOT/services/clamav/.env" 2>/dev/null || true)
+token=$(sed -n 's/^NTFY_ALERT_TOKEN=//p' "$REPO_ROOT/services/ntfy/.env" 2>/dev/null || true)
+topic=$(sed -n 's|^NTFY_ALERT_URL=.*/||p' "$REPO_ROOT/services/ntfy/.env" 2>/dev/null || true)
 cat >"$WATCH_ENV" <<EOF
 WATCH_MOUNTS="$WATCH_MOUNTS"
 NTFY_URL=http://127.0.0.1:8118/${topic:-homeserver-alerts}
 NTFY_TOKEN=$token
 EOF
 chmod 600 "$WATCH_ENV"
-[ -n "$token" ] || echo "⚠ No NTFY_ALERT_TOKEN in services/clamav/.env -- edit $WATCH_ENV, alerts will only go to the journal"
+[ -n "$token" ] || echo "⚠ No NTFY_ALERT_TOKEN in services/ntfy/.env -- edit $WATCH_ENV, alerts will only go to the journal"
 
 cat >"$WATCH_BIN" <<'EOF'
 #!/usr/bin/env bash

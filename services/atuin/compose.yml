@@ -16,10 +16,12 @@ services:
     volumes:
       - atuin-postgres-alpine:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER}"]
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -51,12 +53,8 @@ services:
       ATUIN_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@atuin-db/${POSTGRES_DB}
     volumes:
       - ${DATA_ROOT}/config:/config
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8888/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+    # No healthcheck here on purpose: the image ships its own (curl /healthz, 30s interval), and
+    # upstream's compose defines none, so a compose one would only replace it.
     depends_on:
       atuin-db:
         condition: service_healthy

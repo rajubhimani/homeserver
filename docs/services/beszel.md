@@ -128,6 +128,11 @@ It also reports per-container Docker stats via the mounted `${DOCKER_SOCKET}` (r
 
 **`update beszel` fails with `Conflict. The container name "/beszel" is already in use`:** an earlier interrupted recreate left a stray container named `<hash>_beszel` in `Created` state (never started) carrying the same compose labels, so Compose picks the wrong one to rename. Find it with `docker ps -a --filter name=beszel`, confirm it's `Created` (not the real, previously-running `beszel`), `docker rm` it, then re-run the update. Hit on 2026-09-25 during the 0.19.0 → 0.20.0 bump.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: the agent reconnected to the restored hub (its key was accepted). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
