@@ -92,6 +92,11 @@ Official **Zulip** app ([Google Play](https://play.google.com/store/apps/details
 - **The bare root path (`/`) shows a "No organization found" page until an organization exists** — expected Zulip behavior for a zero-realm deployment, not a bug: the real entry point is always the realm-creation link (or an existing organization's own subdomain/URL), not the bare domain.
 - **Outgoing email routed through the shared [Mailpit](mailpit.md) catcher by default** (`SETTING_EMAIL_HOST=mailpit` in `compose.yml`) — invite/notification emails genuinely send, nothing ever leaves this host. `ZULIP__EMAIL_PASSWORD` stays an unused placeholder since Mailpit needs no auth; point `SETTING_EMAIL_HOST`/etc. at a real relay instead in `.env` if you want actual delivery.
 
+## Version line
+
+- `zulip-rabbitmq` runs `rabbitmq:4.3.6`. RabbitMQ patches only its latest minor series for the community, and 4.2 (upstream docker-zulip's pin) left community support on 2026-07-31 ([RabbitMQ versions](https://www.rabbitmq.com/docs/versions)). There's no LTS track, so this is the newest supported release ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)).
+- **Open: `zulip/zulip-postgresql:14`.** Postgres 14 reaches end of life on 2026-11-12, and Zulip publishes no newer image yet (tags stop at 14). Follow Zulip's own Postgres upgrade path when docker-zulip ships one.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

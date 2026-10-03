@@ -32,7 +32,7 @@ curl http://localhost:8141/api/v4/system/ping
 
 ## Connecting the Android app
 
-Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.11.1` (`.env.example`), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
+Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.7.8` (`.env.example`, the current ESR), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
 
 ## Registration
 
@@ -43,6 +43,10 @@ Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/de
 - **Resource usage**: this is part of a "try it and see" playground (Rocket.Chat/Zulip alongside it) — bring it up when you want it, down when you don't (`uv run homeserver.py dev down mattermost`), rather than leaving it running idle. `down` auto-snapshots first, same as every other service.
 - **Outgoing email routed through the shared [Mailpit](mailpit.md) catcher by default** (`MM_EMAILSETTINGS_SMTPSERVER=mailpit` in `compose.yml`) — invites/notifications genuinely send, nothing ever leaves this host. Point `MM_EMAILSETTINGS_SMTPSERVER`/etc. at a real relay instead in `.env` if you want actual delivery.
 - **Playbooks/Calls plugins log "requires a professional license or higher"** on startup — expected in Team Edition, not an error; core messaging is unaffected.
+
+## Version line
+
+`MATTERMOST_VERSION=11.7.8`, the current **Extended Support Release** (ESR, supported to 2027-05-15; ESRs come every 9 months with 12 months of support, see the [release policy](https://docs.mattermost.com/product-overview/release-policy.html)), per the LTS-always rule ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)). It moved from 11.11.1 on 2026-10-03 with a reset, since the instance was still empty and Mattermost can't downgrade its database. The next ESR is expected around February 2027.
 
 ---
 

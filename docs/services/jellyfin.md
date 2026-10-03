@@ -187,6 +187,21 @@ The `jellyfin-pgsql-test` container, its Postgres volume, `service_data/data/jel
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: config restored (setup wizard already completed). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
+## Playback: video freezes while audio continues (2026-10-03)
+
+**Symptom:** in the browser, the picture freezes while the audio keeps playing; going back or clicking/seeking unfreezes it.
+
+**What the investigation ruled out:**
+- **The files must be transcoded for browsers, whichever browser.** They're HEVC 10-bit (x265) with 6-channel HE-AAC and only `dvd_subtitle` (VobSub, image) subtitle tracks. Browsers can't decode HEVC 10-bit or draw image subtitles, so Jellyfin transcodes to H.264 on the CPU, burns the subtitles in, and downmixes the audio.
+- **The CPU keeps up easily:** a whole 22-minute episode transcodes in about 79s, roughly 17× real time. Throttling and segment deletion are off (`encoding.xml`).
+- **The transcoded output is clean.** Jellyfin's exact ffmpeg command, re-run on 3 minutes from the same resume point (with and without the subtitle burn-in) and checked with ffmpeg's `freezedetect`, has every frame (4,316 each) and no frozen spans. So the freeze happens after the server, in delivery and playback of the HLS stream.
+
+**Not the proxy:** `proxy_buffering off` plus the rest of Jellyfin's [official nginx block](https://jellyfin.org/docs/general/post-install/networking/reverse-proxy/nginx/) was tried on 2026-10-03. Playback still froze, and the user also saw hangs with it, so it was **reverted**: the `jellyfin.${DOMAIN}` block is unchanged. Segments were reaching the browser steadily (status 200 every 3s), and their timestamps were continuous.
+
+**Root cause: Firefox plus fMP4 HLS.** It happens only in Firefox. Chrome and Jellyfin Desktop (mpv) play the same stream fine. Firefox's console shows `HLS Error: mediaError bufferStalledError`. (The `otherError internalException` / `ReferenceError: e is not defined` from a `blob:` worker appears in every browser: hls.js's worker breaks under jellyfin-web's minifier and falls back to the main thread, which is harmless on its own.) Firefox mishandles fMP4 fragment timestamps ([Mozilla bug 2026875](https://bugzilla.mozilla.org/show_bug.cgi?id=2026875)). jellyfin-web 12.1 works around it only for `browser.firefox && versionMajor == 149` (`src/scripts/browserDeviceProfile.js`), so newer Firefox versions still request fMP4 and stall ([jellyfin-web#7546](https://github.com/jellyfin/jellyfin-web/issues/7546)). Firefox's fingerprinting protection was ruled out: both `privacy.resistFingerprinting` and `privacy.fingerprintingProtection` were already `false`.
+
+**Fix for Firefox users (per browser, there's no server switch):** in Jellyfin, **Settings → Playback → untick "Prefer fMP4-HLS Media Container"**. Firefox then gets MPEG-TS segments. jellyfin-web stores this preference only in the browser (`set('preferFmp4HlsContainer', …, false)`), so the server can't set it for everyone. Chrome, Edge, Safari and Jellyfin Desktop need nothing. The permanent fix is upstream widening that Firefox check; update Jellyfin once a release does.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

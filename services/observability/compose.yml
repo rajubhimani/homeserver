@@ -19,7 +19,7 @@ services:
       - homeserver
 
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.13.4
     container_name: prometheus
     restart: unless-stopped
     command:

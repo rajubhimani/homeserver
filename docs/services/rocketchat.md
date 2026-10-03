@@ -82,6 +82,12 @@ NATS checks its own monitoring endpoint (`wget http://localhost:8222/healthz`, e
 - **No auth on `nats`'s monitoring port** — internal-only (`expose`, not `ports`), never reachable from outside the `homeserver` network, so this doesn't matter in practice.
 - Prometheus exporters for MongoDB/NATS metrics exist in Rocket.Chat's own official compose reference but were deliberately left out here — this is a playground instance, not a production deployment needing metrics scraping.
 
+## Version line
+
+- **Rocket.Chat `8.5.3`**, the current **LTS** (supported to 2027-07-31, see [endoflife.date](https://endoflife.date/rocket-chat) and the [release life cycle](https://docs.rocket.chat/docs/releaselifecycle)). It moved from the non-LTS 8.8.1 on 2026-10-03 with a reset (the instance was empty).
+- **MongoDB `8.0.32-ubi8`**, MongoDB's long-supported yearly major (to Oct 2029). 8.1/8.2/8.3 are short rapid releases, and 8.2 reached EOL on 2026-07-31. Rocket.Chat 8.5.3's own release notes list `MongoDB: 8.0` under *Engine versions*. Upstream's `rocketchat-compose` still defaults to 8.2, so this is a deliberate departure, made per the LTS-always rule ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)).
+- **NATS `2.14.7-alpine`**. NATS supports only its two newest minor versions (2.15, 2.14), and the 2.11 that upstream's compose pins is EOL. 2.14 is the more mature supported line.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
