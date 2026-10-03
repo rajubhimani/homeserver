@@ -19,7 +19,7 @@ services:
     command: sh -c "mkdir -p /vikunja-files && chown -R 1000:0 /vikunja-files"
 
   vikunja:
-    image: vikunja/vikunja:2.6.0
+    image: vikunja/vikunja:2.7.0
     container_name: vikunja
     restart: unless-stopped
     env_file: .env

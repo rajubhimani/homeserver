@@ -3,9 +3,12 @@ name = "dagster-user-code"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "dagster==1.13.24",
-    "dagster-postgres==0.29.24",
-    "dagster-docker==0.29.24",
+    "dagster==1.13.25",
+    "dagster-postgres==0.29.25",
+    "dagster-docker==0.29.25",
+    # Required by Dagster+ in every code location (docs.dagster.io/deployment/dagster-plus/code-requirements),
+    # so this image can be deployed to Dagster+ Hybrid unchanged. Unused while self-hosted.
+    "dagster-cloud==1.13.25",
 ]
 
 [tool.uv]

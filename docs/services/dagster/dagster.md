@@ -136,6 +136,10 @@ Separately from the per-run/per-step caps above, the 3 platform containers thems
 - **`pool=` concurrency pools are documented (`reference_asset`/`reference_op`) but not demoed live** — see the [feature-parity table](../../12-orchestration.md)'s "Capping concurrent executions" row for why: it needs a `dagster.yaml` `concurrency:` block, baked into the shared `dagster-webserver`/`dagster-daemon` image at build time, so demoing it means editing that file and rebuilding both containers — not a `definitions.py`-only change like every other example here.
 - **Asset Observations (`@observable_source_asset`/`ObserveResult`) are not demoed here** — a distinct concept from materialization: recording that a *source* asset (data Dagster doesn't produce, e.g. an external table) was checked/is fresh, without computing anything. None of this repo's examples touch source assets at all; worth knowing the concept exists for a real external-freshness use case.
 
+## Managed-cloud parity
+
+The user code already runs as a separate code location (`dagster-user-code` gRPC server), the same model Dagster+ Hybrid uses. Since 2026-10-03 its image also carries `dagster-cloud==1.13.25`, matching `dagster`, which [Dagster+ requires in every code location](https://docs.dagster.io/deployment/dagster-plus/code-requirements). The same image can be pointed at a Dagster+ Hybrid agent unchanged ([10 — New Services](../../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). Instance settings (`webserver-daemon/dagster.yaml`: Postgres storage, Docker run launcher) stay in the webserver/daemon image. Dagster+ supplies its own, so nothing in user code depends on them. `definitions.py` has no hardcoded hosts.
+
 ---
 
 [← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)

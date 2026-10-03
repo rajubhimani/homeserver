@@ -125,6 +125,29 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 - **Combined with the next section:** pick the LTS line first, then the exact version inside it that upstream's compose/docs test.
 - Sources: the vendors' own policies ([ClamAV](https://docs.clamav.net/faq/faq-eol.html), [Prometheus](https://prometheus.io/docs/introduction/release-cycle/), [Mattermost](https://docs.mattermost.com/product-overview/release-policy.html), [Forgejo](https://endoflife.date/forgejo), [RabbitMQ](https://www.rabbitmq.com/docs/versions), [MongoDB](https://mongodb.com/support-policy/lifecycles), [MariaDB](https://mariadb.com/resources/blog/announcing-yearly-lts-releases-for-mariadb-community-server/)).
 
+### Managed-cloud parity (orchestrators and backing services)
+
+Airflow, Dagster and Temporal have managed cloud counterparts, and this stack keeps each one movable there without code changes. That takes precedence over "newest" (none of the three publishes an LTS line).
+
+- **Airflow:** pin the newest version that **all** of AWS MWAA, Google Cloud Composer 3 and Astronomer run, on MWAA's Python. Check [MWAA's supported versions](https://docs.aws.amazon.com/mwaa/latest/userguide/airflow-versions.html), the [Composer release notes](https://cloud.google.com/composer/docs/release-notes) and the [Astro Runtime notes](https://www.astronomer.io/docs/runtime/runtime-release-notes). On 2026-10-03 that was `3.3.1-python3.12`, not the newer 3.3.2. Move up only once MWAA has the new version. DAGs use only Airflow connections, variables and env vars, never this stack's hostnames.
+- **Dagster:** user code runs as its own code location (the `dagster-user-code` gRPC container), the same model Dagster+ Hybrid uses. Its image includes `dagster-cloud` pinned to the same version as `dagster`, which [Dagster+ requires](https://docs.dagster.io/deployment/dagster-plus/code-requirements). Instance settings (`dagster.yaml`: storage, run launcher) stay in the webserver/daemon image, never in user code.
+- **Temporal:** the server version doesn't matter, since [Temporal Cloud runs the same server and every SDK supports every server](https://docs.temporal.io/cloud/overview.md). Workers connect through Temporal's [environment configuration](https://docs.temporal.io/develop/environment-configuration) (`TEMPORAL_ADDRESS`, `TEMPORAL_API_KEY`, `TEMPORAL_TLS*`, plus `TEMPORAL_NAMESPACES` here), never a hardcoded address. Moving to Temporal Cloud is then a `.env` change, and the [automated migration](https://docs.temporal.io/cloud/migrate/automated) moves running workflows.
+- **On every update** of these three, re-check the managed services first and record the result in the service doc.
+
+**The same holds for the backing services underneath every app.** A database, cache, queue or object store version only goes where the matching AWS managed service already runs it, so any app can move its data tier there:
+
+| Component | Managed equivalent | Checked 2026-10-03 |
+| --- | --- | --- |
+| Postgres 18.6 | [Amazon RDS for PostgreSQL](https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-rds-postgresql-18-6-17-11-16-15-15-19-14-24/) | ✅ 18.6 |
+| MariaDB 11.8 / 12.3 | [Amazon RDS for MariaDB](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-rds-mariadb-community-versions/) | ✅ 11.8.9 / 12.3.3 |
+| Valkey 9.1 / Redis 8.x | [ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html) Valkey (Redis OSS frozen at 7.1) | ✅ Valkey up to 9.1 |
+| RabbitMQ 4.3 | [Amazon MQ](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-mq-rabbitmq-43/) | ✅ 4.3 |
+| MongoDB 8.0 | MongoDB Atlas | ✅ 8.0 |
+| MinIO (S3 API) | Amazon S3 | ✅ endpoint and keys only |
+
+- Apps reach these only through env/config (host, port, credentials, S3 endpoint), never a hardcoded address, so switching is a `.env` change plus a data copy (`dump`/snapshot).
+- Apps that have their own hosted edition (n8n Cloud, GitLab.com, Mattermost Cloud, Rocket.Chat Cloud, Supabase Cloud, Plausible, Grafana Cloud…) need nothing extra. The hosted edition always runs the same or a newer version, and their export/import goes from older to newer.
+
 ## How fixes are chosen
 
 The same rule applies to adding a service, fixing an issue, adding a healthcheck, or bumping a version: **research first, then change once.**

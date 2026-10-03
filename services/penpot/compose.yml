@@ -32,7 +32,7 @@ services:
     command: sh -c "mkdir -p /penpot-assets && chown -R 1001:1001 /penpot-assets"
 
   penpot-backend:
-    image: penpotapp/backend:2.18.0
+    image: penpotapp/backend:2.18.1
     container_name: penpot-backend
     restart: unless-stopped
     env_file: .env
@@ -68,7 +68,7 @@ services:
       - homeserver
 
   penpot-exporter:
-    image: penpotapp/exporter:2.18.0
+    image: penpotapp/exporter:2.18.1
     container_name: penpot-exporter
     restart: unless-stopped
     env_file: .env
@@ -83,7 +83,7 @@ services:
       - homeserver
 
   penpot-frontend:
-    image: penpotapp/frontend:2.18.0
+    image: penpotapp/frontend:2.18.1
     container_name: penpot-frontend
     restart: unless-stopped
     environment:

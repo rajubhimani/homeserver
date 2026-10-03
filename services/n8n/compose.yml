@@ -19,7 +19,7 @@ services:
     command: sh -c "mkdir -p /n8n-data && chown -R 1000:1000 /n8n-data"
 
   n8n:
-    image: n8nio/n8n:2.41.4
+    image: n8nio/n8n:2.41.6
     container_name: n8n
     restart: unless-stopped
     env_file: .env
