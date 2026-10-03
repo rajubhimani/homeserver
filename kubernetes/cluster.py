@@ -243,6 +243,12 @@ def pvc_host_path(pvc: str) -> Path:
     sys.exit(f"PV {pv} lives at {node}, outside the fast/bulk folders")
 
 
+def has_pvc(svc: str, name: str) -> bool:
+    """Whether the generated manifests declare this PVC for the service."""
+    f = K8S / "generated/apps" / svc / "storage.yaml"
+    return f.is_file() and any(d and d["metadata"]["name"] == name for d in yaml.safe_load_all(f.read_text()))
+
+
 def scale(svc: str, replicas: int) -> None:
     sel = f"homeserver/service={svc}"
     kubectl("scale", "deployment", "-n", NAMESPACE, "-l", sel, f"--replicas={replicas}", check=False)
@@ -268,8 +274,15 @@ def cmd_import(a) -> None:
         print(f"== {svc}: snapshot {snap.name}")
         data_tar = next(snap.glob("service_data_*.tar.gz"), None)
         scale(svc, 0)
-        if data_tar:
+        if data_tar and has_pvc(svc, f"{svc}-data"):
             unpack(data_tar, pvc_host_path(f"{svc}-data"))
+        elif data_tar:
+            # No DATA_ROOT mount in Compose (e.g. guacamole keeps everything
+            # in its database); the snapshot's tar should be empty.
+            files = [n for n in subprocess.run(["tar", "tzf", str(data_tar)], capture_output=True, text=True).stdout.split()
+                     if not n.endswith("/")]
+            if files:
+                print(f"note: {svc} has no data volume; skipped {len(files)} file(s) in {data_tar.name}", flush=True)
         # Host folders Compose keeps outside DATA_ROOT (copy_from overrides).
         for co in (load_overrides(svc).get("containers") or {}).values():
             for mo in (co.get("mounts") or {}).values():

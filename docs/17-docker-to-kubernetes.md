@@ -237,6 +237,22 @@ What `import` does for each service:
 
 Use `--live-db` when the newest snapshot is older than the data you want. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
 
+**Big media folders are mounted, not copied** (`hostPath` + `env` in the override). `cluster.py create` mounts the path from the service's `.env` into the kind node; kind can only add mounts at creation, so adding one means rebuilding the cluster.
+
+| Folder | Mounted | Why |
+|---|---|---|
+| Jellyfin `MEDIA_ROOT` | read-only | Compose mounts it read-only too |
+| Nextcloud `OS_ISO_ROOT` | read-only | Only read |
+| Immich `UPLOAD_LOCATION` | **read-write** | Immich refuses to start unless it can write its `.immich` check files |
+
+**Immich shares your real photo folder, and Compose snapshots don't include it** (only Immich's database). Before testing Immich on Kubernetes:
+
+- Have your own copy of the photo folder, for example on the Passport.
+- Stop Compose's Immich first, so two Immichs never use the folder at once.
+- Don't upload or delete photos on the Kubernetes side.
+
+`immich-offline-remover` doesn't run on Kubernetes, so a test never removes library entries. Back on Docker, `restore immich` brings back the database. The photo folder is the same one, with at most some new thumbnails.
+
 Logins: protected hostnames (nginx-plain's `auth_request`, e.g. `browser.`) keep the Authentik sign-in through Traefik's ForwardAuth middleware, as in [Authentik's Traefik guide](https://docs.goauthentik.io/add-secure-apps/providers/proxy/server_traefik/). The same Authentik providers work unchanged.
 ## Step 9 — Going back to Docker *(written with step 8)*
 

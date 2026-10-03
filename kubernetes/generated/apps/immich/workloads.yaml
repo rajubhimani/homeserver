@@ -43,47 +43,6 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: immich-offline-remover
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: immich
-    app.kubernetes.io/name: immich-offline-remover
-spec:
-  replicas: 1
-  revisionHistoryLimit: 3
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: immich-offline-remover
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/part-of: homeserver
-        homeserver/service: immich
-        app.kubernetes.io/name: immich-offline-remover
-    spec:
-      enableServiceLinks: false
-      containers:
-      - name: immich-offline-remover
-        image: ghcr.io/tenekev/immich-offline-files-remover@sha256:73ee3a92c99cd1e43dda62d0dd5546515ad84422dbbd3988b066a1d159d53d3c
-        envFrom:
-        - configMapRef:
-            name: homeserver-root
-        env:
-        - name: API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: immich-env
-              key: IMMICH_OFFLINE_API_KEY
-        - name: API_URL
-          value: http://immich-server:2283/api
-        - name: CRON_EXPRESSION
-          value: 0 2 * * *
-        - name: OFFLINE_THRESHOLD
-          value: '100'
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: immich-redis
   labels:
     app.kubernetes.io/part-of: homeserver
@@ -205,14 +164,15 @@ spec:
         ports:
         - containerPort: 2283
         volumeMounts:
-        - name: v-immich-upload
+        - name: h-usr-src-app-upload
           mountPath: /usr/src/app/upload
         - name: v-immich-immich-server-data
           mountPath: /data
       volumes:
-      - name: v-immich-upload
-        persistentVolumeClaim:
-          claimName: immich-upload
+      - name: h-usr-src-app-upload
+        hostPath:
+          path: /var/k8s/host/immich-upload
+          type: Directory
       - name: v-immich-immich-server-data
         persistentVolumeClaim:
           claimName: immich-immich-server-data

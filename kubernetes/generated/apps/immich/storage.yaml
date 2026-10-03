@@ -29,18 +29,3 @@ spec:
   resources:
     requests:
       storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: immich-upload
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: immich
-spec:
-  accessModes:
-  - ReadWriteOnce
-  storageClassName: bulk
-  resources:
-    requests:
-      storage: 400Gi

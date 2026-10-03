@@ -14,9 +14,15 @@ containers:
       database_extensions: [vector, vchord, earthdistance, cube]
   immich-server:
     mounts:
-      # Photos: a copy of UPLOAD_LOCATION (Immich writes thumbnails and
-      # encoded video into it), on the HDD class.
-      /usr/src/app/upload: {volume: upload, size: 400Gi, class: bulk, copy_from: UPLOAD_LOCATION}
+      # Photos: the real UPLOAD_LOCATION folder, read-write (Immich refuses
+      # to start if it can't write its .immich check files). cluster.py create
+      # mounts it from services/immich/.env at this node path. Not a copy:
+      # whatever Immich changes here changes the real library, and Compose
+      # snapshots don't include it (only the database) - see docs/17 step 8.
+      /usr/src/app/upload: {hostPath: /var/k8s/host/immich-upload, env: UPLOAD_LOCATION}
+  immich-offline-remover:
+    skip: true
+    reason: "Removes Immich assets whose files are missing, through Immich's API. Off while Kubernetes shares the real photo folder with Compose's Immich, so a test run never deletes library entries."
   immich-redis:
     ports: [6379]   # valkey's default port; Compose never publishes it
 storage:
