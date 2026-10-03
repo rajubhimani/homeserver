@@ -72,17 +72,16 @@ spec:
           periodSeconds: 10
           failureThreshold: 8
         volumeMounts:
-        - name: v-data
+        - name: v-beszel-data
           mountPath: /beszel_data
-        - name: v-socket
+          subPath: data
+        - name: v-beszel-data
           mountPath: /beszel_socket
+          subPath: socket
       volumes:
-      - name: v-data
+      - name: v-beszel-data
         persistentVolumeClaim:
           claimName: beszel-data
-      - name: v-socket
-        persistentVolumeClaim:
-          claimName: beszel-socket
   strategy:
     type: Recreate
 ---
@@ -179,19 +178,18 @@ spec:
             add:
             - SYS_RAWIO
         volumeMounts:
-        - name: v-agent
+        - name: v-beszel-data
           mountPath: /var/lib/beszel-agent
-        - name: v-socket
+          subPath: agent
+        - name: v-beszel-data
           mountPath: /beszel_socket
+          subPath: socket
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       volumes:
-      - name: v-agent
+      - name: v-beszel-data
         persistentVolumeClaim:
-          claimName: beszel-agent
-      - name: v-socket
-        persistentVolumeClaim:
-          claimName: beszel-socket
+          claimName: beszel-data
       tolerations:
       - key: node-role.kubernetes.io/control-plane
         operator: Exists

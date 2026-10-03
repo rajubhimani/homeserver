@@ -1,0 +1,8 @@
+# Traefik's Gateway + generated HTTPRoutes replace nginx-plain's routing.
+# These server blocks serve content themselves, so each runs as a small
+# Deployment of nginx-plain's image with its block from
+# templates/default.conf.template (see generate.py nginx_plain()).
+sites:
+  browser-hub:
+    host: browser.${DOMAIN}
+    html: html/browser-hub

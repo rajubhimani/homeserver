@@ -89,11 +89,12 @@ spec:
           periodSeconds: 10
           failureThreshold: 9
         volumeMounts:
-        - name: v-config
+        - name: v-bookstack-data
           mountPath: /config
+          subPath: config
       volumes:
-      - name: v-config
+      - name: v-bookstack-data
         persistentVolumeClaim:
-          claimName: bookstack-config
+          claimName: bookstack-data
   strategy:
     type: Recreate

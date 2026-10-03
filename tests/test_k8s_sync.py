@@ -210,3 +210,30 @@ def test_nginx_redirects_become_gateway_redirects():
     assert r["spec"]["hostnames"] == [gen.TEST_DOMAIN if hasattr(gen, "TEST_DOMAIN") else "k8s.local"]
     assert r["spec"]["rules"][0]["filters"][0]["requestRedirect"] == {
         "scheme": "https", "hostname": "www.k8s.local", "statusCode": 301}
+
+
+def test_forward_auth_hosts_stay_protected():
+    """Every hostname nginx-plain puts behind authentik gets Traefik's
+    ForwardAuth on Kubernetes, plus the outpost path; nothing loses its login."""
+    prot = gen.nginx_protected()
+    assert "browser.${DOMAIN}" in prot
+    for f in GENERATED.glob("envs/test/*/routes.yaml"):
+        for r in yaml.safe_load_all(f.read_text()):
+            if not r or r["kind"] != "HTTPRoute" or "rules" not in r["spec"]:
+                continue
+            hosts = {h.replace(gen.TEST_DOMAIN, "${DOMAIN}") for h in r["spec"]["hostnames"]}
+            if hosts & prot:
+                assert hosts <= prot, f"{f}: protected and open hosts mixed in one route"
+                filters = [fl for rule in r["spec"]["rules"] for fl in rule.get("filters", [])]
+                assert any(fl.get("extensionRef", {}).get("name") == gen.AUTH_MIDDLEWARE for fl in filters), f
+                assert r["spec"]["rules"][0]["matches"][0]["path"]["value"] == "/outpost.goauthentik.io/"
+
+
+def test_browser_hub_block_has_no_nginx_auth_left():
+    """The generated Browser Hub server block drops nginx's auth_request
+    (Traefik + authentik do it) but keeps every status/browser location."""
+    cm = next(d for d in yaml.safe_load_all((GENERATED / "apps/nginx-plain/configmaps.yaml").read_text()) if d)
+    conf = cm["data"]["default.conf.template"]
+    assert "auth_request" not in conf and "goauthentik" not in conf
+    assert conf.count("location = /_status/") == 10
+    assert ".apps.svc.cluster.local:3000" in conf

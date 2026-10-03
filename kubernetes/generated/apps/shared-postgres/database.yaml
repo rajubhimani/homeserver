@@ -9,10 +9,10 @@ metadata:
     homeserver/service: shared-postgres
 spec:
   instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-202608131513-standard-trixie
   enableSuperuserAccess: true
   superuserSecret:
     name: shared-postgres-superuser
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-202608131513-standard-trixie
   postgresql:
     parameters:
       effective_cache_size: 1536MB

@@ -17,6 +17,13 @@ ported:
   - miniflux
   - bookstack
 
+  # Phase 3 (pulled forward): authentik, needed for the forward-auth login
+  # in front of the Browser Hub and the other protected hostnames
+  - authentik
+  # nginx-plain: its routing is Traefik's Gateway + generated HTTPRoutes;
+  # only its self-served sites (Browser Hub) run (overrides/nginx-plain.yaml)
+  - nginx-plain
+
 # Rendered only for the prod environment. The test cluster must never run
 # the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
 # split live traffic between Docker and the test cluster.
@@ -25,5 +32,4 @@ prod_only:
 
 # Not run on Kubernetes, each with the replacement.
 skipped:
-  nginx-plain: "Routing is Traefik's Gateway + generated HTTPRoutes (from nginx-plain's own template)."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."

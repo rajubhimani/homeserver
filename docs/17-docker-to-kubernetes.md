@@ -215,7 +215,29 @@ kubectl -n apps exec shared-postgres-1 -- psql -c '\l'                   # datab
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
 ## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
-## Step 8 — Testing with your real data (planned window) *(after phase 3)*
+## Step 8 — Testing with your real data
+
+Data goes into the cluster as **copies**. Docker's `service_data` folders and databases are only ever read:
+
+```bash
+uv run kubernetes/cluster.py import beszel                 # newest Compose snapshot -> the service's volume
+uv run kubernetes/cluster.py import authentik --live-db    # database from the running container instead
+uv run kubernetes/cluster.py import nextcloud --snapshot 20261003-123208
+```
+
+What `import` does for each service:
+
+1. Stops it on the cluster (Deployments scaled to 0).
+2. Unpacks the snapshot's `service_data` tar into the service's `<svc>-data` volume. One volume per service, with each subfolder mounted as a `subPath`, like Compose's `DATA_ROOT`.
+3. Copies its own Postgres database into the CloudNativePG cluster with `pg_dump`/`pg_restore`, Postgres's documented way to move data between servers:
+   - **from a snapshot:** the tar is unpacked into scratch space and served by a throwaway container of the Compose image, with no network;
+   - **with `--live-db`:** the dump is taken from the running Compose container. `pg_dump` reads one consistent snapshot without blocking it.
+4. Unpacks other named volumes into their own volumes.
+5. Starts it again.
+
+Use `--live-db` when the newest snapshot is older than the data you want. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
+
+Logins: protected hostnames (nginx-plain's `auth_request`, e.g. `browser.`) keep the Authentik sign-in through Traefik's ForwardAuth middleware, as in [Authentik's Traefik guide](https://docs.goauthentik.io/add-secure-apps/providers/proxy/server_traefik/). The same Authentik providers work unchanged.
 ## Step 9 — Going back to Docker *(written with step 8)*
 
 ## Why it's built this way (sources)

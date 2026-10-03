@@ -3,37 +3,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: beszel-agent
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: beszel
-spec:
-  accessModes:
-  - ReadWriteOnce
-  storageClassName: fast
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
   name: beszel-data
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: beszel
-spec:
-  accessModes:
-  - ReadWriteOnce
-  storageClassName: fast
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: beszel-socket
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: beszel

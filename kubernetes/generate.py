@@ -112,28 +112,56 @@ def load_scope() -> dict:
     return yaml.safe_load((K8S_DIR / "scope.yaml").read_text()) or {}
 
 
+NGINX_TEMPLATE = SERVICES_DIR / "nginx-plain/templates/default.conf.template"
+
+
+def nginx_blocks() -> list[str]:
+    """nginx-plain's top-level server { ... } blocks, by brace matching."""
+    text = NGINX_TEMPLATE.read_text()
+    out = []
+    for m in re.finditer(r"^server\s*\{", text, re.M):
+        depth, i = 0, m.end() - 1
+        while i < len(text):
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            if depth == 0:
+                break
+            i += 1
+        out.append(text[m.start():i + 1])
+    return out
+
+
 def nginx_routes() -> dict[str, list[tuple[str, int]]]:
     """container name -> [(hostname template, port)] from nginx-plain's
-    server blocks (server_name ... + set $upstream http://<container>:<port>)."""
-    text = (SERVICES_DIR / "nginx-plain/templates/default.conf.template").read_text()
+    server blocks that proxy `location /` to a container
+    (set $upstream http://<container>:<port>). Blocks that serve content
+    themselves (root ...; e.g. the Browser Hub) are nginx_sites()."""
     routes: dict[str, list[tuple[str, int]]] = {}
-    for block in re.split(r"\n\s*server\s*\{", text):
+    for block in nginx_blocks():
         names = re.search(r"server_name\s+([^;]+);", block)
-        up = re.search(r"set \$upstream https?://([a-z0-9-]+):(\d+)", block)
-        if not names or not up:
+        loc = re.search(r"location / \{[^}]*?set \$upstream https?://([a-z0-9-]+):(\d+)", block)
+        if not names or not loc:
             continue
         for host in names.group(1).split():
-            routes.setdefault(up.group(1), []).append((host, int(up.group(2))))
+            routes.setdefault(loc.group(1), []).append((host, int(loc.group(2))))
     return routes
+
+
+def nginx_protected() -> set[str]:
+    """Hostname templates nginx-plain puts behind authentik's forward auth."""
+    out = set()
+    for block in nginx_blocks():
+        names = re.search(r"server_name\s+([^;]+);", block)
+        if names and "auth_request /outpost.goauthentik.io/auth/nginx;" in block:
+            out.update(names.group(1).split())
+    return out
 
 
 def nginx_redirects() -> list[tuple[str, str, int]]:
     """[(hostname, target hostname, status)] for nginx-plain's redirect-only
     server blocks (server_name X; return 301 https://Y$request_uri;), e.g.
     the bare domain -> www."""
-    text = (SERVICES_DIR / "nginx-plain/templates/default.conf.template").read_text()
     out = []
-    for block in re.split(r"\n\s*server\s*\{", text):
+    for block in nginx_blocks():
         names = re.search(r"server_name\s+([^;]+);", block)
         ret = re.search(r"^\s*return (30[1278]) https://([^$/\s]+(?:\$\{DOMAIN\})?)\$request_uri;", block, re.M)
         if names and ret and "set $upstream" not in block:
@@ -285,6 +313,22 @@ def ensure_env_defined(container: dict, env_keys: set[str], secret: str, has_env
         container["env"] = add + (container.get("env") or [])
 
 
+def data_volume(svc: str, kind: str, key: str, mo: dict, ov: dict, pvcs: dict) -> tuple[str, str, str | None]:
+    """-> (pod volume name, PVC name, subPath). Compose's ${DATA_ROOT} is one
+    folder per service, its subfolders mounted separately: here one PVC
+    <svc>-data, each subfolder a subPath, so a one-shot chown of DATA_ROOT
+    (the *-permissions containers) covers what the apps mount. Named volumes
+    stay one PVC each."""
+    store = ov.get("storage") or {}
+    if kind == "data":
+        pvc, sub, conf = f"{svc}-data", (None if key == "root" else key), store.get("data") or {}
+    else:
+        pvc, sub, conf = f"{svc}-{slug(key)}", None, store.get(key) or {}
+    pvcs.setdefault(pvc, {"size": mo.get("size") or conf.get("size") or "1Gi",
+                          "class": mo.get("class") or conf.get("class") or "fast"})
+    return f"v-{slug(pvc)}"[:63], pvc, sub
+
+
 def wait_container(target: str, port: int) -> dict:
     return {
         "name": f"wait-{target}"[:63],
@@ -316,6 +360,14 @@ def convert(svc: str) -> dict[str, list[dict]]:
 
     oneshots = {n for n, s in services.items() if str(s.get("restart", "")).strip('"') in ("no", "on-failure")}
 
+    # A CORE app's own Postgres -> its own CloudNativePG cluster (same name).
+    own_db = {}
+    for n, s in services.items():
+        if not (ov_c.get(cname[n]) or {}).get("skip") and (cl := own_postgres(svc, n, s, ov)):
+            own_db[n] = cl
+            listen[n] = [5432]
+            files.setdefault("database.yaml", []).append(cl)
+
     for n, s in services.items():
         c = cname[n]
         co = ov_c.get(c) or {}
@@ -325,6 +377,8 @@ def convert(svc: str) -> dict[str, list[dict]]:
             continue
         if n in oneshots and any(n in (o.get("depends_on") or {}) for o in services.values()):
             continue  # becomes an initContainer of whoever depends on it
+        if n in own_db:
+            continue  # rendered as a CNPG Cluster above
         where = f"{svc}/{c}"
         container: dict = {"name": c, "image": k8s_value(s["image"], env_keys, where)}
         if s.get("entrypoint"):
@@ -398,13 +452,11 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 git_paths.append((rel, tgt))
                 mounts.append({"name": "repo", "mountPath": tgt, "subPath": f"repo/{rel}", "readOnly": True})
             elif kind in ("data", "named"):
-                pvc = f"{svc}-{slug(key)}"
-                pvcs.setdefault(pvc, {"size": mo.get("size") or (ov.get("storage") or {}).get(key, {}).get("size") or "1Gi",
-                                      "class": mo.get("class") or "fast"})
-                vname = f"v-{slug(key)}"[:63]
+                vname, pvc, sub = data_volume(svc, kind, key, mo, ov, pvcs)
                 if not any(v["name"] == vname for v in pod_vols):
                     pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
-                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
+                mounts.append({"name": vname, "mountPath": tgt, **({"subPath": sub} if sub else {}),
+                               **({"readOnly": True} if ro else {})})
             else:
                 hp = mo.get("hostPath")
                 if not hp:
@@ -455,6 +507,20 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 if ds.get("command"):
                     cm = ds["command"]
                     ic["args"] = [k8s_value(a, env_keys, where) for a in (shlex.split(cm) if isinstance(cm, str) else cm)]
+                if ds.get("user"):
+                    u = str(ds["user"]).split(":")
+                    ic["securityContext"] = {"runAsUser": int(u[0]), **({"runAsGroup": int(u[1])} if len(u) > 1 else {})}
+                imounts = []
+                for dm in ds.get("volumes") or []:
+                    dkind, dkey = classify_mount(dm, svc)
+                    if dkind not in ("data", "named"):
+                        raise GenError(f"{where}: init step {cname[dep]} mounts {dkind} {dkey}; only data/named volumes are supported")
+                    vname, pvc, sub = data_volume(svc, dkind, dkey, {}, ov, pvcs)
+                    if not any(v["name"] == vname for v in pod_vols):
+                        pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
+                    imounts.append({"name": vname, "mountPath": dm["target"], **({"subPath": sub} if sub else {})})
+                if imounts:
+                    ic["volumeMounts"] = imounts
                 init.append(ic)
             elif condition == "service_healthy":
                 if not listen.get(dep):
@@ -509,6 +575,58 @@ def convert(svc: str) -> dict[str, list[dict]]:
     return files
 
 
+AUTHENTIK = {"name": "authentik-server", "port": 9000}
+AUTH_MIDDLEWARE = "authentik-forward-auth"
+
+
+def http_route(name: str, svc: str, hosts_tmpl: list[str], backend: dict, domain: str) -> list[dict]:
+    """HTTPRoute(s) for hostnames -> backend. Hosts nginx-plain protects with
+    authentik keep that protection: Traefik's ForwardAuth middleware
+    (authentik's Traefik guide) on the app, plus /outpost.goauthentik.io/ on
+    the same host routed straight to authentik."""
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    prot = nginx_protected()
+    out = []
+    for suffix, group in (("", [h for h in hosts_tmpl if h not in prot]),
+                          ("-auth" if any(h not in prot for h in hosts_tmpl) else "", [h for h in hosts_tmpl if h in prot])):
+        if not group:
+            continue
+        rules: list[dict] = [{"backendRefs": [backend]}]
+        if group[0] in prot:
+            rules = [
+                {"matches": [{"path": {"type": "PathPrefix", "value": "/outpost.goauthentik.io/"}}],
+                 "backendRefs": [dict(AUTHENTIK)]},
+                {"filters": [{"type": "ExtensionRef", "extensionRef": {
+                    "group": "traefik.io", "kind": "Middleware", "name": AUTH_MIDDLEWARE}}],
+                 "backendRefs": [backend]},
+            ]
+        out.append({"apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
+                    "metadata": {"name": name + suffix, "labels": labels},
+                    "spec": {"parentRefs": [GATEWAY],
+                             "hostnames": sorted({h.replace("${DOMAIN}", domain) for h in group}),
+                             "rules": rules}})
+    return out
+
+
+def authentik_middleware() -> dict:
+    """Traefik ForwardAuth -> authentik's embedded outpost, exactly as
+    authentik's docs give it (docs.goauthentik.io, proxy provider, Traefik):
+    the Kubernetes counterpart of nginx-plain's auth_request."""
+    return {
+        "apiVersion": "traefik.io/v1alpha1", "kind": "Middleware",
+        "metadata": {"name": AUTH_MIDDLEWARE, "labels": {"app.kubernetes.io/part-of": "homeserver",
+                                                         "homeserver/service": "authentik"}},
+        "spec": {"forwardAuth": {
+            "address": f"http://authentik-server.{NAMESPACE}.svc.cluster.local:9000/outpost.goauthentik.io/auth/traefik",
+            "trustForwardHeader": True,
+            "authResponseHeaders": [
+                "X-authentik-username", "X-authentik-groups", "X-authentik-entitlements", "X-authentik-email",
+                "X-authentik-name", "X-authentik-uid", "X-authentik-jwt", "X-authentik-meta-jwks",
+                "X-authentik-meta-outpost", "X-authentik-meta-provider", "X-authentik-meta-app",
+                "X-authentik-meta-version"]}},
+    }
+
+
 def route_objects(svc: str, domain: str) -> list[dict]:
     """HTTPRoutes for every container of the service that nginx-plain routes."""
     compose = load_compose(svc)
@@ -519,13 +637,7 @@ def route_objects(svc: str, domain: str) -> list[dict]:
         c = s.get("container_name") or n
         if (ov_c.get(c) or {}).get("skip") or c not in routes:
             continue
-        hosts = sorted({h.replace("${DOMAIN}", domain) for h, _ in routes[c]})
-        port = routes[c][0][1]
-        out.append({
-            "apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
-            "metadata": {"name": c, "labels": {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}},
-            "spec": {"parentRefs": [GATEWAY], "hostnames": hosts,
-                     "rules": [{"backendRefs": [{"name": c, "port": port}]}]}})
+        out += http_route(c, svc, sorted({h for h, _ in routes[c]}), {"name": c, "port": routes[c][0][1]}, domain)
         # nginx-plain's redirect-only blocks that point at this container's
         # hostnames -> Gateway API's standard RequestRedirect filter (path and
         # query are kept, like $request_uri).
@@ -588,44 +700,89 @@ def compose_limit(svc: str) -> str | None:
     return mem(lim["memory"]) if lim.get("memory") else None
 
 
-def shared_postgres() -> dict[str, list[dict]]:
-    svc = "shared-postgres"
-    ov = load_overrides(svc)
-    args = compose_args(svc)
+def pg_params(args: list[str]) -> dict[str, str]:
+    """postgres -c k=v flags from a Compose command -> CNPG parameters."""
     params = {}
     for i, a in enumerate(args):
         if a == "-c" and i + 1 < len(args) and "=" in args[i + 1]:
             k, v = args[i + 1].split("=", 1)
             params[k] = v
+    return dict(sorted(params.items()))
+
+
+def cnpg_cluster(name: str, svc: str, params: dict, limit: str | None, size: str, extra: dict) -> dict:
+    """A one-instance CloudNativePG Cluster that keeps the Compose container's
+    name as its Service (managed.services.additional), so DB_HOST is unchanged."""
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    extra = dict(extra)
+    hba = extra.pop("pg_hba", None)
+    return {
+        "apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+        "metadata": {"name": name, "labels": labels},
+        "spec": {
+            "instances": 1,
+            "imageName": VERSIONS["CNPG_POSTGRES_IMAGE"],
+            **extra,
+            "postgresql": {"parameters": params, **({"pg_hba": hba} if hba else {})},
+            "storage": {"size": size, "storageClass": "fast"},
+            **({"resources": {"limits": {"memory": limit}}} if limit else {}),
+            "inheritedMetadata": {"labels": labels},
+            "managed": {"services": {"additional": [
+                {"selectorType": "rw", "serviceTemplate": {"metadata": {"name": name, "labels": labels}}}]}},
+        },
+    }
+
+
+def own_postgres(svc: str, n: str, s: dict, ov: dict) -> dict | None:
+    """A CORE app's own `postgres:` container (named by its DB_HOST) -> its own
+    CNPG Cluster: database and owner from the same .env keys Compose passes
+    (POSTGRES_DB/POSTGRES_USER), password from Secret <svc>-db-owner."""
+    c = s.get("container_name") or n
+    ex = load_env(SERVICES_DIR / svc / ".env.example")
+    if not re.match(r"(docker\.io/(library/)?)?postgres:", s["image"]) or ex.get("DB_HOST") != c:
+        return None
+    env = s.get("environment") or {}
+    key = lambda k: (re.fullmatch(r"\$\{(\w+)\}", str(env.get(k, ""))) or [None, k])[1]  # noqa: E731
+    db, user = ex.get(key("POSTGRES_DB")), ex.get(key("POSTGRES_USER"))
+    if not db or not user:
+        raise GenError(f"{svc}/{c}: can't resolve POSTGRES_DB/POSTGRES_USER from .env.example")
+    cm = s.get("command") or []
+    lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
+    size = ((ov.get("storage") or {}).get(c) or {}).get("size", "5Gi")
+    # The app's role owns its database but isn't a superuser (unlike the
+    # Compose container, where POSTGRES_USER is): the same split managed
+    # Postgres (RDS, Cloud SQL, Azure) has.
+    return cnpg_cluster(c, svc, pg_params(shlex.split(cm) if isinstance(cm, str) else list(cm)),
+                        mem(lim["memory"]) if lim.get("memory") else None, size,
+                        {"bootstrap": {"initdb": {"database": db, "owner": user, "secret": {"name": f"{svc}-db-owner"}}}})
+
+
+def own_db_keys(svc: str) -> tuple[str, str] | None:
+    """(user key, password key) in the service's .env for its own CNPG
+    database owner, or None: what cluster.py turns into <svc>-db-owner."""
+    for n, s in (load_compose(svc).get("services") or {}).items():
+        if own_postgres(svc, n, s, {}):
+            env = s.get("environment") or {}
+            key = lambda k: (re.fullmatch(r"\$\{(\w+)\}", str(env.get(k, ""))) or [None, k])[1]  # noqa: E731
+            return key("POSTGRES_USER"), key("POSTGRES_PASSWORD")
+    return None
+
+
+def shared_postgres() -> dict[str, list[dict]]:
+    svc = "shared-postgres"
+    ov = load_overrides(svc)
+    params = pg_params(compose_args(svc))
     apps = {a: s for a, s in shared_db_apps().items() if s["engine"] == "postgres"}
     # Each app's login may connect only to its own database(s): the declarative
     # equivalent of homeserver.py's REVOKE ALL ON DATABASE ... FROM PUBLIC,
     # which CNPG can't declare (it doesn't manage privileges).
     hba = [f"host {','.join(s['dbs'])} {s['user']} all scram-sha-256" for _, s in sorted(apps.items())]
     hba.append(f"host all {','.join(sorted({s['user'] for s in apps.values()}))} all reject")
-    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
-    lim = compose_limit(svc)
-    cluster = {
-        "apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
-        "metadata": {"name": svc, "labels": labels},
-        "spec": {
-            "instances": 1,
-            # The admin login Compose has (POSTGRES_USER=postgres), from a
-            # basic-auth Secret cluster.py builds from shared-postgres/.env.
-            "enableSuperuserAccess": True,
-            "superuserSecret": {"name": f"{svc}-superuser"},
-            "imageName": VERSIONS["CNPG_POSTGRES_IMAGE"],
-            "postgresql": {"parameters": dict(sorted(params.items())), "pg_hba": hba},
-            "storage": {"size": (ov.get("storage") or {}).get("size", "5Gi"), "storageClass": "fast"},
-            **({"resources": {"limits": {"memory": lim}}} if lim else {}),
-            "inheritedMetadata": {"labels": labels},
-            # The name the apps' DB_HOST uses under Compose, pointing at the
-            # primary: CNPG's own additional-service mechanism
-            # (cloudnative-pg.io/docs/1.30/service_management).
-            "managed": {"services": {"additional": [
-                {"selectorType": "rw", "serviceTemplate": {"metadata": {"name": svc, "labels": labels}}}]}},
-        },
-    }
+    # The admin login Compose has (POSTGRES_USER=postgres), from a basic-auth
+    # Secret cluster.py builds from shared-postgres/.env.
+    cluster = cnpg_cluster(svc, svc, params, compose_limit(svc), (ov.get("storage") or {}).get("size", "5Gi"),
+                           {"enableSuperuserAccess": True, "superuserSecret": {"name": f"{svc}-superuser"},
+                            "pg_hba": hba})
     return {"database.yaml": [cluster]}
 
 
@@ -716,10 +873,88 @@ def db_wait(svc: str) -> dict | None:
             "command": ["sh", "-c", 'until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done']}
 
 
+# ── nginx-plain's own sites ───────────────────────────────────────────────
+AUTH_LINES = re.compile(r"^\s*(auth_request\s|error_page 401 = @goauthentik|auth_request_set \$auth_cookie|"
+                        r"add_header Set-Cookie \$auth_cookie).*\n", re.M)
+
+
+def strip_location(block: str, head: str) -> str:
+    """Remove `location <head> { ... }` (brace matched) from a server block."""
+    while (i := block.find(f"location {head} {{")) != -1:
+        depth, j = 0, block.index("{", i)
+        while True:
+            depth += {"{": 1, "}": -1}.get(block[j], 0)
+            if depth == 0:
+                break
+            j += 1
+        start = block.rfind("\n", 0, i) + 1
+        block = block[:start] + block[j + 2:]
+    return block
+
+
+def nginx_plain() -> dict[str, list[dict]]:
+    """Traefik replaces nginx-plain's routing. What it can't replace are the
+    blocks that serve content themselves (overrides/nginx-plain.yaml sites):
+    each runs as a small Deployment of nginx-plain's own image with that
+    exact server block. The authentik lines come out (Traefik's ForwardAuth
+    does that job in front), upstreams get the in-cluster suffix (nginx's
+    resolver doesn't use search domains), and the resolver is kube-dns."""
+    svc = "nginx-plain"
+    ov = load_overrides(svc)
+    s = next(iter(load_compose(svc)["services"].values()))
+    text = NGINX_TEMPLATE.read_text()
+    header = text[:text.index("\nserver {")]
+    blocks = nginx_blocks()
+    health = next(b for b in blocks if "server_name _;" in b)
+    files: dict[str, list[dict]] = {}
+    for site, conf in (ov.get("sites") or {}).items():
+        block = next((b for b in blocks if re.search(rf"server_name\s+{re.escape(conf['host'])};", b)), None)
+        if not block:
+            raise GenError(f"nginx-plain: no server block for {conf['host']}")
+        block = AUTH_LINES.sub("", strip_location(strip_location(block, "/outpost.goauthentik.io"), "@goauthentik_proxy_signin"))
+        block = re.sub(r"(set \$upstream https?://[a-z0-9-]+)(:\d+;)", rf"\1.{NAMESPACE}.svc.cluster.local\2", block)
+        labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc, "app.kubernetes.io/name": site}
+        html_dir = SERVICES_DIR / svc / conf["html"]
+        html = {f.name: f.read_text() for f in sorted(html_dir.iterdir()) if f.is_file()}
+        root = re.search(r"root\s+([^;]+);", block).group(1)
+        files.setdefault("configmaps.yaml", []).append({
+            "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": f"{site}-files", "labels": labels},
+            "data": {"default.conf.template": "\n".join(
+                ln.rstrip() for ln in (header + "\n" + health + "\n\n" + block).splitlines()) + "\n", **html}})
+        container = {
+            "name": site, "image": s["image"],
+            "env": [{"name": "DOMAIN", "valueFrom": {"configMapKeyRef": {"name": ROOT_CONFIGMAP, "key": "DOMAIN"}}},
+                    {"name": "NGINX_RESOLVER", "value": "kube-dns.kube-system.svc.cluster.local"}],
+            "ports": [{"containerPort": 80}],
+            **probe_set(s.get("healthcheck"), set(), f"{svc}/{site}"),
+            "volumeMounts": [{"name": "files", "mountPath": "/etc/nginx/templates/default.conf.template",
+                              "subPath": "default.conf.template", "readOnly": True}]
+            + [{"name": "files", "mountPath": f"{root}/{k}", "subPath": k, "readOnly": True} for k in html],
+        }
+        files.setdefault("workloads.yaml", []).append({
+            "apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": site, "labels": labels},
+            "spec": {"replicas": 1, "revisionHistoryLimit": 3,
+                     "selector": {"matchLabels": {"app.kubernetes.io/name": site}},
+                     "template": {"metadata": {"labels": labels}, "spec": {
+                         "enableServiceLinks": False, "containers": [container],
+                         "volumes": [{"name": "files", "configMap": {"name": f"{site}-files"}}]}}}})
+        files.setdefault("services.yaml", []).append({
+            "apiVersion": "v1", "kind": "Service", "metadata": {"name": site, "labels": labels},
+            "spec": {"selector": {"app.kubernetes.io/name": site}, "ports": [{"name": "http", "port": 80, "targetPort": 80}]}})
+    return files
+
+
+def nginx_site_routes(domain: str) -> list[dict]:
+    out = []
+    for site, conf in (load_overrides("nginx-plain").get("sites") or {}).items():
+        out += http_route(site, "nginx-plain", [conf["host"]], {"name": site, "port": 80}, domain)
+    return out
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
-    return HEADER.format(svc=svc) + "---\n".join(yaml.dump(o, Dumper=_Dumper, sort_keys=False, width=120) for o in objs)
+    return HEADER.format(svc=svc) + "---\n".join(yaml.dump(o, Dumper=_Dumper, sort_keys=False, width=120, allow_unicode=True) for o in objs)
 
 
 def kustomization(resources: list[str], namespace: str | None = NAMESPACE) -> str:
@@ -741,11 +976,15 @@ def render(out: Path) -> list[str]:
             files = shared_postgres()
         elif svc == "shared-mariadb":
             files = shared_mariadb()
+        elif svc == "nginx-plain":
+            files = nginx_plain()
         else:
             files = convert(svc)
             dbo = app_database(svc)
             if dbo and not external_db(svc):
                 files["database.yaml"] = dbo
+            if svc == "authentik":
+                files["middleware.yaml"] = [authentik_middleware()]
         d = out / "apps" / svc
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(files.items()):
@@ -758,7 +997,7 @@ def render(out: Path) -> list[str]:
             ed = out / "envs" / env / svc
             ed.mkdir(parents=True, exist_ok=True)
             res = [f"../../../apps/{svc}"]
-            routes = route_objects(svc, dom)
+            routes = nginx_site_routes(dom) if svc == "nginx-plain" else route_objects(svc, dom)
             if routes:
                 (ed / "routes.yaml").write_text(dump(routes, svc))
                 res.append("routes.yaml")

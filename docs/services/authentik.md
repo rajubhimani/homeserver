@@ -179,3 +179,16 @@ Reset to an empty install, came up healthy, then restored from its `reset-backup
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## On Kubernetes
+
+Generated from this compose file:
+
+- **Database:** `authentik-db` becomes its own CloudNativePG cluster under the same name. Database and owner come from `POSTGRES_DB`/`POSTGRES_USER`; the owner isn't a superuser.
+- **Server and worker:** they share one `authentik-data` volume (`media`, `templates` and `certs` as subPaths). `authentik-permissions` runs as an init container on that volume.
+- **Probes:** copied from Authentik's official Helm chart (2026.8.3).
+- **Docker socket:** not mounted. It's only for Docker-managed outposts; forward auth uses the embedded outpost.
+- **Login in front of apps:** the Traefik `Middleware` `authentik-forward-auth` (from Authentik's Traefik guide) protects every hostname nginx-plain sends through `auth_request`.
+
+Copy your data in with `uv run kubernetes/cluster.py import authentik --live-db` ([docs/17](../17-docker-to-kubernetes.md) step 8).
+
