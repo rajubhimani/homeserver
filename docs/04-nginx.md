@@ -106,3 +106,14 @@ uv run homeserver.py dev up nginx-plain  # auto-stops nginx (NPM) if running
 ---
 
 [← Access Setup](03-access.md) | [Home](../setup.md) | [Next: Nextcloud →](05-nextcloud.md)
+
+## On Kubernetes
+
+Traefik's Gateway plus generated HTTPRoutes replace nginx-plain's routing, all generated from `templates/default.conf.template`:
+
+- **Proxy blocks** (`location /` → a container) become HTTPRoutes. Blocks with Authentik's `auth_request` keep the login through Traefik's ForwardAuth middleware, plus `/outpost.goauthentik.io/` routed to Authentik.
+- **Redirect-only blocks** (the bare domain → `www`) become `RequestRedirect` routes.
+- **Blocks that serve content themselves** (the Browser Hub, listed in `kubernetes/overrides/nginx-plain.yaml`) run as a small Deployment of this image with that exact block, minus the `auth_request` lines.
+- **The tunnel target:** a Service named `nginx-plain` points at Traefik, so the Cloudflare tunnel's `http://nginx-plain:80` works unchanged.
+
+Guide: [17 — Moving to Kubernetes](17-docker-to-kubernetes.md).
