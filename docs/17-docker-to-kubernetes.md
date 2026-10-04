@@ -239,6 +239,14 @@ uv run kubernetes/cluster.py rmi wallabag                             # free its
 
 An app that genuinely needs an exception records it in its override: `security: {privilege_escalation: true, reason: ...}` or `security: {seccomp: Unconfined, reason: ...}`.
 
+### Secrets encrypted at rest, and a steadier control plane
+
+Applied by `cluster.py create` (so from the next cluster rebuild on):
+
+- **Secrets are encrypted in etcd with `secretbox`.** The Kubernetes docs rate it "Strong"; they call `aescbc` "Weak" (padding-oracle attacks) and accept `aesgcm` only with automatic key rotation ([encrypt-data](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/)). The key is generated once into `kubernetes/.env` (`K8S_SECRETS_ENCRYPTION_KEY`, mode 600, never in git). The config file goes to `K8S_ENCRYPTION_DIR`, owner-only, mounted read-only into the node. With a cloud key service (AWS KMS, Azure Key Vault, GCP KMS), `kms v2` is the stronger choice.
+- **Longer leader-election leases** for the scheduler and controller-manager (60 s lease, 45 s renew, instead of 15 s/10 s). On 2026-10-04 slow etcd writes made both restart 16–17 times. A single control plane has no other instance to hand over to, so riding out a stall is better than restarting. etcd's own [tuning guide](https://etcd.io/docs/v3.6/tuning/) also recommends top disk priority for etcd (`ionice -c2 -n0`).
+- **Verified on a throwaway cluster:** read raw from etcd, a new Secret starts with `k8s:enc:secretbox:v1:key1`, and its value doesn't appear in plain text; through the API it reads normally. Note: kind renders kubeadm `v1beta3`, so `extraArgs` in the template is a map, not a list.
+
 ### Pod Security Standards
 
 Namespace `apps` warns on anything that breaks **Baseline** and audits **Restricted** (`cluster/namespaces.yaml`). It doesn't enforce yet. A dry run against the running services (`kubectl label --dry-run=server ns apps pod-security.kubernetes.io/enforce=baseline`) lists the remaining Baseline exceptions, all from deliberate features:
