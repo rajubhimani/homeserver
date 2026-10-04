@@ -2331,7 +2331,7 @@ def velero_values(env: str) -> dict:
 
 def backup_store() -> dict[str, list[dict] | dict]:
     """The cluster's own S3 store (MinIO, the maintained pgsty fork), on the
-    HDD (storage class bulk), with one bucket and one key per consumer."""
+    HDD (storage class backup), with one bucket and one key per consumer."""
     labels = {"app.kubernetes.io/part-of": "homeserver", "app.kubernetes.io/name": "backup-store"}
     secure_c = {"allowPrivilegeEscalation": False, "runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000,
                 "capabilities": {"drop": ["ALL"]}}
@@ -2370,7 +2370,7 @@ def backup_store() -> dict[str, list[dict] | dict]:
             {"apiVersion": "v1", "kind": "PersistentVolumeClaim",
              "metadata": {"name": "backup-store", "namespace": BACKUP_NS, "labels": labels,
                           "annotations": {"argocd.argoproj.io/sync-options": KEEP_OPTIONS}},
-             "spec": {"accessModes": ["ReadWriteOnce"], "storageClassName": "bulk",
+             "spec": {"accessModes": ["ReadWriteOnce"], "storageClassName": "backup",
                       "resources": {"requests": {"storage": "200Gi"}}}},
             {"apiVersion": "apps/v1", "kind": "Deployment",
              "metadata": {"name": "backup-store", "namespace": BACKUP_NS, "labels": labels},

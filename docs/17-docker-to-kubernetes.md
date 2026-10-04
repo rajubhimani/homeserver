@@ -123,8 +123,9 @@ $EDITOR kubernetes/.env
 |---|---|---|
 | `K8S_HTTP_PORT` / `K8S_HTTPS_PORT` | Where the cluster's router listens (loopback only) | `18080` / `18443` |
 | `K8S_FAST_PATH` | SSD folder for databases and small data (storage class `fast`) | `~/k8s-data/fast` |
-| `K8S_BULK_PATH` | HDD folder for big data, backups, logs (storage class `bulk`) | `/mnt/mydata/k8s-data/bulk` |
-| `K8S_IMAGES_PATH` | Where the cluster keeps its copy of every image. kind stores images a second time, so keep this off a small SSD | `/mnt/mydata/k8s-data/containerd` |
+| `K8S_BULK_PATH` | SSD folder for larger app data and logs (storage class `bulk`) | `~/k8s-data/bulk` |
+| `K8S_BACKUP_PATH` | HDD folder for the backup store (storage class `backup`): a backup must not share a disk with its data | `/mnt/mydata/k8s-data/backup` |
+| `K8S_IMAGES_PATH` | Where the cluster keeps its copy of every image. kind stores images a second time (~35-70 GB). On this host it's on the SSD, which removes the HDD bottleneck of 2026-10-04 | `~/k8s-data/containerd` |
 
 Then:
 
@@ -586,7 +587,7 @@ Every Kubernetes choice here follows the upstream project's documented way. Wher
 | Traefik creates the Gateway itself (`gateway.enabled`, `namespacePolicy: All`) | The Traefik chart's own values (`helm show values traefik --version 41.6.1`) |
 | Beszel agent: DaemonSet, `hostNetwork`, control-plane tolerations, `maxUnavailable: 100%` | [Beszel's Kubernetes example](https://beszel.dev/guide/advanced-deployment) |
 | docs: git-sync runs once at pod start, not as a live sidecar | [git-sync](https://github.com/kubernetes/git-sync) "can pull one time". The paths are `subPath` mounts, which Kubernetes never updates after start, so a sidecar's later syncs wouldn't reach the app |
-| Storage classes `fast`/`bulk` | [local-path-provisioner](https://github.com/rancher/local-path-provisioner): `nodePath` (listed in `nodePathMap`) and `pathPattern` per StorageClass |
+| Storage classes `fast`/`bulk`/`backup` | [local-path-provisioner](https://github.com/rancher/local-path-provisioner): `nodePath` (listed in `nodePathMap`) and `pathPattern` per StorageClass |
 | Restart on `.env` change | [Helm's `checksum/config` pattern](https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments), done with `kubectl rollout restart` when the Secret's hash changes |
 | Secrets parsed with the same `.env` rules as Compose, not `kubectl --from-env-file` | **Own design:** kubectl's env-file parser keeps quotes literally, while Compose strips them. Apps must see the same values in both runtimes |
 | kind node's image store on the HDD (`K8S_IMAGES_PATH` mounted at `/var/lib/containerd`) | **Own design:** [kind extraMounts](https://kind.sigs.k8s.io/docs/user/configuration/#extra-mounts) are documented, but not for containerd's store. kind keeps a second copy of every image, which the small SSD can't hold. Verified on ext4 |

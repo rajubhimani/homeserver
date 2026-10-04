@@ -105,7 +105,7 @@ def encryption_config(c: dict) -> None:
 
 def cmd_create(_a) -> None:
     c = cfg()
-    for key in ("K8S_FAST_PATH", "K8S_BULK_PATH", "K8S_IMAGES_PATH"):
+    for key in ("K8S_FAST_PATH", "K8S_BULK_PATH", "K8S_BACKUP_PATH", "K8S_IMAGES_PATH"):
         Path(c[key]).mkdir(parents=True, exist_ok=True)
     encryption_config(c)
     text = string.Template((K8S / "cluster/kind-config.template.yaml").read_text()).substitute(c)
@@ -187,7 +187,7 @@ def cmd_bootstrap(a) -> None:
     # kind's local-path provisioner: allow the fast/bulk folders the storage
     # classes use. Node setup, not cluster config, so it stays here.
     conf = {"nodePathMap": [{"node": "DEFAULT_PATH_FOR_NON_LISTED_NODES",
-                             "paths": ["/var/local-path-provisioner", "/var/k8s/fast", "/var/k8s/bulk"]}]}
+                             "paths": ["/var/local-path-provisioner", "/var/k8s/fast", "/var/k8s/bulk", "/var/k8s/backup"]}]}
     kubectl("-n", "local-path-storage", "patch", "configmap", "local-path-config", "--type", "merge",
             "-p", json.dumps({"data": {"config.json": json.dumps(conf, indent=1)}}))
     # The node holding the host folders (kind: its only node); on a real
@@ -354,10 +354,11 @@ def pvc_host_path(pvc: str) -> Path:
     q = subprocess.run(["kubectl", "--context", f"kind-{c['K8S_CLUSTER_NAME']}", "get", "pv", pv, "-o",
                         "jsonpath={.spec.hostPath.path}{.spec.local.path}"], capture_output=True, text=True)
     node = q.stdout.strip()
-    for prefix, key in (("/var/k8s/fast", "K8S_FAST_PATH"), ("/var/k8s/bulk", "K8S_BULK_PATH")):
+    for prefix, key in (("/var/k8s/fast", "K8S_FAST_PATH"), ("/var/k8s/bulk", "K8S_BULK_PATH"),
+                        ("/var/k8s/backup", "K8S_BACKUP_PATH")):
         if node.startswith(prefix):
             return Path(os.path.expanduser(c[key])) / node[len(prefix):].lstrip("/")
-    sys.exit(f"PV {pv} lives at {node}, outside the fast/bulk folders")
+    sys.exit(f"PV {pv} lives at {node}, outside the fast/bulk/backup folders")
 
 
 def has_pvc(svc: str, name: str) -> bool:

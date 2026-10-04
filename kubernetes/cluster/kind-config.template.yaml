@@ -16,11 +16,13 @@ nodes:
         hostPort: ${K8S_HTTPS_PORT}
         listenAddress: "127.0.0.1"
     extraMounts:
-      # Storage classes "fast" (SSD) and "bulk" (HDD), see cluster/storage.yaml
+      # Storage classes "fast", "bulk" (SSD) and "backup" (HDD), see cluster/base/storage.yaml
       - hostPath: ${K8S_FAST_PATH}
         containerPath: /var/k8s/fast
       - hostPath: ${K8S_BULK_PATH}
         containerPath: /var/k8s/bulk
+      - hostPath: ${K8S_BACKUP_PATH}
+        containerPath: /var/k8s/backup
       # The node's image store, so image copies land on the roomy disk
       - hostPath: ${K8S_IMAGES_PATH}
         containerPath: /var/lib/containerd
