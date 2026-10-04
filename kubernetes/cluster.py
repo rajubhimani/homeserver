@@ -620,17 +620,28 @@ def cmd_rmi(a) -> None:
     """Remove stopped services' images from the kind node's image store
     (K8S_IMAGES_PATH): not images any running pod still uses."""
     node = f"{cfg()['K8S_CLUSTER_NAME']}-control-plane"
+    names = services(a.services)
+    # A container that's still shutting down keeps its image in use: wait
+    # for the services' pods to be gone first.
+    for svc in names:
+        subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "wait",
+                        "--for=delete", "pod", "-l", f"homeserver/service={svc}", "--timeout=300s"], capture_output=True)
     in_use = set(subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "get", "pods", "-A", "-o",
                                  "jsonpath={range .items[*]}{range .spec.containers[*]}{.image}{\"\\n\"}{end}"
                                  "{range .spec.initContainers[*]}{.image}{\"\\n\"}{end}{end}"],
                                 capture_output=True, text=True).stdout.split())
     wanted = set()
-    for svc in services(a.services):
+    for svc in names:
         wanted |= service_images(svc)
     for img in sorted(wanted - in_use):
         ref = img if "/" in img.split(":")[0] or "." in img.split("/")[0] else f"docker.io/library/{img}"
         r = subprocess.run(["docker", "exec", node, "crictl", "rmi", ref], capture_output=True, text=True)
-        print(("removed " if r.returncode == 0 else "kept    ") + img + ("" if r.returncode == 0 else f"  ({r.stderr.strip()[:80]})"))
+        gone = subprocess.run(["docker", "exec", node, "crictl", "inspecti", ref], capture_output=True).returncode != 0
+        if gone:
+            print(f"removed {img}")
+        else:
+            err = r.stderr.strip().splitlines()
+            print(f"kept    {img}  ({err[-1] if err else 'still present'})")
     kept = sorted(wanted & in_use)
     if kept:
         print("still in use by running pods: " + ", ".join(kept))
