@@ -1,4 +1,4 @@
-# Handover — Kubernetes migration status (2026-10-04)
+# Handover — Kubernetes migration status (2026-10-05)
 
 Read this first in a new session. It records where the Docker → Kubernetes
 work stands, what's left, the decisions already made with the owner, and
@@ -12,22 +12,14 @@ design), branch `feature/k8s-generated`.
 
 ---
 
-## 0. Before formatting the OS (the owner is about to)
+## 0. OS reinstall: DONE (2026-10-05)
 
-**What's on which disk** (checked 2026-10-04):
-
-| Disk | Holds | On format |
-|---|---|---|
-| `sda6` (SSD, btrfs: `/` and `/home`) | `/var/lib/docker` (**every Docker named volume: all Docker databases**), `~/k8s-data/fast` (Kubernetes databases and fast volumes), `~/k8s-data/encryption`, `~/.claude`, the kind cluster | **lost** |
-| `sdb2` (HDD, `/mnt/mydata`) | this repo, every `.env`, `kubernetes/.env` (all keys), `service_data/` (Docker data folders **and snapshots**), `/mnt/mydata/k8s-data/` (export, backup store, image store), `/mnt/mydata/claude-backup-20261004/` | safe |
-| `sdb1` (HDD, `/mnt/media`) | photos (Immich), media (Jellyfin), OS ISOs | safe |
-| Passport (`/run/media/raju/My Passport`) | archives | safe |
-
-**Checked before the format:**
-- **Docker:** all 52 named volumes are in snapshots under `service_data/backup/` (2026-10-02/03, taken when Docker stopped; nothing newer exists). The 106 anonymous volumes hold no data (kind's node `/var`, tool installs).
-- **Kubernetes:** export `/mnt/mydata/k8s-data/export/20261004-185119` (23 services, 9 database dumps, 25 volume archives). **If the cluster was used after 18:51 on 2026-10-04, take a fresh export first:** `uv run kubernetes/cluster.py export --env prod <services>` (the list is in §2).
-- **`~/.claude`:** copied to `/mnt/mydata/claude-backup-20261004/dot-claude` (memories, global `CLAUDE.md`, session history).
-- **Optional extra copy:** `uv run homeserver.py archive "/run/media/raju/My Passport/homeserver"`, plus `kubernetes/.env` to the Passport.
+The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same paths. Rebuilt the same day:
+- Tools: kind, kubectl, helm (Fedora's v4.2.2; `versions.env` pins v4.3.0, nothing checks it), uv, gh (HTTPS login). inotify limits set.
+- Layout as decided in §1: Docker, kind's image store (`~/k8s-data/containerd`), `fast` and `bulk` on the SSD (`chattr +C`); the backup store on the HDD through the new `backup` class (`K8S_BACKUP_PATH=/mnt/mydata/k8s-data/backup`).
+- `cluster.py create`, `bootstrap --env prod` (tunnel off), then `import --from-export /mnt/mydata/k8s-data/export/20261004-185119`: all 23 services imported.
+- Row counts checked on the restored databases (Immich 21,246 assets, Firefly 113 accounts / 793 transactions, Authentik 4 users, Nextcloud 691 files, Atuin 2,882 records in `store`, Forgejo 3 repos, Plausible 2 sites, Guacamole 3 connections).
+- `~/.claude` was not restored; the copy is at `/mnt/mydata/claude-backup-20261004/dot-claude`.
 
 ## 1. After formatting
 
@@ -80,9 +72,9 @@ design), branch `feature/k8s-generated`.
 
 ## 3. Next steps, in order
 
-1. **Re-run the backup store setup** (ArgoCD app `backup-store`; its PostSync job) and check Velero: `kubectl -n velero get backupstoragelocation default` → `Available`. Then run a manual Velero backup and check it completes.
-2. **Per-app check of the imported data:** log in to each CORE app, check the data is there, and confirm the CrashLoop/Init pods have settled.
-3. **Tunnel back on:** `uv run kubernetes/k8s.py up cloudflared --env prod`, commit, push. Then check the public hostnames and real client IPs (`docs/17` "Real client IPs").
+1. ~~Backup store + Velero~~ **done 2026-10-05:** the location is `Available`; a manual Backup of one service (beszel) completed with no errors. The full nightly schedule runs at 03:30.
+2. **Per-app check of the imported data (owner):** row counts already match (§0); log in to each CORE app and check it. Pods have settled except what's in §5.
+3. **Tunnel back on (after step 2, and after Cloudflare's Connectors list shows no stray connector):** `uv run kubernetes/k8s.py up cloudflared --env prod`, commit, push. Then check the public hostnames and real client IPs (`docs/17` "Real client IPs").
 4. **`cluster.py restore`.** Design notes:
    - **Volumes:** a Velero `Restore` CR (selector `homeserver/service=<svc>`) after deleting that service's Deployments and PVCs, with ArgoCD paused (`argo_pause`).
    - **Own Postgres (point in time):** delete the Cluster and recreate it with `bootstrap.recovery` from the ObjectStore under a **new** `serverName` (CNPG refuses an archive that isn't empty), then reconcile with ArgoCD's desired spec.
@@ -112,7 +104,7 @@ design), branch `feature/k8s-generated`.
 
 ## 5. Follow-ups (agreed, not started)
 
-- **A separate SSD for kind's image store.** It's on the HDD, and starting ~90 pods saturated it for over an hour (100% busy at ~130 IOPS) and made probes kill slow starters. This is the main performance limit.
+- **The one SSD is now the shared bottleneck** (done 2026-10-05: image store, databases and etcd all on it, replacing the HDD bottleneck). A whole-cluster start or a heavy first start (Nextcloud's rsync of its source tree) drives I/O pressure to ~50-70%, stalls the desktop and makes the API server miss leases (CNPG operator, scheduler and controller-manager restart). Options if it matters: `ionice` for etcd, a `docker update --device-write-bps` cap on the kind node, or a second SSD. Host power: `tuned-adm profile throughput-performance`, EPP `performance` and SATA `max_performance` (commands in the session notes; make them stick with `/etc/tmpfiles.d/99-maxperf.conf`).
 - **Egress network policies**, Beszel's agent in its own privileged namespace (then enforce Baseline on `apps`), image scanning, Cloudflare Access/WAF, Authentik two-factor, a Docker socket proxy, and etcd `ionice`.
 - **Headlamp's token is cluster-admin** (the chart's default): add a read-only role, or put it behind Authentik.
 - **mariadb-operator can't scale to 0** (upstream #356): a MariaDB server runs once created.
@@ -196,3 +188,12 @@ design), branch `feature/k8s-generated`.
 - A MinIO tag existed on GitHub but not on Docker Hub.
 
 **Load:** starting everything at once saturated the HDD; sync waves fix the ordering, and a dedicated SSD would fix the capacity.
+
+## 9. Lessons from 2026-10-05 (each fixed, each with a test or a doc note)
+
+- **mariadb-operator's default startup probe (~50 s) kills a first start that is still initialising** on a loaded disk, leaving a corrupt datadir (zeroed `ibdata1`, root password never set). Generated `MariaDB` resources now set a 15-minute `startupProbe`. Damaged volumes: move the files aside, don't delete.
+- **`import --from-export` started every exported service, the stopped tunnel included.** It now starts only the running list.
+- **A probe on a container's own name goes through a Service that has no ready pod.** Temporal never became Ready; the generator now emits `tcpSocket` for that pattern.
+- **Dagster's chart readiness probe is fixed to port 80;** our service port is 3000, so the probe moves with it.
+- **Locally built images (`homeserver/dagster-user-code`, `homeserver/temporal-worker`) are gone after a reinstall:** run `cluster.py images <svc>` after bootstrap.
+- **Cloudflare showed the tunnel healthy while no connector ran here.** Check Zero Trust, Tunnels, Connectors for a stray one before turning the tunnel on.
