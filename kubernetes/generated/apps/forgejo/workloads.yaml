@@ -54,6 +54,10 @@ spec:
           value: $(PREFERRED_LICENSES)
         - name: FORGEJO__security__INSTALL_LOCK
           value: 'true'
+        - name: FORGEJO__security__REVERSE_PROXY_LIMIT
+          value: $(REVERSE_PROXY_LIMIT)
+        - name: FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES
+          value: $(REVERSE_PROXY_TRUSTED_PROXIES)
         - name: FORGEJO__server__DOMAIN
           value: forgejo.$(DOMAIN)
         - name: FORGEJO__server__ROOT_URL
@@ -62,8 +66,6 @@ spec:
           value: '2223'
         - name: FORGEJO__service__DISABLE_REGISTRATION
           value: $(DISABLE_REGISTRATION)
-        - name: FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES
-          value: 172.18.0.0/16
         - name: USER_GID
           value: '1000'
         - name: USER_UID

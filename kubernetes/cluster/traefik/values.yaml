@@ -56,5 +56,10 @@ ports:
     # same job under Compose by setting X-Forwarded-Proto https.
     forwardedHeaders:
       trustedIPs: ["10.244.0.0/16"]
+    # Drop the X-Real-Ip Traefik sets to the tunnel pod (see real-ip.yaml).
+    http:
+      middlewares: ["infra-strip-x-real-ip@kubernetescrd"]
   websecure:
     nodePort: 30443
+    http:
+      middlewares: ["infra-strip-x-real-ip@kubernetescrd"]

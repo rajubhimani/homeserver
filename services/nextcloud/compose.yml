@@ -66,6 +66,7 @@ services:
       - nextcloud-html:/var/www/html
       - nextcloud-config:/var/www/html/config
       - ./config/db.config.php:/var/www/html/config/db.config.php:ro   # DB login from .env (POSTGRES_*)
+      - ./config/remoteip.conf:/etc/apache2/conf-available/remoteip.conf:ro   # real client IP in the access log
       - nextcloud-data:/var/www/html/data
       - nextcloud-custom-apps:/var/www/html/custom_apps
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting

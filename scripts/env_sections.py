@@ -75,7 +75,8 @@ def blocks(text: str) -> list[tuple[str | None, list[str]]]:
 def arrange(svc: str, text: str) -> str:
     body = HEADER.sub("", text)
     # drop the generated Kubernetes section (rebuilt below)
-    body = re.sub(r"\n*# Nothing to change for Kubernetes:.*\Z", "", body, flags=re.S)
+    # Only the section's own comment lines: keys added after it stay.
+    body = re.sub(r"\n*# Nothing to change for Kubernetes:[^\n]*(\n#[^\n]*)*", "", body)
     k8s = k8s_env(svc)
     docker_keys = DOCKER_ONLY | set(k8s)
     common, docker = [], []

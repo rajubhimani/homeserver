@@ -21,7 +21,7 @@ spec:
         homeserver/service: nextcloud
         app.kubernetes.io/name: nextcloud
       annotations:
-        homeserver/config-sha256: 4ae32c4d8af9514525386d0748d632d50c67dd4a5b6ea2e2caac79bf0be4792c
+        homeserver/config-sha256: 0629578c31a926735292ddcbdd73753145953ad7fe6a152795ecc32894efa0b4
     spec:
       enableServiceLinks: false
       initContainers:
@@ -112,6 +112,10 @@ spec:
           mountPath: /var/www/html/config/db.config.php
           subPath: services-nextcloud-config-db-config-php
           readOnly: true
+        - name: files
+          mountPath: /etc/apache2/conf-available/remoteip.conf
+          subPath: services-nextcloud-config-remoteip-conf
+          readOnly: true
         - name: v-nextcloud-nextcloud-data
           mountPath: /var/www/html/data
         - name: v-nextcloud-nextcloud-custom-apps
@@ -165,6 +169,9 @@ spec:
           items:
           - key: services-nextcloud-config-db-config-php
             path: services-nextcloud-config-db-config-php
+            mode: 420
+          - key: services-nextcloud-config-remoteip-conf
+            path: services-nextcloud-config-remoteip-conf
             mode: 420
   strategy:
     type: Recreate
