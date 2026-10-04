@@ -193,7 +193,9 @@ def cmd_bootstrap(a) -> None:
     # The node holding the host folders (kind: its only node); on a real
     # cluster, label the machine that has them instead.
     kubectl("label", "nodes", "--all", "homeserver/host-folders=true", "--overwrite")
-    # ArgoCD's CRDs are too large for client-side apply (ArgoCD install docs).
+    # ArgoCD's manifest doesn't create its namespace (its install docs create
+    # it first); its CRDs are too large for client-side apply.
+    kubectl("apply", "-f", "-", input=yaml.safe_dump({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": ARGOCD_NS}}))
     kubectl("apply", "--server-side", "--force-conflicts", "-k", str(K8S / "generated/platform/argocd"))
     for d in ("argocd-server", "argocd-repo-server", "argocd-applicationset-controller"):
         kubectl("-n", ARGOCD_NS, "rollout", "status", f"deployment/{d}", "--timeout=10m")
