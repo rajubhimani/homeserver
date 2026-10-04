@@ -754,11 +754,11 @@ def cmd_images(a) -> None:
             continue
         run(["docker", "compose", "-f", str(d / "compose.yml"), "--env-file", str(d / ".env"), "build",
              *[n for n, _ in built]])
-        for _, image in built:
-            img = image.replace("$$", "$")
-            if "${" in img:
-                from generate import image_ref
-                img = image_ref(svc, image, svc)
+        from generate import image_ref
+        # Once per image: containers can share one (Dagster's webserver and
+        # daemon), and --drop-host-copy removes it after the first load.
+        for img in dict.fromkeys(image_ref(svc, image, svc) if "${" in image else image.replace("$$", "$")
+                                 for _, image in built):
             run(["kind", "load", "docker-image", img, "--name", cfg()["K8S_CLUSTER_NAME"]])
             if a.drop_host_copy:
                 run(["docker", "rmi", img], check=False)  # kind has its own copy now
