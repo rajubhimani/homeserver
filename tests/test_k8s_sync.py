@@ -572,3 +572,32 @@ def test_kubernetes_scripts_have_no_undefined_names():
                           cwd=REPO, capture_output=True, text=True)
     errors = [l for l in proc.stdout.splitlines() if "undefined name" in l or "imported but unused" in l]
     assert not errors, "\n".join(errors)
+
+
+def test_init_steps_get_their_compose_environment():
+    """A Compose one-shot step that runs as an init container gets what its
+    Compose service declares: the whole .env when it has env_file, and every
+    `environment:` key. Without them airflow-init migrated a throwaway
+    SQLite file and temporal-schema-setup ran with empty arguments
+    (2026-10-04 smoke tests)."""
+    gaps = []
+    for svc in PORTED:
+        f = GENERATED / "apps" / svc / "workloads.yaml"
+        if not f.is_file():
+            continue
+        comp = gen.load_compose(svc)["services"]
+        by_name = {re.sub(r"[^a-z0-9-]", "-", (s.get("container_name") or n).lower()): s for n, s in comp.items()}
+        for d in yaml.safe_load_all(f.read_text()):
+            pod = ((d or {}).get("spec") or {}).get("template", {}).get("spec", {})
+            for ic in pod.get("initContainers") or []:
+                s = by_name.get(ic["name"])
+                if not s:
+                    continue  # generated waits (wait-db, wait-<svc>)
+                refs = {x["secretRef"]["name"] for x in ic.get("envFrom") or [] if "secretRef" in x}
+                if s.get("env_file") and f"{svc}-env" not in refs:
+                    gaps.append(f"{svc}/{ic['name']}: no .env (env_file)")
+                have = {e["name"] for e in ic.get("env") or []}
+                missing = set(s.get("environment") or {}) - have
+                if missing:
+                    gaps.append(f"{svc}/{ic['name']}: missing {sorted(missing)}")
+    assert not gaps, "\n".join(gaps)

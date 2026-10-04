@@ -136,6 +136,9 @@ spec:
         - sh
         - -c
         - chown -R 65534:65534 /prometheus && chown -R 10001:10001 /loki && chown -R 472:0 /grafana
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -278,6 +281,9 @@ spec:
         - sh
         - -c
         - chown -R 65534:65534 /prometheus && chown -R 10001:10001 /loki && chown -R 472:0 /grafana
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -489,6 +495,9 @@ spec:
         - sh
         - -c
         - chown -R 65534:65534 /prometheus && chown -R 10001:10001 /loki && chown -R 472:0 /grafana
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

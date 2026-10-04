@@ -44,6 +44,9 @@ spec:
         - -c
         - mkdir -p /authentik-data/media /authentik-data/templates /authentik-data/certs && chown -R 1000:1000 /authentik-data/media
           /authentik-data/templates /authentik-data/certs
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -161,6 +164,9 @@ spec:
         - -c
         - mkdir -p /authentik-data/media /authentik-data/templates /authentik-data/certs && chown -R 1000:1000 /authentik-data/media
           /authentik-data/templates /authentik-data/certs
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

@@ -46,6 +46,9 @@ spec:
         - sh
         - -c
         - mkdir -p /penpot-assets && chown -R 1001:1001 /penpot-assets
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

@@ -46,6 +46,9 @@ spec:
         - sh
         - -c
         - mkdir -p /outline-data && chown -R 1001:1001 /outline-data
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

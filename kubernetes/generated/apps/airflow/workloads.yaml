@@ -70,6 +70,34 @@ spec:
           # defined" even with SMTP config fully set (hit this exact error
           # building example_email_alert_on_failure.py).
           /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "$(SMTP_HOST)" --conn-port "$(SMTP_PORT)" --conn-extra "{\"from_email\": \"$(SMTP_FROM_EMAIL)\", \"disable_tls\": true, \"disable_ssl\": true}" || true
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        - secretRef:
+            name: airflow-env
+        env:
+        - name: AIRFLOW_CONFIG
+          value: /opt/airflow/config/airflow.cfg
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          value: $(JWT_SECRET)
+        - name: AIRFLOW__API__SECRET_KEY
+          value: $(API_SECRET_KEY)
+        - name: AIRFLOW__CORE__AUTH_MANAGER
+          value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+        - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+          value: 'true'
+        - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+          value: http://airflow-apiserver:8080/execution/
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: LocalExecutor
+        - name: AIRFLOW__CORE__FERNET_KEY
+          value: $(FERNET_KEY)
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: $(LOAD_EXAMPLES)
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(POSTGRES_DB)
+        - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+          value: 'true'
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -331,6 +359,34 @@ spec:
           # defined" even with SMTP config fully set (hit this exact error
           # building example_email_alert_on_failure.py).
           /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "$(SMTP_HOST)" --conn-port "$(SMTP_PORT)" --conn-extra "{\"from_email\": \"$(SMTP_FROM_EMAIL)\", \"disable_tls\": true, \"disable_ssl\": true}" || true
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        - secretRef:
+            name: airflow-env
+        env:
+        - name: AIRFLOW_CONFIG
+          value: /opt/airflow/config/airflow.cfg
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          value: $(JWT_SECRET)
+        - name: AIRFLOW__API__SECRET_KEY
+          value: $(API_SECRET_KEY)
+        - name: AIRFLOW__CORE__AUTH_MANAGER
+          value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+        - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+          value: 'true'
+        - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+          value: http://airflow-apiserver:8080/execution/
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: LocalExecutor
+        - name: AIRFLOW__CORE__FERNET_KEY
+          value: $(FERNET_KEY)
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: $(LOAD_EXAMPLES)
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(POSTGRES_DB)
+        - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+          value: 'true'
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -583,6 +639,34 @@ spec:
           # defined" even with SMTP config fully set (hit this exact error
           # building example_email_alert_on_failure.py).
           /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "$(SMTP_HOST)" --conn-port "$(SMTP_PORT)" --conn-extra "{\"from_email\": \"$(SMTP_FROM_EMAIL)\", \"disable_tls\": true, \"disable_ssl\": true}" || true
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        - secretRef:
+            name: airflow-env
+        env:
+        - name: AIRFLOW_CONFIG
+          value: /opt/airflow/config/airflow.cfg
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          value: $(JWT_SECRET)
+        - name: AIRFLOW__API__SECRET_KEY
+          value: $(API_SECRET_KEY)
+        - name: AIRFLOW__CORE__AUTH_MANAGER
+          value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+        - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+          value: 'true'
+        - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+          value: http://airflow-apiserver:8080/execution/
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: LocalExecutor
+        - name: AIRFLOW__CORE__FERNET_KEY
+          value: $(FERNET_KEY)
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: $(LOAD_EXAMPLES)
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(POSTGRES_DB)
+        - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+          value: 'true'
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -849,6 +933,34 @@ spec:
           # defined" even with SMTP config fully set (hit this exact error
           # building example_email_alert_on_failure.py).
           /entrypoint airflow connections add smtp_default --conn-type smtp --conn-host "$(SMTP_HOST)" --conn-port "$(SMTP_PORT)" --conn-extra "{\"from_email\": \"$(SMTP_FROM_EMAIL)\", \"disable_tls\": true, \"disable_ssl\": true}" || true
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        - secretRef:
+            name: airflow-env
+        env:
+        - name: AIRFLOW_CONFIG
+          value: /opt/airflow/config/airflow.cfg
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          value: $(JWT_SECRET)
+        - name: AIRFLOW__API__SECRET_KEY
+          value: $(API_SECRET_KEY)
+        - name: AIRFLOW__CORE__AUTH_MANAGER
+          value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+        - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+          value: 'true'
+        - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+          value: http://airflow-apiserver:8080/execution/
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: LocalExecutor
+        - name: AIRFLOW__CORE__FERNET_KEY
+          value: $(FERNET_KEY)
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: $(LOAD_EXAMPLES)
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(POSTGRES_DB)
+        - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+          value: 'true'
         securityContext:
           runAsUser: 0
           runAsGroup: 0

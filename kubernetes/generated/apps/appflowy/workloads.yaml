@@ -99,6 +99,11 @@ spec:
         - -c
         - ' mc alias set appflowy http://appflowy-minio:9000 $(MINIO_ROOT_USER) $(MINIO_ROOT_PASSWORD); mc mb --ignore-existing
           appflowy/appflowy; exit 0; '
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        - secretRef:
+            name: appflowy-env
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-appflowy-redis

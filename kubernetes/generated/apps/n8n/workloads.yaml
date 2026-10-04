@@ -46,6 +46,9 @@ spec:
         - sh
         - -c
         - mkdir -p /n8n-data && chown -R 1000:1000 /n8n-data
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

@@ -55,6 +55,35 @@ spec:
           done
           temporal-sql-tool --plugin postgres12 --ep $(DB_HOST) -u $(POSTGRES_USER) -p $(DB_PORT) --db $(POSTGRES_DB) update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
           temporal-sql-tool --plugin postgres12 --ep $(DB_HOST) -u $(POSTGRES_USER) -p $(DB_PORT) --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        env:
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: temporal-env
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: temporal-env
+              key: DB_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: temporal-env
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: temporal-env
+              key: POSTGRES_USER
+        - name: SQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: temporal-env
+              key: POSTGRES_PASSWORD
         securityContext:
           allowPrivilegeEscalation: false
       containers:
@@ -325,6 +354,14 @@ spec:
               echo "Namespace $ns already registered."
             fi
           done
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        env:
+        - name: TEMPORAL_ADDRESS
+          value: temporal:7233
+        - name: TEMPORAL_CLI_ADDRESS
+          value: temporal:7233
         securityContext:
           allowPrivilegeEscalation: false
       containers:

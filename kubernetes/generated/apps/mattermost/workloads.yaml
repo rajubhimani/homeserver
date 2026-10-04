@@ -47,6 +47,9 @@ spec:
         - -c
         - mkdir -p /mattermost-data/config /mattermost-data/data /mattermost-data/logs /mattermost-data/plugins /mattermost-data/client-plugins
           /mattermost-data/bleve-indexes && chown -R 2000:2000 /mattermost-data
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

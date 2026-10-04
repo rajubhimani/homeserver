@@ -36,6 +36,9 @@ spec:
         - -R
         - 1000:1000
         - /config
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

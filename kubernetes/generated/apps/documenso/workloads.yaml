@@ -46,6 +46,9 @@ spec:
         - sh
         - -c
         - mkdir -p /documenso-data && chown -R 1001:65533 /documenso-data
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

@@ -38,6 +38,15 @@ spec:
 
             chown -R "$(MONGODB_USER_ID)" /data/db /data/configdb;
             echo "=====> Ownership set to uid $(MONGODB_USER_ID)";
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        env:
+        - name: MONGODB_USER_ID
+          valueFrom:
+            secretKeyRef:
+              name: rocketchat-env
+              key: MONGODB_USER_ID
         securityContext:
           runAsUser: 0
           allowPrivilegeEscalation: false
@@ -215,6 +224,15 @@ spec:
         - |2
 
             mongosh "mongodb://mongodb:27017/?directConnection=true" --eval "rs.initiate({_id: \"$(MONGODB_REPLICA_SET_NAME)\", members: [{ _id: 0, host: \"mongodb:27017\" }]})" || true;
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        env:
+        - name: MONGODB_REPLICA_SET_NAME
+          valueFrom:
+            secretKeyRef:
+              name: rocketchat-env
+              key: MONGODB_REPLICA_SET_NAME
         securityContext:
           allowPrivilegeEscalation: false
       - name: rocketchat-permissions
@@ -223,6 +241,9 @@ spec:
         - sh
         - -c
         - mkdir -p /rocketchat-uploads && chown -R 65533:65533 /rocketchat-uploads
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

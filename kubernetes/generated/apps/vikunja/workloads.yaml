@@ -46,6 +46,9 @@ spec:
         - sh
         - -c
         - mkdir -p /vikunja-files && chown -R 1000:0 /vikunja-files
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
         securityContext:
           runAsUser: 0
           runAsGroup: 0

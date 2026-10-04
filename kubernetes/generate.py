@@ -728,6 +728,17 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 if ds.get("command"):
                     cm = ds["command"]
                     ic["args"] = [k8s_value(a, env_keys, where) for a in (shlex.split(cm) if isinstance(cm, str) else cm)]
+                # The step's own environment, exactly as for app containers:
+                # Compose fills ${VAR} from .env even without env_file, and an
+                # env_file step gets the whole .env (airflow-init's database
+                # URL, temporal-schema-setup's DB_HOST: both ran without
+                # them until 2026-10-04 and silently did the wrong thing).
+                ic["envFrom"] = [{"configMapRef": {"name": ROOT_CONFIGMAP}}] + (
+                    [{"secretRef": {"name": f"{svc}-env"}}] if ds.get("env_file") else [])
+                denv = dict(ds.get("environment") or {})
+                if denv:
+                    ic["env"] = env_list(denv, env_keys, f"{svc}-env", bool(ds.get("env_file")), where)
+                ensure_env_defined(ic, env_keys, f"{svc}-env", bool(ds.get("env_file")))
                 if ds.get("user"):
                     u = str(ds["user"]).split(":")
                     ic["securityContext"] = {"runAsUser": int(u[0]), **({"runAsGroup": int(u[1])} if len(u) > 1 else {})}
