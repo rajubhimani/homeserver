@@ -105,6 +105,8 @@ design), branch `feature/k8s-generated`.
   - `argo_pause` (ArgoCD's skip-reconcile) for imports and smoke tests.
 - **Ops UIs** (only on this machine; add them to `/etc/hosts` as `127.0.0.1`):
   - `argocd.k8s.local:18080`, `headlamp.k8s.local:18080`, `grafana.k8s.local:18080`, `backup.k8s.local:18080`.
+  - How to sign in to each (commands that print the credentials): `docs/17` Step 6, "Signing in".
+  - How to sign in to each (commands that print the credentials): `docs/17` Step 6, "Signing in".
   - Apps keep their Docker localhost ports through the local-access proxy.
 - **Tests:** `uv run pytest`: 136 tests in ~20 s, one test per check (`conftest.each`).
 

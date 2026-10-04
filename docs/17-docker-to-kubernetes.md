@@ -399,13 +399,33 @@ ArgoCD needs its documented app-of-apps health check for Applications to make th
 - **Data is never deleted by ArgoCD.** Volumes, PersistentVolumes and database objects carry `Prune=false,Delete=false`. Deleting the ApplicationSet keeps every service's objects (`preserveResourcesOnDeletion`).
 - **`auto_sync` starts off,** so the first sync is reviewed in the UI before anything changes.
 
-**The UIs (only on this machine, never on the public domain):**
-- **ArgoCD:** `http://argocd.k8s.local:18080`, user `admin`. `bootstrap` prints the command that shows the first password.
-- **Headlamp:** `http://headlamp.k8s.local:18080`.
-- **Grafana:** `http://grafana.k8s.local:18080` (it has no public route, as on Docker).
-- **Backup store console (MinIO):** `http://backup.k8s.local:18080`, login `BACKUP_STORE_ROOT_USER`/`BACKUP_STORE_ROOT_PASSWORD` from `kubernetes/.env`. Sign in with a token from `kubectl -n headlamp create token headlamp`.
+**The UIs (only on this machine, never on the public domain).** Add their names to `/etc/hosts` once:
 
-Add both names to `/etc/hosts`.
+```bash
+echo '127.0.0.1 argocd.k8s.local headlamp.k8s.local grafana.k8s.local backup.k8s.local' | sudo tee -a /etc/hosts
+```
+
+| UI | URL | Shows |
+|---|---|---|
+| ArgoCD | `http://argocd.k8s.local:18080` | every app's Synced/Healthy state and the sync waves |
+| Headlamp | `http://headlamp.k8s.local:18080` | pods, events, logs |
+| Grafana | `http://grafana.k8s.local:18080` | metrics and logs (no public route, as on Docker) |
+| Backup store (MinIO console) | `http://backup.k8s.local:18080` | buckets: WAL archives, base backups, Velero, dumps |
+
+**Signing in.** Run these in your own terminal: they print the secret on screen and never write it anywhere. Replace `kind-homeserver-test` with `kind-$K8S_CLUSTER_NAME` if you changed the cluster name in `kubernetes/.env`.
+
+| UI | Login | Command that shows it |
+|---|---|---|
+| ArgoCD | user `admin` | `kubectl --context kind-homeserver-test -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' \| base64 -d; echo` |
+| Headlamp | a token (paste it on the sign-in page) | `kubectl --context kind-homeserver-test -n headlamp create token headlamp` (valid 1 hour; run it again for a new one) |
+| Grafana | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `services/observability/.env` | `grep -E '^GRAFANA_ADMIN_(USER\|PASSWORD)=' services/observability/.env` |
+| Backup store | `BACKUP_STORE_ROOT_USER` / `BACKUP_STORE_ROOT_PASSWORD` from `kubernetes/.env` | `grep -E '^BACKUP_STORE_ROOT_(USER\|PASSWORD)=' kubernetes/.env` |
+
+Notes:
+- Use the root login for the MinIO console. The other `BACKUP_*_ACCESS_KEY`/`SECRET_KEY` pairs are per-bucket S3 keys for Postgres, Velero and the dumps; they can't sign in to the console.
+- ArgoCD's initial password is only for the first sign-in. Change it in the UI (User Info), then delete the `argocd-initial-admin-secret` Secret.
+- Headlamp's token belongs to a cluster-admin service account (the chart's default), so treat it like the cluster's root password. A read-only role is a listed follow-up (`HANDOVER.md`).
+- `Lost connection to the cluster ... Internal Server Error` in Headlamp right after a rebuild or a big start is usually the API server answering slowly while the disk is busy with image pulls. Reload once the pods have settled.
 
 **Logs (Grafana + Loki)** come with the observability port (`docs/services/observability.md`, "On Kubernetes"). CrowdSec was removed from the stack on 2026-10-04, from Docker and Kubernetes alike.
 
