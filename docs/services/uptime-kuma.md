@@ -105,6 +105,9 @@ Uses external MariaDB (`uptime-kuma-db`, own container in this service's compose
 - `.env.example` documents (commented, image defaults, no behavior change) the rest of Uptime Kuma's server-level env vars worth knowing about: `UPTIME_KUMA_PORT`/`UPTIME_KUMA_HOST` (bind address/port, only useful if you fork the container's internal port off `3001`), `UPTIME_KUMA_DISABLE_FRAME_SAMEORIGIN` (clickjacking protection — leave off unless embedding a status page elsewhere), `UPTIME_KUMA_WS_ORIGIN_CHECK`, `UPTIME_KUMA_ALLOW_ALL_CHROME_EXEC` (browser-engine monitors), `NODE_EXTRA_CA_CERTS` (monitoring an internal HTTPS endpoint signed by a private CA), and `NOTIFICATION_PROXY`. Full list: [Uptime Kuma wiki — Environment Variables](https://github.com/louislam/uptime-kuma/wiki/Environment-Variables).
 - Monitor types and notification providers above were verified against the 2.5.0 tag's own source (`src/pages/EditMonitor.vue`, `server/monitor-types/`, `server/notification-providers/`) and its GitHub release notes — not assumed from the latest Uptime Kuma docs, which describe a newer feature set than this pin.
 
+## Real client IPs
+
+*Settings → Reverse Proxy → Trust Proxy* is **off** (database setting `trustProxy=false`), so Uptime Kuma logs and rate-limits logins by the proxy's address. Turn it on in the UI. With the edge (Kubernetes) and nginx-plain (Docker) overwriting `X-Forwarded-For` with Cloudflare's `CF-Connecting-IP`, the address it then uses is the real one, and a visitor can't fake it.
 
 ## On Kubernetes
 

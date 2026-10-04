@@ -2,6 +2,8 @@
 """Apply verified Jellyfin performance/reliability tuning to database.xml, system.xml and every library's options.xml.
 
 Usage: uv run jellyfin/apply-tuning.py   (from repo root, or `python jellyfin/apply-tuning.py`)
+       uv run services/jellyfin/apply-tuning.py --data-root <folder> --no-restart
+           edit another copy (e.g. the Kubernetes volume) without touching Docker
 
 Stops jellyfin, edits its config XML in place, restarts it in whatever mode
 (dev/prod) it was already running in. Safe to re-run any time (idempotent —
@@ -31,6 +33,10 @@ DEFAULT_TRICKPLAY_PROCESS_PRIORITY = "Normal"
 # next to the video fails with "Read-only file system". False stores them under
 # /config/metadata instead.
 DEFAULT_SAVE_SUBTITLES_WITH_MEDIA = "false"
+# Proxies whose X-Forwarded-For Jellyfin trusts for the client IP: Docker's
+# bridge networks (nginx-plain) and the Kubernetes pod network (edge, Traefik).
+# Empty means none: Jellyfin then logs and rate-limits the proxy's address.
+DEFAULT_KNOWN_PROXIES = "172.16.0.0/12,10.0.0.0/8"
 
 
 def load_env(env_path: Path) -> dict[str, str]:
@@ -130,15 +136,38 @@ def apply_library_options(config_root: Path, value: str) -> list[tuple[str, str,
     return report
 
 
+def apply_known_proxies(network_xml: Path, proxies: list[str]) -> tuple[str, str]:
+    """Set <KnownProxies> in network.xml to the given IPs/CIDRs. Jellyfin
+    accepts subnets there (ApiServiceCollectionExtensions.AddProxyAddresses)
+    and only honours X-Forwarded-For from them. Returns (old, new)."""
+    text = network_xml.read_text(encoding="utf-8-sig")
+    m = re.search(r"([ \t]*)<KnownProxies\s*/>|([ \t]*)<KnownProxies>(.*?)</KnownProxies>", text, re.S)
+    if not m:
+        sys.exit(f"{network_xml}: no <KnownProxies> element")
+    indent = m.group(1) if m.group(1) is not None else m.group(2)
+    old = ",".join(re.findall(r"<string>([^<]*)</string>", m.group(3) or ""))
+    new_block = (f"{indent}<KnownProxies>\n" + "".join(f"{indent}  <string>{x}</string>\n" for x in proxies)
+                 + f"{indent}</KnownProxies>") if proxies else f"{indent}<KnownProxies />"
+    new_text = text[:m.start()] + new_block + text[m.end():]
+    if new_text != text:
+        network_xml.write_text(new_text, encoding="utf-8")
+    return old, ",".join(proxies)
+
+
 def main() -> int:
+    args = sys.argv[1:]
+    no_restart = "--no-restart" in args
     env = load_env(SERVICE_DIR / ".env")
     data_root = resolve_data_root(env)
+    if "--data-root" in args:
+        data_root = Path(args[args.index("--data-root") + 1]).expanduser().resolve()
     concurrency = resolve_concurrency(env)
     trickplay_threads = max(1, concurrency // 2)
 
     database_xml = data_root / "config" / "config" / "database.xml"
     system_xml = data_root / "config" / "config" / "system.xml"
-    for f in (database_xml, system_xml):
+    network_xml = data_root / "config" / "config" / "network.xml"
+    for f in (database_xml, system_xml, network_xml):
         if not f.exists():
             sys.exit(
                 f"{f} not found -- Jellyfin needs to have completed first-run setup "
@@ -153,15 +182,19 @@ def main() -> int:
     if save_subtitles_with_media not in ("true", "false"):
         sys.exit(f"JELLYFIN_SAVE_SUBTITLES_WITH_MEDIA must be true or false, got {save_subtitles_with_media!r}")
 
-    env_name = detect_running_env()
-    print(f"Detected env: {env_name}")
+    known_proxies = [x.strip() for x in (env.get("JELLYFIN_KNOWN_PROXIES", DEFAULT_KNOWN_PROXIES)).split(",") if x.strip()]
+
+    env_name = None if no_restart else detect_running_env()
+    print(f"Detected env: {env_name or '(not touched: --no-restart)'}")
     print(f"Concurrency: {concurrency}  (trickplay threads: {trickplay_threads})")
     print(f"LockingBehavior: {locking_behavior}")
     print(f"ImageExtractionTimeoutMs: {image_extraction_timeout_ms}")
     print(f"TrickplayOptions/ProcessPriority: {trickplay_process_priority}")
     print(f"Libraries/SaveSubtitlesWithMedia: {save_subtitles_with_media}")
+    print(f"network.xml/KnownProxies: {','.join(known_proxies) or '(none)'}")
 
-    run_homeserver(env_name, "down")
+    if env_name:
+        run_homeserver(env_name, "down")
 
     report = []
     report += apply_changes(database_xml, [
@@ -177,6 +210,7 @@ def main() -> int:
     ])
 
     library_report = apply_library_options(data_root / "config", save_subtitles_with_media)
+    proxies_old, proxies_new = apply_known_proxies(network_xml, known_proxies)
 
     print("\nApplied:")
     for tag, old, new in report:
@@ -190,7 +224,11 @@ def main() -> int:
         marker = "  (unchanged)" if old == new else ""
         print(f"  {library}/options.xml: SaveSubtitlesWithMedia: {old} -> {new}{marker}")
 
-    run_homeserver(env_name, "up")
+    marker = "  (unchanged)" if proxies_old == proxies_new else ""
+    print(f"  {network_xml.name}: KnownProxies: {proxies_old or '(none)'} -> {proxies_new or '(none)'}{marker}")
+
+    if env_name:
+        run_homeserver(env_name, "up")
     print("\nDone.")
     return 0
 

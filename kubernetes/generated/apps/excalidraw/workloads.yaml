@@ -30,7 +30,6 @@ spec:
             name: homeserver-root
         ports:
         - containerPort: 80
-        - containerPort: 80
           hostPort: 8116
           hostIP: 127.0.0.1
         - containerPort: 80

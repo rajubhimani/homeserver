@@ -44,6 +44,9 @@ Any future watchdog in this stack can reuse the same topic (same pattern as `adg
 - `NTFY_BEHIND_PROXY=true` is required so ntfy trusts `X-Forwarded-For` from nginx-plain for correct rate-limiting/IP logging.
 - **Reverse proxy needs WebSocket upgrade headers and buffering disabled, or push is not instant.** Subscribers (the phone app, the web UI) hold a long-lived connection open — either a real WebSocket (`/<topic>/ws`) or a chunked JSON stream (`/<topic>/json`) — with a keepalive ping every ~30s, and only pick up new messages the moment they arrive on that connection. `nginx-plain`'s `ntfy.${DOMAIN}` block was missing `proxy_set_header Upgrade`/`Connection $connection_upgrade` (breaking the WebSocket handshake outright — confirmed live, `curl` got a hung connection instead of `101 Switching Protocols` before the fix) and `proxy_buffering off` (without it, nginx holds the streamed response in its own buffer instead of flushing it to the client immediately, so messages only show up once the app happens to reconnect — e.g. on a manual pull-to-refresh). Both fixed in the same block as the rest of nginx-plain's websocket-upgrade services; verified after the fix with a real WebSocket handshake over the public domain (`101 Switching Protocols`) and a published message arriving on an open stream within ~1s.
 
+## Real client IPs
+
+ntfy rate-limits by the visitor's IP. With `NTFY_PROXY_TRUSTED_HOSTS` empty it takes the *right-most* `X-Forwarded-For` entry ([ntfy docs](https://docs.ntfy.sh/config/)): fine under Docker (nginx-plain sends one address), but behind Traefik that's a proxy, so every visitor would share one limit. Since 2026-10-04 `.env` lists the proxy networks (`10.0.0.0/8,172.16.0.0/12`; ntfy accepts CIDRs), and ntfy skips them. Verified on Kubernetes with debug logging: `visitor_ip` is the real IP.
 
 ## Fresh-install verification (2026-10-03)
 

@@ -511,7 +511,6 @@ spec:
           value: '80'
         ports:
         - containerPort: 80
-        - containerPort: 80
           hostPort: 8100
           hostIP: 127.0.0.1
         - containerPort: 80

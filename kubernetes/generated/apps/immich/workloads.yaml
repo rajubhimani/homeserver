@@ -181,7 +181,6 @@ spec:
           value: $(CACHE_PORT)
         ports:
         - containerPort: 2283
-        - containerPort: 2283
           hostPort: 2283
           hostIP: 127.0.0.1
         - containerPort: 2283

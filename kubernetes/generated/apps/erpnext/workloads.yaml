@@ -67,7 +67,6 @@ spec:
           value: 'off'
         ports:
         - containerPort: 8080
-        - containerPort: 8080
           hostPort: 8153
           hostIP: 127.0.0.1
         - containerPort: 8080

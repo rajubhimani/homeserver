@@ -39,7 +39,6 @@ spec:
           value: /data
         ports:
         - containerPort: 15630
-        - containerPort: 15630
           hostPort: 8154
           hostIP: 127.0.0.1
         - containerPort: 15630

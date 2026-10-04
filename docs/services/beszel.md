@@ -124,6 +124,10 @@ Because of the host-network mode, the agent's `HUB_URL` (in `.env` since 2026-10
 
 It also reports per-container Docker stats via the mounted `${DOCKER_SOCKET}` (read-only).
 
+## Real client IPs
+
+Beszel is built on PocketBase, which records the client IP in its request logs and uses it for rate limits. PocketBase reads a forwarded header only when *Settings → Application → User IP proxy headers* names one (stored in the database; Beszel has no environment variable for it, and `TRUSTED_PROXY_IPS` belongs to a different feature). Set it to `X-Real-IP` in the PocketBase admin panel (`/_/`), leaving *use leftmost IP* off. The edge and nginx-plain both set that header from Cloudflare's `CF-Connecting-IP`, so it's correct and can't be faked through the tunnel. Until then Beszel logs the proxy's address (seen on Kubernetes: `10.244.0.126`).
+
 ## Troubleshooting
 
 **`update beszel` fails with `Conflict. The container name "/beszel" is already in use`:** an earlier interrupted recreate left a stray container named `<hash>_beszel` in `Created` state (never started) carrying the same compose labels, so Compose picks the wrong one to rename. Find it with `docker ps -a --filter name=beszel`, confirm it's `Created` (not the real, previously-running `beszel`), `docker rm` it, then re-run the update. Hit on 2026-09-25 during the 0.19.0 → 0.20.0 bump.

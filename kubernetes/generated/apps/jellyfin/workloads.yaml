@@ -32,7 +32,6 @@ spec:
             name: jellyfin-env
         ports:
         - containerPort: 8096
-        - containerPort: 8096
           hostPort: 8096
           hostIP: 127.0.0.1
         - containerPort: 8096

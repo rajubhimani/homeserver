@@ -54,7 +54,6 @@ spec:
         - name: TZ
           value: $(TZ)
         ports:
-        - containerPort: 8384
         - containerPort: 22000
         - containerPort: 21027
           protocol: UDP

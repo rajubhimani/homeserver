@@ -32,7 +32,6 @@ spec:
             name: stirling-pdf-env
         ports:
         - containerPort: 8080
-        - containerPort: 8080
           hostPort: 8089
           hostIP: 127.0.0.1
         - containerPort: 8080

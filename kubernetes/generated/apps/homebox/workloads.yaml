@@ -47,7 +47,6 @@ spec:
           value: $(HBOX_WEB_MAX_UPLOAD_SIZE)
         ports:
         - containerPort: 7745
-        - containerPort: 7745
           hostPort: 8136
           hostIP: 127.0.0.1
         - containerPort: 7745

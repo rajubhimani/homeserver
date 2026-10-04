@@ -508,7 +508,12 @@ def convert(svc: str) -> dict[str, list[dict]]:
         # Services + port mappings carry the same ports out; see host_ports.)
         published = published_ports(s)
         if published:
-            container.setdefault("ports", [])
+            # A port bound to host addresses is declared once per address; a
+            # plain entry for the same port next to them would overlap
+            # (Kubernetes warns "overlapping port definition").
+            bound = {(tgt, "UDP" if proto == "udp" else "TCP") for _, _, tgt, proto in published}
+            container["ports"] = [pt for pt in container.get("ports", [])
+                                  if (pt["containerPort"], pt.get("protocol", "TCP")) not in bound]
             container["ports"] += [{"containerPort": tgt, "hostPort": hp, "hostIP": ip,
                                     **({"protocol": "UDP"} if proto == "udp" else {})}
                                    for ip, hp, tgt, proto in published]
@@ -1186,7 +1191,77 @@ def nginx_plain() -> dict[str, list[dict]]:
         files.setdefault("services.yaml", []).append({
             "apiVersion": "v1", "kind": "Service", "metadata": {"name": site, "labels": labels},
             "spec": {"selector": {"app.kubernetes.io/name": site}, "ports": [{"name": "http", "port": 80, "targetPort": 80}]}})
+    if ov.get("edge"):
+        add_edge(files, s, header, ov["edge"])
     return files
+
+
+EDGE_BLOCK = """
+# Edge for the Cloudflare tunnel (generated): the cluster's equivalent of
+# nginx-plain's proxy headers. The visitor's address comes from
+# CF-Connecting-IP ($real_client_ip, the map above) and overwrites X-Real-IP
+# and X-Forwarded-For, so a visitor's own forwarded headers never reach an
+# app (Cloudflare's documented method; docs/17 "Real client IPs"). Traefik
+# trusts this pod and passes both on unchanged.
+server {
+    listen 80 default_server;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name _;
+
+    location = /_health {
+        access_log off;
+        return 200 "ok\\n";
+        add_header Content-Type text/plain;
+    }
+
+    location / {
+        proxy_pass http://UPSTREAM;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $real_client_ip;
+        proxy_set_header X-Forwarded-For $real_client_ip;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # Uploads, streaming and long-lived connections pass through
+        # untouched; the apps enforce their own limits.
+        client_max_body_size 0;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+"""
+
+
+def add_edge(files: dict, s: dict, header: str, conf: dict) -> None:
+    """The edge Deployment + Service named nginx-plain: the tunnel's target
+    (http://nginx-plain:80, set on Cloudflare's dashboard)."""
+    name = "nginx-plain"
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": name, "app.kubernetes.io/name": name}
+    conf_text = "\n".join(ln.rstrip() for ln in (header + "\n" + EDGE_BLOCK.replace("UPSTREAM", conf["upstream"])).splitlines()) + "\n"
+    cm_data = {"default.conf.template": conf_text}
+    files.setdefault("configmaps.yaml", []).append({
+        "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": f"{name}-edge", "labels": labels}, "data": cm_data})
+    container = {
+        "name": name, "image": s["image"],
+        "env": [{"name": "NGINX_RESOLVER", "value": "kube-dns.kube-system.svc.cluster.local"}],
+        "ports": [{"containerPort": 80}],
+        **probe_set(s.get("healthcheck"), set(), f"{name}/edge"),
+        "volumeMounts": [{"name": "files", "mountPath": "/etc/nginx/templates/default.conf.template",
+                          "subPath": "default.conf.template", "readOnly": True}],
+    }
+    files.setdefault("workloads.yaml", []).append({
+        "apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name, "labels": labels},
+        "spec": {"replicas": 1, "revisionHistoryLimit": 3,
+                 "selector": {"matchLabels": {"app.kubernetes.io/name": name}},
+                 "template": {"metadata": {"labels": labels, **config_checksum(cm_data)}, "spec": {
+                     "enableServiceLinks": False, "containers": [container],
+                     "volumes": [{"name": "files", "configMap": {"name": f"{name}-edge"}}]}}}})
+    files.setdefault("services.yaml", []).append({
+        "apiVersion": "v1", "kind": "Service", "metadata": {"name": name, "labels": labels},
+        "spec": {"selector": {"app.kubernetes.io/name": name}, "ports": [{"name": "http", "port": 80, "targetPort": 80}]}})
 
 
 def nginx_site_routes(domain: str) -> list[dict]:

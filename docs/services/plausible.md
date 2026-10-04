@@ -49,6 +49,9 @@ Confirmed against Plausible's own current docs.
 - `plausible-events-db` runs `clickhouse/clickhouse-server:26.8.15.10-alpine`, a patch release in ClickHouse's 26.8 long-term-support line (updated 2026-10-03 from 26.8.2). Plausible's own `compose.yml` still pins `24.12-alpine`; this stack moved to 26.8 earlier and only takes patches within that line.
 - **`MAXMIND_LICENSE_KEY` (`.env`) is required for Locations stats — set on this instance.** Without it, the app logs `[locus] [geolocation] database failed to load (:remote): {:http, 401, "Unauthorized"}` on a recurring retry (roughly hourly), forever, since MaxMind's GeoLite2 databases have required a free registered account + license key since December 2019 — there's no way to fetch one anonymously anymore. Nothing else breaks without it; page view/visitor tracking works fine either way, only the **Locations** panel has no country/city data to show. Signed up at [maxmind.com](https://www.maxmind.com/en/geolite2/signup) (free) and generated a license key under **Services → My License Key** — when prompted "Will this key be used for geoipupdate?", chose **No** (Plausible fetches the database itself directly; the paired Account ID that answering "Yes" requires is only for MaxMind's separate `geoipupdate` tool, which Plausible doesn't use — confirmed only `MAXMIND_LICENSE_KEY` is needed, no account ID field exists in Plausible's own config). Verified live post-restart: a real 31MB `GeoLite2-City.mmdb.gz` downloaded inside the container and `/api/health` reports all green, no more 401s.
 
+## Real client IPs
+
+Plausible reads `CF-Connecting-IP` directly (`lib/plausible_web/remote_ip.ex`, checked before `X-Forwarded-For`), which Cloudflare sets and a visitor can't fake. Correct under Docker and Kubernetes with no setting.
 
 ## On Kubernetes
 

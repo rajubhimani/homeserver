@@ -37,7 +37,6 @@ spec:
           value: http://nextcloud
         ports:
         - containerPort: 3002
-        - containerPort: 3002
           hostPort: 8151
           hostIP: 127.0.0.1
         - containerPort: 3002

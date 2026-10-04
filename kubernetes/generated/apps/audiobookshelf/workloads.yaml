@@ -35,7 +35,6 @@ spec:
           value: $(TZ)
         ports:
         - containerPort: 80
-        - containerPort: 80
           hostPort: 8094
           hostIP: 127.0.0.1
         - containerPort: 80

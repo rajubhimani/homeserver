@@ -32,7 +32,6 @@ spec:
             name: ollama-env
         ports:
         - containerPort: 11434
-        - containerPort: 11434
           hostPort: 8110
           hostIP: 127.0.0.1
         - containerPort: 11434

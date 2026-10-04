@@ -55,7 +55,6 @@ spec:
           value: $(TZ)
         ports:
         - containerPort: 5000
-        - containerPort: 5000
           hostPort: 8155
           hostIP: 127.0.0.1
         - containerPort: 5000

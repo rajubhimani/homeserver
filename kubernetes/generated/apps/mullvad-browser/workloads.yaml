@@ -43,7 +43,6 @@ spec:
           value: /mullvad-browser/
         ports:
         - containerPort: 3000
-        - containerPort: 3000
           hostPort: 8149
           hostIP: 127.0.0.1
         - containerPort: 3000

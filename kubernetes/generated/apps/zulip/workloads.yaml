@@ -63,7 +63,6 @@ spec:
           value: $(ZULIP_ADMIN_EMAIL)
         ports:
         - containerPort: 80
-        - containerPort: 80
           hostPort: 8143
           hostIP: 127.0.0.1
         - containerPort: 80

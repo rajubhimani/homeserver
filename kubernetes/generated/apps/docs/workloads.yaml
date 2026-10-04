@@ -49,7 +49,6 @@ spec:
             name: docs-env
         ports:
         - containerPort: 80
-        - containerPort: 80
           hostPort: 8144
           hostIP: 127.0.0.1
         - containerPort: 80

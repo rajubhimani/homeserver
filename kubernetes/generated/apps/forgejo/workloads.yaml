@@ -71,8 +71,6 @@ spec:
         - name: USER_UID
           value: '1000'
         ports:
-        - containerPort: 22
-        - containerPort: 3000
         - containerPort: 3000
           hostPort: 3002
           hostIP: 127.0.0.1

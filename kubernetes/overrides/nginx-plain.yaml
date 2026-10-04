@@ -11,3 +11,9 @@ sites:
 # container each address means, so their routes are generated too.
 upstream_hosts:
   172.18.0.1: wg-easy
+
+# The edge: what the Cloudflare tunnel reaches (Service nginx-plain). It sets
+# the visitor's IP from CF-Connecting-IP like nginx-plain does under Compose,
+# then hands every request to Traefik. docs/17 "Real client IPs".
+edge:
+  upstream: traefik.infra.svc.cluster.local:80

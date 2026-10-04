@@ -59,7 +59,6 @@ spec:
           value: 0.0.0.0
         ports:
         - containerPort: 8888
-        - containerPort: 8888
           hostPort: 8122
           hostIP: 127.0.0.1
         - containerPort: 8888

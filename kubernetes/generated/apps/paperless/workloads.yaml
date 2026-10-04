@@ -81,7 +81,6 @@ spec:
           value: https://paperless.$(DOMAIN)
         ports:
         - containerPort: 8000
-        - containerPort: 8000
           hostPort: 8010
           hostIP: 127.0.0.1
         - containerPort: 8000

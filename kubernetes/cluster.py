@@ -150,8 +150,6 @@ def cmd_install(_a) -> None:
     kubectl("-n", "local-path-storage", "patch", "configmap", "local-path-config", "--type", "merge",
             "-p", json.dumps({"data": {"config.json": json.dumps(conf, indent=1)}}))
     kubectl("apply", "-f", str(K8S / "cluster/storage.yaml"))
-    kubectl("apply", "-f", str(K8S / "cluster/traefik/nginx-plain-alias.yaml"))
-    kubectl("apply", "-f", str(K8S / "cluster/traefik/real-ip.yaml"))
     # Database operators: CloudNativePG (shared + own Postgres) and
     # mariadb-operator (shared MariaDB). Both watch every namespace.
     kubectl("apply", "--server-side", "-f",

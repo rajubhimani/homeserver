@@ -56,8 +56,6 @@ spec:
             gitlab_rails['gitlab_email_from'] = 'gitlab@example.com'
             gitlab_rails['gitlab_email_reply_to'] = 'gitlab@example.com'
         ports:
-        - containerPort: 22
-        - containerPort: 80
         - containerPort: 80
           hostPort: 8085
           hostIP: 127.0.0.1

@@ -51,7 +51,6 @@ spec:
           value: https://calcom.$(DOMAIN)
         ports:
         - containerPort: 3000
-        - containerPort: 3000
           hostPort: 8129
           hostIP: 127.0.0.1
         - containerPort: 3000

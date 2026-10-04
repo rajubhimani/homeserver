@@ -177,6 +177,9 @@ Error response from daemon: failed to set up container networking: driver failed
 
 **Fix used here:** bind DNS to the host's actual LAN IP instead of the wildcard — set `DNS_BIND_IP` in `.env` (see `.env.example` for how to find it via `ip -4 addr`) and both `compose.dev.yml`/`compose.prod.yml` publish `${DNS_BIND_IP}:53:53` rather than `0.0.0.0:53:53`. Avoids the conflict on both platforms without touching host DNS config. Caveat: if the host's LAN IP changes (DHCP lease renewal), `DNS_BIND_IP` needs updating and the container restarting — set a DHCP reservation on your router for this host to avoid that. The web UI (port 8123/3000) is unaffected by any of this either way — it starts and passes its healthcheck regardless of the DNS port's fate.
 
+## Real client IPs
+
+`dns.trusted_proxies` in `AdGuardHome.yaml` lists the proxies whose forwarded headers AdGuard trusts (web UI and DNS-over-HTTPS). It lists `172.16.0.0/12` (Docker); on Kubernetes add `10.0.0.0/8` as well (done on the kind copy, 2026-10-04). AdGuard documents it as a YAML-only setting: edit it with AdGuard stopped.
 
 ## On Kubernetes
 

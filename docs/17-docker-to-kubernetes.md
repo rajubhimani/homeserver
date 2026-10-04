@@ -300,6 +300,45 @@ uv run homeserver.py status
 - **Nextcloud:** from its next start under Docker it logs in with `.env`'s `POSTGRES_USER` (`config/db.config.php`) instead of `oc_admin`. That's intended; check `curl -s localhost:8081/status.php` after the start.
 - **Want the cluster's changes on Docker?** That's a migration in the other direction (dump from CloudNativePG, `homeserver.py restore`), not part of this test.
 
+## Real client IPs behind the Cloudflare tunnel (decision, 2026-10-04)
+
+**The problem.** Requests reach the cluster as visitor → Cloudflare → cloudflared (a pod) → Traefik → app. Traefik sets `X-Real-IP` to whoever connected to it, which is always the cloudflared pod. A visitor's own `X-Forwarded-For` survives, with Cloudflare appending the real address *without a space* (`fake,real`). So apps reading `X-Real-IP` logged the tunnel pod, and Forgejo (which reads `X-Real-IP` first, then splits `X-Forwarded-For` only on `", "`) could be fooled by a crafted header. Under Docker, nginx-plain avoided both by **overwriting** `X-Real-IP` and `X-Forwarded-For` with `CF-Connecting-IP`.
+
+**What the sources say** (researched 2026-10-04):
+
+| Source | Finding |
+|---|---|
+| [Cloudflare: restoring visitor IPs](https://developers.cloudflare.com/support/troubleshooting/restoring-visitor-ips/restoring-original-visitor-ips/) | Restore at the origin from `CF-Connecting-IP`; for nginx use `ngx_http_realip_module` (`real_ip_header CF-Connecting-IP`) |
+| [Cloudflare: request header Transform Rules](https://developers.cloudflare.com/rules/transform/request-header-modification/) | **Can't** set `x-real-ip`, `x-forwarded-for`, `true-client-ip` or `x-forwarded-proto` at the edge |
+| Traefik source (`pkg/middlewares/forwardedheaders/forwarded_header.go`, v3.7) | Keeps an incoming `X-Real-Ip` only from a trusted sender, otherwise sets it to the connecting address; no option to use `CF-Connecting-IP` |
+| [Traefik docs: entrypoints](https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/), [forum](https://community.traefik.io/t/x-real-ip-header-wrong/28294) | Only "trust forwarded headers" (`forwardedHeaders.trustedIPs`); no built-in `CF-Connecting-IP` handling |
+| Traefik plugins (GitHub, checked 2026-10-04) | BetterCorp/cloudflarewarp (98★) **archived**; Paxxs/traefik-get-real-ip 87★, 1 maintainer; PseudoResonance/cloudflarewarp 24★; jramsgz/traefik-real-ip 7★; kubitodev/traefik-cloudflared-source-ip 2★, untouched since 2023 |
+| [Envoy Gateway ClientTrafficPolicy](https://gateway.envoyproxy.io/docs/tasks/traffic/client-traffic-policy/) (API: `clienttrafficpolicy_types.go`) | First-class `clientIPDetection.customHeader: CF-Connecting-IP`, but it doesn't set `X-Real-IP` for apps, and it means replacing Traefik |
+| [Community issue](https://github.com/helmcode/nan/issues/114) | Anything that reaches the router directly (bypassing the tunnel) can fake `CF-Connecting-IP`; trust it only on the tunnel path |
+| Forgejo (`chi-middleware/proxy`, `middleware.go`) | Reads `X-Real-IP` first; walks `X-Forwarded-For` from the right, `REVERSE_PROXY_LIMIT` hops, splitting on `", "` |
+| Vaultwarden (`src/auth.rs`) | Takes the *first* entry of `IP_HEADER`, so `X-Forwarded-For` is fakeable there; `CF-Connecting-IP` isn't |
+
+**Options considered:**
+
+| Option | Secure | Reliable | Best practice | Verdict |
+|---|---|---|---|---|
+| **Edge nginx in front of Traefik**, setting `X-Real-IP` and `X-Forwarded-For` from `CF-Connecting-IP`, as nginx-plain does | Yes: overwrites the visitor's headers, and only the tunnel reaches it | High: the official nginx image | Cloudflare-documented method; identical to the Docker setup | **Chosen** |
+| Traefik real-IP plugin | Yes, if it overwrites | Medium-low: small single-maintainer projects, the original archived | Community only | Rejected |
+| Switch the Gateway to Envoy Gateway | Partly: no `X-Real-IP` for apps | High | Official API | Rejected: replaces the router for one feature |
+| Per-app settings only | No: Forgejo stays fakeable | Medium | Each app's docs | Kept as defence in depth (Vaultwarden `CF-Connecting-IP`, Forgejo `[security]`, Nextcloud `remoteip`) |
+
+**Result (verified 2026-10-04 on kind, a failed login or request through the tunnel with a faked `X-Forwarded-For: 6.6.6.6`):**
+
+| Service | Records the real IP? | How |
+|---|---|---|
+| Authentik, Firefly, Firefly importer, Immich, Guacamole, Nextcloud (app and Apache log), Forgejo, Vaultwarden, Jellyfin, ntfy, docs, landing, IT-Tools | ✅ never the fake | edge + each app's trusted-proxy setting (`docs/services/<svc>.md`, "Real client IPs") |
+| Plausible | ✅ | reads `CF-Connecting-IP` itself |
+| Beszel, Uptime Kuma | ⚠️ the proxy, until set once in the app's UI | PocketBase *User IP proxy headers* = `X-Real-IP`; Uptime Kuma *Trust Proxy* = on |
+| AdGuard | ✅ on kind | `trusted_proxies` + `10.0.0.0/8` (YAML) |
+| Atuin | — | records no client IPs |
+
+**Rule for the future:** check every app that records or acts on a visitor IP with a failed login through the tunnel **and** a faked `X-Forwarded-For`. It must log the real address, never the fake one or a cluster address.
+
 ## Why it's built this way (sources)
 
 Every Kubernetes choice here follows the upstream project's documented way. Where none exists, the row says so and gives the reason. Checked 2026-10-03.

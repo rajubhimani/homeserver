@@ -70,7 +70,6 @@ spec:
           value: https://vikunja.$(DOMAIN)/
         ports:
         - containerPort: 3456
-        - containerPort: 3456
           hostPort: 8111
           hostIP: 127.0.0.1
         - containerPort: 3456

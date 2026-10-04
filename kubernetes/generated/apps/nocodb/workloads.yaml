@@ -49,7 +49,6 @@ spec:
           value: https://nocodb.$(DOMAIN)
         ports:
         - containerPort: 8080
-        - containerPort: 8080
           hostPort: 8126
           hostIP: 127.0.0.1
         - containerPort: 8080

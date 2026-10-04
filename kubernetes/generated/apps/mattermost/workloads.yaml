@@ -78,7 +78,6 @@ spec:
           value: UTC
         ports:
         - containerPort: 8065
-        - containerPort: 8065
           hostPort: 8141
           hostIP: 127.0.0.1
         - containerPort: 8065

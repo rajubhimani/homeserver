@@ -43,7 +43,6 @@ spec:
           value: /brave/
         ports:
         - containerPort: 3000
-        - containerPort: 3000
           hostPort: 8148
           hostIP: 127.0.0.1
         - containerPort: 3000

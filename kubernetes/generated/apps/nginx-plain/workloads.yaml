@@ -77,3 +77,72 @@ spec:
       - name: files
         configMap:
           name: browser-hub-files
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-plain
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: nginx-plain
+    app.kubernetes.io/name: nginx-plain
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nginx-plain
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: homeserver
+        homeserver/service: nginx-plain
+        app.kubernetes.io/name: nginx-plain
+      annotations:
+        homeserver/config-sha256: eacdb901bf5e4a4987b094d13a378fd3a687a7574926c012ec420593c6252ee1
+    spec:
+      enableServiceLinks: false
+      containers:
+      - name: nginx-plain
+        image: nginx:1.30.5-alpine
+        env:
+        - name: NGINX_RESOLVER
+          value: kube-dns.kube-system.svc.cluster.local
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -f http://localhost/_health || exit 1
+          timeoutSeconds: 5
+          periodSeconds: 60
+          failureThreshold: 5
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -f http://localhost/_health || exit 1
+          timeoutSeconds: 5
+          periodSeconds: 60
+          failureThreshold: 10
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -f http://localhost/_health || exit 1
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 6
+        volumeMounts:
+        - name: files
+          mountPath: /etc/nginx/templates/default.conf.template
+          subPath: default.conf.template
+          readOnly: true
+      volumes:
+      - name: files
+        configMap:
+          name: nginx-plain-edge

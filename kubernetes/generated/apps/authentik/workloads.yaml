@@ -69,8 +69,6 @@ spec:
           value: $(AUTHENTIK_SECRET_KEY)
         ports:
         - containerPort: 9000
-        - containerPort: 9443
-        - containerPort: 9000
           hostPort: 8088
           hostIP: 127.0.0.1
         - containerPort: 9000

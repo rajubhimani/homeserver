@@ -39,7 +39,6 @@ spec:
           value: $(WEBUI_SECRET_KEY)
         ports:
         - containerPort: 8080
-        - containerPort: 8080
           hostPort: 8109
           hostIP: 127.0.0.1
         - containerPort: 8080
