@@ -46,10 +46,11 @@ design), branch `feature/k8s-generated`.
 
 **Your user needs the same name and UID:** `raju`, 1000. File owners on `/mnt/mydata` (ext4) are stored as numbers.
 
-**Storage layout after the reinstall (agreed 2026-10-04: ~100 GB of the SSD for this):**
+**Storage layout after the reinstall (confirmed by the owner 2026-10-04: ~100 GB of the SSD for this):**
 
 | Data | Where | `kubernetes/.env` |
 |---|---|---|
+| Docker itself (`/var/lib/docker`: images, containers, Docker's database volumes) | **SSD** (Fedora's default location; the kind node runs here too) | — |
 | kind's image store (~35 GB, up to ~70 GB with every app) | **SSD** (this removes the bottleneck that saturated the HDD on 2026-10-04) | `K8S_IMAGES_PATH=~/k8s-data/containerd` |
 | Databases, etcd, app volumes (classes `fast` and `bulk`) | **SSD** | `K8S_FAST_PATH=~/k8s-data/fast`, `K8S_BULK_PATH=~/k8s-data/bulk` |
 | Backup store (MinIO: WAL archives, base backups, Velero, dumps) | **HDD**: a backup must not share a disk with its data | its PVC needs a storage class on the HDD. Add a `backup` class at `/mnt/mydata/k8s-data/backup` (generator + `cluster/base/storage.yaml` + a kind mount), then point `backup_store()`'s PVC at it. **To do before bootstrap.** |
