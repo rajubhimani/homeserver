@@ -73,6 +73,7 @@ spec:
     labels:
       app.kubernetes.io/part-of: homeserver
       homeserver/service: immich
+      velero.io/exclude-from-backup: 'true'
   managed:
     services:
       additional:

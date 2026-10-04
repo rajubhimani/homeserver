@@ -157,6 +157,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: immich
         app.kubernetes.io/name: immich-server
+      annotations:
+        backup.velero.io/backup-volumes-excludes: v-immich-host-immich-upload
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

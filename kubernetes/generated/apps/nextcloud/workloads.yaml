@@ -24,6 +24,7 @@ spec:
         app.kubernetes.io/name: nextcloud
       annotations:
         homeserver/config-sha256: 0629578c31a926735292ddcbdd73753145953ad7fe6a152795ecc32894efa0b4
+        backup.velero.io/backup-volumes-excludes: v-nextcloud-host-nextcloud-os-iso
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -205,6 +206,7 @@ spec:
         app.kubernetes.io/name: nextcloud-cron
       annotations:
         homeserver/config-sha256: 9f3966ebb99087d3f389aafa7c6f7e0abde63107d1bf2dc54d678b8114d74ca7
+        backup.velero.io/backup-volumes-excludes: v-nextcloud-host-nextcloud-os-iso
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

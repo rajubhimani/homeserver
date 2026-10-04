@@ -4,3 +4,9 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/shared-postgres
+patches:
+- target:
+    kind: Cluster
+    name: shared-postgres
+  patch: "- op: add\n  path: /spec/plugins\n  value:\n  - name: barman-cloud.cloudnative-pg.io\n\
+    \    isWALArchiver: true\n    parameters:\n      barmanObjectName: backup-postgres\n"

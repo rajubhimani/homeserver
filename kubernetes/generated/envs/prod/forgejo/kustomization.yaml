@@ -5,6 +5,7 @@ namespace: apps
 resources:
 - ../../../apps/forgejo
 - routes.yaml
+- backups.yaml
 patches:
 - target:
     kind: Cluster
@@ -14,3 +15,8 @@ patches:
     kind: Deployment
     name: forgejo
   patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Cluster
+    name: forgejo-db
+  patch: "- op: add\n  path: /spec/plugins\n  value:\n  - name: barman-cloud.cloudnative-pg.io\n\
+    \    isWALArchiver: true\n    parameters:\n      barmanObjectName: backup-postgres\n"

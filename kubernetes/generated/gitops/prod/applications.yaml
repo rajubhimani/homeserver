@@ -319,6 +319,161 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  name: cert-manager
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homeserver
+spec:
+  project: platform
+  sources:
+  - repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.21.2
+    helm:
+      releaseName: cert-manager
+      valuesObject:
+        crds:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plugin-barman-cloud
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homeserver
+spec:
+  project: platform
+  sources:
+  - repoURL: https://cloudnative-pg.github.io/charts
+    chart: plugin-barman-cloud
+    targetRevision: 0.8.1
+    helm:
+      releaseName: plugin-barman-cloud
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backup-store
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homeserver
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/rajubhimani/homeserver.git
+    targetRevision: feature/k8s-generated
+    path: kubernetes/generated/platform/backup-store
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: backup
+  syncPolicy:
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homeserver
+spec:
+  project: platform
+  sources:
+  - repoURL: https://vmware-tanzu.github.io/helm-charts
+    chart: velero
+    targetRevision: 12.2.0
+    helm:
+      releaseName: velero
+      valuesObject:
+        image:
+          repository: velero/velero
+          tag: v1.18.4
+        initContainers:
+        - name: velero-plugin-for-aws
+          image: velero/velero-plugin-for-aws:v1.14.4
+          volumeMounts:
+          - mountPath: /target
+            name: plugins
+        deployNodeAgent: true
+        snapshotsEnabled: false
+        credentials:
+          useSecret: true
+          existingSecret: velero-credentials
+        configuration:
+          backupStorageLocation:
+          - name: default
+            provider: aws
+            bucket: velero
+            default: true
+            config:
+              region: us-east-1
+              s3ForcePathStyle: 'true'
+              s3Url: http://backup-store.backup.svc.cluster.local:9000
+          volumeSnapshotLocation: []
+          defaultVolumesToFsBackup: true
+          uploaderType: kopia
+        schedules:
+          apps-nightly:
+            schedule: 30 3 * * *
+            useOwnerReferencesInBackup: false
+            template:
+              includedNamespaces:
+              - apps
+              defaultVolumesToFsBackup: true
+              ttl: 720h0m0s
+              storageLocation: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  syncPolicy:
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
   name: ops-routes
   namespace: argocd
   labels:

@@ -389,7 +389,24 @@ Add both names to `/etc/hosts`.
 **Logs (Grafana + Loki)** come with the observability port (`docs/services/observability.md`, "On Kubernetes"). CrowdSec was removed from the stack on 2026-10-04, from Docker and Kubernetes alike.
 
 **Status (2026-10-04):** written and tested offline: generator tests, and every folder renders with `kubectl kustomize`. The first `bootstrap` happens at the next cluster rebuild, together with encryption at rest. The current cluster was installed by the old `install` command (CloudNativePG from its manifest), so a Helm-installed second copy can't be added on top of it.
-## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
+## Step 7 — Backups
+
+Decided 2026-10-04 (option A of three): each piece is its own project's documented choice, all actively maintained, and every backup goes to one S3 store. Docker's "`down` takes a backup" becomes **nightly backups plus continuous WAL archiving**, because a git push can't run a backup before it stops something.
+
+| What | How | Restores to |
+|---|---|---|
+| Each Postgres cluster (own and shared) | CloudNativePG's [Barman Cloud plugin](https://cloudnative-pg.io/plugin-barman-cloud/) (the in-tree method is deprecated since 1.26): continuous WAL archive plus a nightly base backup (`ScheduledBackup`) | any point in time within the retention |
+| One app's database on a shared server | a nightly `pg_dump -Fc` / `mariadb-dump` job per app, into `dumps/<svc>/<timestamp>/`, the same format as Compose's `_shareddb_` dumps | that night. Barman restores whole clusters only, and CloudNativePG notes dumps aren't for whole-cluster recovery, so both exist |
+| Volumes in `apps` | [Velero](https://velero.io) file-system backup (kopia), nightly | that night |
+| Not by Velero | database volumes (covered above) and host folders (Immich's photos, Jellyfin's media, Nextcloud's ISOs), which stay on their own disks | — |
+
+**Where:** the S3 store in `kubernetes/deploy/<env>.yaml` (`backup:`). By default that's the cluster's own MinIO (`pgsty/minio`, the maintained fork) in namespace `backup` on the HDD (200 Gi). It has one bucket per consumer (`postgres`, `velero`, `dumps`), and each consumer gets its own key, allowed into its own bucket only. The keys are generated into `kubernetes/.env` (mode 600) and reach the cluster through External Secrets. **Moving to a cloud** (AWS S3, or another provider's S3 API): change `endpoint` and `region`, and put that store's keys in `kubernetes/.env`. Nothing else changes.
+
+**Settings:** `schedule` (nightly, `30 3 * * *` UTC) and `retention_days` (30): Barman's recovery window, Velero's TTL. `enabled: false` turns everything off for an environment. The test environment has it off until the next rebuild, because the current cluster has no Barman plugin yet and WAL archiving to a missing plugin would stall its databases.
+
+**Add-ons** (`kubernetes/cluster/addons.yaml`): cert-manager (the plugin requires it), `plugin-barman-cloud` (next to the CNPG operator), `backup-store`, and `velero` (with `velero-plugin-for-aws` for S3). Local volumes have no CSI snapshots, so Velero copies files. That's also why the storage classes create `local` volumes (Velero's file-system backup doesn't support `hostPath`).
+
+**Status (2026-10-04):** written and tested offline. The generator tests check every running database has a nightly backup and every shared-database app a dump job. The first real backups run after the rebuild. `cluster.py restore` and `archive` (a copy of the store to the Passport) are next.
 ## Step 8 — Testing with your real data
 
 Data goes into the cluster as **copies**. Docker's `service_data` folders and databases are only ever read:

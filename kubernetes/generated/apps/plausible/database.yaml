@@ -37,6 +37,7 @@ spec:
     labels:
       app.kubernetes.io/part-of: homeserver
       homeserver/service: plausible
+      velero.io/exclude-from-backup: 'true'
   managed:
     services:
       additional:

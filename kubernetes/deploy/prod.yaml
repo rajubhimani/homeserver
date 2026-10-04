@@ -18,3 +18,14 @@ revision: feature/k8s-generated
 running: [min, core]
 stopped: []
 auto_sync: false
+# backup: where backups go (docs/17 "Backups"). endpoint: any S3 API; the
+#   default is the cluster's own MinIO (namespace backup). Switching to AWS
+#   S3, GCS (S3 interop) or Azure (via an S3 gateway) = change endpoint and
+#   region, put that store's keys in kubernetes/.env. enabled: false turns
+#   off WAL archiving, base backups and dumps for this environment.
+backup:
+  enabled: true
+  endpoint: http://backup-store.backup.svc.cluster.local:9000
+  region: us-east-1
+  schedule: "30 3 * * *"   # nightly, cluster time (UTC)
+  retention_days: 30

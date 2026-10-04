@@ -1893,8 +1893,9 @@ def homeserver_config(env: str, domain: str) -> dict[str, list[dict]]:
              "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": sa}},
             {"apiVersion": ESO_API, "kind": "ClusterSecretStore", "metadata": {"name": SECRET_STORE, "labels": labels},
              "spec": {
-                 # Only ExternalSecrets in the apps namespace may read the store.
-                 "conditions": [{"namespaces": [NAMESPACE]}],
+                 # Only ExternalSecrets in these namespaces may read the store:
+                 # the apps, and the backup store and Velero (their S3 keys).
+                 "conditions": [{"namespaces": [NAMESPACE, BACKUP_NS, VELERO_NS]}],
                  "provider": {"kubernetes": {
                      "remoteNamespace": SECRET_STORE_NS,
                      "server": {"caProvider": {"type": "ConfigMap", "name": "kube-root-ca.crt", "key": "ca.crt",
@@ -1923,7 +1924,7 @@ def gitops(env: str) -> dict[str, list[dict]]:
     sync_auto = {"automated": {"prune": True, "selfHeal": True}} if d.get("auto_sync") else {}
     retry = {"limit": 10, "backoff": {"duration": "30s", "factor": 2, "maxDuration": "5m"}}
     meta = lambda name: {"name": name, "namespace": ARGOCD_NS, "labels": {"app.kubernetes.io/part-of": "homeserver"}}  # noqa: E731
-    gen = f"kubernetes/generated"
+    gen = "kubernetes/generated"
     projects = [
         {"apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject", "metadata": meta("platform"),
          "spec": {"description": "Cluster add-ons: routing, operators, secrets, GitOps, UI",
@@ -1952,7 +1953,8 @@ def gitops(env: str) -> dict[str, list[dict]]:
             sources = [{"repoURL": a["repo"], "chart": a["chart"], "targetRevision": VERSIONS[a["version"]],
                         "helm": {"releaseName": a.get("release", a["name"]),
                                  **({"valueFiles": [f"$values/{a['values']}"]} if a.get("values") else {}),
-                                 **({"valuesObject": a["values_object"]} if a.get("values_object") else {})}}]
+                                 **({"valuesObject": a["values_object"]} if a.get("values_object") else {}),
+                                 **({"valuesObject": velero_values(env)} if a.get("values_from") == "velero" else {})}}]
             if a.get("values"):
                 sources.append({"repoURL": repo, "targetRevision": rev, "ref": "values"})
             src = {"sources": sources}
@@ -2099,6 +2101,242 @@ def helm_service_files(svc: str) -> dict[str, list[dict]]:
     return files
 
 
+# ── backups (docs/17 "Backups", phase 5) ──────────────────────────────────
+# Databases: CloudNativePG's Barman Cloud plugin archives WAL continuously and
+# takes a nightly base backup (any point in time). One app's database on a
+# shared server: a nightly pg_dump/mariadb-dump job (Barman restores whole
+# clusters only). Volumes: Velero with kopia, nightly, database and host
+# folders excluded. All into one S3 store (kubernetes/deploy/<env>.yaml
+# backup.endpoint; default the cluster's MinIO), each consumer with its own
+# key limited to its own bucket.
+
+BACKUP_NS = "backup"
+BACKUP_BUCKETS = ("postgres", "velero", "dumps")
+VELERO_NS = "velero"
+BARMAN_PLUGIN = "barman-cloud.cloudnative-pg.io"
+PG_OBJECT_STORE = "backup-postgres"
+VELERO_EXCLUDE = {"velero.io/exclude-from-backup": "true"}
+
+
+def backup_settings(env: str) -> dict:
+    b = load_deploy(env).get("backup") or {}
+    return {"enabled": bool(b.get("enabled")), "endpoint": b.get("endpoint", ""), "region": b.get("region", "us-east-1"),
+            "schedule": b.get("schedule", "30 3 * * *"), "retention_days": int(b.get("retention_days", 30))}
+
+
+def backup_key_secret(name: str, svc: str, bucket: str, fmt: str = "pair") -> dict:
+    """An ExternalSecret with one bucket's S3 key, from kubernetes/.env
+    (store key 'kubernetes'): BACKUP_<BUCKET>_ACCESS_KEY / _SECRET_KEY."""
+    k, s = f"BACKUP_{bucket.upper()}_ACCESS_KEY", f"BACKUP_{bucket.upper()}_SECRET_KEY"
+    ref = lambda key: "{{ " + f'index . "{key}"' + " }}"  # noqa: E731
+    data = ({"ACCESS_KEY_ID": ref(k), "ACCESS_SECRET_KEY": ref(s)} if fmt == "pair" else
+            {"cloud": f"[default]\naws_access_key_id={ref(k)}\naws_secret_access_key={ref(s)}\n"})
+    es = external_secret(name, svc, template={"data": data})
+    es["spec"]["dataFrom"] = [{"extract": {"key": "kubernetes"}}]
+    return es
+
+
+def exclude_from_velero(files: dict[str, list[dict]]) -> None:
+    """Velero backs up the apps namespace's volumes; databases have their
+    own backups (Barman, dumps) and host folders (photos, media) stay on
+    their own disks, so both are left out."""
+    for objs in files.values():
+        for o in objs:
+            if o["kind"] == "Cluster":
+                im = o["spec"]["inheritedMetadata"]
+                im["labels"] = {**im["labels"], **VELERO_EXCLUDE}
+            elif o["kind"] == "MariaDB":
+                im = o["spec"]["inheritMetadata"]
+                im["labels"] = {**im["labels"], **VELERO_EXCLUDE}
+            elif o["kind"] in ("Deployment", "DaemonSet", "StatefulSet"):
+                tmpl = o["spec"]["template"]
+                host = sorted(v["name"] for v in tmpl["spec"].get("volumes") or []
+                              if "-host-" in (v.get("persistentVolumeClaim") or {}).get("claimName", ""))
+                if host:
+                    tmpl["metadata"]["annotations"] = {**(tmpl["metadata"].get("annotations") or {}),
+                                                       "backup.velero.io/backup-volumes-excludes": ",".join(host)}
+
+
+def db_backup_patches(objs: list[dict]) -> list[dict]:
+    """Env overlay: WAL archiving through the Barman Cloud plugin on every
+    CloudNativePG cluster of the service."""
+    return [{"target": {"kind": "Cluster", "name": o["metadata"]["name"]},
+             "patch": yaml.safe_dump([{"op": "add", "path": "/spec/plugins", "value": [
+                 {"name": BARMAN_PLUGIN, "isWALArchiver": True,
+                  "parameters": {"barmanObjectName": PG_OBJECT_STORE}}]}], sort_keys=False)}
+            for o in objs if o["kind"] == "Cluster"]
+
+
+def db_backup_objects(svc: str, objs: list[dict], env: str) -> list[dict]:
+    """Env overlay objects for a running service: a nightly base backup of
+    each of its clusters, and a nightly dump of its shared-server database."""
+    b = backup_settings(env)
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
+    out = []
+    for o in objs:
+        if o["kind"] == "Cluster":
+            n = o["metadata"]["name"]
+            out.append({"apiVersion": "postgresql.cnpg.io/v1", "kind": "ScheduledBackup",
+                        "metadata": {"name": f"{n}-nightly", "labels": labels},
+                        # CNPG's cron has seconds first
+                        "spec": {"schedule": "0 " + b["schedule"], "backupOwnerReference": "self",
+                                 "cluster": {"name": n}, "method": "plugin",
+                                 "pluginConfiguration": {"name": BARMAN_PLUGIN}}})
+    spec = shared_db_apps().get(svc)
+    if spec and not external_db(svc):
+        out.append(dump_cronjob(svc, spec, b, labels))
+    return out
+
+
+def dump_cronjob(svc: str, spec: dict, b: dict, labels: dict) -> dict:
+    """pg_dump (custom format) or mariadb-dump of each of the app's databases
+    into dumps/<svc>/<timestamp>/, as homeserver.py's _shareddb_ dumps."""
+    server = SHARED[spec["engine"]]
+    pg = spec["engine"] == "postgres"
+    image = VERSIONS["CNPG_POSTGRES_IMAGE"] if pg else next(iter(load_compose(server)["services"].values()))["image"]
+    if pg:
+        env = [{"name": "PGPASSWORD", "valueFrom": {"secretKeyRef": {"name": f"{svc}-db-role", "key": "password"}}},
+               {"name": "PGUSER", "valueFrom": {"secretKeyRef": {"name": f"{svc}-db-role", "key": "username"}}}]
+        dump = " && ".join(f"pg_dump -Fc -h {server} -d {db} -f /work/{db}.dump" for db in spec["dbs"])
+    else:
+        env = [{"name": "MYSQL_PWD", "valueFrom": {"secretKeyRef": {"name": f"{svc}-env", "key": spec["password_key"]}}}]
+        dump = " && ".join(f"mariadb-dump -h {server} -u {spec['user']} --single-transaction --routines --triggers "
+                           f"{db} > /work/{db}.sql" for db in spec["dbs"])
+    secure = {"allowPrivilegeEscalation": False, "runAsNonRoot": True, "runAsUser": 65534,
+              "capabilities": {"drop": ["ALL"]}}
+    upload = ('mc alias set store "$S3_ENDPOINT" "$ACCESS_KEY_ID" "$ACCESS_SECRET_KEY" >/dev/null && '
+              f'mc cp --recursive /work/ "store/dumps/{svc}/$(date -u +%Y%m%d-%H%M%S)/"')
+    pod = {"restartPolicy": "OnFailure", "automountServiceAccountToken": False, "enableServiceLinks": False,
+           "securityContext": {"seccompProfile": {"type": "RuntimeDefault"}, "fsGroup": 65534},
+           "initContainers": [{"name": "dump", "image": image, "command": ["sh", "-c", dump], "env": env,
+                               "securityContext": secure, "volumeMounts": [{"name": "work", "mountPath": "/work"}]}],
+           "containers": [{"name": "upload", "image": VERSIONS["MC_IMAGE"], "command": ["sh", "-c", upload],
+                           "env": [{"name": "S3_ENDPOINT", "value": b["endpoint"]}, {"name": "MC_CONFIG_DIR", "value": "/work/.mc"}],
+                           "envFrom": [{"secretRef": {"name": "backup-dumps-credentials"}}],
+                           "securityContext": secure, "volumeMounts": [{"name": "work", "mountPath": "/work"}]}],
+           "volumes": [{"name": "work", "emptyDir": {}}]}
+    return {"apiVersion": "batch/v1", "kind": "CronJob", "metadata": {"name": f"{svc}-db-dump", "labels": labels},
+            "spec": {"schedule": b["schedule"], "concurrencyPolicy": "Forbid", "successfulJobsHistoryLimit": 1,
+                     "failedJobsHistoryLimit": 3,
+                     "jobTemplate": {"spec": {"backoffLimit": 3, "ttlSecondsAfterFinished": 86400,
+                                              "template": {"metadata": {"labels": labels}, "spec": pod}}}}}
+
+
+def backup_config(env: str) -> list[dict]:
+    """The apps-namespace side of the store: Barman's ObjectStore and the
+    S3 keys the database backups and dump jobs use (homeserver-config)."""
+    b = backup_settings(env)
+    if not b["enabled"]:
+        return []
+    return [
+        backup_key_secret("backup-postgres-credentials", "homeserver-config", "postgres"),
+        backup_key_secret("backup-dumps-credentials", "homeserver-config", "dumps"),
+        {"apiVersion": "barmancloud.cnpg.io/v1", "kind": "ObjectStore",
+         "metadata": {"name": PG_OBJECT_STORE, "namespace": NAMESPACE, "labels": {"app.kubernetes.io/part-of": "homeserver"}},
+         "spec": {"retentionPolicy": f"{b['retention_days']}d",
+                  "configuration": {"destinationPath": "s3://postgres/", "endpointURL": b["endpoint"],
+                                    "s3Credentials": {
+                                        "accessKeyId": {"name": "backup-postgres-credentials", "key": "ACCESS_KEY_ID"},
+                                        "secretAccessKey": {"name": "backup-postgres-credentials", "key": "ACCESS_SECRET_KEY"}},
+                                    "wal": {"compression": "gzip"}, "data": {"compression": "gzip"}}}},
+    ]
+
+
+def velero_values(env: str) -> dict:
+    """The Velero chart's values: the S3 store from kubernetes/deploy/<env>.yaml,
+    file-system backups (kopia) of the apps namespace, nightly."""
+    v, b = VERSIONS, backup_settings(env)
+    return {
+        "image": {"repository": "velero/velero", "tag": v["VELERO_VERSION"]},
+        "initContainers": [{"name": "velero-plugin-for-aws", "image": f"velero/velero-plugin-for-aws:{v['VELERO_AWS_PLUGIN_VERSION']}",
+                            "volumeMounts": [{"mountPath": "/target", "name": "plugins"}]}],
+        "deployNodeAgent": True,
+        "snapshotsEnabled": False,  # local volumes have no CSI snapshots: file-system backup instead
+        "credentials": {"useSecret": True, "existingSecret": "velero-credentials"},
+        "configuration": {
+            "backupStorageLocation": [{"name": "default", "provider": "aws", "bucket": "velero", "default": True,
+                                       "config": {"region": b["region"], "s3ForcePathStyle": "true", "s3Url": b["endpoint"]}}],
+            "volumeSnapshotLocation": [],
+            "defaultVolumesToFsBackup": True,
+            "uploaderType": "kopia"},
+        "schedules": ({"apps-nightly": {"schedule": b["schedule"], "useOwnerReferencesInBackup": False, "template": {
+            "includedNamespaces": [NAMESPACE], "defaultVolumesToFsBackup": True, "ttl": f"{b['retention_days'] * 24}h0m0s",
+            "storageLocation": "default"}}} if b["enabled"] else {}),
+    }
+
+
+def backup_store() -> dict[str, list[dict] | dict]:
+    """The cluster's own S3 store (MinIO, the maintained pgsty fork), on the
+    HDD (storage class bulk), with one bucket and one key per consumer."""
+    labels = {"app.kubernetes.io/part-of": "homeserver", "app.kubernetes.io/name": "backup-store"}
+    secure_c = {"allowPrivilegeEscalation": False, "runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000,
+                "capabilities": {"drop": ["ALL"]}}
+    pod_sec = {"seccompProfile": {"type": "RuntimeDefault"}, "fsGroup": 1000}
+    root = lambda k: {"name": k, "valueFrom": {"secretKeyRef": {"name": "backup-store-root", "key": k}}}  # noqa: E731
+    users = []
+    for bucket in BACKUP_BUCKETS:
+        u = bucket.upper()
+        users.append(f'mc mb --ignore-existing store/{bucket} && '
+                     f'printf \'{{"Version":"2012-10-17","Statement":[{{"Effect":"Allow","Action":["s3:*"],'
+                     f'"Resource":["arn:aws:s3:::{bucket}","arn:aws:s3:::{bucket}/*"]}}]}}\' > /tmp/{bucket}.json && '
+                     f'(mc admin policy create store {bucket}-only /tmp/{bucket}.json 2>/dev/null || true) && '
+                     f'mc admin user add store "$BACKUP_{u}_ACCESS_KEY" "$BACKUP_{u}_SECRET_KEY" && '
+                     f'(mc admin policy attach store {bucket}-only --user "$BACKUP_{u}_ACCESS_KEY" 2>/dev/null || true)')
+    setup = " && ".join(['mc alias set store http://backup-store:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'] + users)
+    es_root = external_secret("backup-store-root", "backup-store", template={"data": {
+        "MINIO_ROOT_USER": '{{ index . "BACKUP_STORE_ROOT_USER" }}',
+        "MINIO_ROOT_PASSWORD": '{{ index . "BACKUP_STORE_ROOT_PASSWORD" }}',
+        **{f"BACKUP_{b.upper()}_{k}": "{{ " + f'index . "BACKUP_{b.upper()}_{k}"' + " }}"
+           for b in BACKUP_BUCKETS for k in ("ACCESS_KEY", "SECRET_KEY")}}})
+    es_root["spec"]["dataFrom"] = [{"extract": {"key": "kubernetes"}}]
+    es_velero = backup_key_secret("velero-credentials", "velero", "velero", fmt="aws")
+    es_velero["metadata"]["namespace"] = VELERO_NS
+    return {
+        "store.yaml": [
+            {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": BACKUP_NS, "labels": {
+                "app.kubernetes.io/part-of": "homeserver", "pod-security.kubernetes.io/enforce": "restricted"}}},
+            {**es_root, "metadata": {**es_root["metadata"], "namespace": BACKUP_NS}},
+            {"apiVersion": "v1", "kind": "PersistentVolumeClaim",
+             "metadata": {"name": "backup-store", "namespace": BACKUP_NS, "labels": labels,
+                          "annotations": {"argocd.argoproj.io/sync-options": KEEP_OPTIONS}},
+             "spec": {"accessModes": ["ReadWriteOnce"], "storageClassName": "bulk",
+                      "resources": {"requests": {"storage": "200Gi"}}}},
+            {"apiVersion": "apps/v1", "kind": "Deployment",
+             "metadata": {"name": "backup-store", "namespace": BACKUP_NS, "labels": labels},
+             "spec": {"replicas": 1, "strategy": {"type": "Recreate"},
+                      "selector": {"matchLabels": {"app.kubernetes.io/name": "backup-store"}},
+                      "template": {"metadata": {"labels": labels}, "spec": {
+                          "automountServiceAccountToken": False, "enableServiceLinks": False, "securityContext": pod_sec,
+                          "containers": [{"name": "minio", "image": VERSIONS["MINIO_IMAGE"],
+                                          "args": ["server", "/data", "--console-address", ":9001"],
+                                          "env": [root("MINIO_ROOT_USER"), root("MINIO_ROOT_PASSWORD")],
+                                          "ports": [{"containerPort": 9000}, {"containerPort": 9001}],
+                                          "readinessProbe": {"httpGet": {"path": "/minio/health/ready", "port": 9000}, "periodSeconds": 15},
+                                          "livenessProbe": {"httpGet": {"path": "/minio/health/live", "port": 9000},
+                                                            "periodSeconds": 30, "failureThreshold": 4},
+                                          "securityContext": secure_c,
+                                          "volumeMounts": [{"name": "data", "mountPath": "/data"}]}],
+                          "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "backup-store"}}]}}}},
+            {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "backup-store", "namespace": BACKUP_NS, "labels": labels},
+             "spec": {"selector": {"app.kubernetes.io/name": "backup-store"},
+                      "ports": [{"name": "s3", "port": 9000, "targetPort": 9000}, {"name": "console", "port": 9001, "targetPort": 9001}]}},
+            # Buckets, per-consumer keys and their one-bucket policies; idempotent,
+            # re-run on every sync (ArgoCD PostSync hook).
+            {"apiVersion": "batch/v1", "kind": "Job",
+             "metadata": {"name": "backup-store-setup", "namespace": BACKUP_NS, "labels": labels,
+                          "annotations": {"argocd.argoproj.io/hook": "PostSync",
+                                          "argocd.argoproj.io/hook-delete-policy": "BeforeHookCreation"}},
+             "spec": {"backoffLimit": 10, "template": {"metadata": {"labels": labels}, "spec": {
+                 "restartPolicy": "OnFailure", "automountServiceAccountToken": False, "securityContext": pod_sec,
+                 "containers": [{"name": "setup", "image": VERSIONS["MC_IMAGE"], "command": ["sh", "-c", setup],
+                                 "env": [{"name": "MC_CONFIG_DIR", "value": "/tmp/.mc"}],
+                                 "envFrom": [{"secretRef": {"name": "backup-store-root"}}],
+                                 "securityContext": secure_c}]}}}},
+            es_velero,
+        ],
+    }
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
@@ -2142,6 +2380,7 @@ def render(out: Path) -> list[str]:
         if not helm_service(svc) and (es := service_secrets(svc)):
             files["secrets.yaml"] = es
         reload_on_secret_change(files)
+        exclude_from_velero(files)
         stopped(files)
         all_objs = [o for objs in files.values() for o in objs]
         d = out / "apps" / svc
@@ -2160,8 +2399,14 @@ def render(out: Path) -> list[str]:
             if routes:
                 (ed / "routes.yaml").write_text(dump(routes, svc))
                 res.append("routes.yaml")
-            (ed / "kustomization.yaml").write_text(kustomization(
-                res, patches=running_patches(all_objs) if svc in running[env] else None))
+            patches = running_patches(all_objs) if svc in running[env] else []
+            if backup_settings(env)["enabled"]:
+                patches += db_backup_patches(all_objs)
+                extra = db_backup_objects(svc, all_objs, env) if svc in running[env] else []
+                if extra:
+                    (ed / "backups.yaml").write_text(dump(extra, svc))
+                    res.append("backups.yaml")
+            (ed / "kustomization.yaml").write_text(kustomization(res, patches=patches or None))
     la = local_access()
     d = out / "apps" / "local-access"
     d.mkdir(parents=True, exist_ok=True)
@@ -2174,6 +2419,8 @@ def render(out: Path) -> list[str]:
         (ed / "kustomization.yaml").write_text(kustomization(["../../../apps/local-access"], namespace=LOCAL_ACCESS_NS))
     for env, dom in (("test", TEST_DOMAIN), ("prod", domain)):
         hc = homeserver_config(env, domain)
+        if (bc := backup_config(env)):
+            hc["backups.yaml"] = bc
         d = out / "apps" / f"homeserver-config-{env}"
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(hc.items()):
@@ -2188,7 +2435,10 @@ def render(out: Path) -> list[str]:
         for fname, objs in sorted(go.items()):
             (g / fname).write_text(dump(objs, "gitops"))
         (g / "kustomization.yaml").write_text(kustomization(sorted(go), namespace=None))
-    for name, fs in platform_files().items():
+    pf = platform_files()
+    pf["backup-store"] = {**backup_store(), "kustomization.yaml": {
+        "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["store.yaml"]}}
+    for name, fs in pf.items():
         d = out / "platform" / name
         d.mkdir(parents=True, exist_ok=True)
         for fname, content in fs.items():

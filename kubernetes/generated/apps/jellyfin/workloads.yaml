@@ -22,6 +22,8 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: jellyfin
         app.kubernetes.io/name: jellyfin
+      annotations:
+        backup.velero.io/backup-volumes-excludes: v-jellyfin-host-jellyfin-media
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

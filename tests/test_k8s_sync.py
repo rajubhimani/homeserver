@@ -473,7 +473,8 @@ def test_services_are_generated_stopped():
 
 def test_env_overlays_follow_the_running_list():
     """envs/<env>/<svc> switches the service on exactly when
-    kubernetes/deploy/<env>.yaml runs it, with one patch per stopped object."""
+    kubernetes/deploy/<env>.yaml runs it (one patch per stopped object), and
+    turns on WAL archiving for its databases when the env has backups on."""
     for env in gen.ENVS:
         running = gen.running_services(env)
         for svc in PORTED:
@@ -481,11 +482,10 @@ def test_env_overlays_follow_the_running_list():
             if not k.is_file():
                 continue
             patches = yaml.safe_load(k.read_text()).get("patches") or []
-            if svc in running:
-                assert patches == gen.running_patches(_apps_objects(svc)), f"{env}/{svc}"
-                assert gen.started(_apps_objects(svc)) != _apps_objects(svc) or not patches
-            else:
-                assert not patches, f"{env}/{svc} runs but kubernetes/deploy/{env}.yaml doesn't list it"
+            backups = gen.db_backup_patches(_apps_objects(svc)) if gen.backup_settings(env)["enabled"] else []
+            expected = (gen.running_patches(_apps_objects(svc)) if svc in running else []) + backups
+            assert patches == expected, (f"{env}/{svc}: overlay doesn't match kubernetes/deploy/{env}.yaml "
+                                         f"(running: {svc in running}, backups: {bool(backups)})")
         for app, spec in gen.shared_db_apps().items():
             if app in running and not gen.external_db(app):
                 assert gen.SHARED[spec["engine"]] in running, f"{env}: {app} runs without its shared database"
@@ -632,3 +632,36 @@ def test_dagster_chart_values_match_compose():
     assert not stopped["dagster-user-deployments"]["enabled"]
     # The code is in the image now: no service_data mount on Compose.
     assert not any("user-code" in str(m.get("source", "")) for m in comp["dagster-user-code"].get("volumes") or [])
+
+
+def test_backups_cover_every_database_and_volume():
+    """With backups on (kubernetes/deploy/<env>.yaml), every running service's
+    Postgres has a nightly base backup and its shared-server databases a
+    nightly dump. Velero leaves out database volumes (backed up by Barman and
+    the dumps) and host folders (photos, media), everywhere."""
+    for env in gen.ENVS:
+        if not gen.backup_settings(env)["enabled"]:
+            continue
+        for svc in gen.running_services(env):
+            f = GENERATED / "envs" / env / svc / "backups.yaml"
+            objs = [d for d in yaml.safe_load_all(f.read_text()) if d] if f.is_file() else []
+            scheduled = {o["spec"]["cluster"]["name"] for o in objs if o["kind"] == "ScheduledBackup"}
+            clusters = {o["metadata"]["name"] for o in _apps_objects(svc) if o["kind"] == "Cluster"}
+            assert clusters <= scheduled, f"{env}/{svc}: no nightly backup for {sorted(clusters - scheduled)}"
+            if svc in gen.shared_db_apps() and not gen.external_db(svc):
+                assert any(o["kind"] == "CronJob" for o in objs), f"{env}/{svc}: no database dump job"
+    for app, spec in gen.shared_db_apps().items():  # every app's dump job builds (postgres and mariadb)
+        job = gen.dump_cronjob(app, spec, gen.backup_settings("prod"), {})
+        assert all(db in job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["initContainers"][0]["command"][2]
+                   for db in spec["dbs"])
+    for svc in PORTED:
+        for o in _apps_objects(svc):
+            if o["kind"] in ("Cluster", "MariaDB"):
+                meta = o["spec"].get("inheritedMetadata") or o["spec"].get("inheritMetadata")
+                assert meta["labels"].get("velero.io/exclude-from-backup") == "true", f"{svc}: {o['metadata']['name']}"
+            if o["kind"] in ("Deployment", "DaemonSet"):
+                tmpl = o["spec"]["template"]
+                host = {v["name"] for v in tmpl["spec"].get("volumes") or []
+                        if "-host-" in (v.get("persistentVolumeClaim") or {}).get("claimName", "")}
+                excl = set((tmpl["metadata"].get("annotations") or {}).get("backup.velero.io/backup-volumes-excludes", "").split(","))
+                assert host <= excl, f"{svc}/{o['metadata']['name']}: host folders {sorted(host - excl)} would be copied by Velero"

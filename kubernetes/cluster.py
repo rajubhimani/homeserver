@@ -205,6 +205,30 @@ def env_hash(data: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
+BACKUP_KEYS = ["BACKUP_STORE_ROOT_USER", "BACKUP_STORE_ROOT_PASSWORD"] + [
+    f"BACKUP_{b.upper()}_{k}" for b in ("postgres", "velero", "dumps") for k in ("ACCESS_KEY", "SECRET_KEY")]
+
+
+def ensure_backup_keys() -> dict[str, str]:
+    """The backup store's keys (root, and one key per bucket, docs/17
+    "Backups"): generated once into kubernetes/.env (mode 600, never in git).
+    For an outside S3 store, put that store's keys there instead."""
+    import secrets as _secrets
+    env_file = K8S / ".env"
+    have = load_env(env_file)
+    missing = [k for k in BACKUP_KEYS if not have.get(k)]
+    if missing:
+        gen = {k: (f"{k.split('_')[1].lower()}-{_secrets.token_hex(6)}" if k.endswith(("_ACCESS_KEY", "_ROOT_USER"))
+                   else _secrets.token_urlsafe(32)) for k in missing}
+        with env_file.open("a") as f:
+            f.write("\n# Backup store keys (cluster.py, docs/17 \"Backups\"): root, then one per bucket.\n"
+                    + "".join(f"{k}={v}\n" for k, v in gen.items()))
+        env_file.chmod(0o600)
+        print(f"generated {len(missing)} backup store key(s) in kubernetes/.env")
+        have.update(gen)
+    return {k: have[k] for k in BACKUP_KEYS}
+
+
 def cmd_secrets(a) -> None:
     """Copy each services/<svc>/.env into the secret store (Secret <svc> in
     namespace homeserver-secrets, readable only by External Secrets). The
@@ -214,6 +238,12 @@ def cmd_secrets(a) -> None:
     kubectl("apply", "-f", "-", input=yaml.safe_dump(
         {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": SECRET_STORE_NS, "labels": {
             "app.kubernetes.io/part-of": "homeserver", "pod-security.kubernetes.io/enforce": "restricted"}}}))
+    # kubernetes/.env's backup keys, as store key 'kubernetes'.
+    keys = ensure_backup_keys()
+    kubectl("apply", "-f", "-", input=yaml.safe_dump(
+        {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+         "metadata": {"name": "kubernetes", "namespace": SECRET_STORE_NS, "labels": {"app.kubernetes.io/part-of": "homeserver"}},
+         "stringData": keys}))
     prod_only = set(load_scope().get("prod_only") or [])
     for svc in services(a.services):
         env_file = REPO / "services" / svc / ".env"

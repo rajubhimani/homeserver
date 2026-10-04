@@ -5,6 +5,7 @@ namespace: apps
 resources:
 - ../../../apps/plausible
 - routes.yaml
+- backups.yaml
 patches:
 - target:
     kind: Cluster
@@ -18,3 +19,8 @@ patches:
     kind: Deployment
     name: plausible-events-db
   patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Cluster
+    name: plausible-db
+  patch: "- op: add\n  path: /spec/plugins\n  value:\n  - name: barman-cloud.cloudnative-pg.io\n\
+    \    isWALArchiver: true\n    parameters:\n      barmanObjectName: backup-postgres\n"

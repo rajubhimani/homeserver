@@ -5,6 +5,7 @@ namespace: apps
 resources:
 - ../../../apps/nextcloud
 - routes.yaml
+- backups.yaml
 patches:
 - target:
     kind: Cluster
@@ -22,3 +23,8 @@ patches:
     kind: Deployment
     name: nextcloud-redis
   patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Cluster
+    name: nextcloud-db
+  patch: "- op: add\n  path: /spec/plugins\n  value:\n  - name: barman-cloud.cloudnative-pg.io\n\
+    \    isWALArchiver: true\n    parameters:\n      barmanObjectName: backup-postgres\n"
