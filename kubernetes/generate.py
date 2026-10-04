@@ -1940,7 +1940,9 @@ IN_CLUSTER = "https://kubernetes.default.svc"
 OPS_HOSTS = {"argocd": ("argocd-server", ARGOCD_NS, 80), "headlamp": ("headlamp", "headlamp", 80),
              # Grafana has no public route (internal-only, as on Docker); this test
              # hostname reaches it only from this machine.
-             "grafana": ("observability", NAMESPACE, 3000)}
+             "grafana": ("observability", NAMESPACE, 3000),
+             # The backup store's console (MinIO), root login from kubernetes/.env.
+             "backup": ("backup-store", "backup", 9001)}
 
 
 def gitops(env: str) -> dict[str, list[dict]]:

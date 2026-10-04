@@ -398,7 +398,9 @@ ArgoCD needs its documented app-of-apps health check for Applications to make th
 
 **The UIs (only on this machine, never on the public domain):**
 - **ArgoCD:** `http://argocd.k8s.local:18080`, user `admin`. `bootstrap` prints the command that shows the first password.
-- **Headlamp:** `http://headlamp.k8s.local:18080`. Sign in with a token from `kubectl -n headlamp create token headlamp`.
+- **Headlamp:** `http://headlamp.k8s.local:18080`.
+- **Grafana:** `http://grafana.k8s.local:18080` (it has no public route, as on Docker).
+- **Backup store console (MinIO):** `http://backup.k8s.local:18080`, login `BACKUP_STORE_ROOT_USER`/`BACKUP_STORE_ROOT_PASSWORD` from `kubernetes/.env`. Sign in with a token from `kubectl -n headlamp create token headlamp`.
 
 Add both names to `/etc/hosts`.
 
