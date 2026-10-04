@@ -17,6 +17,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -41,6 +44,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -68,6 +74,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: default
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -95,6 +104,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: default
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -129,6 +141,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: infra
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -158,6 +173,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: cnpg-system
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -187,6 +205,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: mariadb-operator
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -216,6 +237,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: mariadb-operator
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -245,6 +269,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: external-secrets
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -277,6 +304,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: reloader
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -306,6 +336,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: headlamp
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -338,6 +371,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: cert-manager
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -367,6 +403,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: cnpg-system
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -394,6 +433,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: backup
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -461,6 +503,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: velero
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -493,6 +538,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: kube-system
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -520,6 +568,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:
@@ -560,7 +611,7 @@ spec:
           enabled: false
         dagsterWebserver:
           nameOverride: webserver
-          replicaCount: 0
+          replicaCount: 1
           service:
             port: 3000
           image:
@@ -578,7 +629,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
         dagsterDaemon:
-          enabled: false
+          enabled: true
           image:
             tag: 1.13.25
             pullPolicy: IfNotPresent
@@ -594,7 +645,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
         dagster-user-deployments:
-          enabled: false
+          enabled: true
           deployments:
           - name: dagster-user-code
             port: 4000
@@ -645,6 +696,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: apps
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     retry:
       limit: 10
       backoff:

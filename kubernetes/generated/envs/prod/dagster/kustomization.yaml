@@ -5,3 +5,4 @@ namespace: apps
 resources:
 - ../../../apps/dagster
 - routes.yaml
+- backups.yaml

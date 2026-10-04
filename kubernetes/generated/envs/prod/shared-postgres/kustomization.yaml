@@ -4,7 +4,12 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/shared-postgres
+- backups.yaml
 patches:
+- target:
+    kind: Cluster
+    name: shared-postgres
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
 - target:
     kind: Cluster
     name: shared-postgres

@@ -5,3 +5,9 @@ namespace: apps
 resources:
 - ../../../apps/miniflux
 - routes.yaml
+- backups.yaml
+patches:
+- target:
+    kind: Deployment
+    name: miniflux
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

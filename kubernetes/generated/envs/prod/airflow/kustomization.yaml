@@ -5,3 +5,21 @@ namespace: apps
 resources:
 - ../../../apps/airflow
 - routes.yaml
+- backups.yaml
+patches:
+- target:
+    kind: Deployment
+    name: airflow-apiserver
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: airflow-dag-processor
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: airflow-scheduler
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: airflow-triggerer
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

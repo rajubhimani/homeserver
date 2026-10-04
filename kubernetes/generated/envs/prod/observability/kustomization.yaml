@@ -4,3 +4,24 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/observability
+patches:
+- target:
+    kind: Deployment
+    name: alloy
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: observability
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: loki
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: DaemonSet
+    name: node-exporter
+  patch: "- op: remove\n  path: /spec/template/spec/nodeSelector/homeserver~1stopped\n"
+- target:
+    kind: Deployment
+    name: prometheus
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

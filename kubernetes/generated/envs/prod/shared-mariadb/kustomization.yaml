@@ -4,3 +4,8 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/shared-mariadb
+patches:
+- target:
+    kind: MariaDB
+    name: shared-mariadb
+  patch: "- op: replace\n  path: /spec/suspend\n  value: false\n"
