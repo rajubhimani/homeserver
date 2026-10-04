@@ -5,10 +5,9 @@ or container can't ship without one of the three (docs/10-new-services.md,
 
 from __future__ import annotations
 
-import re
 
-import pytest
 import yaml
+from conftest import each
 
 import homeserver as hs
 
@@ -75,8 +74,11 @@ def containers():
     return out
 
 
-@pytest.mark.parametrize("svc,ctr,d,oneshot", containers(), ids=lambda x: x if isinstance(x, str) else "")
-def test_long_running_container_has_a_healthcheck_story(svc, ctr, d, oneshot):
+def test_long_running_container_has_a_healthcheck_story():
+    each(containers(), _long_running_container_has_a_healthcheck_story, ids=lambda x: x if isinstance(x, str) else "")
+
+
+def _long_running_container_has_a_healthcheck_story(svc, ctr, d, oneshot):
     if oneshot:
         return
     hc = d.get("healthcheck") or {}
@@ -103,8 +105,11 @@ def test_exception_lists_only_name_real_containers():
 TCP_PG_ISREADY = sorted(set(hs.SERVICES_MIN + hs.SERVICES_CORE) | {"shared-postgres"})
 
 
-@pytest.mark.parametrize("svc", TCP_PG_ISREADY)
-def test_pg_isready_probes_tcp_not_the_socket(svc):
+def test_pg_isready_probes_tcp_not_the_socket():
+    each(TCP_PG_ISREADY, _pg_isready_probes_tcp_not_the_socket)
+
+
+def _pg_isready_probes_tcp_not_the_socket(svc):
     """On a fresh volume the postgres image's init runs a socket-only temporary
     server; a socket pg_isready reports ready then, and the app starts into
     'connection refused' when it's stopped. '-h 127.0.0.1' only answers once

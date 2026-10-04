@@ -21,6 +21,7 @@ instead of guessing.
 from __future__ import annotations
 
 import argparse
+import copy
 import filecmp
 import hashlib
 import json
@@ -87,6 +88,23 @@ def base_file(svc: str) -> str:
     return "docker-compose.yml" if svc == "landing" else "compose.yml"
 
 
+# Parsed inputs, cached by file contents' modification times: one render asks
+# for the same service thousands of times (network policies look at every
+# service from every other), and each `docker compose config` is a process.
+# Callers get their own deep copy, so changing a result never leaks into the
+# next caller.
+_CACHE: dict[tuple, object] = {}
+
+
+def _cached(key: tuple, files: list[Path], load):
+    stamp = tuple(f.stat().st_mtime_ns if f.is_file() else None for f in files)
+    hit = _CACHE.get(key)
+    if hit is None or hit[0] != stamp:
+        hit = (stamp, load())
+        _CACHE[key] = hit
+    return copy.deepcopy(hit[1])
+
+
 def load_compose(svc: str) -> dict:
     """The service exactly as Compose resolves it (merges, anchors, extends),
     with ${VAR} left unresolved so no .env value is ever inlined."""
@@ -94,19 +112,22 @@ def load_compose(svc: str) -> dict:
     files = [d / base_file(svc)]
     if (d / "compose.prod.yml").is_file():
         files.append(d / "compose.prod.yml")
-    cmd = ["docker", "compose", "--project-directory", str(d)]
-    for f in files:
-        cmd += ["-f", str(f)]
-    cmd += ["config", "--no-interpolate", "--format", "json"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=d)
-    if proc.returncode != 0:
-        raise GenError(f"{svc}: docker compose config failed: {proc.stderr.strip()[-300:]}")
-    return json.loads(proc.stdout)
+
+    def load() -> dict:
+        cmd = ["docker", "compose", "--project-directory", str(d)]
+        for f in files:
+            cmd += ["-f", str(f)]
+        cmd += ["config", "--no-interpolate", "--format", "json"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=d)
+        if proc.returncode != 0:
+            raise GenError(f"{svc}: docker compose config failed: {proc.stderr.strip()[-300:]}")
+        return json.loads(proc.stdout)
+    return _cached(("compose", svc), files + [d / ".env.example"], load)
 
 
 def load_overrides(svc: str) -> dict:
     f = OVERRIDES / f"{svc}.yaml"
-    return (yaml.safe_load(f.read_text()) or {}) if f.is_file() else {}
+    return _cached(("overrides", svc), [f], lambda: (yaml.safe_load(f.read_text()) or {}) if f.is_file() else {})
 
 
 def load_scope() -> dict:

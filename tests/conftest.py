@@ -27,6 +27,24 @@ sys.path.insert(0, str(REPO))
 import homeserver as hs  # noqa: E402
 
 
+def each(items, check, ids=None) -> None:
+    """Run one check over every item (service, container, shared-db app) and
+    fail once, listing every item that broke it. One test per check instead
+    of one per service: the same assertions, the whole picture at once."""
+    failures = []
+    for item in items:
+        label = ids(item) if ids else ("/".join(str(x) for x in item if isinstance(x, str))
+                                       if isinstance(item, tuple) else str(item))
+        try:
+            check(*item) if isinstance(item, tuple) else check(item)
+        except pytest.skip.Exception:
+            continue  # nothing to check for this one
+        except AssertionError as e:
+            failures.append(f"{label}: {str(e).splitlines()[0] if str(e) else 'assertion failed'}"
+                            + "".join(f"\n    {ln}" for ln in str(e).splitlines()[1:6]))
+    assert not failures, f"{len(failures)} failing:\n" + "\n".join(failures)
+
+
 class FakeBackend(hs.DockerBackend):
     """In-memory Docker. A service's compose project starts as one container
     named after the service (enough for get_running_services' ^slug(-|$)

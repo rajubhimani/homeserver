@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import each
 
 import homeserver as hs
 
@@ -133,8 +134,11 @@ def test_env_db_names_match_env_example():
                 assert env.get(k) == spec[key], f"{svc}: .env {k} differs from .env.example"
 
 
-@pytest.mark.parametrize("svc", sorted(SHARED_APPS))
-def test_shared_db_objects_mirror_compose_provisioning(svc):
+def test_shared_db_objects_mirror_compose_provisioning():
+    each(sorted(SHARED_APPS), _shared_db_objects_mirror_compose_provisioning)
+
+
+def _shared_db_objects_mirror_compose_provisioning(svc):
     """Same role/user, database(s) and ownership as homeserver.py's
     provision_shared_db, and nothing an operator could ever drop."""
     spec = SHARED_APPS[svc]

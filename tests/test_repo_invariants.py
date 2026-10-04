@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
 
 import homeserver as hs
+from conftest import each
 
 REPO = hs.BASE_DIR
 SERVICES = json.loads((REPO / "services.json").read_text())["services"]
@@ -47,8 +47,11 @@ def test_slugs_are_unique():
     assert len(slugs) == len(set(slugs))
 
 
-@pytest.mark.parametrize("entry", [s for s in SERVICES if s.get("tier")], ids=lambda s: s["slug"])
-def test_tier_is_known(entry):
+def test_tier_is_known():
+    each([s for s in SERVICES if s.get("tier")], _tier_is_known, ids=lambda s: s["slug"])
+
+
+def _tier_is_known(entry):
     assert entry["tier"] in KNOWN_TIERS
 
 
@@ -66,13 +69,19 @@ UNLISTED_DIRS = {
 }
 
 
-@pytest.mark.parametrize("svc", service_dirs())
-def test_every_service_dir_is_registered(svc):
+def test_every_service_dir_is_registered():
+    each(service_dirs(), _every_service_dir_is_registered)
+
+
+def _every_service_dir_is_registered(svc):
     assert svc in BY_SLUG or svc in UNLISTED_DIRS, f"services/{svc} has a compose file but no services.json entry"
 
 
-@pytest.mark.parametrize("svc", service_dirs())
-def test_every_service_has_dev_and_prod_overrides(svc):
+def test_every_service_has_dev_and_prod_overrides():
+    each(service_dirs(), _every_service_has_dev_and_prod_overrides)
+
+
+def _every_service_has_dev_and_prod_overrides(svc):
     d = REPO / "services" / svc
     assert (d / "compose.dev.yml").is_file() and (d / "compose.prod.yml").is_file()
 
@@ -85,8 +94,11 @@ PUBLIC_PROD_PORTS = {
 }
 
 
-@pytest.mark.parametrize("svc", service_dirs())
-def test_prod_ports_are_loopback_and_mirrored_on_wireguard(svc):
+def test_prod_ports_are_loopback_and_mirrored_on_wireguard():
+    each(service_dirs(), _prod_ports_are_loopback_and_mirrored_on_wireguard)
+
+
+def _prod_ports_are_loopback_and_mirrored_on_wireguard(svc):
     text = strip_comments(compose_text(svc, "compose.prod.yml"))
     loopback = set(re.findall(r"127\.0\.0\.1:([^:\"\s]+):(\d+)", text))
     mirrored = set(re.findall(r"10\.8\.0\.1:([^:\"\s]+):(\d+)", text))
@@ -109,14 +121,20 @@ def test_every_prod_host_port_is_in_the_services_reference():
 
 # ── .env.example ──────────────────────────────────────────────────
 
-@pytest.mark.parametrize("svc", service_dirs())
-def test_env_file_services_ship_an_env_example(svc):
+def test_env_file_services_ship_an_env_example():
+    each(service_dirs(), _env_file_services_ship_an_env_example)
+
+
+def _env_file_services_ship_an_env_example(svc):
     if "env_file" in compose_text(svc):
         assert (REPO / "services" / svc / ".env.example").is_file()
 
 
-@pytest.mark.parametrize("svc", service_dirs())
-def test_compose_variables_without_defaults_are_in_env_example(svc):
+def test_compose_variables_without_defaults_are_in_env_example():
+    each(service_dirs(), _compose_variables_without_defaults_are_in_env_example)
+
+
+def _compose_variables_without_defaults_are_in_env_example(svc):
     keys = env_example_keys(svc) | INJECTED_VARS
     missing = set()
     # Only the files homeserver.py actually loads, not vendored references
@@ -135,8 +153,11 @@ SHARED_USERS = [s for s in SERVICES if s.get("shared_db")]
 ENGINE_IMAGE = {"postgres": r"postgres", "mariadb": r"mariadb|mysql"}
 
 
-@pytest.mark.parametrize("entry", SHARED_USERS, ids=lambda s: s["slug"])
-def test_shared_db_apps_are_wired_consistently(entry):
+def test_shared_db_apps_are_wired_consistently():
+    each(SHARED_USERS, _shared_db_apps_are_wired_consistently, ids=lambda s: s["slug"])
+
+
+def _shared_db_apps_are_wired_consistently(entry):
     svc, spec = entry["slug"], entry["shared_db"]
     assert entry["tier"] in ABOVE_CORE, "only services above CORE may use a shared database"
     assert spec["engine"] in hs.SHARED_DB_SERVICES
@@ -159,8 +180,11 @@ def test_shared_db_apps_are_wired_consistently(entry):
     assert not (svc_dir / "postgres-init").exists()
 
 
-@pytest.mark.parametrize("entry", SHARED_USERS, ids=lambda s: s["slug"])
-def test_docs_do_not_describe_a_removed_db_container(entry):
+def test_docs_do_not_describe_a_removed_db_container():
+    each(SHARED_USERS, _docs_do_not_describe_a_removed_db_container, ids=lambda s: s["slug"])
+
+
+def _docs_do_not_describe_a_removed_db_container(entry):
     """Once an app moves to a shared server, its own <svc>-db container is
     gone; docs still describing it (outside clearly historical lines) are stale."""
     svc = entry["slug"]
@@ -172,8 +196,11 @@ def test_docs_do_not_describe_a_removed_db_container(entry):
     assert not stale, f"docs still describe {svc}-db: {stale}"
 
 
-@pytest.mark.parametrize("server", list(hs.SHARED_DB_SERVICES.values()))
-def test_shared_servers_publish_no_ports(server):
+def test_shared_servers_publish_no_ports():
+    each(list(hs.SHARED_DB_SERVICES.values()), _shared_servers_publish_no_ports)
+
+
+def _shared_servers_publish_no_ports(server):
     assert "ports:" not in strip_comments(compose_text(server, "compose.prod.yml"))
     assert "ports:" not in strip_comments(compose_text(server, "compose.dev.yml"))
 
@@ -188,8 +215,11 @@ DOC_ELSEWHERE = {
 }
 
 
-@pytest.mark.parametrize("svc", [s["slug"] for s in SERVICES if hs.is_managed_service(s)])
-def test_every_managed_service_is_documented(svc):
+def test_every_managed_service_is_documented():
+    each([s["slug"] for s in SERVICES if hs.is_managed_service(s)], _every_managed_service_is_documented)
+
+
+def _every_managed_service_is_documented(svc):
     docs = REPO / "docs" / "services"
     if svc in DOC_ELSEWHERE:
         assert (REPO / DOC_ELSEWHERE[svc]).is_file()

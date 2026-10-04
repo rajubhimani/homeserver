@@ -8,11 +8,10 @@ at first start."""
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-import pytest
 import yaml
+from conftest import each
 
 import homeserver as hs
 
@@ -78,8 +77,11 @@ def check_url(url: str, c: dict) -> list[str]:
     return problems
 
 
-@pytest.mark.parametrize("entry", SHARED_USERS, ids=lambda s: s["slug"])
-def test_app_connects_to_its_own_provisioned_database(entry):
+def test_app_connects_to_its_own_provisioned_database():
+    each(SHARED_USERS, _app_connects_to_its_own_provisioned_database, ids=lambda s: s["slug"])
+
+
+def _app_connects_to_its_own_provisioned_database(entry):
     svc = entry["slug"]
     c = creds(svc)
     services = render(svc)
@@ -165,8 +167,11 @@ def test_dagster_yaml_storage_uses_shared_postgres_and_spec_keys():
 ADMIN_KEYS = {"MARIADB_ROOT_PASSWORD", "MYSQL_ROOT_PASSWORD"}
 
 
-@pytest.mark.parametrize("entry", SHARED_USERS, ids=lambda s: s["slug"])
-def test_app_never_gets_admin_credentials(entry):
+def test_app_never_gets_admin_credentials():
+    each(SHARED_USERS, _app_never_gets_admin_credentials, ids=lambda s: s["slug"])
+
+
+def _app_never_gets_admin_credentials(entry):
     """An app on a shared server logs in as its own role/user only. It must
     not carry an admin/root password (its env_file is injected into its
     containers) or be configured as the server's admin user."""

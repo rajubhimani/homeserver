@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 import homeserver as hs
+from conftest import each
 from conftest import shared_db_users
 
 REPO = hs.BASE_DIR
@@ -106,8 +107,11 @@ def _backing_names(doc: dict) -> set[str]:
     return names
 
 
-@pytest.mark.parametrize("svc", sorted(p.parent.name for p in (REPO / "services").glob("*/compose.yml")))
-def test_apps_reach_backing_services_through_env(svc):
+def test_apps_reach_backing_services_through_env():
+    each(sorted(p.parent.name for p in (REPO / "services").glob("*/compose.yml")), _apps_reach_backing_services_through_env)
+
+
+def _apps_reach_backing_services_through_env(svc):
     """Twelve-factor config: an app's database/cache/queue/storage endpoint
     comes from its .env (DB_HOST, CACHE_HOST, MQ_HOST, S3_ENDPOINT, ...),
     never a container name written into compose, so any tier can move to a
