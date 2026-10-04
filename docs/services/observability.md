@@ -147,6 +147,20 @@ Prometheus runs `v3.13.4`, its current **LTS** (fixes for severe issues until 20
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
 
+## On Kubernetes
+
+Generated from this Compose file like every other service (`kubernetes/overrides/observability.yaml`), with the same images, dashboards and retention. Only the parts that read Docker change; decided 2026-10-04 over Grafana's Helm bundle (k8s-monitoring, Loki and kube-prometheus-stack charts), to keep parity with Compose.
+
+| Container | On Kubernetes |
+|---|---|
+| Alloy | Reads pod logs through the Kubernetes API (`alloy/config.kubernetes.alloy`, `loki.source.kubernetes`). This is [Grafana's recommended way](https://grafana.com/docs/alloy/latest/collect/logs-in-kubernetes/): it needs no host privileges, unlike reading `/var/log/pods`. One Alloy covers the cluster. Log labels: `container` (the same names as under Docker), `service`, `namespace`, `pod`. |
+| Prometheus | `prometheus/prometheus.kubernetes.yml` scrapes each kubelet's built-in cAdvisor (`/metrics/cadvisor`) directly, as kube-prometheus-stack does. A relabel copies the kubelet's `container` label to `name`, so the cAdvisor dashboard works unchanged. |
+| cAdvisor | Not run: every kubelet has it built in. |
+| node-exporter | A DaemonSet, one per node, reading the node's `/proc`, `/sys` and `/` read-only, like Compose. |
+| Grafana | The dashboards folder (750 KB) is mounted with git-sync: a ConfigMap that size would exceed the 256 KB annotation a client-side apply writes. |
+
+**Permissions:** Alloy and Prometheus get read-only cluster roles from `kubernetes/cluster/base/observability-rbac.yaml`. They're kept under the platform project, so the services' ArgoCD project never needs to create cluster-wide roles. Alloy gets `pods`, `pods/log` and `namespaces`. Prometheus gets `nodes`, `pods` and `nodes/metrics`, and deliberately not `nodes/proxy`, which reaches the kubelet's whole API (including running commands in containers).
+
 ## Permissions and healthchecks (fresh installs)
 
 - **`observability-permissions`** (one-shot, runs before Prometheus, Loki and Grafana) sets ownership of their data folders to each image's own user: Prometheus `nobody` (65534), Loki 10001, Grafana 472. Without it, a data folder Docker recreates root-owned (fresh machine, wipe or `reset`) leaves Prometheus and Loki crash-looping on "permission denied". Until 2026-10-02 these folders had only ever been fixed by hand, which the fresh-install run exposed.

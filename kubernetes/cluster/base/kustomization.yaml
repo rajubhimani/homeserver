@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - namespaces.yaml
   - storage.yaml
+  - observability-rbac.yaml

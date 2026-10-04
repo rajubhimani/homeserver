@@ -405,14 +405,24 @@ def config_checksum(data: dict[str, str]) -> dict:
 def repo_config_ports(svc: str, services: dict, cname: dict) -> dict[str, set[int]]:
     """{compose service: ports} named as <container>:<port> in the repo files
     and folders this service mounts (nginx.conf, Caddyfile, Envoy configs)."""
+    ov_c = load_overrides(svc).get("containers") or {}
+    skipped = {n for n, s in services.items() if (ov_c.get(s.get("container_name") or n) or {}).get("skip")}
     names = {}
     for n, s in services.items():
+        if n in skipped:
+            continue  # not run here: nothing reaches it
         names[(s.get("container_name") or n)] = n
         names[n] = n
     texts = []
-    for s in services.values():
+    for n, s in services.items():
+        if n in skipped:
+            continue
+        mo_all = (ov_c.get(s.get("container_name") or n) or {}).get("mounts") or {}
         for m in s.get("volumes") or []:
-            src = str(m.get("source", ""))
+            mo = mo_all.get(m.get("target")) or {}
+            if mo.get("skip"):
+                continue
+            src = str(REPO / mo["file"]) if mo.get("file") else str(m.get("source", ""))  # what's mounted here
             path = Path(src)
             if not src.startswith(str(REPO)) or not path.exists():
                 continue
@@ -630,7 +640,11 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 raise GenError(f"{where}: mounts the Docker socket ({tgt}); Kubernetes has none. "
                                f"Add overrides/{svc}.yaml containers.{c}.mounts.{tgt}.skip (with a reason) or skip the container.")
             if kind == "repo-file":
-                p = Path(key)
+                # file: the same config written for Kubernetes, kept next to
+                # Compose's (e.g. Alloy reading pods instead of the Docker socket).
+                p = REPO / mo["file"] if mo.get("file") else Path(key)
+                if not p.is_file():
+                    raise GenError(f"{where}: mounts.{tgt}.file {mo.get('file')} doesn't exist")
                 rel = p.relative_to(REPO).as_posix()
                 k = slug(rel.replace("/", "-").replace(".", "-"))
                 files_cm[k] = p.read_text()

@@ -1,0 +1,49 @@
+// Kubernetes version of config.alloy (kubernetes/overrides/observability.yaml
+// mounts it instead): pod logs through the Kubernetes API, Grafana's
+// recommended way (grafana.com/docs/alloy/latest/collect/logs-in-kubernetes:
+// no host privileges, unlike reading /var/log/pods). One Alloy covers the
+// whole cluster. Permissions: kubernetes/cluster/base/observability-rbac.yaml.
+
+discovery.kubernetes "pods" {
+  role = "pod"
+}
+
+discovery.relabel "pods" {
+  targets = discovery.kubernetes.pods.targets
+
+  // "container" carries the same names as under Docker: the generator names
+  // each workload after Compose's container_name (pod label
+  // app.kubernetes.io/name); other pods keep their container's name.
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    regex         = "(.+)"
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_homeserver_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.kubernetes "pods" {
+  targets    = discovery.relabel.pods.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

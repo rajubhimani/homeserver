@@ -1,0 +1,47 @@
+# Read-only cluster access for observability (generated from Compose into the
+# apps namespace): Alloy reads pod logs through the API, Prometheus reads the
+# kubelets' cAdvisor metrics through the API server's node proxy. Kept here,
+# under the platform project, so the services' project never needs to create
+# cluster-wide roles (docs/17 "GitOps"). No nodes/proxy: it reaches the
+# kubelet's whole API; Prometheus scrapes the kubelets with nodes/metrics.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: alloy, namespace: apps}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: prometheus, namespace: apps}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: homeserver-alloy}
+rules:
+  # discovery.kubernetes (role pod) + loki.source.kubernetes
+  - apiGroups: [""]
+    resources: [pods, pods/log, namespaces]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: homeserver-alloy}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: homeserver-alloy}
+subjects: [{kind: ServiceAccount, name: alloy, namespace: apps}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: homeserver-prometheus}
+rules:
+  # kubernetes_sd_configs (node, pod)
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs: [list, watch]
+  # the kubelets' /metrics/cadvisor
+  - apiGroups: [""]
+    resources: [nodes/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: homeserver-prometheus}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: homeserver-prometheus}
+subjects: [{kind: ServiceAccount, name: prometheus, namespace: apps}]

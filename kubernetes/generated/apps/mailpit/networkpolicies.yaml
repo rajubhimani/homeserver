@@ -124,6 +124,13 @@ spec:
   - from:
     - podSelector:
         matchLabels:
+          homeserver/service: observability
+    ports:
+    - protocol: TCP
+      port: 1025
+  - from:
+    - podSelector:
+        matchLabels:
           homeserver/service: outline
     ports:
     - protocol: TCP

@@ -99,6 +99,10 @@ ported:
   # manual
   - gitlab
 
+  # Phase 4 — observability: Alloy and Prometheus read Kubernetes instead
+  # of Docker (overrides/observability.yaml)
+  - observability
+
 # Rendered only for the prod environment. The test cluster must never run
 # the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
 # split live traffic between Docker and the test cluster.
@@ -113,8 +117,7 @@ skipped:
   dozzle: "Docker log viewer (needs the socket). On Kubernetes, Grafana + Loki (observability) and Headlamp show pod logs."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
 
-# Not ported yet, each waiting on its own piece of work:
-#   observability, crowdsec: read Docker's logs through the socket; they move
-#     with the logging phase (Alloy/CrowdSec reading /var/log/pods).
-#   dagster: runs jobs with DockerRunLauncher; Dagster's Kubernetes setup uses
-#     K8sRunLauncher (dagster-k8s) plus its locally built images.
+# Not ported yet, each waiting on its own piece of work (decided 2026-10-04:
+# both become ArgoCD add-ons from their official Helm charts, docs/17):
+#   crowdsec: the chart's agent reads the Traefik and edge-nginx pod logs.
+#   dagster: Dagster's chart (K8sRunLauncher), our images as user code.
