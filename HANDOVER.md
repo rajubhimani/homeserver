@@ -31,6 +31,26 @@ design), branch `feature/k8s-generated`.
 
 ## 1. After formatting
 
+**The plan (2026-10-04):** wipe the whole SSD, Windows included, and install Fedora on all of it.
+- **Wipe only `sda`,** the WD Green 240 GB (model `WD Green 2.5 240GB`).
+- **Never touch** `sdb` (Seagate ST2000LM015 1.8 TB: all the data), `sdd` (the Passport) or `sdc` (the Ventoy installer stick).
+
+**Mount the data disks at exactly the same paths;** the repo, every `.env` and the media mounts depend on them. Add to `/etc/fstab`, then `sudo mkdir -p /mnt/media /mnt/mydata && sudo mount -a`:
+
+```
+/dev/disk/by-uuid/F6C2F918C2F8DE35 /mnt/media auto nosuid,nodev,nofail,x-gvfs-show,x-gvfs-name=Media 0 0
+/dev/disk/by-uuid/09c0e2ab-d6e1-4010-a945-ed022a666aba /mnt/mydata auto nosuid,nodev,nofail,x-gvfs-show,x-gvfs-name=MyData 0 0
+```
+
+(`sdb1` is NTFS, `/mnt/media`; `sdb2` is ext4, `/mnt/mydata`. The UUIDs don't change unless those partitions are reformatted.)
+
+**Your user needs the same name and UID:** `raju`, 1000. File owners on `/mnt/mydata` (ext4) are stored as numbers.
+
+**Open question for the owner (the SSD has more room without Windows):** move kind's image store (`K8S_IMAGES_PATH`, ~35 GB) from the HDD to the SSD.
+- **For:** it removes the bottleneck that saturated the HDD on 2026-10-04.
+- **Against:** the WD Green is a weak SSD that already holds the databases and etcd. Images are written once (on pull) and then mostly read.
+- **btrfs note:** if the SSD stays btrfs (Fedora's default), set `chattr +C` on the database folders (`~/k8s-data/fast`) before first use. Postgres on copy-on-write fragments; this follows btrfs' own advice for databases and VM images.
+
 1. **Tools:** Docker, git, `gh`, uv, then kind, kubectl and helm at the versions in `kubernetes/versions.env`. Raise the inotify limits (docs/17 "Step 0").
 2. **Restore Claude's files:** `cp -a /mnt/mydata/claude-backup-20261004/dot-claude/. ~/.claude/`. That brings back the memories (`projects/-mnt-mydata-homeserver/memory/`) and the global rule file `~/.claude/CLAUDE.md`.
 3. **Docker databases: restore explicitly, never just `up`.** `up` auto-restores only when a service's volumes **and** its `service_data/data/<svc>` folder are both missing. After a format the folders exist and the volumes don't, so `up` would start apps on empty databases, and some (Authentik) offer their first-visitor admin setup. For each service with named volumes: `uv run homeserver.py prod restore <svc>`, then `up`.
