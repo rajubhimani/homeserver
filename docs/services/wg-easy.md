@@ -91,6 +91,20 @@ Router UIs vary enormously. On this homeserver's router (Sercomm AOT-4221SR, an 
 
 **This coarse router toggle is only half the picture — your host's own firewall matters just as much, if not more.** A real, routable IPv6 address (which this whole setup depends on) means anything your *host* firewall allows inbound is now reachable from the internet too, regardless of the router. This exact combination (router set to Low + an unrelated, overly-broad host firewall rule) once exposed RDP and several admin panels on this deployment — see [09 — Firewall](../09-firewall.md) for the full incident and the default-deny host firewall setup every IPv6-reachable host should have, VPN or not.
 
+## On Kubernetes
+
+wg-easy has no Kubernetes guide upstream; its docs cover Docker, Podman, dockerless, Traefik and Caddy. So `kubernetes/overrides/wg-easy.yaml` mirrors this compose file, which is our own design:
+
+- **Network:** host networking, which on kind is the node's network.
+- **Privileges:** `NET_ADMIN` + `SYS_MODULE`, and `/lib/modules` read-only.
+- **Health check:** the image's own (`wg show`).
+- **Ports:**
+  - the web UI (51821) gets a Service, so its route and the landing check reach it;
+  - on kind, `cluster.py create` forwards WireGuard's UDP 51820 from the host into the node, and binds `localhost:51821`.
+- **Data:** `/etc/wireguard` (keys, peers, `wg-easy.db`) is imported from a snapshot like any data folder.
+
+On kind, `wg0` and `10.8.0.1` live inside the node, not on the host. VPN clients reach the LAN and the internet through it as before, but this machine's own `10.8.0.1:<port>` mirrors only exist on a cluster that runs on the host itself.
+
 ## Exact Commands Run On This Host (Copy-Paste Reference)
 
 Every host-level command actually executed to get this working, in order. The Prerequisites section above explains *why* each is needed — this is the condensed "just run these" version for rebuilding this exact host. Adjust the zone name (`FedoraWorkstation`) and interface name (`wlp13s0`) if your host differs — check with `firewall-cmd --get-active-zones` and `ip route show default` respectively.

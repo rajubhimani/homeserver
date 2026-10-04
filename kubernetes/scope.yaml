@@ -36,6 +36,7 @@ ported:
   - onlyoffice
   - whiteboard
   - jellyfin
+  - wg-easy
   - forgejo
   - atuin
   - guacamole
@@ -51,5 +52,4 @@ prod_only:
 
 # Not run on Kubernetes, each with the replacement.
 skipped:
-  wg-easy: "Stays on Docker until the real cutover: it holds UDP 51820 on the host and is the VPN (10.8.0.1) other machines use to reach this one; a second copy can't share the port."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."

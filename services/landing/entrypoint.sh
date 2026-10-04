@@ -27,5 +27,6 @@ sed \
   -e "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" \
   -e "s/RESOLVER_PLACEHOLDER/${RESOLVER}/g" \
   -e "s/UPSTREAM_SUFFIX_PLACEHOLDER/${UPSTREAM_SUFFIX:-}/g" \
+  -e "s/WG_EASY_HOST_PLACEHOLDER/${WG_EASY_HOST:-172.18.0.1}/g" \
   /template/nginx.conf > /etc/nginx/conf.d/default.conf
 exec nginx -g 'daemon off;'

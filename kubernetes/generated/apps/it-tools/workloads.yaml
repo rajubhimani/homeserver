@@ -30,6 +30,12 @@ spec:
             name: homeserver-root
         ports:
         - containerPort: 80
+        - containerPort: 80
+          hostPort: 8119
+          hostIP: 127.0.0.1
+        - containerPort: 80
+          hostPort: 8119
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -60,3 +66,5 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 5
+  strategy:
+    type: Recreate

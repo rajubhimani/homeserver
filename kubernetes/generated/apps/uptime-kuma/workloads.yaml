@@ -54,6 +54,12 @@ spec:
           value: $(MYSQL_USER)
         ports:
         - containerPort: 3001
+        - containerPort: 3001
+          hostPort: 3001
+          hostIP: 127.0.0.1
+        - containerPort: 3001
+          hostPort: 3001
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

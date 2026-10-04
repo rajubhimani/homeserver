@@ -40,6 +40,12 @@ spec:
         ports:
         - containerPort: 1025
         - containerPort: 8025
+        - containerPort: 8025
+          hostPort: 8140
+          hostIP: 127.0.0.1
+        - containerPort: 8025
+          hostPort: 8140
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

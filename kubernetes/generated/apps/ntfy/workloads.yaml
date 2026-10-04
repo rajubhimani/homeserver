@@ -45,6 +45,12 @@ spec:
           value: /var/lib/ntfy/cache.db
         ports:
         - containerPort: 80
+        - containerPort: 80
+          hostPort: 8118
+          hostIP: 127.0.0.1
+        - containerPort: 80
+          hostPort: 8118
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

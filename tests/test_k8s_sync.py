@@ -58,7 +58,7 @@ def _generated_docs():
         if f.name == "kustomization.yaml":
             continue
         for doc in yaml.safe_load_all(f.read_text()):
-            if doc:
+            if isinstance(doc, dict):  # host-ports.yaml is a plain list, not an object
                 yield f, doc
 
 
@@ -332,3 +332,19 @@ def test_image_healthchecks_are_carried_and_current():
                     stale.append(f"{svc}/{c}")
     assert not missing, f"image healthcheck not carried to Kubernetes: {missing}"
     assert not stale, f"image_healthcheck differs from the image's HEALTHCHECK (re-copy it): {stale}"
+
+
+def test_localhost_ports_mirror_compose():
+    """Every literal-address port Compose publishes becomes hostPort+hostIP on
+    its container (localhost works on a cluster on this machine), and every
+    127.0.0.1 port is in host-ports.yaml for kind's port mappings, with
+    unique host and node ports."""
+    hp = yaml.safe_load((GENERATED / "host-ports.yaml").read_text())
+    assert len({(e["host"], e["protocol"]) for e in hp}) == len(hp), "duplicate host port"
+    assert len({(e["node"], e["protocol"]) for e in hp}) == len(hp), "duplicate node port"
+    in_list = {(e["svc"], e["host"]) for e in hp}
+    for svc in PORTED:
+        for n, s in gen.load_compose(svc)["services"].items():
+            for ip, host, tgt, proto in gen.published_ports(s):
+                if ip == "127.0.0.1" and svc != "nginx-plain":
+                    assert (svc, host) in in_list, f"{svc}: 127.0.0.1:{host} missing from host-ports.yaml"

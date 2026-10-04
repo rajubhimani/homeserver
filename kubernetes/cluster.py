@@ -73,6 +73,18 @@ def cmd_create(_a) -> None:
     # Host folders services read from (overrides with hostPath + env): the
     # real path from that service's .env, at the fixed node path the
     # generated manifests use. kind can only add mounts at create time.
+    # Compose's localhost ports (generated/host-ports.yaml), on 127.0.0.1 like Compose's prod files.
+    hp = yaml.safe_load((K8S / "generated/host-ports.yaml").read_text()) or []
+    text = text.replace("    extraMounts:\n", "".join(
+        f"      - containerPort: {e['node']}\n        hostPort: {e['host']}\n        listenAddress: \"127.0.0.1\"\n"
+        f"        protocol: {e['protocol'].upper()}\n" for e in hp) + "    extraMounts:\n", 1)
+    ports = node_ports()
+    if ports:
+        # Ports host-network services receive straight from outside (the
+        # WireGuard VPN): forwarded from every host interface into the node.
+        maps = "".join(f"      - containerPort: {pt}\n        hostPort: {pt}\n        protocol: {proto.upper()}\n"
+                       for pt, proto in ports)
+        text = text.replace("    extraMounts:\n", maps + "    extraMounts:\n", 1)
     for node_path, host, ro in host_mounts():
         text += (f"      - hostPath: {host}\n        containerPath: {node_path}\n"
                  + ("        readOnly: true\n" if ro else ""))
@@ -103,6 +115,16 @@ def host_mounts() -> list[tuple[str, str, bool]]:
                     prev = out.get(mo["hostPath"], (host, True))
                     out[mo["hostPath"]] = (host, prev[1] and ro)
     return [(k, v[0], v[1]) for k, v in sorted(out.items())]
+
+
+def node_ports() -> list[tuple[int, str]]:
+    """[(port, protocol)] from every ported service's overrides (node_ports)."""
+    out = set()
+    for svc in load_scope().get("ported") or []:
+        for co in (load_overrides(svc).get("containers") or {}).values():
+            for np in co.get("node_ports") or []:
+                out.add((int(np["port"]), np.get("protocol", "tcp")))
+    return sorted(out)
 
 
 def host_path(svc: str, key: str) -> str:

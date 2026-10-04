@@ -141,3 +141,5 @@ Under Compose the rendered config is unchanged.
 ---
 
 [← Immich](06-immich.md) | [Home](../setup.md) | [Next: Maintenance →](08-maintenance.md)
+
+`WG_EASY_HOST` (`.env`): wg-easy runs on the host network, so its status check reaches it by address. Under Compose that's the `homeserver` bridge's gateway, `172.18.0.1`; Kubernetes sets the `wg-easy` Service in `kubernetes/overrides/landing.yaml`. It used to be hardcoded in `nginx.conf`.

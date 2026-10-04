@@ -32,3 +32,21 @@ spec:
   - name: p9000
     port: 9000
     targetPort: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plausible-host
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: plausible
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: plausible
+  ports:
+  - name: h8130
+    port: 8000
+    targetPort: 8000
+    nodePort: 30118
+    protocol: TCP

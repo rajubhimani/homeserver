@@ -17,3 +17,26 @@ spec:
   - name: p9443
     port: 9443
     targetPort: 9443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-server-host
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: authentik
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: authentik-server
+  ports:
+  - name: h8088
+    port: 9000
+    targetPort: 9000
+    nodePort: 30106
+    protocol: TCP
+  - name: h9444
+    port: 9443
+    targetPort: 9443
+    nodePort: 30125
+    protocol: TCP

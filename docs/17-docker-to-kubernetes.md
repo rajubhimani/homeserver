@@ -237,6 +237,15 @@ What `import` does for each service:
 
 Use `--live-db` when the newest snapshot is older than the data you want. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
 
+**Localhost ports work like under Compose.** Every port a `compose.prod.yml` publishes on a fixed address becomes the container's `hostPort` + `hostIP` (`127.0.0.1`, and the `10.8.0.1` VPN mirror), which is Kubernetes' form of `127.0.0.1:8088:9000`:
+
+- **On a cluster that runs on your machine** (k3s, kubeadm…), `localhost:8088` answers directly.
+- **On kind**, the node is a container, so the generator also writes NodePort Services and `generated/host-ports.yaml`, and `cluster.py create` binds each port on `127.0.0.1` with kind's port mappings. kind adds mappings only at creation, so a newly ported service needs a rebuild for its port; its `*.<domain>` route works without one.
+- **nginx-plain's** `8180`/`8443` go to Traefik, which does its job here.
+- **Host-network containers** (wg-easy) listen on the node directly. A `node_ports` entry in the override forwards a port from every host address (WireGuard's UDP 51820).
+
+Kubernetes' guidance is to avoid `hostPort` unless needed. Matching Compose's localhost ports on one machine is that need, and those Deployments use the `Recreate` strategy, because two pods can't hold the same host port at once.
+
 **Big media folders are mounted, not copied** (`hostPath` + `env` in the override). `cluster.py create` mounts the path from the service's `.env` into the kind node; kind can only add mounts at creation, so adding one means rebuilding the cluster.
 
 | Folder | Mounted | Why |

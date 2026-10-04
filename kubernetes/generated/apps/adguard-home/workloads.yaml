@@ -33,6 +33,12 @@ spec:
         - containerPort: 3000
         - containerPort: 53
           protocol: UDP
+        - containerPort: 3000
+          hostPort: 8123
+          hostIP: 127.0.0.1
+        - containerPort: 3000
+          hostPort: 8123
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

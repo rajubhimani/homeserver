@@ -55,6 +55,12 @@ spec:
           value: '1'
         ports:
         - containerPort: 8080
+        - containerPort: 8080
+          hostPort: 8093
+          hostIP: 127.0.0.1
+        - containerPort: 8080
+          hostPort: 8093
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -82,3 +88,5 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+  strategy:
+    type: Recreate

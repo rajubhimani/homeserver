@@ -39,6 +39,12 @@ spec:
           value: $(CLAMD_STARTUP_TIMEOUT)
         ports:
         - containerPort: 3310
+        - containerPort: 3310
+          hostPort: 8152
+          hostIP: 127.0.0.1
+        - containerPort: 3310
+          hostPort: 8152
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

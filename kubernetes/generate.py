@@ -139,11 +139,16 @@ def nginx_routes() -> dict[str, list[tuple[str, int]]]:
     routes: dict[str, list[tuple[str, int]]] = {}
     for block in nginx_blocks():
         names = re.search(r"server_name\s+([^;]+);", block)
-        loc = re.search(r"location / \{[^}]*?set \$upstream https?://([a-z0-9-]+):(\d+)", block)
+        loc = re.search(r"location / \{[^}]*?set \$upstream https?://([a-z0-9.-]+):(\d+)", block)
         if not names or not loc:
             continue
+        # A raw IP upstream (wg-easy on the host network) -> its container,
+        # from overrides/nginx-plain.yaml upstream_hosts.
+        target = (load_overrides("nginx-plain").get("upstream_hosts") or {}).get(loc.group(1), loc.group(1))
+        if re.fullmatch(r"[\d.]+", target):
+            continue
         for host in names.group(1).split():
-            routes.setdefault(loc.group(1), []).append((host, int(loc.group(2))))
+            routes.setdefault(target, []).append((host, int(loc.group(2))))
     return routes
 
 
@@ -468,6 +473,17 @@ def convert(svc: str) -> dict[str, list[dict]]:
         if listen[n] or udp.get(n):
             container["ports"] = [{"containerPort": p} for p in listen[n]] + \
                 [{"containerPort": p, "protocol": "UDP"} for p in sorted(udp.get(n) or [])]
+        # Compose's published ports, as-is: hostPort + hostIP is Kubernetes'
+        # form of "127.0.0.1:8088:9000", so on a cluster running on this
+        # machine localhost:<port> (and the VPN mirror on 10.8.0.1) answers
+        # like under Compose. (kind's node is a container: its NodePort
+        # Services + port mappings carry the same ports out; see host_ports.)
+        published = published_ports(s)
+        if published:
+            container.setdefault("ports", [])
+            container["ports"] += [{"containerPort": tgt, "hostPort": hp, "hostIP": ip,
+                                    **({"protocol": "UDP"} if proto == "udp" else {})}
+                                   for ip, hp, tgt, proto in published]
         # Compose's healthcheck, or (Kubernetes ignores image HEALTHCHECKs) the
         # image's own, copied verbatim into the override in Docker's format.
         container.update(probe_set(s.get("healthcheck") if (s.get("healthcheck") or {}).get("test")
@@ -659,14 +675,15 @@ def convert(svc: str) -> dict[str, list[dict]]:
             spec: dict = {"selector": {"matchLabels": {"app.kubernetes.io/name": c}}, "template": tmpl}
             if kind == "Deployment":
                 spec = {"replicas": 1, "revisionHistoryLimit": 3, **spec}
-                if any("persistentVolumeClaim" in v for v in pod_vols):
-                    spec["strategy"] = {"type": "Recreate"}  # RWO volumes: never two pods at once
+                if any("persistentVolumeClaim" in v for v in pod_vols) or published:
+                    # RWO volumes / host ports: never two pods at once
+                    spec["strategy"] = {"type": "Recreate"}
             spec.update(co.get("workload") or {})
             obj["spec"] = spec
         files.setdefault("workloads.yaml", []).append(obj)
 
         for sname in ([c] + ([n] if n != c and re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", n) else [])) \
-                if (listen[n] or udp.get(n)) and kind != "Job" and not pod.get("hostNetwork") else []:
+                if (listen[n] or udp.get(n)) and kind != "Job" and (not pod.get("hostNetwork") or co.get("service")) else []:
             # Docker's DNS answers to the container name and the Compose
             # service name; some .env values use the latter (Immich's DB_URL).
             files.setdefault("services.yaml", []).append({
@@ -1158,6 +1175,98 @@ def nginx_site_routes(domain: str) -> list[dict]:
     return out
 
 
+# ── localhost ports ───────────────────────────────────────────────────────
+NODE_PORT_BASE = 30100
+TRAEFIK_NODE_PORTS = {80: 30080, 443: 30443}
+
+
+def published_ports(s: dict) -> list[tuple[str, int, int, str]]:
+    """[(host IP, host port, container port, protocol)] for Compose ports
+    bound to a literal address (127.0.0.1 and the 10.8.0.1 VPN mirror);
+    ports bound to a ${VAR} address (AdGuard's DNS_BIND_IP) are left out."""
+    out = []
+    for p in s.get("ports") or []:
+        if isinstance(p, dict):
+            ip, hp, tgt, proto = p.get("host_ip"), p.get("published"), p.get("target"), p.get("protocol", "tcp")
+        else:
+            spec, _, proto = str(p).partition("/")
+            parts = spec.split(":")
+            if len(parts) != 3:
+                continue
+            ip, hp, tgt, proto = parts[0], parts[1], parts[2], proto or "tcp"
+        if ip and hp and re.fullmatch(r"[\d.]+", str(ip)) and str(hp).isdigit():
+            out.append((str(ip), int(hp), int(tgt), proto))
+    return out
+
+
+def loopback_ports(s: dict) -> list[tuple[int, int, str]]:
+    """[(host port, container port, protocol)] a Compose service publishes on
+    127.0.0.1 (compose.prod.yml), long or short (${VAR}) syntax."""
+    out = []
+    for p in s.get("ports") or []:
+        if isinstance(p, dict):
+            if p.get("host_ip") == "127.0.0.1" and p.get("published"):
+                out.append((int(p["published"]), int(p["target"]), p.get("protocol", "tcp")))
+        else:
+            spec, _, proto = str(p).partition("/")
+            parts = spec.split(":")
+            if len(parts) == 3 and parts[0] == "127.0.0.1":
+                out.append((int(parts[1]), int(parts[2]), proto or "tcp"))
+    return out
+
+
+def host_ports() -> list[dict]:
+    """Every 127.0.0.1 port Compose publishes for a ported service, as a
+    kind port mapping: host port -> node port. NodePort Services (fixed node
+    ports, in host-port order) carry them to the container; nginx-plain's go
+    to Traefik, which does its job here; host-network containers (wg-easy)
+    listen on the node directly. kind binds these only at cluster creation."""
+    scope = load_scope()
+    entries = []
+    for svc in scope.get("ported") or []:
+        ov_c = load_overrides(svc).get("containers") or {}
+        for n, s in (load_compose(svc).get("services") or {}).items():
+            c = s.get("container_name") or n
+            co = ov_c.get(c) or {}
+            if co.get("skip") and svc != "nginx-plain":
+                continue
+            if s.get("network_mode") == "host":
+                for port in co.get("ports") or []:
+                    entries.append({"svc": svc, "container": c, "host": int(port), "target": int(port),
+                                    "protocol": "tcp", "node": int(port)})
+                continue
+            for host, target, proto in loopback_ports(s):
+                e = {"svc": svc, "container": c, "host": host, "target": target, "protocol": proto}
+                if svc == "nginx-plain":
+                    if target not in TRAEFIK_NODE_PORTS:
+                        continue
+                    e["node"] = TRAEFIK_NODE_PORTS[target]
+                entries.append(e)
+    nxt = NODE_PORT_BASE
+    for e in sorted(entries, key=lambda e: (e["host"], e["protocol"])):
+        if "node" not in e:
+            e["node"] = nxt
+            nxt += 1
+    return sorted(entries, key=lambda e: (e["host"], e["protocol"]))
+
+
+def host_port_services(svc: str) -> list[dict]:
+    """NodePort Services <container>-host for the service's localhost ports."""
+    by_c: dict[str, list[dict]] = {}
+    for e in host_ports():
+        if e["svc"] == svc and e["svc"] != "nginx-plain" and e["node"] >= NODE_PORT_BASE:
+            by_c.setdefault(e["container"], []).append(e)
+    out = []
+    for c, es in sorted(by_c.items()):
+        out.append({"apiVersion": "v1", "kind": "Service",
+                    "metadata": {"name": f"{c}-host", "labels": {"app.kubernetes.io/part-of": "homeserver",
+                                                                "homeserver/service": svc}},
+                    "spec": {"type": "NodePort", "selector": {"app.kubernetes.io/name": c},
+                             "ports": [{"name": f"h{e['host']}", "port": e["target"], "targetPort": e["target"],
+                                        "nodePort": e["node"], "protocol": e["protocol"].upper()} for e in es]}})
+    return out
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
@@ -1192,6 +1301,8 @@ def render(out: Path) -> list[str]:
                 files["database.yaml"] = dbo
             if svc == "authentik":
                 files["middleware.yaml"] = [authentik_middleware()]
+        if hp := host_port_services(svc):
+            files.setdefault("services.yaml", []).extend(hp)
         d = out / "apps" / svc
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(files.items()):
@@ -1209,6 +1320,11 @@ def render(out: Path) -> list[str]:
                 (ed / "routes.yaml").write_text(dump(routes, svc))
                 res.append("routes.yaml")
             (ed / "kustomization.yaml").write_text(kustomization(res))
+    (out / "host-ports.yaml").write_text(
+        "# GENERATED by kubernetes/generate.py: Compose's 127.0.0.1 ports -> kind node ports.\n"
+        "# cluster.py create binds each on 127.0.0.1 (kind adds port mappings only at creation).\n"
+        + yaml.dump([{k: e[k] for k in ("host", "node", "protocol", "svc", "container")} for e in host_ports()],
+                    Dumper=_Dumper, sort_keys=False))
     return written
 
 

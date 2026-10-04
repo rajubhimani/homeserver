@@ -71,6 +71,18 @@ spec:
         ports:
         - containerPort: 22
         - containerPort: 3000
+        - containerPort: 3000
+          hostPort: 3002
+          hostIP: 127.0.0.1
+        - containerPort: 3000
+          hostPort: 3002
+          hostIP: 10.8.0.1
+        - containerPort: 22
+          hostPort: 2223
+          hostIP: 127.0.0.1
+        - containerPort: 22
+          hostPort: 2223
+          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

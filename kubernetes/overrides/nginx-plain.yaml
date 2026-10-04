@@ -6,3 +6,8 @@ sites:
   browser-hub:
     host: browser.${DOMAIN}
     html: html/browser-hub
+
+# Upstreams nginx-plain reaches by address (host-network containers): the
+# container each address means, so their routes are generated too.
+upstream_hosts:
+  172.18.0.1: wg-easy
