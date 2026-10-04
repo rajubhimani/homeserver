@@ -35,6 +35,7 @@ spec:
   description: Services generated from Docker Compose
   sourceRepos:
   - https://github.com/rajubhimani/homeserver.git
+  - https://dagster-io.github.io/helm
   destinations:
   - server: https://kubernetes.default.svc
     namespace: apps

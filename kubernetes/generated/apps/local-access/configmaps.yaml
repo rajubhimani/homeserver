@@ -95,6 +95,7 @@ data:
             8125 orangehrm.apps.svc.cluster.local:80;
             8085 gitlab.apps.svc.cluster.local:80;
             2224 gitlab.apps.svc.cluster.local:22;
+            8139 dagster-webserver.apps.svc.cluster.local:3000;
         }
         server {
             listen 8106;
@@ -174,6 +175,7 @@ data:
             listen 8125;
             listen 8085;
             listen 2224;
+            listen 8139;
             proxy_pass $backend;
             proxy_timeout 1h;
         }

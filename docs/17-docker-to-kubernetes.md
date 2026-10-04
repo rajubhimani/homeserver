@@ -316,6 +316,9 @@ Kubelet health probes stay allowed: verified, a pod under a deny-all policy stay
 | ArgoCD's git branch | `revision` in `kubernetes/deploy/<env>.yaml`; `feature/k8s-generated` now, `develop` after the merge | No rework when the branch changes |
 | What decides which services run | **Git:** the `running` list in `kubernetes/deploy/<env>.yaml`, applied by ArgoCD (Step 5) | Easy to switch clusters or clouds: everything, including what runs, comes from the repo |
 | Secrets | **External Secrets Operator** with an in-cluster store filled from `.env` (Step 3) | Nothing secret in the public repo; switching to a cloud secret manager changes only the store |
+| Observability | Generated from Compose; Alloy reads pod logs through the API, Prometheus the kubelets' cAdvisor (`docs/services/observability.md`) | Same setup as Compose, with Grafana's recommended log source |
+| Dagster | Its official Helm chart, the code built into the image (`docs/services/dagster/dagster.md`) | Dagster's documented Kubernetes way; also Dagster+'s |
+| CrowdSec | Removed from Docker and Kubernetes | The owner's call (it was detection-only, with no bouncer) |
 | `down` takes a backup (Compose) | Becomes scheduled backups plus CloudNativePG's continuous WAL archive (phase 5) | A git commit can't run a backup first; WAL restores to any point in time, not only to the last `down` |
 | Network policies | Ingress first; egress later | Kubernetes' documented starting point; egress has to list every app's external calls |
 

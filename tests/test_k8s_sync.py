@@ -605,3 +605,30 @@ def test_init_steps_get_their_compose_environment():
                 if missing:
                     gaps.append(f"{svc}/{ic['name']}: missing {sorted(missing)}")
     assert not gaps, "\n".join(gaps)
+
+
+def test_dagster_chart_values_match_compose():
+    """Dagster runs from its official chart: its Services keep Compose's
+    names and ports (the route and .env endpoints don't change), its database
+    is the shared one from .env.example, the chart version is the dagster
+    version the code image is built with, and run pods carry the label the
+    shared-postgres network policy admits."""
+    if "dagster" not in PORTED:
+        pytest.skip("dagster not ported")
+    comp = gen.load_compose("dagster")["services"]
+    ex = gen.load_env(REPO / "services/dagster/.env.example")
+    v = gen.dagster_values(True)
+    release = gen.load_overrides("dagster")["helm"]["release"]
+    assert f"{release}-{v['dagsterWebserver']['nameOverride']}" == comp["dagster-webserver"]["container_name"]
+    assert v["dagsterWebserver"]["service"]["port"] == 3000
+    code = v["dagster-user-deployments"]["deployments"][0]
+    assert code["name"] == comp["dagster-user-code"]["container_name"] and code["port"] == 4000
+    assert f"{code['image']['repository']}:{code['image']['tag']}" == comp["dagster-user-code"]["image"]
+    assert v["postgresql"]["postgresqlHost"] == ex["DB_HOST"] and v["postgresql"]["enabled"] is False
+    assert gen.dagster_version() in comp["dagster-user-code"]["image"]
+    assert v["runLauncher"]["config"]["k8sRunLauncher"]["labels"]["homeserver/service"] == "dagster"
+    stopped = gen.dagster_values(False)
+    assert stopped["dagsterWebserver"]["replicaCount"] == 0 and not stopped["dagsterDaemon"]["enabled"]
+    assert not stopped["dagster-user-deployments"]["enabled"]
+    # The code is in the image now: no service_data mount on Compose.
+    assert not any("user-code" in str(m.get("source", "")) for m in comp["dagster-user-code"].get("volumes") or [])

@@ -45,29 +45,35 @@ flowchart LR
     Daemon --> DB
 ```
 
-## Where your pipeline code actually lives
+## Where your pipeline code lives
 
-`services/dagster/user-code/definitions.py` is a **git-tracked template**, not what actually runs — the container reads live code from a bind mount: `service_data/data/dagster/user-code/` (gitignored, your live copy). The template is also baked into the built image at `/template`, purely as a seed source; `dagster-user-code`'s entrypoint copies it into the bind mount **only when `definitions.py` is missing there** (fresh clone, restored backup), then execs the gRPC server. After that first copy, the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own pipeline. Same relationship as `.env.example`/`.env`, just for a whole file instead of a few variables.
+**In the image** (since 2026-10-04). `services/dagster/user-code/definitions.py` is built into `homeserver/dagster-user-code` (`user-code/Dockerfile`: `COPY definitions.py /opt/dagster/app/`). Compose and Kubernetes run that same image, and every run and step container uses it too, so the code needs no mount anywhere. That's Dagster's documented way for Kubernetes and for Dagster+ code locations.
 
-`definitions.py` is the container's actual entrypoint argument, not decoration — deleting it entirely just gets it re-seeded from the template on the next restart rather than leaving the container permanently unable to start a code location at all.
-
-The check and copy both live in `user-code/Dockerfile`'s `CMD`, not in `compose.yml` or `homeserver.py` — it runs fresh on every container start, not just the first:
-
-```dockerfile
-CMD ["/bin/sh", "-c", "[ -f definitions.py ] || cp /template/definitions.py .; exec dagster api grpc -h 0.0.0.0 -p 4000 -f definitions.py"]
-```
-
-Same shape as Temporal's worker (see its own doc for the full breakdown): `[ -f definitions.py ]` tests whether the file already exists in `/opt/dagster/app` (the bind mount, set as `WORKDIR`); `||` runs the `cp` only when that test fails; `;` then unconditionally starts the code server either way. `exec` hands off the process in place so `dagster` itself becomes PID 1 and receives Docker's shutdown signal directly, instead of a wrapping shell swallowing it.
-
-Changing `definitions.py` only needs a restart, not a rebuild:
+To change a pipeline, edit `user-code/definitions.py` and rebuild:
 
 ```bash
-docker restart dagster-user-code
+uv run homeserver.py dev update dagster      # rebuilds the image and restarts
 ```
 
-(Dagster's docker-compose deployment doesn't auto-reload on file change — restarting is the documented way to pick up code changes; see [dagster-io/dagster#30824](https://github.com/dagster-io/dagster/issues/30824).)
+**Before 2026-10-04** the code ran from an editable copy under `service_data/data/dagster/user-code/`, seeded from the template on first start. That copy matched the template exactly when this changed, so nothing was lost. The folder is left in place, unused.
 
-**Every run and step container launched by `DockerRunLauncher`/`docker_executor` also needs this same mount** — they run the identical `homeserver/dagster-user-code` image, and since that image no longer bakes in `definitions.py`, a run/step container can't import the code it's supposed to execute without it. That's why the bind mount appears **three places**, all pointing at the same host path: `dagster-user-code`'s own `compose.yml` volume (uses `${DATA_ROOT}`), plus `dagster.yaml`'s `run_launcher.container_kwargs.volumes` and `definitions.py`'s own `docker_executor` `container_kwargs.volumes` (both hardcoded to the absolute host path, since `dagster.yaml` is baked into the image at build time — not compose-interpolated, so `${DATA_ROOT}` doesn't work there). Update all three if `service_data/` ever moves.
+**How a run's steps execute** is the runtime's choice (`DAGSTER_EXECUTOR` in `.env`, read by `definitions.py`), so the same code runs on both:
+
+| `DAGSTER_EXECUTOR` | Where | Steps |
+|---|---|---|
+| `docker` (default) | Compose | each step in its own container (`docker_executor`), sharing the IO-manager volume |
+| `multiprocess` | Kubernetes (set by the chart's values) | each run is its own Job pod (`K8sRunLauncher`), steps are processes inside it. This is Dagster's default Kubernetes setup and needs no volume shared between pods |
+
+## On Kubernetes
+
+Dagster runs from its **official Helm chart** (`dagster-io/helm`; decided 2026-10-04 over generating it from Compose). `kubernetes/overrides/dagster.yaml` marks it, and `generate.py` writes the chart's values into the ArgoCD Application `dagster-chart` (`generated/gitops/<env>`):
+
+- **Names as in Compose:** Services `dagster-webserver:3000` and `dagster-user-code:4000`, so the route and `.env` endpoints don't change.
+- **Images:** the code server runs `homeserver/dagster-user-code` (built locally: `cluster.py images dagster`). The webserver and daemon run Dagster's official image at the same version, and the chart version is the `dagster==` pin in `user-code/pyproject.toml`.
+- **Database:** shared Postgres, from `.env.example`. The chart's own Postgres is off. Its password Secret (`dagster-postgresql-secret`) is built by External Secrets from `.env`.
+- **Limits and labels:** memory limits as in Compose. Run pods get Compose's run caps (512 MB, 1 CPU) and the `homeserver/service: dagster` label that shared Postgres's network policy admits.
+- **On and off:** the running list in `kubernetes/deploy/<env>.yaml`. Stopped means 0 webservers, and the daemon and code server switched off (the chart can't scale the code server to 0; it holds no data).
+- **Generated as usual:** the login and database, the secrets, the network policy and the route.
 
 ## Every run — and every step — launches as its own container, by default
 

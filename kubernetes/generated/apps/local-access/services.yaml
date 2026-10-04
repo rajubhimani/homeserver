@@ -262,6 +262,11 @@ spec:
     targetPort: 8138
     nodePort: 30156
     protocol: TCP
+  - name: h8139
+    port: 8139
+    targetPort: 8139
+    nodePort: 30175
+    protocol: TCP
   - name: h8140
     port: 8140
     targetPort: 8140

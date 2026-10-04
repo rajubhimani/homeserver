@@ -250,6 +250,11 @@
   protocol: tcp
   svc: temporal
   container: temporal-ui
+- host: 8139
+  node: 30175
+  protocol: tcp
+  svc: dagster
+  container: dagster-webserver
 - host: 8140
   node: 30119
   protocol: tcp

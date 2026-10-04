@@ -342,3 +342,125 @@ spec:
     syncOptions:
     - CreateNamespace=true
     - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dagster-chart
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homeserver
+spec:
+  project: homeserver
+  source:
+    repoURL: https://dagster-io.github.io/helm
+    chart: dagster
+    targetRevision: 1.13.25
+    helm:
+      releaseName: dagster
+      valuesObject:
+        global:
+          postgresqlSecretName: dagster-postgresql-secret
+        generatePostgresqlPasswordSecret: false
+        postgresql:
+          enabled: false
+          postgresqlHost: shared-postgres
+          postgresqlUsername: dagster
+          postgresqlDatabase: dagster
+          service:
+            port: 5432
+        telemetry:
+          enabled: false
+        dagsterWebserver:
+          nameOverride: webserver
+          replicaCount: 0
+          service:
+            port: 3000
+          image:
+            tag: 1.13.25
+            pullPolicy: IfNotPresent
+          labels:
+            app.kubernetes.io/part-of: homeserver
+            homeserver/service: dagster
+          resources:
+            limits:
+              memory: 512Mi
+          podSecurityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          securityContext:
+            allowPrivilegeEscalation: false
+        dagsterDaemon:
+          enabled: false
+          image:
+            tag: 1.13.25
+            pullPolicy: IfNotPresent
+          labels:
+            app.kubernetes.io/part-of: homeserver
+            homeserver/service: dagster
+          resources:
+            limits:
+              memory: 384Mi
+          podSecurityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          securityContext:
+            allowPrivilegeEscalation: false
+        dagster-user-deployments:
+          enabled: false
+          deployments:
+          - name: dagster-user-code
+            port: 4000
+            image:
+              repository: homeserver/dagster-user-code
+              tag: 1.13.25
+              pullPolicy: IfNotPresent
+            dagsterApiGrpcArgs:
+            - -f
+            - definitions.py
+            envSecrets:
+            - name: dagster-env
+            env:
+            - name: DAGSTER_EXECUTOR
+              value: multiprocess
+            includeConfigInLaunchedRuns:
+              enabled: true
+            labels:
+              app.kubernetes.io/part-of: homeserver
+              homeserver/service: dagster
+            resources:
+              limits:
+                memory: 256Mi
+            podSecurityContext:
+              seccompProfile:
+                type: RuntimeDefault
+            securityContext:
+              allowPrivilegeEscalation: false
+        runLauncher:
+          type: K8sRunLauncher
+          config:
+            k8sRunLauncher:
+              imagePullPolicy: IfNotPresent
+              envSecrets:
+              - name: dagster-env
+              envVars:
+              - DAGSTER_EXECUTOR=multiprocess
+              labels:
+                app.kubernetes.io/part-of: homeserver
+                homeserver/service: dagster
+              resources:
+                limits:
+                  memory: 512Mi
+                  cpu: '1'
+              securityContext:
+                allowPrivilegeEscalation: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps
+  syncPolicy:
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

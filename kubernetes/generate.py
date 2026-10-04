@@ -1934,7 +1934,8 @@ def gitops(env: str) -> dict[str, list[dict]]:
         # cluster-wide kinds the generator emits.
         {"apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject", "metadata": meta("homeserver"),
          "spec": {"description": "Services generated from Docker Compose",
-                  "sourceRepos": [repo],
+                  "sourceRepos": [repo] + sorted({h["repo"] for s in load_scope().get("ported") or []
+                                                  if (h := helm_service(s))}),
                   "destinations": [{"server": IN_CLUSTER, "namespace": ns}
                                    for ns in (NAMESPACE, LOCAL_ACCESS_NS, SECRET_STORE_NS)],
                   "clusterResourceWhitelist": [{"group": "", "kind": "Namespace"},
@@ -1962,6 +1963,16 @@ def gitops(env: str) -> dict[str, list[dict]]:
                               "destination": {"server": IN_CLUSTER, "namespace": a["namespace"]},
                               "syncPolicy": {**sync_auto, "retry": retry,
                                              "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}})
+    for svc in load_scope().get("ported") or []:
+        if (h := helm_service(svc)):
+            values = dagster_values(svc in running_services(env)) if svc == "dagster" else {}
+            apps.append({"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": meta(f"{svc}-chart"),
+                         "spec": {"project": "homeserver",
+                                  "source": {"repoURL": h["repo"], "chart": h["chart"],
+                                             "targetRevision": dagster_version() if svc == "dagster" else h["version"],
+                                             "helm": {"releaseName": h["release"], "valuesObject": values}},
+                                  "destination": {"server": IN_CLUSTER, "namespace": NAMESPACE},
+                                  "syncPolicy": {**sync_auto, "retry": retry}}})
     appset = {
         "apiVersion": "argoproj.io/v1alpha1", "kind": "ApplicationSet", "metadata": meta("services"),
         "spec": {
@@ -2008,6 +2019,86 @@ def platform_files() -> dict[str, dict[str, list[dict] | str]]:
     }
 
 
+# ── services from their official Helm chart (overrides helm:) ───────────
+
+HARDENED_POD = {"seccompProfile": {"type": "RuntimeDefault"}}
+HARDENED_CONTAINER = {"allowPrivilegeEscalation": False}
+
+
+def helm_service(svc: str) -> dict | None:
+    return load_overrides(svc).get("helm")
+
+
+def dagster_version() -> str:
+    deps = (SERVICES_DIR / "dagster/user-code/pyproject.toml").read_text()
+    m = re.search(r'"dagster==([0-9.]+)"', deps)
+    if not m:
+        raise GenError("dagster: no dagster==<version> in user-code/pyproject.toml")
+    return m[1]
+
+
+def dagster_values(running: bool) -> dict:
+    """The Dagster chart's values: Compose's names and limits, the database
+    on shared-postgres from .env.example, and the copies from the running list
+    (the code server's replicaCount can't be 0 in the chart, so it's switched
+    off instead; it holds no data)."""
+    comp = load_compose("dagster")["services"]
+    ex = load_env(SERVICES_DIR / "dagster/.env.example")
+    code = comp["dagster-user-code"]
+    repo_, tag = code["image"].rsplit(":", 1)
+    labels = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": "dagster"}
+    lim = lambda n: mem(comp[n]["deploy"]["resources"]["limits"]["memory"])  # noqa: E731
+    secure = {"podSecurityContext": HARDENED_POD, "securityContext": HARDENED_CONTAINER}
+    official = {"tag": dagster_version(), "pullPolicy": "IfNotPresent"}
+    return {
+        "global": {"postgresqlSecretName": "dagster-postgresql-secret"},
+        "generatePostgresqlPasswordSecret": False,
+        "postgresql": {"enabled": False, "postgresqlHost": ex["DB_HOST"],
+                       "postgresqlUsername": ex["DAGSTER_POSTGRES_USER"],
+                       "postgresqlDatabase": ex["DAGSTER_POSTGRES_DB"],
+                       "service": {"port": int(ex.get("DB_PORT", "5432"))}},
+        "telemetry": {"enabled": False},  # as Compose's dagster.yaml
+        "dagsterWebserver": {"nameOverride": "webserver",  # Service dagster-webserver:3000, as in Compose
+                             "replicaCount": 1 if running else 0, "service": {"port": 3000},
+                             "image": official, "labels": labels,
+                             "resources": {"limits": {"memory": lim("dagster-webserver")}}, **secure},
+        "dagsterDaemon": {"enabled": running, "image": official, "labels": labels,
+                          "resources": {"limits": {"memory": lim("dagster-daemon")}}, **secure},
+        "dagster-user-deployments": {"enabled": running, "deployments": [{
+            "name": "dagster-user-code", "port": 4000,  # Service dagster-user-code:4000, as in Compose
+            "image": {"repository": repo_, "tag": tag, "pullPolicy": "IfNotPresent"},
+            "dagsterApiGrpcArgs": ["-f", "definitions.py"],
+            "envSecrets": [{"name": "dagster-env"}],
+            "env": [{"name": "DAGSTER_EXECUTOR", "value": "multiprocess"}],
+            "includeConfigInLaunchedRuns": {"enabled": True},
+            "labels": labels, "resources": {"limits": {"memory": lim("dagster-user-code")}}, **secure}]},
+        "runLauncher": {"type": "K8sRunLauncher", "config": {"k8sRunLauncher": {
+            "imagePullPolicy": "IfNotPresent",
+            "envSecrets": [{"name": "dagster-env"}],
+            "envVars": ["DAGSTER_EXECUTOR=multiprocess"],
+            "labels": labels,  # run pods may reach shared-postgres (its network policy)
+            # Compose's DockerRunLauncher caps (dagster.yaml): 512m, 1 CPU
+            "resources": {"limits": {"memory": "512Mi", "cpu": "1"}},
+            "securityContext": HARDENED_CONTAINER}}},
+    }
+
+
+def helm_service_files(svc: str) -> dict[str, list[dict]]:
+    """What the generator still writes for a chart-run service."""
+    files: dict[str, list[dict]] = {}
+    dbo = app_database(svc)
+    if dbo and not external_db(svc):
+        files["database.yaml"] = dbo
+    es = service_secrets(svc)
+    if svc == "dagster":
+        # The chart reads the database password from this Secret and key.
+        es.append(external_secret("dagster-postgresql-secret", svc, template={
+            "data": {"postgresql-password": '{{ index . "DAGSTER_POSTGRES_PASSWORD" }}'}}))
+    if es:
+        files["secrets.yaml"] = es
+    return files
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
@@ -2038,6 +2129,8 @@ def render(out: Path) -> list[str]:
             files = shared_mariadb()
         elif svc == "nginx-plain":
             files = nginx_plain()
+        elif helm_service(svc):
+            files = helm_service_files(svc)
         else:
             files = convert(svc)
             dbo = app_database(svc)
@@ -2046,7 +2139,7 @@ def render(out: Path) -> list[str]:
             if svc == "authentik":
                 files["middleware.yaml"] = [authentik_middleware()]
         files["networkpolicies.yaml"] = [network_policy(svc)]
-        if (es := service_secrets(svc)):
+        if not helm_service(svc) and (es := service_secrets(svc)):
             files["secrets.yaml"] = es
         reload_on_secret_change(files)
         stopped(files)

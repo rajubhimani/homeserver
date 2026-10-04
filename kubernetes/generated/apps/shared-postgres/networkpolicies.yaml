@@ -27,6 +27,9 @@ spec:
           homeserver/service: calcom
     - podSelector:
         matchLabels:
+          homeserver/service: dagster
+    - podSelector:
+        matchLabels:
           homeserver/service: documenso
     - podSelector:
         matchLabels:

@@ -255,6 +255,22 @@ def release_secrets(svc: str) -> None:
             subprocess.run(ctx + ["delete", "secret", name], capture_output=True)
 
 
+def chart_manifest(svc: str, running: bool = True) -> str:
+    """A chart-run service's workloads (overrides helm:), rendered with the
+    values ArgoCD would use: for smoke tests on a cluster without ArgoCD."""
+    import generate
+    h = generate.helm_service(svc)
+    if not h:
+        return ""
+    values = generate.dagster_values(running) if svc == "dagster" else {}
+    version = generate.dagster_version() if svc == "dagster" else h["version"]
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as f:
+        yaml.safe_dump(values, f)
+        f.flush()
+        return subprocess.run(["helm", "template", h["release"], h["chart"], "--repo", h["repo"], "--version", version,
+                               "-n", NAMESPACE, "-f", f.name], capture_output=True, text=True, check=True).stdout
+
+
 def apply_started(svc: str, env: str) -> None:
     """Apply a service in its running form, whatever git says (smoke tests)."""
     release_secrets(svc)
@@ -262,6 +278,8 @@ def apply_started(svc: str, env: str) -> None:
                          capture_output=True, text=True, check=True).stdout
     objs = started([o for o in yaml.safe_load_all(out) if o])
     kubectl("apply", "-f", "-", input="---\n".join(yaml.safe_dump(o, sort_keys=False) for o in objs), check=False)
+    if (chart := chart_manifest(svc)):
+        kubectl("apply", "-n", NAMESPACE, "-f", "-", input=chart, check=False)
 
 
 def snapshot_dir(svc: str, ts: str | None) -> Path | None:
@@ -699,6 +717,8 @@ def cmd_smoke(a) -> None:
         print(("OK   " if not results[svc] else "FAIL ") + svc + "".join(f"\n     {n}" for n in results[svc]), flush=True)
         if not a.keep:
             kubectl("delete", "-k", str(K8S / "generated/envs/test" / svc), "--ignore-not-found", "--timeout=300s", check=False)
+            if (chart := chart_manifest(svc)):
+                kubectl("delete", "-n", NAMESPACE, "-f", "-", "--ignore-not-found", "--timeout=300s", input=chart, check=False)
             wait_for_calm_disk()
             cmd_rmi(argparse.Namespace(services=[svc]))
             argo_pause(svc, False)  # ArgoCD recreates it as git has it (stopped)
@@ -770,16 +790,17 @@ def smoke_check(svc: str, ctx: list[str], timeout: int) -> list[str]:
 
 
 def service_images(svc: str) -> set[str]:
-    """Every image a service's generated manifests use (containers + init)."""
+    """Every image a service's manifests use (containers + init), its chart's included."""
     out = set()
-    for f in (K8S / "generated/apps" / svc).glob("*.yaml"):
-        for d in yaml.safe_load_all(f.read_text()):
-            spec = ((d or {}).get("spec") or {})
-            pod = (spec.get("template") or {}).get("spec") or {}
-            for c in pod.get("containers", []) + pod.get("initContainers", []):
-                out.add(c["image"])
-            if spec.get("imageName"):
-                out.add(spec["imageName"])
+    docs = [d for f in (K8S / "generated/apps" / svc).glob("*.yaml") for d in yaml.safe_load_all(f.read_text())]
+    docs += list(yaml.safe_load_all(chart_manifest(svc) or ""))
+    for d in docs:
+        spec = ((d or {}).get("spec") or {})
+        pod = (spec.get("template") or {}).get("spec") or {}
+        for c in pod.get("containers", []) + pod.get("initContainers", []):
+            out.add(c["image"])
+        if spec.get("imageName"):
+            out.add(spec["imageName"])
     return out
 
 

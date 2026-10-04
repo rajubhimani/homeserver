@@ -102,6 +102,8 @@ ported:
   # Phase 4 — observability: Alloy and Prometheus read Kubernetes instead
   # of Docker (overrides/observability.yaml)
   - observability
+  # automation-ai: Dagster from its official Helm chart (overrides/dagster.yaml)
+  - dagster
 
 # Rendered only for the prod environment. The test cluster must never run
 # the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
@@ -117,6 +119,3 @@ skipped:
   dozzle: "Docker log viewer (needs the socket). On Kubernetes, Grafana + Loki (observability) and Headlamp show pod logs."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
 
-# Not ported yet (decided 2026-10-04: an ArgoCD add-on from the official
-# Helm chart, docs/17):
-#   dagster: Dagster's chart (K8sRunLauncher), our images as user code.
