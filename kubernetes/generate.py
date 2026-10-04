@@ -2335,10 +2335,15 @@ def backup_store() -> dict[str, list[dict] | dict]:
         users.append(f'mc mb --ignore-existing store/{bucket} && '
                      f'printf \'{{"Version":"2012-10-17","Statement":[{{"Effect":"Allow","Action":["s3:*"],'
                      f'"Resource":["arn:aws:s3:::{bucket}","arn:aws:s3:::{bucket}/*"]}}]}}\' > /tmp/{bucket}.json && '
-                     f'(mc admin policy create store {bucket}-only /tmp/{bucket}.json 2>/dev/null || true) && '
+                     # create replaces an existing policy; attach is done when the user already
+                     # has it. Errors stay visible and fail the job (a silenced failure left
+                     # Velero without a policy, 2026-10-04).
+                     f'mc admin policy create store {bucket}-only /tmp/{bucket}.json && '
                      f'mc admin user add store "$BACKUP_{u}_ACCESS_KEY" "$BACKUP_{u}_SECRET_KEY" && '
-                     f'(mc admin policy attach store {bucket}-only --user "$BACKUP_{u}_ACCESS_KEY" 2>/dev/null || true)')
-    setup = " && ".join(['mc alias set store http://backup-store:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'] + users)
+                     f'(mc admin user info store "$BACKUP_{u}_ACCESS_KEY" | grep -q "{bucket}-only" || '
+                     f'mc admin policy attach store {bucket}-only --user "$BACKUP_{u}_ACCESS_KEY") && '
+                     f'mc admin user info store "$BACKUP_{u}_ACCESS_KEY" | grep -q "{bucket}-only"')
+    setup = "set -e; " + " && ".join(['mc alias set store http://backup-store:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'] + users)
     es_root = external_secret("backup-store-root", "backup-store", template={"data": {
         "MINIO_ROOT_USER": '{{ index . "BACKUP_STORE_ROOT_USER" }}',
         "MINIO_ROOT_PASSWORD": '{{ index . "BACKUP_STORE_ROOT_PASSWORD" }}',

@@ -184,18 +184,21 @@ spec:
         command:
         - sh
         - -c
-        - mc alias set store http://backup-store:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc mb --ignore-existing
-          store/postgres && printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::postgres","arn:aws:s3:::postgres/*"]}]}'
-          > /tmp/postgres.json && (mc admin policy create store postgres-only /tmp/postgres.json 2>/dev/null || true) && mc
-          admin user add store "$BACKUP_POSTGRES_ACCESS_KEY" "$BACKUP_POSTGRES_SECRET_KEY" && (mc admin policy attach store
-          postgres-only --user "$BACKUP_POSTGRES_ACCESS_KEY" 2>/dev/null || true) && mc mb --ignore-existing store/velero
+        - set -e; mc alias set store http://backup-store:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc mb
+          --ignore-existing store/postgres && printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::postgres","arn:aws:s3:::postgres/*"]}]}'
+          > /tmp/postgres.json && mc admin policy create store postgres-only /tmp/postgres.json && mc admin user add store
+          "$BACKUP_POSTGRES_ACCESS_KEY" "$BACKUP_POSTGRES_SECRET_KEY" && (mc admin user info store "$BACKUP_POSTGRES_ACCESS_KEY"
+          | grep -q "postgres-only" || mc admin policy attach store postgres-only --user "$BACKUP_POSTGRES_ACCESS_KEY") &&
+          mc admin user info store "$BACKUP_POSTGRES_ACCESS_KEY" | grep -q "postgres-only" && mc mb --ignore-existing store/velero
           && printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::velero","arn:aws:s3:::velero/*"]}]}'
-          > /tmp/velero.json && (mc admin policy create store velero-only /tmp/velero.json 2>/dev/null || true) && mc admin
-          user add store "$BACKUP_VELERO_ACCESS_KEY" "$BACKUP_VELERO_SECRET_KEY" && (mc admin policy attach store velero-only
-          --user "$BACKUP_VELERO_ACCESS_KEY" 2>/dev/null || true) && mc mb --ignore-existing store/dumps && printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::dumps","arn:aws:s3:::dumps/*"]}]}'
-          > /tmp/dumps.json && (mc admin policy create store dumps-only /tmp/dumps.json 2>/dev/null || true) && mc admin user
-          add store "$BACKUP_DUMPS_ACCESS_KEY" "$BACKUP_DUMPS_SECRET_KEY" && (mc admin policy attach store dumps-only --user
-          "$BACKUP_DUMPS_ACCESS_KEY" 2>/dev/null || true)
+          > /tmp/velero.json && mc admin policy create store velero-only /tmp/velero.json && mc admin user add store "$BACKUP_VELERO_ACCESS_KEY"
+          "$BACKUP_VELERO_SECRET_KEY" && (mc admin user info store "$BACKUP_VELERO_ACCESS_KEY" | grep -q "velero-only" ||
+          mc admin policy attach store velero-only --user "$BACKUP_VELERO_ACCESS_KEY") && mc admin user info store "$BACKUP_VELERO_ACCESS_KEY"
+          | grep -q "velero-only" && mc mb --ignore-existing store/dumps && printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::dumps","arn:aws:s3:::dumps/*"]}]}'
+          > /tmp/dumps.json && mc admin policy create store dumps-only /tmp/dumps.json && mc admin user add store "$BACKUP_DUMPS_ACCESS_KEY"
+          "$BACKUP_DUMPS_SECRET_KEY" && (mc admin user info store "$BACKUP_DUMPS_ACCESS_KEY" | grep -q "dumps-only" || mc
+          admin policy attach store dumps-only --user "$BACKUP_DUMPS_ACCESS_KEY") && mc admin user info store "$BACKUP_DUMPS_ACCESS_KEY"
+          | grep -q "dumps-only"
         env:
         - name: MC_CONFIG_DIR
           value: /tmp/.mc
