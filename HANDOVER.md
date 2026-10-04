@@ -46,25 +46,20 @@ design), branch `feature/k8s-generated`.
 
 **Your user needs the same name and UID:** `raju`, 1000. File owners on `/mnt/mydata` (ext4) are stored as numbers.
 
-**Open question for the owner (the SSD has more room without Windows):** move kind's image store (`K8S_IMAGES_PATH`, ~35 GB) from the HDD to the SSD.
-- **For:** it removes the bottleneck that saturated the HDD on 2026-10-04.
-- **Against:** the WD Green is a weak SSD that already holds the databases and etcd. Images are written once (on pull) and then mostly read.
-- **btrfs note:** if the SSD stays btrfs (Fedora's default), set `chattr +C` on the database folders (`~/k8s-data/fast`) before first use. Postgres on copy-on-write fragments; this follows btrfs' own advice for databases and VM images.
+**Storage layout after the reinstall (agreed 2026-10-04: ~100 GB of the SSD for this):**
 
-1. **Tools:** Docker, git, `gh`, uv, then kind, kubectl and helm at the versions in `kubernetes/versions.env`. Raise the inotify limits (docs/17 "Step 0").
-2. **Restore Claude's files:** `cp -a /mnt/mydata/claude-backup-20261004/dot-claude/. ~/.claude/`. That brings back the memories (`projects/-mnt-mydata-homeserver/memory/`) and the global rule file `~/.claude/CLAUDE.md`.
-3. **Docker databases: restore explicitly, never just `up`.** `up` auto-restores only when a service's volumes **and** its `service_data/data/<svc>` folder are both missing. After a format the folders exist and the volumes don't, so `up` would start apps on empty databases, and some (Authentik) offer their first-visitor admin setup. For each service with named volumes: `uv run homeserver.py prod restore <svc>`, then `up`.
-4. **`service_data` symlink:** the repo's `service_data` points at `/mnt/mydata/service_data`. Check it with `readlink -f service_data`.
-5. **Kubernetes:** `~/k8s-data/fast` and the encryption folder are gone; `kubernetes/.env` keeps every key.
-   1. `uv run kubernetes/cluster.py create` (it rewrites the encryption config from the key in `kubernetes/.env`).
-   2. Before bootstrap, set cloudflared to stopped in git (see §4).
-   3. `bootstrap --env prod`.
-   4. `images temporal dagster --drop-host-copy`.
-   5. `import --env prod --from-export <newest export>`.
-   6. Turn the tunnel back on in git.
+| Data | Where | `kubernetes/.env` |
+|---|---|---|
+| kind's image store (~35 GB, up to ~70 GB with every app) | **SSD** (this removes the bottleneck that saturated the HDD on 2026-10-04) | `K8S_IMAGES_PATH=~/k8s-data/containerd` |
+| Databases, etcd, app volumes (classes `fast` and `bulk`) | **SSD** | `K8S_FAST_PATH=~/k8s-data/fast`, `K8S_BULK_PATH=~/k8s-data/bulk` |
+| Backup store (MinIO: WAL archives, base backups, Velero, dumps) | **HDD**: a backup must not share a disk with its data | its PVC needs a storage class on the HDD. Add a `backup` class at `/mnt/mydata/k8s-data/backup` (generator + `cluster/base/storage.yaml` + a kind mount), then point `backup_store()`'s PVC at it. **To do before bootstrap.** |
+| Exports (`cluster.py export`), archives | **HDD** | `K8S_EXPORT_PATH=/mnt/mydata/k8s-data/export` |
+| Photos and media | **HDD** (`/mnt/media`), mounted as now | — |
 
-   The image store (`/mnt/mydata/k8s-data/containerd`) survives, which saves the downloads. If containerd complains about its state, move it aside and let it re-pull.
-6. **The Cloudflare tunnel must never run in two places.** Docker's cloudflared and the cluster's cloudflared share one token.
+**Cautions:**
+- **Keep about 20% of the SSD free:** a DRAM-less WD Green slows down sharply when full. Remove unused images (`cluster.py rmi`; smoke tests already do).
+- **Wear:** after the move, check the write rate of Prometheus, Loki and WAL (Grafana / metrics-server). If it's heavy, give those an HDD class too.
+- **btrfs:** if the SSD stays btrfs (Fedora's default), run `chattr +C` on `~/k8s-data/fast` and `~/k8s-data/bulk` while they're empty. Postgres on copy-on-write fragments; this is btrfs' own advice for databases.
 
 ## 2. Where things stand
 
