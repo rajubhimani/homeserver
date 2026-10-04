@@ -140,3 +140,7 @@ Reset to an empty install, came up healthy, then restored from its `reset-backup
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## On Kubernetes: "fingerprint mismatch" after the move
+
+The hub stores one fingerprint per token record: it sets it on an agent's first connection and refuses any later agent whose fingerprint differs (`internal/hub/agent_connect.go`: "fingerprint mismatch"). The agent on Kubernetes runs on the kind node, a different machine identity from the Docker host's, so the imported hub rejects it and the system shows as down (agent log: `WebSocket connected ... reason=fingerprint mismatch`). Fix, in the hub UI: **Settings -> Tokens & Fingerprints**, open the row's menu on the system, **Delete fingerprint**. The agent reconnects within seconds and the hub records its new fingerprint. (Beszel's docs don't cover this; the page and the reset are in its source, `tokens-fingerprints.tsx`.) The agent now reports the kind node, not the physical host's CPU, memory and disks.
