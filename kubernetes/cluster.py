@@ -584,6 +584,7 @@ def cmd_smoke(a) -> None:
     results = {}
     for svc in names:
         print(f"\n==== {svc}", flush=True)
+        wait_for_calm_disk()
         for img in sorted(service_images(svc)):  # one at a time
             ref = img if "/" in img.split(":")[0] or "." in img.split("/")[0] else f"docker.io/library/{img}"
             subprocess.run(["docker", "exec", node, "crictl", "pull", ref], capture_output=True)
@@ -593,12 +594,31 @@ def cmd_smoke(a) -> None:
         print(("OK   " if not results[svc] else "FAIL ") + svc + "".join(f"\n     {n}" for n in results[svc]), flush=True)
         if not a.keep:
             kubectl("delete", "-k", str(K8S / "generated/envs/test" / svc), "--ignore-not-found", "--timeout=300s", check=False)
+            wait_for_calm_disk()
             cmd_rmi(argparse.Namespace(services=[svc]))
     print("\n==== smoke results")
     for svc, notes in results.items():
         print(f"{'OK  ' if not notes else 'FAIL'} {svc}")
         for n in notes:
             print(f"     {n}")
+
+
+def wait_for_calm_disk(limit: float = 20.0, max_wait: int = 1800) -> None:
+    """Pause until the host's disk I/O pressure (PSI, avg10) is below limit.
+    The test cluster shares this machine's disks with the running services;
+    on 2026-10-04 starting Plane while AppFlowy's images were being removed
+    drove load to 144 and stalled the API server, so each step waits."""
+    psi = Path("/proc/pressure/io")
+    if not psi.is_file():
+        return
+    start = time.time()
+    while time.time() - start < max_wait:
+        some = psi.read_text().split("\n")[0]
+        avg10 = float(some.split("avg10=")[1].split()[0])
+        if avg10 < limit:
+            return
+        print(f"  waiting for the disk to calm down (I/O pressure {avg10:.0f}%)", flush=True)
+        time.sleep(20)
 
 
 def smoke_check(svc: str, ctx: list[str], timeout: int) -> list[str]:
