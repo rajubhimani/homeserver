@@ -450,7 +450,9 @@ def restore_pg(cname: str, db: str, user: str, dump: Path, pod: str | None = Non
     may not), then restore everything else as the app's role
     (pg_restore -L with the EXTENSION entries left out)."""
     pod = pod or f"{cname}-1"  # CNPG names the first instance <cluster>-1
-    kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"cluster/{cname}", "--timeout=300s")
+    # The primary pod, not the Cluster's Ready: that also counts WAL archiving,
+    # which a restore doesn't need (and which waits on the backup store).
+    kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"pod/{pod}", "--timeout=600s")
     ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec", "-i", pod, "-c", "postgres", "--"]
     toc = subprocess.run(ctx + ["sh", "-c", "cat > /controller/restore.dump && pg_restore -l /controller/restore.dump"],
                          stdin=dump.open("rb"), capture_output=True, check=True).stdout.decode()
