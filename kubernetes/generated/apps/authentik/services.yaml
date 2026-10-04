@@ -33,10 +33,10 @@ spec:
   - name: h8088
     port: 9000
     targetPort: 9000
-    nodePort: 30106
+    nodePort: 30110
     protocol: TCP
   - name: h9444
     port: 9443
     targetPort: 9443
-    nodePort: 30125
+    nodePort: 30173
     protocol: TCP

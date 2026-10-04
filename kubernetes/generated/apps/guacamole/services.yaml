@@ -45,5 +45,5 @@ spec:
   - name: h8107
     port: 8080
     targetPort: 8080
-    nodePort: 30112
+    nodePort: 30123
     protocol: TCP

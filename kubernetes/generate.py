@@ -334,6 +334,34 @@ def ensure_env_defined(container: dict, env_keys: set[str], secret: str, has_env
         container["env"] = add + (container.get("env") or [])
 
 
+def repo_dir_configmap(c: str, key: str, tgt: str, where: str, labels: dict, files: dict,
+                       pod_vols: list, checksum_extra: dict) -> dict:
+    """A small repo folder (hook scripts, example DAGs, dynamic config) as a
+    ConfigMap: versioned with the manifests, exec bits from git (what a fresh
+    clone gets), and the config checksum rolls the pod on a change. Adds the
+    ConfigMap and the pod volume; returns the volume mount."""
+    rel = Path(key).relative_to(REPO).as_posix()
+    files_dir = sorted(f for f in Path(key).rglob("*") if f.is_file())
+    if sum(f.stat().st_size for f in files_dir) > 900_000:
+        raise GenError(f"{where}: {rel} is too big for a ConfigMap (1 MiB); use {{from: git}}")
+    modes = git_modes(rel)
+    dir_cm = f"{c}-{slug(Path(rel).name)}"[:63]
+    keyof = lambda f: slug(f.relative_to(key).as_posix().replace("/", "-").replace(".", "-"))  # noqa: E731
+    data = {keyof(f): f.read_text() for f in files_dir}
+    checksum_extra.update({f"{dir_cm}/{k}": v for k, v in data.items()})
+    if not any(o.get("metadata", {}).get("name") == dir_cm for o in files.get("configmaps.yaml", [])):
+        files.setdefault("configmaps.yaml", []).append({
+            "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": dir_cm, "labels": labels},
+            "data": dict(sorted(data.items()))})
+    vname = f"d-{slug(dir_cm)}"[:63]
+    if not any(v["name"] == vname for v in pod_vols):
+        pod_vols.append({"name": vname, "configMap": {"name": dir_cm, "items": [
+            {"key": keyof(f), "path": f.relative_to(key).as_posix(),
+             "mode": 0o755 if modes.get(f"{rel}/{f.relative_to(key).as_posix()}") == "100755" else 0o644}
+            for f in files_dir]}})
+    return {"name": vname, "mountPath": tgt, "readOnly": True}
+
+
 def git_modes(rel: str) -> dict[str, str]:
     """{path: git file mode} under a repo folder: the modes a fresh clone gets."""
     out = subprocess.run(["git", "ls-files", "-s", "--", rel], cwd=REPO, capture_output=True, text=True, check=True).stdout
@@ -521,6 +549,18 @@ def convert(svc: str) -> dict[str, list[dict]]:
             mo = (co.get("mounts") or {}).get(tgt, {})
             if mo.get("skip"):
                 continue
+            if mo.get("volume"):
+                # A folder Compose keeps outside DATA_ROOT (cache, uploads,
+                # metadata, a writable repo folder): its own PVC here, whatever
+                # the source; cluster.py import can copy a host folder in
+                # (copy_from: the .env key).
+                pvc = f"{svc}-{slug(mo['volume'])}"
+                pvcs.setdefault(pvc, {"size": mo.get("size") or "1Gi", "class": mo.get("class") or "fast"})
+                vname = f"v-{slug(pvc)}"[:63]
+                if not any(v["name"] == vname for v in pod_vols):
+                    pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
+                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
+                continue
             if kind == "localtime":
                 continue  # TZ env covers it
             if kind == "socket":
@@ -535,27 +575,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
                     exec_keys.add(k)  # e.g. entrypoint.sh: ConfigMap files default to 0644
                 mounts.append({"name": "files", "mountPath": tgt, "subPath": k, "readOnly": True})
             elif kind == "repo-dir" and mo.get("from") == "configmap":
-                # A small repo folder (e.g. hook scripts) as a ConfigMap: versioned
-                # with the manifests, exec bits from git (what a fresh clone
-                # gets), and the config checksum rolls the pod on a change.
-                rel = Path(key).relative_to(REPO).as_posix()
-                files_dir = sorted(f for f in Path(key).rglob("*") if f.is_file())
-                if sum(f.stat().st_size for f in files_dir) > 900_000:
-                    raise GenError(f"{where}: {rel} is too big for a ConfigMap (1 MiB); use {{from: git}}")
-                modes = git_modes(rel)
-                dir_cm = f"{c}-{slug(Path(rel).name)}"[:63]
-                data = {slug(f.relative_to(key).as_posix().replace("/", "-").replace(".", "-")): f.read_text() for f in files_dir}
-                checksum_extra.update({f"{dir_cm}/{k}": v for k, v in data.items()})
-                files.setdefault("configmaps.yaml", []).append({
-                    "apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": dir_cm, "labels": labels_svc},
-                    "data": dict(sorted(data.items()))})
-                vname = f"d-{slug(dir_cm)}"[:63]
-                pod_vols.append({"name": vname, "configMap": {"name": dir_cm, "items": [
-                    {"key": slug(f.relative_to(key).as_posix().replace("/", "-").replace(".", "-")),
-                     "path": f.relative_to(key).as_posix(),
-                     "mode": 0o755 if modes.get(f"{rel}/{f.relative_to(key).as_posix()}") == "100755" else 0o644}
-                    for f in files_dir]}})
-                mounts.append({"name": vname, "mountPath": tgt, "readOnly": True})
+                mounts.append(repo_dir_configmap(c, key, tgt, where, labels_svc, files, pod_vols, checksum_extra))
             elif kind == "repo-dir":
                 if mo.get("from") != "git":
                     raise GenError(f"{where}: mounts repo folder {key}; add overrides/{svc}.yaml "
@@ -569,16 +589,6 @@ def convert(svc: str) -> dict[str, list[dict]]:
                     pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
                 mounts.append({"name": vname, "mountPath": tgt, **({"subPath": sub} if sub else {}),
                                **({"readOnly": True} if ro else {})})
-            elif mo.get("volume"):
-                # A host folder Compose keeps outside DATA_ROOT (cache, uploads,
-                # metadata): its own PVC here; cluster.py import can copy the
-                # folder in (copy_from: the .env key).
-                pvc = f"{svc}-{slug(mo['volume'])}"
-                pvcs.setdefault(pvc, {"size": mo.get("size") or "1Gi", "class": mo.get("class") or "fast"})
-                vname = f"v-{slug(pvc)}"[:63]
-                if not any(v["name"] == vname for v in pod_vols):
-                    pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
-                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
             else:
                 hp = mo.get("hostPath")
                 if not hp:
@@ -635,8 +645,16 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 imounts = []
                 for dm in ds.get("volumes") or []:
                     dkind, dkey = classify_mount(dm, svc)
+                    if dkind in ("repo-dir", "repo-file"):
+                        # A one-shot step reading repo content (e.g. airflow-init's
+                        # example DAGs): the same ConfigMap as for app containers.
+                        if dkind == "repo-file":
+                            raise GenError(f"{where}: init step {cname[dep]} mounts repo file {dkey}; not supported yet")
+                        imounts.append(repo_dir_configmap(cname[dep], dkey, dm["target"], where, labels_svc,
+                                                          files, pod_vols, checksum_extra))
+                        continue
                     if dkind not in ("data", "named"):
-                        raise GenError(f"{where}: init step {cname[dep]} mounts {dkind} {dkey}; only data/named volumes are supported")
+                        raise GenError(f"{where}: init step {cname[dep]} mounts {dkind} {dkey}; only data/named/repo volumes are supported")
                     vname, pvc, sub = data_volume(svc, dkind, dkey, {}, ov, pvcs)
                     if not any(v["name"] == vname for v in pod_vols):
                         pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
@@ -955,7 +973,10 @@ def own_mariadb(svc: str, n: str, s: dict, ov: dict) -> dict | None:
     db_k, user_k = env_ref(s, "MARIADB_DATABASE", "MYSQL_DATABASE"), env_ref(s, "MARIADB_USER", "MYSQL_USER")
     pw_k = env_ref(s, "MARIADB_PASSWORD", "MYSQL_PASSWORD")
     if not all((root_k, db_k, user_k, pw_k)) or not ex.get(db_k) or not ex.get(user_k):
-        raise GenError(f"{svc}/{c}: can't resolve the MariaDB root/database/user/password keys")
+        # The app logs in as root and creates its own databases (ERPNext's
+        # sites): no app user to provision, so it stays a plain workload
+        # exactly like Compose (plan: "ERPNext needs root to create sites").
+        return None
     cm = s.get("command") or []
     args = shlex.split(cm) if isinstance(cm, str) else list(cm)
     lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}

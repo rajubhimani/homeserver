@@ -45,7 +45,7 @@ spec:
   - name: h8102
     port: 8080
     targetPort: 8080
-    nodePort: 30109
+    nodePort: 30119
     protocol: TCP
 ---
 apiVersion: v1
@@ -63,5 +63,5 @@ spec:
   - name: h8104
     port: 8080
     targetPort: 8080
-    nodePort: 30110
+    nodePort: 30121
     protocol: TCP

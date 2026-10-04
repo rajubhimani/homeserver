@@ -30,5 +30,5 @@ spec:
   - name: h8096
     port: 8096
     targetPort: 8096
-    nodePort: 30108
+    nodePort: 30115
     protocol: TCP

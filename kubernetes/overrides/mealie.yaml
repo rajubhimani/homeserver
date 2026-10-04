@@ -1,0 +1,8 @@
+containers:
+  mealie:
+    # The image's own HEALTHCHECK (ghcr.io/mealie-recipes/mealie:v3.28.0), verbatim (kubernetes/image_healthcheck.py);
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py checks it.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - $MEALIE_HOME/healthcheck.sh

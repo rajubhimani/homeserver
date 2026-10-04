@@ -45,5 +45,5 @@ spec:
   - name: h2283
     port: 2283
     targetPort: 2283
-    nodePort: 30101
+    nodePort: 30102
     protocol: TCP

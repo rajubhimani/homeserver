@@ -30,5 +30,5 @@ spec:
   - name: h8080
     port: 80
     targetPort: 80
-    nodePort: 30104
+    nodePort: 30106
     protocol: TCP

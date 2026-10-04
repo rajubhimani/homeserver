@@ -43,6 +43,62 @@ ported:
   - mailpit
   - plausible
 
+  # Phase 3 — above CORE (generated, applied at 0 replicas; started on demand)
+  # daily
+  - excalidraw
+  - karakeep
+  - homebox
+  - silverbullet
+  - syncthing
+  - trilium
+  - wallabag
+  # browser
+  - brave
+  - chromium
+  - firefox
+  - mullvad-browser
+  - librewolf
+  - zen
+  - helium
+  - chrome
+  - edge
+  - vivaldi
+  # office
+  - stirling-pdf-lite
+  - stirling-pdf
+  - vikunja
+  - appflowy
+  - plane
+  - calcom
+  - listmonk
+  # automation-ai
+  - airflow
+  - temporal
+  - ollama
+  - open-webui
+  - n8n
+  # extra
+  - paperless
+  - audiobookshelf
+  - mealie
+  - supabase
+  - nocodb
+  - outline
+  - penpot
+  - documenso
+  - invoiceshelf
+  - erpnext
+  - ghostfolio
+  - openproject
+  - mattermost
+  - rocketchat
+  - zulip
+  - mail-archiver
+  - bichon
+  - orangehrm
+  # manual
+  - gitlab
+
 # Rendered only for the prod environment. The test cluster must never run
 # the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
 # split live traffic between Docker and the test cluster.
@@ -52,4 +108,13 @@ prod_only:
 # Not run on Kubernetes, each with the replacement.
 skipped:
   wg-easy: "Stays on Docker (decided 2026-10-04): the VPN is how this machine is reached when something breaks, so it runs independently of the cluster (common homelab practice; wg-easy documents only Docker, Podman and dockerless installs). Prepared in overrides/wg-easy.yaml should that change."
+  coolify: "Docker PaaS: deploys apps as Docker containers through the socket. On Kubernetes, ArgoCD and the generated manifests do that job."
+  dockge: "Docker Compose stack manager (needs the socket). Kubernetes UIs are the ArgoCD UI and Headlamp."
+  dozzle: "Docker log viewer (needs the socket). On Kubernetes, Grafana + Loki (observability) and Headlamp show pod logs."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
+
+# Not ported yet, each waiting on its own piece of work:
+#   observability, crowdsec: read Docker's logs through the socket; they move
+#     with the logging phase (Alloy/CrowdSec reading /var/log/pods).
+#   dagster: runs jobs with DockerRunLauncher; Dagster's Kubernetes setup uses
+#     K8sRunLauncher (dagster-k8s) plus its locally built images.

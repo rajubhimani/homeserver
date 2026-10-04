@@ -30,5 +30,5 @@ spec:
   - name: h8152
     port: 3310
     targetPort: 3310
-    nodePort: 30123
+    nodePort: 30161
     protocol: TCP
