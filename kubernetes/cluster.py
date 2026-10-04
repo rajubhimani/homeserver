@@ -5,6 +5,8 @@
     uv run kubernetes/cluster.py bootstrap --env E # ArgoCD + the secret store; ArgoCD then installs everything from git
     uv run kubernetes/cluster.py secrets [svc...]  # services/<svc>/.env -> the secret store (ESO builds the app Secrets)
     uv run kubernetes/cluster.py import  <svc...> [--snapshot TS]  # copy a Compose snapshot's data into the cluster
+    uv run kubernetes/cluster.py export  [svc...]  # the cluster's data (database dumps, volume tars) -> K8S_EXPORT_PATH
+    uv run kubernetes/cluster.py import  [svc...] --from-export DIR  # ... and back, e.g. into a rebuilt cluster
     uv run kubernetes/cluster.py images  <svc...>  # build a service's local images (Compose build:) and load them into kind
     uv run kubernetes/cluster.py smoke   <svc...> [--keep]  # start with empty data on test hostnames, check, remove
     uv run kubernetes/cluster.py rmi     <svc...>  # remove a stopped service's images from the kind node (frees disk)
@@ -41,7 +43,7 @@ K8S = Path(__file__).resolve().parent
 REPO = K8S.parent
 sys.path.insert(0, str(K8S))
 from generate import (ARGOCD_NS, SECRET_STORE_NS, load_compose, load_env, load_overrides, load_scope,  # noqa: E402
-                      own_mariadb, own_postgres, shared_db_apps, slug, started)
+                      own_db_keys, own_mariadb, own_postgres, shared_db_apps, slug, started)
 
 VERSIONS = load_env(K8S / "versions.env")
 NAMESPACE = "apps"
@@ -239,8 +241,23 @@ def argo_pause(svc: str, paused: bool) -> None:
                    capture_output=True, check=True)
 
 
+def release_secrets(svc: str) -> None:
+    """Delete a service's Secrets made before External Secrets (the old
+    'secrets' command), so its ExternalSecrets can create them: ESO refuses
+    a target Secret it doesn't own (external-secrets.io, ownership docs)."""
+    f = K8S / "generated/apps" / svc / "secrets.yaml"
+    names = [d["spec"]["target"]["name"] for d in yaml.safe_load_all(f.read_text()) if d] if f.is_file() else []
+    ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE]
+    for name in names:
+        p = subprocess.run(ctx + ["get", "secret", name, "-o", "jsonpath={.metadata.ownerReferences[*].kind}"],
+                           capture_output=True, text=True)
+        if p.returncode == 0 and "ExternalSecret" not in p.stdout:
+            subprocess.run(ctx + ["delete", "secret", name], capture_output=True)
+
+
 def apply_started(svc: str, env: str) -> None:
     """Apply a service in its running form, whatever git says (smoke tests)."""
+    release_secrets(svc)
     out = subprocess.run(["kubectl", "kustomize", str(K8S / "generated/envs" / env / svc)],
                          capture_output=True, text=True, check=True).stdout
     objs = started([o for o in yaml.safe_load_all(out) if o])
@@ -304,6 +321,9 @@ def cmd_import(a) -> None:
     (pg_dump, read-only), for when the newest snapshot is older than the data."""
     global LIVE_DB
     LIVE_DB = a.live_db
+    if a.from_export:
+        import_export(a)
+        return
     for svc in services(a.services):
         snap = snapshot_dir(svc, a.snapshot)
         print(f"== {svc}: " + (f"snapshot {snap.name}" if snap else "no snapshot (homeserver.py takes one on every 'down'); copy_from folders only"))
@@ -359,12 +379,12 @@ def copy_folder(src: Path, dest: Path) -> None:
             "find /dst -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a /src/. /dst/")
 
 
-def restore_pg(cname: str, db: str, user: str, dump: Path) -> None:
+def restore_pg(cname: str, db: str, user: str, dump: Path, pod: str | None = None) -> None:
     """Load a pg_dump into the CNPG cluster: recreate the database owned by
     the app's role, create the dump's extensions as superuser (an app role
     may not), then restore everything else as the app's role
     (pg_restore -L with the EXTENSION entries left out)."""
-    pod = f"{cname}-1"  # CNPG names the first instance <cluster>-1
+    pod = pod or f"{cname}-1"  # CNPG names the first instance <cluster>-1
     kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"cluster/{cname}", "--timeout=300s")
     ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec", "-i", pod, "-c", "postgres", "--"]
     toc = subprocess.run(ctx + ["sh", "-c", "cat > /controller/restore.dump && pg_restore -l /controller/restore.dump"],
@@ -481,6 +501,122 @@ def import_volume(svc: str, vol_tar: Path) -> None:
         import_mariadb(svc, owner, vol, vol_tar, mdb)
         return
     unpack(vol_tar, pvc_host_path(f"{svc}-{slug(vol)}"))
+
+
+def export_root() -> Path:
+    return Path(os.path.expanduser(cfg().get("K8S_EXPORT_PATH", "/mnt/mydata/k8s-data/export")))
+
+
+def service_dbs(svc: str) -> list[dict]:
+    """The databases holding a service's data on the cluster:
+    {engine, pod, db, user} for its own CNPG/MariaDB and its shared-server databases."""
+    out = []
+    env = load_env(REPO / "services" / svc / ".env")
+    ov = load_overrides(svc)
+    for n, s in (load_compose(svc).get("services") or {}).items():
+        c = s.get("container_name") or n
+        if own_postgres(svc, n, s, ov):
+            own = own_db_keys(svc)
+            user = env.get(own["user_key"], own["user"]) if own["user_key"] else own["user"]
+            out.append({"engine": "postgres", "pod": f"{c}-1", "cluster": c, "db": own["db"], "user": user})
+        elif (m := own_mariadb(svc, n, s, ov)):
+            out.append({"engine": "mariadb", "pod": f"{c}-0", "cluster": c, "db": m["spec"]["database"]})
+    spec = shared_db_apps().get(svc)
+    if spec:
+        server = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}[spec["engine"]]
+        for db in spec["dbs"]:
+            out.append({"engine": spec["engine"], "pod": f"{server}-{'1' if spec['engine'] == 'postgres' else '0'}",
+                        "cluster": server, "db": db, "user": spec["user"]})
+    return out
+
+
+def service_volumes(svc: str) -> list[str]:
+    """The service's own data volumes (generated PVCs). Database volumes are
+    dumped instead, and host folders (storage class host) stay where they are."""
+    f = K8S / "generated/apps" / svc / "storage.yaml"
+    return [d["metadata"]["name"] for d in (yaml.safe_load_all(f.read_text()) if f.is_file() else [])
+            if d and d["kind"] == "PersistentVolumeClaim" and d["spec"].get("storageClassName") != "host"]
+
+
+def cmd_export(a) -> None:
+    """Copy the cluster's data out, so a rebuilt cluster can start from it:
+    pg_dump/mariadb-dump of each database (consistent, while it runs) and a
+    tar of each volume, taken with the service stopped. The format import
+    --from-export reads; the cluster isn't changed apart from the short stop."""
+    from generate import running_services
+    names = a.services or sorted(running_services(a.env) - {"shared-postgres", "shared-mariadb"})
+    out = export_root() / time.strftime("%Y%m%d-%H%M%S")
+    out.mkdir(parents=True)
+    ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec"]
+    manifest = {}
+    for svc in services(names):
+        d = out / svc
+        d.mkdir()
+        entry = {"dbs": [], "volumes": []}
+        for db in service_dbs(svc):
+            f = d / f"db-{db['cluster']}-{db['db']}.{'dump' if db['engine'] == 'postgres' else 'sql'}"
+            cmd = (["-c", "postgres", "--", "pg_dump", "-Fc", "-d", db["db"]] if db["engine"] == "postgres" else
+                   ["--", "sh", "-c", f'mariadb-dump -uroot -p"$MARIADB_ROOT_PASSWORD" --single-transaction '
+                                      f'--routines --triggers {db["db"]}'])
+            print(f"+ dump {db['cluster']}/{db['db']}", flush=True)
+            with f.open("wb") as fh:
+                if subprocess.run(ctx + [db["pod"]] + cmd, stdout=fh).returncode != 0:
+                    sys.exit(f"{svc}: dump of {db['cluster']}/{db['db']} failed; nothing deleted, fix and re-run")
+            entry["dbs"].append({**db, "file": f.name})
+        vols = [v for v in service_volumes(svc) if has_bound_pvc(v)]
+        if vols:
+            argo_pause(svc, True)
+            scale(svc, 0)  # files at rest while they're copied
+            try:
+                for v in vols:
+                    src = pvc_host_path(v)
+                    print(f"+ tar {v}", flush=True)
+                    as_root([f"{src}:/src:ro", f"{d}:/out"], f"tar czf /out/vol-{v}.tar.gz -C /src .")
+                    entry["volumes"].append({"pvc": v, "file": f"vol-{v}.tar.gz"})
+            finally:
+                argo_pause(svc, False)
+                if subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", ARGOCD_NS, "get",
+                                   "application", svc], capture_output=True).returncode != 0:
+                    scale(svc, 1)  # no ArgoCD to restore it
+        manifest[svc] = entry
+    (out / "export.json").write_text(json.dumps(manifest, indent=1))
+    total = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
+    print(f"exported {len(manifest)} service(s), {total / 2**30:.1f} GiB -> {out}")
+
+
+def has_bound_pvc(name: str) -> bool:
+    p = subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "get", "pvc", name,
+                        "-o", "jsonpath={.spec.volumeName}"], capture_output=True, text=True)
+    return bool(p.stdout.strip())
+
+
+def import_export(a) -> None:
+    """Load an export (cmd_export) into this cluster: volumes unpacked with
+    the service stopped, then each database restored as its app's login."""
+    src = Path(a.from_export)
+    manifest = json.loads((src / "export.json").read_text())
+    for svc in a.services or list(manifest):
+        entry = manifest[svc]
+        print(f"== {svc}: from {src.name}", flush=True)
+        argo_pause(svc, True)
+        try:
+            if entry["volumes"]:
+                scale(svc, 0)
+                for v in entry["volumes"]:
+                    unpack(src / svc / v["file"], pvc_host_path(v["pvc"]))
+            for db in entry["dbs"]:
+                f = src / svc / db["file"]
+                if db["engine"] == "postgres":
+                    restore_pg(db["cluster"], db["db"], db["user"], f, pod=db["pod"])
+                else:
+                    kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"mariadb/{db['cluster']}", "--timeout=300s")
+                    with f.open("rb") as fh:
+                        subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec",
+                                        "-i", db["pod"], "--", "sh", "-c",
+                                        f'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" {db["db"]}'], stdin=fh, check=True)
+            scale(svc, 1)
+        finally:
+            argo_pause(svc, False)
 
 
 def cmd_validate(a) -> None:
@@ -689,7 +825,7 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "images", "smoke", "rmi", "validate", "status", "delete"])
+    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "images", "smoke", "rmi", "validate", "status", "delete"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
@@ -697,8 +833,9 @@ def main() -> int:
     ap.add_argument("--drop-host-copy", action="store_true", help="images: remove Docker's copy after loading it into kind")
     ap.add_argument("--timeout", type=int, default=900, help="smoke: seconds to wait for readiness")
     ap.add_argument("--live-db", action="store_true", help="import: own Postgres from the running Compose container (pg_dump)")
+    ap.add_argument("--from-export", help="import: a folder written by export (K8S_EXPORT_PATH/<timestamp>)")
     a = ap.parse_args()
-    {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
+    {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "export": cmd_export, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
      "status": cmd_status, "delete": cmd_delete}[a.action](a)
     return 0
 

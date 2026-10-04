@@ -25,8 +25,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
-
 K8S = Path(__file__).resolve().parent
 sys.path.insert(0, str(K8S))
 from cluster import NAMESPACE, cfg  # noqa: E402

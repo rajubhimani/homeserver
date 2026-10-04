@@ -562,3 +562,13 @@ def test_k8s_py_up_down_edit_the_running_list(tmp_path, monkeypatch):
     assert jelly in after
     _, after = k8s.edit("test", "down", ["core"])
     assert set(hs.SERVICES_MIN) & set(PORTED) <= after and not (set(hs.SERVICES_CORE) & after)
+
+
+def test_kubernetes_scripts_have_no_undefined_names():
+    """A name used but never imported or defined only fails when that code
+    path runs (cluster.py import lost own_db_keys on 2026-10-04): pyflakes
+    finds it statically."""
+    proc = subprocess.run(["python", "-m", "pyflakes", *map(str, sorted(K8S.glob("*.py")))],
+                          cwd=REPO, capture_output=True, text=True)
+    errors = [l for l in proc.stdout.splitlines() if "undefined name" in l or "imported but unused" in l]
+    assert not errors, "\n".join(errors)

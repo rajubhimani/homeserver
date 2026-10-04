@@ -13,7 +13,11 @@ docker-sdk = ["python-on-whales>=0.81,<0.82"]
 
 [dependency-groups]
 # Test suite only — homeserver.py itself stays pure-stdlib. Run: uv run pytest
-dev = ["pytest>=8", "pyyaml>=6"]
+dev = [
+    "pyflakes>=4.0.2",
+    "pytest>=8",
+    "pyyaml>=6",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

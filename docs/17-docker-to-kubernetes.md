@@ -407,7 +407,23 @@ What `import` does for each service:
 4. Unpacks other named volumes into their own volumes.
 5. Starts it again.
 
-Use `--live-db` when the newest snapshot is older than the data you want. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
+Use `--live-db` when the newest snapshot is older than the data you want.
+
+**Rebuilding the cluster, keeping its data** (for changes kind applies only at creation: encryption at rest, new node ports or host folders):
+
+```bash
+uv run kubernetes/cluster.py export --env prod      # every running service -> K8S_EXPORT_PATH/<timestamp>/
+uv run kubernetes/k8s.py down cloudflared --env prod && git commit -am "k8s: tunnel off for the rebuild" && git push
+uv run kubernetes/cluster.py delete
+uv run kubernetes/cluster.py create
+uv run kubernetes/cluster.py bootstrap --env prod   # ArgoCD starts the running list with empty data
+uv run kubernetes/cluster.py import --env prod --from-export /mnt/mydata/k8s-data/export/<timestamp>
+uv run kubernetes/k8s.py up cloudflared --env prod && git commit -am "k8s: tunnel back on" && git push
+```
+
+**The tunnel stays off until the data is back.** Between `bootstrap` and `import` the apps run empty, and a fresh app often lets its first visitor create the admin account (Authentik's initial setup, for one). Taking cloudflared out of the running list first keeps those pages unreachable from the internet.
+
+`export` takes a `pg_dump`/`mariadb-dump` of each database the service uses (its own, or its databases on the shared servers), consistent while it runs. It also takes a tar of each data volume, with the service briefly stopped. Host folders (Immich's photos, Jellyfin's media) are left in place. `import --from-export` unpacks the volumes and restores each database as the app's own login. `export` stops, without deleting anything, if any dump fails. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
 
 **Localhost ports work like under Compose,** served by **one local-access proxy** (decided 2026-10-04) rather than a `hostPort` on every app. The proxy is a small nginx in namespace `local-access` (`generated/apps/local-access`). Its `stream` module forwards each port Compose publishes (`127.0.0.1`, plus the `10.8.0.1` VPN mirror) at the TCP level to the app's Service, so web, SSH and TLS all work, and it resolves names per connection, so services that aren't running don't stop it. Only this pod holds host ports, so namespace `apps` can meet Pod Security Baseline (which forbids `hostPort`). The proxy's ports:
 
