@@ -751,3 +751,22 @@ def test_a_route_is_found_by_the_compose_service_key_too():
     route = next(d for d in docs if d["kind"] == "HTTPRoute")
     assert any(h.startswith("grafana.") for h in route["spec"]["hostnames"])
     assert route["spec"]["rules"][0]["backendRefs"][0] == {"name": "grafana", "port": 3000}
+
+
+def test_uptime_kuma_k8s_plan_replaces_docker_monitors():
+    """Docker Container monitors need the Docker socket, so on Kubernetes all of
+    them were down (2026-10-05). The plan is public-URL checks plus TCP checks
+    on databases and caches, disabled for services that aren't running."""
+    import sys as _sys
+    _sys.path.insert(0, str(REPO / "services" / "uptime-kuma"))
+    import k8s_monitors
+    plan = k8s_monitors.plan("prod", run={"vaultwarden", "nextcloud", "nextcloud-db", "shared-postgres"})
+    by_name = {m["name"]: m for m in plan}
+    assert len(by_name) == len(plan)  # unique: the script skips existing names
+    assert by_name["vaultwarden.prajnatech.in"] == {
+        "name": "vaultwarden.prajnatech.in", "kind": "http", "url": "https://vaultwarden.prajnatech.in/",
+        "active": True, "service": "vaultwarden"}
+    assert by_name["nextcloud-db (tcp)"]["hostname"] == "nextcloud-db-rw" and by_name["nextcloud-db (tcp)"]["port"] == 5432
+    assert by_name["shared-mariadb (tcp)"]["port"] == 3306
+    assert by_name["nextcloud-redis (tcp)"]["port"] == 6379
+    assert not by_name["authentik.prajnatech.in"]["active"]  # not in `run`: created disabled

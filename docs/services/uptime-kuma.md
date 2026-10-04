@@ -113,6 +113,18 @@ Uses external MariaDB (`uptime-kuma-db`, own container in this service's compose
 
 Generated from this compose file. `uptime-kuma-db` becomes a mariadb-operator `MariaDB` on the same `mariadb:12.3.3` image, which is also the operator's default. The Docker socket mount is left out: only the "Docker container" monitor type needs it, and HTTP/TCP monitors work unchanged. Its startup probe is 15 minutes (the operator's default kills a slow first initialisation), then the image's own `HEALTHCHECK`. Guide: [docs/17](../17-docker-to-kubernetes.md).
 
+**Monitors on Kubernetes (`--k8s`).** The 187 Docker Container monitors all read the Docker socket, which a pod doesn't have, so after the move every one reported `connect ENOENT /var/run/docker.sock` (2026-10-05). Replace them:
+
+```bash
+uv run services/uptime-kuma/setup-monitors.py --k8s --prune
+```
+
+It asks for your Uptime Kuma login (and a 2FA code if enabled), then creates, from the generated manifests (`services/uptime-kuma/k8s_monitors.py`):
+- **an HTTP monitor per public hostname** (`https://<host>/`): the check a visitor's request makes, through Cloudflare, the tunnel and the router, so it also notices the tunnel being down. 3xx and 401 count as up (apps redirect to their login; authentik-protected hosts to authentik), and redirects aren't followed;
+- **a TCP monitor per database and cache**: CloudNativePG `<name>-rw:5432`, MariaDB `<name>:3306`, `*-redis`/`*-valkey`.
+
+Monitors of services the env doesn't run (`--env prod`, `kubernetes/deploy/prod.yaml`) are created paused. `--prune` deletes the Docker Container monitors, which can't work here; hand-made monitors are never touched. Re-run it after adding or removing a service; existing names are skipped.
+
 ## Fresh-install verification (2026-10-03)
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: all 187 monitors restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
