@@ -256,7 +256,7 @@ def slug(text: str) -> str:
 
 # ── conversion ────────────────────────────────────────────────────────────
 
-def probe_set(hc: dict | None, env_keys: set[str], where: str) -> dict:
+def probe_set(hc: dict | None, env_keys: set[str], where: str, own_names: frozenset = frozenset()) -> dict:
     """Compose healthcheck -> readiness + liveness + startup probes. Readiness
     fails where Docker marks the container unhealthy (after `retries`).
     Liveness uses the same check with a doubled failureThreshold, the
@@ -284,6 +284,15 @@ def probe_set(hc: dict | None, env_keys: set[str], where: str) -> dict:
     timeout = seconds(hc.get("timeout")) or 30
     retries = int(hc.get("retries") or 3)
     base = {"exec": {"command": cmd}, "timeoutSeconds": timeout}
+    # "nc -z <this container's own name> <port>" (Temporal: its frontend binds
+    # only the container IP, so Compose checks the own name, which Docker DNS
+    # resolves to itself). In Kubernetes that name is a Service, and a Service
+    # routes only to ready pods: the probe could never pass and the pod would
+    # never become ready. A tcpSocket probe goes to the pod's own IP, which is
+    # what the same name meant in Compose (and what Temporal's Helm chart uses).
+    nc = test[1:] if test[0] == "CMD" else shlex.split(test[1]) if test[0] == "CMD-SHELL" else []
+    if len(nc) == 4 and nc[:2] == ["nc", "-z"] and nc[2] in own_names and nc[3].isdigit():
+        base = {"tcpSocket": {"port": int(nc[3])}, "timeoutSeconds": timeout}
     out = {
         "readinessProbe": {**base, "periodSeconds": period, "failureThreshold": retries},
         "livenessProbe": {**base, "periodSeconds": period, "failureThreshold": retries * 2},
@@ -609,7 +618,8 @@ def convert(svc: str) -> dict[str, list[dict]]:
         # Compose's healthcheck, or (Kubernetes ignores image HEALTHCHECKs) the
         # image's own, copied verbatim into the override in Docker's format.
         container.update(probe_set(s.get("healthcheck") if (s.get("healthcheck") or {}).get("test")
-                                   else co.get("image_healthcheck"), env_keys, where))
+                                   else co.get("image_healthcheck"), env_keys, where,
+                                   frozenset({n, s.get("container_name") or n, cname.get(n, n)})))
         if not (listen[n] or udp.get(n)):
             # No ports, so no traffic for readiness to steer: liveness (and
             # startup) only, as the official Airflow chart does for its

@@ -716,3 +716,17 @@ def test_import_never_starts_a_stopped_service(tmp_path, monkeypatch):
         "docs": {"volumes": [], "dbs": []}, "cloudflared": {"volumes": [], "dbs": []}}))
     mod.import_export(type("A", (), {"from_export": str(tmp_path), "services": [], "env": "prod"})())
     assert scaled == [("docs", 1)], scaled
+
+
+def test_a_probe_never_goes_through_the_pods_own_service():
+    """Temporal's Compose healthcheck is `nc -z temporal 7233` (its own name,
+    resolved by Docker DNS to itself). On Kubernetes that name is a Service,
+    which routes only to ready pods, so the pod could never become ready and
+    everything waiting on `temporal:7233` waited forever (2026-10-05). The
+    generator turns it into a tcpSocket probe on the pod's own IP."""
+    docs = [d for d in yaml.safe_load_all((K8S / "generated/apps/temporal/workloads.yaml").read_text()) if d]
+    main = next(c for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "temporal"
+                for c in d["spec"]["template"]["spec"]["containers"] if c["name"] == "temporal")
+    for probe in ("readinessProbe", "livenessProbe", "startupProbe"):
+        assert main[probe].get("tcpSocket") == {"port": 7233}, (probe, main[probe])
+        assert "exec" not in main[probe]

@@ -118,32 +118,20 @@ spec:
         ports:
         - containerPort: 7233
         readinessProbe:
-          exec:
-            command:
-            - nc
-            - -z
-            - temporal
-            - '7233'
+          tcpSocket:
+            port: 7233
           timeoutSeconds: 10
           periodSeconds: 15
           failureThreshold: 10
         livenessProbe:
-          exec:
-            command:
-            - nc
-            - -z
-            - temporal
-            - '7233'
+          tcpSocket:
+            port: 7233
           timeoutSeconds: 10
           periodSeconds: 15
           failureThreshold: 20
         startupProbe:
-          exec:
-            command:
-            - nc
-            - -z
-            - temporal
-            - '7233'
+          tcpSocket:
+            port: 7233
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 16
