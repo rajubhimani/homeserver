@@ -257,6 +257,25 @@ Namespace `apps` warns on anything that breaks **Baseline** and audits **Restric
 
 **Restricted** additionally needs non-root users and all capabilities dropped, which most images here (starting as root) don't support.
 
+### Network policies (design for phase 4)
+
+**Why:** today any pod can open a connection to any other, including every database. Under Compose that's the same, since everything shares the `homeserver` network. For a firm this is the most valuable isolation: a compromised app shouldn't reach another app's database.
+
+**Verified first (2026-10-04):** kind's network plugin, kindnet, enforces `NetworkPolicy` through the Kubernetes SIG project [kube-network-policies](https://kube-network-policies.sigs.k8s.io/docs/) ([kindnet docs](https://kindnet.sigs.k8s.io/docs/user/network-policies/)). A scratch test reached a pod before a deny-all ingress policy and was blocked after it.
+
+**Design**, generated from Compose and `.env` like everything else:
+
+1. **Default deny ingress** for every pod in `apps` ([Kubernetes: default policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-policies)). Ingress only at first; egress policies come later, because they also have to allow DNS and every external API each app calls.
+2. **Within a service:** its own pods may talk to each other (app ↔ its database and cache), using the `homeserver/service` label.
+3. **From the router:** Traefik (namespace `infra`) and the edge may reach the ports the service's routes use.
+4. **Shared servers:** `shared-postgres` and `shared-mariadb` accept connections only from the services that declare `shared_db` in `services.json`.
+5. **Cross-service endpoints:** every `.env.example` `HOST`/`PORT` pair or `host:port` that names another service (e.g. `MAIL_HOST=mailpit` + 1025, Authentik for logins) becomes an allow rule, the same mapping the endpoint test already checks.
+6. **Watchers:** the landing page's health checks and Uptime Kuma may reach every web port; Beszel's hub may reach its agent.
+7. **Operators:** CloudNativePG and mariadb-operator may reach their database pods (status and replication ports).
+8. **Localhost ports:** traffic arriving through the node (kind port mappings, `hostPort`) is allowed for the published ports only.
+
+A test will check every service has a policy and that each `.env` endpoint is covered. A smoke test per tier will confirm nothing legitimate is blocked.
+
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
 ## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
