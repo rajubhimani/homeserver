@@ -147,6 +147,11 @@ See `docs/services/forgejo-examples/` for a matching CI workflow template and re
 
 **Mirrored repos**: Forgejo Actions only triggers on `.forgejo/workflows/` (or `.gitea/workflows/` for compat) — never `.github/workflows/`. If the repo is a pull mirror (`is_mirror` in Forgejo's DB), you also can't add that file directly in Forgejo — mirror syncs force-reset tracked branches to match the upstream exactly (and prune anything else), so a locally-added file gets silently wiped at the next sync. Add `.forgejo/workflows/` to the *source* repo instead (e.g. on GitHub, if that's what's being mirrored) so it comes down with the next sync.
 
+## Real client IPs
+
+`REVERSE_PROXY_TRUSTED_PROXIES` and `REVERSE_PROXY_LIMIT` are in `.env` and set in Forgejo's **`[security]`** section. Until 2026-10-04 compose set them under `[service]`, which Forgejo ignores, so Forgejo only trusted `127.0.0.0/8` and logged the proxy's address. They now trust the Docker bridge networks and the Kubernetes pod network. `LIMIT=2` covers Kubernetes' two hops (tunnel, then Traefik), and Forgejo walks `X-Forwarded-For` from the right (chi-middleware/proxy).
+
+Known limit behind Traefik: if a visitor sends their own `X-Forwarded-For`, Cloudflare appends the real address with no space after the comma (`fake,real`). Forgejo splits only on `", "`, so it reads one malformed address. Under Docker, nginx-plain replaces the header, so this doesn't happen there. See `docs/17` for the fix.
 
 ## On Kubernetes
 
