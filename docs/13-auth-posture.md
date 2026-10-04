@@ -6,7 +6,7 @@
 
 Every service in this stack has *some* barrier at its own login screen, but "has a login screen" and "has user management" are different claims. This doc audits all 58 services with a user-facing UI against four buckets, then looks at which of the weakest ones are realistic candidates to put behind [Authentik](services/authentik.md) forward-auth instead of (or in addition to) their own login — 5 bucket-A services have had this actually applied (see the bucket right after A), plus Browser Hub separately out of bucket B and Ollama separately as a bare API with no UI to audit at all (see the notes right after that bucket's table).
 
-**Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`, `crowdsec`. (`ollama` also has no UI, but now has a public route gated by Authentik — see the note after the Bucket A+ table below.)
+**Excluded from the audit** (no login-facing UI at all): `cloudflared`, `nginx-plain`, `landing`. (`ollama` also has no UI, but now has a public route gated by Authentik — see the note after the Bucket A+ table below.)
 
 ## The four buckets
 

@@ -504,7 +504,7 @@
       const res = await fetch('services.json', { cache: 'no-store' });
       const data = await res.json();
       // Only entries with a category get a card -- tier-only infra entries
-      // (cloudflared, nginx-plain, landing itself, crowdsec, ollama) are
+      // (cloudflared, nginx-plain, landing itself, ollama) are
       // deliberately invisible here, same as before this was data-driven.
       // Sorted alphabetically by name (case-insensitive) so each category/
       // subgroup grid is easy to scan for a specific service instead of

@@ -400,9 +400,7 @@ handful of examples:
 | forgejo | 3002 (HTTP), 2223 (SSH) | `forgejo/compose.dev.yml` |
 
 Exceptions: `cloudflared` has no inbound port (outbound tunnel client only —
-no Service/HTTPRoute/lan-service at all) and `crowdsec` exposes nothing
-(detection-only, matches `docs/11-services-reference.md`'s own "no port
-exposed" note).
+no Service/HTTPRoute/lan-service at all).
 
 Gotcha hit once already: editing an existing `LoadBalancer` Service's `port:`
 in place does **not** cleanly re-provision the underlying proxy container —
@@ -558,7 +556,7 @@ reconciling ArgoCD against everything in git, service by service.
 **Known architectural gaps, documented in-file, not oversights:**
 
 - **Docker-socket-dependent tools still in the pilot** (beszel-agent,
-  authentik-worker, crowdsec, cadvisor, alloy) mount `/var/run/docker.sock`
+  authentik-worker, cadvisor, alloy) mount `/var/run/docker.sock`
   via `hostPath` as currently configured — same underlying problem as the
   4 removed services above (no live socket on a containerd `kind` node),
   but these 5 differ in one important way: the Docker socket is an

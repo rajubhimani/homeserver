@@ -23,7 +23,7 @@ spec:
         homeserver/service: nginx-plain
         app.kubernetes.io/name: browser-hub
       annotations:
-        homeserver/config-sha256: 5f61a0d4fa4478506d8f87fcfc647afbc3c3ae80deff5765dd33fd46ed2e4d74
+        homeserver/config-sha256: 8e955d18c910a7d9c40069a3edbb33aa3b6987d0f0fd8b8722cccdfef6770e43
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -109,7 +109,7 @@ spec:
         homeserver/service: nginx-plain
         app.kubernetes.io/name: nginx-plain
       annotations:
-        homeserver/config-sha256: eacdb901bf5e4a4987b094d13a378fd3a687a7574926c012ec420593c6252ee1
+        homeserver/config-sha256: eaa37e337975d6b1adb18c0309d15f4ab20db015d437868e40f26c6be0ffc0e8
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

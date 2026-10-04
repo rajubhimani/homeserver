@@ -23,7 +23,7 @@ spec:
         homeserver/service: docs
         app.kubernetes.io/name: docs
       annotations:
-        homeserver/config-sha256: 7cdf60426fcb0a02d4399eff258ffd01d6f25c4a3a68f2914f00896fa858742b
+        homeserver/config-sha256: e5ec1b098c8e267855b3d196868a7d1c486b4e847521dbf3d7d9062e96d4492f
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

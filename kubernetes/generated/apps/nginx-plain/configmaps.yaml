@@ -33,9 +33,8 @@ data:
     }
 
     # Same field shape as nginx's built-in "combined" format, just with
-    # $real_client_ip instead of $remote_addr — CrowdSec's bundled nginx parser
-    # (services/crowdsec/, crowdsec.labels.type=nginx on this container) expects
-    # that exact shape, so only the IP source changes, not the log structure.
+    # $real_client_ip instead of $remote_addr, so standard combined-format log
+    # parsers keep working: only the IP source changes, not the log structure.
     # NOT set at http level: multiple access_log directives at the SAME context
     # level accumulate (both fire, doubling every request) rather than the later
     # one replacing the earlier one — confirmed live. A child context's directive
@@ -411,9 +410,8 @@ data:
     }
 
     # Same field shape as nginx's built-in "combined" format, just with
-    # $real_client_ip instead of $remote_addr — CrowdSec's bundled nginx parser
-    # (services/crowdsec/, crowdsec.labels.type=nginx on this container) expects
-    # that exact shape, so only the IP source changes, not the log structure.
+    # $real_client_ip instead of $remote_addr, so standard combined-format log
+    # parsers keep working: only the IP source changes, not the log structure.
     # NOT set at http level: multiple access_log directives at the SAME context
     # level accumulate (both fire, doubling every request) rather than the later
     # one replacing the earlier one — confirmed live. A child context's directive

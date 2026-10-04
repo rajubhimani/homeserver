@@ -51,7 +51,7 @@ brave, chromium, firefox, mullvad-browser, librewolf, zen, helium, chrome, edge,
 vivaldi, browser (the hub's virtual card).
 
 **Extra services** (started with `up all` or individually):
-crowdsec, dockge, dozzle,
+dockge, dozzle,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,
 documenso, invoiceshelf, erpnext, ghostfolio, openproject, mattermost,
@@ -124,7 +124,6 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Chrome | `chrome` | 8159 | 3000 | browser |
 | Edge | `edge` | 8160 | 3000 | browser |
 | Vivaldi | `vivaldi` | 8161 | 3000 | browser |
-| CrowdSec | `crowdsec` | — (no port exposed, detection-only) | 8080 (internal LAPI) | extra |
 | Dockge | `dockge` | 5001 | 5001 | extra |
 | Dozzle | `dozzle` | 9999 | 8080 | extra |
 | Paperless-ngx | `paperless` | 8010 | 8000 | extra |

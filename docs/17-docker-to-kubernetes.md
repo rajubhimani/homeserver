@@ -383,7 +383,7 @@ From then on ArgoCD installs and updates everything from git, itself included. V
 
 Add both names to `/etc/hosts`.
 
-**Logs (Grafana + Loki) and CrowdSec** come with the observability port (phase 4, next).
+**Logs (Grafana + Loki)** come with the observability port (`docs/services/observability.md`, "On Kubernetes"). CrowdSec was removed from the stack on 2026-10-04, from Docker and Kubernetes alike.
 
 **Status (2026-10-04):** written and tested offline: generator tests, and every folder renders with `kubectl kustomize`. The first `bootstrap` happens at the next cluster rebuild, together with encryption at rest. The current cluster was installed by the old `install` command (CloudNativePG from its manifest), so a Helm-installed second copy can't be added on top of it.
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*

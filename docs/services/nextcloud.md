@@ -147,7 +147,7 @@ Confirmed against Nextcloud's own current user manual, not assumed from memory.
 ## Real client IPs
 
 - **Nextcloud itself** (brute-force protection, `nextcloud.log` `remoteAddr`) uses `X-Forwarded-For` from the trusted proxies in `TRUSTED_PROXIES`, and logs the real IP under both runtimes.
-- **Apache's access log:** `config/remoteip.conf` replaces the image's `remoteip.conf`, which read `X-Real-IP`. It reads `X-Forwarded-For` and walks it from the right past the internal proxies (`mod_remoteip`), so the access log, which CrowdSec reads, shows the real IP. A faked `X-Forwarded-For` doesn't fool it. Verified 2026-10-04.
+- **Apache's access log:** `config/remoteip.conf` replaces the image's `remoteip.conf`, which read `X-Real-IP`. It reads `X-Forwarded-For` and walks it from the right past the internal proxies (`mod_remoteip`), so the access log shows the real IP. A faked `X-Forwarded-For` doesn't fool it. Verified 2026-10-04.
 
 ## Troubleshooting: unhealthy / 503 / redirect loops behind the proxy
 

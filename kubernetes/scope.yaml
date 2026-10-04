@@ -117,7 +117,6 @@ skipped:
   dozzle: "Docker log viewer (needs the socket). On Kubernetes, Grafana + Loki (observability) and Headlamp show pod logs."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
 
-# Not ported yet, each waiting on its own piece of work (decided 2026-10-04:
-# both become ArgoCD add-ons from their official Helm charts, docs/17):
-#   crowdsec: the chart's agent reads the Traefik and edge-nginx pod logs.
+# Not ported yet (decided 2026-10-04: an ArgoCD add-on from the official
+# Helm chart, docs/17):
 #   dagster: Dagster's chart (K8sRunLauncher), our images as user code.

@@ -77,7 +77,6 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 [Cloudflare Tunnel](docs/services/cloudflared.md "Public HTTPS access, no open ports — replaces Port forwarding") ·
 [nginx-plain](docs/04-nginx.md "Reverse proxy, default — replaces Manual nginx config") ·
 Nginx Proxy Manager (optional, UI-based reverse proxy — see [04 — Nginx](docs/04-nginx.md)) ·
-[CrowdSec](docs/services/crowdsec.md "Collaborative intrusion detection, detection-only, see TODO.md — replaces fail2ban") ·
 [ClamAV](docs/services/clamav.md "Antivirus scanning daemon backing Nextcloud's files_antivirus app. No UI of its own.") ·
 [Landing page](docs/07-landing.md "Service dashboard with live status")
 
@@ -263,7 +262,6 @@ uv run homeserver.py prod up all
     ├── mail-archiver/
     ├── bichon/
     ├── docs/
-    ├── crowdsec/
     ├── clamav/
     ├── wallabag/
     ├── atuin/
@@ -346,7 +344,6 @@ service_data/
 ├── zulip/            (empty — Postgres/RabbitMQ/Redis/Zulip's own /data all live in named volumes)
 ├── mail-archiver/    (data-protection-keys/, import/) — the archive itself is in the mail-archiver-postgres named volume
 ├── bichon/           (empty — index/mail/metadata all live in the bichon-data named volume)
-├── crowdsec/         (config/) — parsed decisions/DB live in a named volume, not this tree
 ├── clamav/           (empty — virus-signature database lives outside this tree, in service_data/cache/clamav/db/, fully regenerable so kept out of DATA_ROOT)
 ├── wallabag/         (postgres/, data/, images/)
 ├── atuin/            (postgres/, config/)
