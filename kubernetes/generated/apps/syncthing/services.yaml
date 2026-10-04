@@ -41,5 +41,5 @@ spec:
   - name: h8087
     port: 8384
     targetPort: 8384
-    nodePort: 30109
+    nodePort: 30129
     protocol: TCP

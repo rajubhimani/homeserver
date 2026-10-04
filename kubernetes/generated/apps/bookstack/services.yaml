@@ -30,5 +30,5 @@ spec:
   - name: h8115
     port: 80
     targetPort: 80
-    nodePort: 30130
+    nodePort: 30113
     protocol: TCP

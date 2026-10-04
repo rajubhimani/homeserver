@@ -30,5 +30,5 @@ spec:
   - name: h8126
     port: 8080
     targetPort: 8080
-    nodePort: 30140
+    nodePort: 30148
     protocol: TCP

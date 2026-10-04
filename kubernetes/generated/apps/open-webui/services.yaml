@@ -30,5 +30,5 @@ spec:
   - name: h8109
     port: 8080
     targetPort: 8080
-    nodePort: 30124
+    nodePort: 30137
     protocol: TCP

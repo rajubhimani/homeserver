@@ -30,5 +30,5 @@ spec:
   - name: h8127
     port: 9000
     targetPort: 9000
-    nodePort: 30141
+    nodePort: 30149
     protocol: TCP

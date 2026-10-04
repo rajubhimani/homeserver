@@ -30,5 +30,5 @@ spec:
   - name: h8110
     port: 11434
     targetPort: 11434
-    nodePort: 30125
+    nodePort: 30138
     protocol: TCP

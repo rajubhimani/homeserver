@@ -45,5 +45,5 @@ spec:
   - name: h8131
     port: 8080
     targetPort: 8080
-    nodePort: 30145
+    nodePort: 30152
     protocol: TCP

@@ -60,5 +60,5 @@ spec:
   - name: h8100
     port: 80
     targetPort: 80
-    nodePort: 30117
+    nodePort: 30134
     protocol: TCP

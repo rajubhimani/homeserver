@@ -45,5 +45,5 @@ spec:
   - name: h8138
     port: 8080
     targetPort: 8080
-    nodePort: 30149
+    nodePort: 30156
     protocol: TCP

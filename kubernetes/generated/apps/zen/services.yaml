@@ -30,5 +30,5 @@ spec:
   - name: h8157
     port: 3000
     targetPort: 3000
-    nodePort: 30166
+    nodePort: 30168
     protocol: TCP

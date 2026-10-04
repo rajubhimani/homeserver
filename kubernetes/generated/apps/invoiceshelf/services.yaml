@@ -30,5 +30,5 @@ spec:
   - name: h8101
     port: 8080
     targetPort: 8080
-    nodePort: 30118
+    nodePort: 30135
     protocol: TCP

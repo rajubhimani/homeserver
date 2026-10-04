@@ -60,5 +60,5 @@ spec:
   - name: h8133
     port: 8000
     targetPort: 8000
-    nodePort: 30146
+    nodePort: 30153
     protocol: TCP

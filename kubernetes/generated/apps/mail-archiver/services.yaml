@@ -30,5 +30,5 @@ spec:
   - name: h8155
     port: 5000
     targetPort: 5000
-    nodePort: 30164
+    nodePort: 30166
     protocol: TCP

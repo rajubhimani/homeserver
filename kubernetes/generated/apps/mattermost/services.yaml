@@ -30,5 +30,5 @@ spec:
   - name: h8141
     port: 8065
     targetPort: 8065
-    nodePort: 30151
+    nodePort: 30157
     protocol: TCP

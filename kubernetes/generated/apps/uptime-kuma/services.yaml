@@ -30,5 +30,5 @@ spec:
   - name: h3001
     port: 3001
     targetPort: 3001
-    nodePort: 30103
+    nodePort: 30102
     protocol: TCP

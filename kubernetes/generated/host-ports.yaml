@@ -6,357 +6,357 @@
   svc: forgejo
   container: forgejo
 - host: 2224
-  node: 30101
+  node: 30126
   protocol: tcp
   svc: gitlab
   container: gitlab
 - host: 2283
-  node: 30102
+  node: 30101
   protocol: tcp
   svc: immich
   container: immich-server
 - host: 3001
-  node: 30103
+  node: 30102
   protocol: tcp
   svc: uptime-kuma
   container: uptime-kuma
 - host: 3002
-  node: 30104
+  node: 30103
   protocol: tcp
   svc: forgejo
   container: forgejo
 - host: 8010
-  node: 30105
+  node: 30127
   protocol: tcp
   svc: paperless
   container: paperless
 - host: 8080
-  node: 30106
+  node: 30104
   protocol: tcp
   svc: landing
   container: landing
 - host: 8081
-  node: 30107
+  node: 30105
   protocol: tcp
   svc: nextcloud
   container: nextcloud
 - host: 8085
-  node: 30108
+  node: 30128
   protocol: tcp
   svc: gitlab
   container: gitlab
 - host: 8087
-  node: 30109
+  node: 30129
   protocol: tcp
   svc: syncthing
   container: syncthing
 - host: 8088
-  node: 30110
+  node: 30106
   protocol: tcp
   svc: authentik
   container: authentik-server
 - host: 8089
-  node: 30111
+  node: 30130
   protocol: tcp
   svc: stirling-pdf
   container: stirling-pdf
 - host: 8090
-  node: 30112
+  node: 30131
   protocol: tcp
   svc: stirling-pdf-lite
   container: stirling-pdf-lite
 - host: 8093
-  node: 30113
+  node: 30107
   protocol: tcp
   svc: miniflux
   container: miniflux
 - host: 8094
-  node: 30114
+  node: 30132
   protocol: tcp
   svc: audiobookshelf
   container: audiobookshelf
 - host: 8096
-  node: 30115
+  node: 30108
   protocol: tcp
   svc: jellyfin
   container: jellyfin
 - host: 8099
-  node: 30116
+  node: 30133
   protocol: tcp
   svc: openproject
   container: openproject
 - host: 8100
-  node: 30117
+  node: 30134
   protocol: tcp
   svc: plane
   container: plane-proxy
 - host: 8101
-  node: 30118
+  node: 30135
   protocol: tcp
   svc: invoiceshelf
   container: invoiceshelf
 - host: 8102
-  node: 30119
+  node: 30109
   protocol: tcp
   svc: firefly
   container: firefly
 - host: 8103
-  node: 30120
+  node: 30136
   protocol: tcp
   svc: appflowy
   container: appflowy-nginx
 - host: 8104
-  node: 30121
+  node: 30110
   protocol: tcp
   svc: firefly
   container: firefly-importer
 - host: 8106
-  node: 30122
+  node: 30111
   protocol: tcp
   svc: beszel
   container: beszel
 - host: 8107
-  node: 30123
+  node: 30112
   protocol: tcp
   svc: guacamole
   container: guacamole
 - host: 8109
-  node: 30124
+  node: 30137
   protocol: tcp
   svc: open-webui
   container: open-webui
 - host: 8110
-  node: 30125
+  node: 30138
   protocol: tcp
   svc: ollama
   container: ollama
 - host: 8111
-  node: 30126
+  node: 30139
   protocol: tcp
   svc: vikunja
   container: vikunja
 - host: 8112
-  node: 30127
+  node: 30140
   protocol: tcp
   svc: trilium
   container: trilium
 - host: 8113
-  node: 30128
+  node: 30141
   protocol: tcp
   svc: silverbullet
   container: silverbullet
 - host: 8114
-  node: 30129
+  node: 30142
   protocol: tcp
   svc: outline
   container: outline
 - host: 8115
-  node: 30130
+  node: 30113
   protocol: tcp
   svc: bookstack
   container: bookstack
 - host: 8116
-  node: 30131
+  node: 30143
   protocol: tcp
   svc: excalidraw
   container: excalidraw
 - host: 8117
-  node: 30132
+  node: 30144
   protocol: tcp
   svc: karakeep
   container: karakeep
 - host: 8118
-  node: 30133
+  node: 30114
   protocol: tcp
   svc: ntfy
   container: ntfy
 - host: 8119
-  node: 30134
+  node: 30115
   protocol: tcp
   svc: it-tools
   container: it-tools
 - host: 8120
-  node: 30135
+  node: 30145
   protocol: tcp
   svc: n8n
   container: n8n
 - host: 8121
-  node: 30136
+  node: 30146
   protocol: tcp
   svc: wallabag
   container: wallabag
 - host: 8122
-  node: 30137
+  node: 30116
   protocol: tcp
   svc: atuin
   container: atuin
 - host: 8123
-  node: 30138
+  node: 30117
   protocol: tcp
   svc: adguard-home
   container: adguard-home
 - host: 8125
-  node: 30139
+  node: 30147
   protocol: tcp
   svc: orangehrm
   container: orangehrm
 - host: 8126
-  node: 30140
+  node: 30148
   protocol: tcp
   svc: nocodb
   container: nocodb
 - host: 8127
-  node: 30141
+  node: 30149
   protocol: tcp
   svc: listmonk
   container: listmonk
 - host: 8128
-  node: 30142
+  node: 30150
   protocol: tcp
   svc: documenso
   container: documenso
 - host: 8129
-  node: 30143
+  node: 30151
   protocol: tcp
   svc: calcom
   container: calcom
 - host: 8130
-  node: 30144
+  node: 30118
   protocol: tcp
   svc: plausible
   container: plausible
 - host: 8131
-  node: 30145
+  node: 30152
   protocol: tcp
   svc: penpot
   container: penpot-frontend
 - host: 8133
-  node: 30146
+  node: 30153
   protocol: tcp
   svc: supabase
   container: supabase-envoy
 - host: 8136
-  node: 30147
+  node: 30154
   protocol: tcp
   svc: homebox
   container: homebox
 - host: 8137
-  node: 30148
+  node: 30155
   protocol: tcp
   svc: airflow
   container: airflow-apiserver
 - host: 8138
-  node: 30149
+  node: 30156
   protocol: tcp
   svc: temporal
   container: temporal-ui
 - host: 8140
-  node: 30150
+  node: 30119
   protocol: tcp
   svc: mailpit
   container: mailpit
 - host: 8141
-  node: 30151
+  node: 30157
   protocol: tcp
   svc: mattermost
   container: mattermost
 - host: 8142
-  node: 30152
+  node: 30158
   protocol: tcp
   svc: rocketchat
   container: rocketchat
 - host: 8143
-  node: 30153
+  node: 30159
   protocol: tcp
   svc: zulip
   container: zulip
 - host: 8144
-  node: 30154
+  node: 30120
   protocol: tcp
   svc: docs
   container: docs
 - host: 8145
-  node: 30155
+  node: 30160
   protocol: tcp
   svc: firefox
   container: firefox
 - host: 8146
-  node: 30156
+  node: 30161
   protocol: tcp
   svc: chromium
   container: chromium
 - host: 8148
-  node: 30157
+  node: 30162
   protocol: tcp
   svc: brave
   container: brave
 - host: 8149
-  node: 30158
+  node: 30163
   protocol: tcp
   svc: mullvad-browser
   container: mullvad-browser
 - host: 8150
-  node: 30159
+  node: 30121
   protocol: tcp
   svc: onlyoffice
   container: onlyoffice
 - host: 8151
-  node: 30160
+  node: 30122
   protocol: tcp
   svc: whiteboard
   container: whiteboard
 - host: 8152
-  node: 30161
+  node: 30123
   protocol: tcp
   svc: clamav
   container: clamav
 - host: 8153
-  node: 30162
+  node: 30164
   protocol: tcp
   svc: erpnext
   container: erpnext
 - host: 8154
-  node: 30163
+  node: 30165
   protocol: tcp
   svc: bichon
   container: bichon
 - host: 8155
-  node: 30164
+  node: 30166
   protocol: tcp
   svc: mail-archiver
   container: mail-archiver
 - host: 8156
-  node: 30165
+  node: 30167
   protocol: tcp
   svc: librewolf
   container: librewolf
 - host: 8157
-  node: 30166
+  node: 30168
   protocol: tcp
   svc: zen
   container: zen
 - host: 8158
-  node: 30167
+  node: 30169
   protocol: tcp
   svc: helium
   container: helium
 - host: 8159
-  node: 30168
+  node: 30170
   protocol: tcp
   svc: chrome
   container: chrome
 - host: 8160
-  node: 30169
+  node: 30171
   protocol: tcp
   svc: edge
   container: edge
 - host: 8161
-  node: 30170
+  node: 30172
   protocol: tcp
   svc: vivaldi
   container: vivaldi
 - host: 8162
-  node: 30171
+  node: 30173
   protocol: tcp
   svc: ghostfolio
   container: ghostfolio
@@ -366,7 +366,7 @@
   svc: nginx-plain
   container: nginx-plain
 - host: 8200
-  node: 30172
+  node: 30124
   protocol: tcp
   svc: vaultwarden
   container: vaultwarden
@@ -376,7 +376,7 @@
   svc: nginx-plain
   container: nginx-plain
 - host: 9444
-  node: 30173
+  node: 30125
   protocol: tcp
   svc: authentik
   container: authentik-server

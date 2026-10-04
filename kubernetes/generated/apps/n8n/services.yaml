@@ -30,5 +30,5 @@ spec:
   - name: h8120
     port: 5678
     targetPort: 5678
-    nodePort: 30135
+    nodePort: 30145
     protocol: TCP

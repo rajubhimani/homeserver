@@ -30,5 +30,5 @@ spec:
   - name: h8153
     port: 8080
     targetPort: 8080
-    nodePort: 30162
+    nodePort: 30164
     protocol: TCP

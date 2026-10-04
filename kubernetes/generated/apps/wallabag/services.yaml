@@ -30,5 +30,5 @@ spec:
   - name: h8121
     port: 80
     targetPort: 80
-    nodePort: 30136
+    nodePort: 30146
     protocol: TCP

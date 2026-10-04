@@ -1263,11 +1263,28 @@ def host_ports() -> list[dict]:
                         continue
                     e["node"] = TRAEFIK_NODE_PORTS[target]
                 entries.append(e)
+    # Node ports are allocated like a lock file: a port keeps the node port
+    # the committed generated/host-ports.yaml gives it, so adding a service
+    # never renumbers the others (kind binds its mappings at creation, so a
+    # renumbered Service would no longer match them). New ports get the
+    # lowest free number.
+    lock = {}
+    lf = GENERATED / "host-ports.yaml"
+    if lf.is_file():
+        lock = {(e["host"], e["protocol"]): e["node"] for e in (yaml.safe_load(lf.read_text()) or [])}
+    used = {e["node"] for e in entries if "node" in e}
+    for e in entries:
+        n = lock.get((e["host"], e["protocol"]))
+        if "node" not in e and n and n >= NODE_PORT_BASE and n not in used:
+            e["node"] = n
+            used.add(n)
     nxt = NODE_PORT_BASE
     for e in sorted(entries, key=lambda e: (e["host"], e["protocol"])):
         if "node" not in e:
+            while nxt in used:
+                nxt += 1
             e["node"] = nxt
-            nxt += 1
+            used.add(nxt)
     return sorted(entries, key=lambda e: (e["host"], e["protocol"]))
 
 

@@ -45,5 +45,5 @@ spec:
   - name: h8081
     port: 80
     targetPort: 80
-    nodePort: 30107
+    nodePort: 30105
     protocol: TCP

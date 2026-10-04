@@ -30,5 +30,5 @@ spec:
   - name: h8136
     port: 7745
     targetPort: 7745
-    nodePort: 30147
+    nodePort: 30154
     protocol: TCP

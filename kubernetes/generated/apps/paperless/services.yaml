@@ -45,5 +45,5 @@ spec:
   - name: h8010
     port: 8000
     targetPort: 8000
-    nodePort: 30105
+    nodePort: 30127
     protocol: TCP

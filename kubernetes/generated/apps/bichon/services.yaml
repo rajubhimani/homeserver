@@ -30,5 +30,5 @@ spec:
   - name: h8154
     port: 15630
     targetPort: 15630
-    nodePort: 30163
+    nodePort: 30165
     protocol: TCP

@@ -48,5 +48,5 @@ spec:
   - name: h8130
     port: 8000
     targetPort: 8000
-    nodePort: 30144
+    nodePort: 30118
     protocol: TCP
