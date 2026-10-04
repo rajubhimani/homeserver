@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: documenso
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: documenso-permissions
         image: alpine:3.24.2
         args:
@@ -41,6 +47,7 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-documenso-data
           mountPath: /documenso-data
@@ -116,6 +123,8 @@ spec:
           mountPath: /opt/documenso/cert.p12
           subPath: cert.p12
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-documenso-data
         persistentVolumeClaim:

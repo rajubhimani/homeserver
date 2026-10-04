@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: adguard-home
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: adguard-home
         image: adguard/adguardhome:v0.107.79
@@ -75,6 +79,8 @@ spec:
         - name: v-adguard-home-data
           mountPath: /opt/adguardhome/conf
           subPath: conf
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-adguard-home-data
         persistentVolumeClaim:

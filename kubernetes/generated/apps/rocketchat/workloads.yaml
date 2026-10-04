@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: rocketchat-mongodb
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: rocketchat-mongodb-fix-permission
         image: docker.io/mongodb/mongodb-community-server:8.0.32-ubi8
@@ -34,6 +38,7 @@ spec:
             echo "=====> Ownership set to uid $(MONGODB_USER_ID)";
         securityContext:
           runAsUser: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-rocketchat-rocketchat-mongodb
           mountPath: /data/db
@@ -96,6 +101,8 @@ spec:
           mountPath: /data/db
         - name: v-rocketchat-rocketchat-mongodb-configdb
           mountPath: /data/configdb
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-rocketchat-rocketchat-mongodb
         persistentVolumeClaim:
@@ -128,6 +135,10 @@ spec:
         app.kubernetes.io/name: rocketchat-nats
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: rocketchat-nats
         image: docker.io/nats:2.14.7-alpine
@@ -160,6 +171,8 @@ spec:
         resources:
           limits:
             memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -183,6 +196,10 @@ spec:
         app.kubernetes.io/name: rocketchat
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: rocketchat-mongodb-init
         image: docker.io/mongodb/mongodb-community-server:8.0.32-ubi8
@@ -192,6 +209,8 @@ spec:
         - |2
 
             mongosh "mongodb://mongodb:27017/?directConnection=true" --eval "rs.initiate({_id: \"$(MONGODB_REPLICA_SET_NAME)\", members: [{ _id: 0, host: \"mongodb:27017\" }]})" || true;
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: rocketchat-permissions
         image: alpine:3.24.2
         args:
@@ -201,6 +220,7 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-rocketchat-data
           mountPath: /rocketchat-uploads
@@ -276,6 +296,8 @@ spec:
         - name: v-rocketchat-data
           mountPath: /app/uploads
           subPath: uploads
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-rocketchat-data
         persistentVolumeClaim:

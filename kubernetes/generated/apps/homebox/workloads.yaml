@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: homebox
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: homebox
         image: ghcr.io/sysadminsmedia/homebox:0.26.2
@@ -92,6 +96,8 @@ spec:
         - name: v-homebox-data
           mountPath: /data
           subPath: data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-homebox-data
         persistentVolumeClaim:

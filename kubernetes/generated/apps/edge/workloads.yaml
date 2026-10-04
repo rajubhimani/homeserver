@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: edge
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: edge
         image: lscr.io/linuxserver/msedge:latest
@@ -79,6 +83,8 @@ spec:
         - name: v-edge-data
           mountPath: /config
           subPath: config
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-edge-data
         persistentVolumeClaim:

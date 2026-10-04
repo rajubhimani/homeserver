@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: chrome
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: chrome
         image: lscr.io/linuxserver/chrome:latest
@@ -79,6 +83,8 @@ spec:
         - name: v-chrome-data
           mountPath: /config
           subPath: config
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-chrome-data
         persistentVolumeClaim:

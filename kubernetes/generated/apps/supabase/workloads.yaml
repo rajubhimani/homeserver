@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: supabase-auth
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-db
         image: alpine:3.24.2
@@ -29,6 +33,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-auth
         image: supabase/gotrue:v2.196.0
@@ -118,6 +124,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 5
           failureThreshold: 6
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -143,6 +151,10 @@ spec:
         homeserver/config-sha256: e2e217638f775ac06be33ad68e6422f4e6889cbc068bbd66e3b815c11fe1a87b
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: supabase-db
         image: supabase/postgres:17.6.1.136
@@ -231,6 +243,8 @@ spec:
           mountPath: /var/lib/postgresql/data
         - name: v-supabase-supabase-db-config
           mountPath: /etc/postgresql-custom
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-supabase-supabase-db-data
         persistentVolumeClaim:
@@ -290,6 +304,10 @@ spec:
         homeserver/config-sha256: 8e17cf6e15b4fd2b1710534db5ab0a80371712ff344395b479911cee374d0bb2
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-studio
         image: alpine:3.24.2
@@ -297,6 +315,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-studio 3000; do echo waiting for supabase-studio:3000; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-envoy
         image: envoyproxy/envoy:v1.39.1
@@ -369,6 +389,8 @@ spec:
           mountPath: /docker-entrypoint.sh
           subPath: services-supabase-volumes-api-envoy-docker-entrypo
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:
@@ -413,6 +435,10 @@ spec:
         homeserver/config-sha256: a4d252a6a61c0ccd773e01a104fb2b244686fd33aee0eb2d7f30464b15dae33d
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-envoy
         image: alpine:3.24.2
@@ -420,6 +446,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-envoy 8000; do echo waiting for supabase-envoy:8000; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-edge-functions
         image: supabase/edge-runtime:v1.76.2
@@ -477,6 +505,8 @@ spec:
           readOnly: true
         - name: v-supabase-supabase-deno-cache
           mountPath: /root/.cache/deno
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: d-supabase-edge-functions-functions
         configMap:
@@ -516,6 +546,10 @@ spec:
         app.kubernetes.io/name: supabase-imgproxy
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: supabase-imgproxy
         image: darthsim/imgproxy:v3.31.4
@@ -556,6 +590,8 @@ spec:
         - name: v-supabase-data
           mountPath: /var/lib/storage
           subPath: storage
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-supabase-data
         persistentVolumeClaim:
@@ -585,6 +621,10 @@ spec:
         app.kubernetes.io/name: supabase-meta
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-db
         image: alpine:3.24.2
@@ -592,6 +632,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-meta
         image: supabase/postgres-meta:v0.99.0
@@ -633,6 +675,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 6
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -658,6 +702,10 @@ spec:
         homeserver/config-sha256: bfb8be0e4d276043062a4562eb08250ceca6c01e0c94c65257a3d4eddf0531e7
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-db
         image: alpine:3.24.2
@@ -665,6 +713,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-pooler
         image: supabase/supavisor:2.9.12
@@ -755,6 +805,8 @@ spec:
           mountPath: /etc/pooler/pooler.exs
           subPath: services-supabase-volumes-pooler-pooler-exs
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:
@@ -786,6 +838,10 @@ spec:
         app.kubernetes.io/name: realtime-dev-supabase-realtime
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-db
         image: alpine:3.24.2
@@ -793,6 +849,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: realtime-dev-supabase-realtime
         image: supabase/realtime:v2.134.10
@@ -865,6 +923,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -888,6 +948,10 @@ spec:
         app.kubernetes.io/name: supabase-rest
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-db
         image: alpine:3.24.2
@@ -895,6 +959,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-rest
         image: postgrest/postgrest:v14.17
@@ -942,6 +1008,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 5
           failureThreshold: 6
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -965,6 +1033,10 @@ spec:
         app.kubernetes.io/name: supabase-storage
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-supabase-db
         image: alpine:3.24.2
@@ -972,6 +1044,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: supabase-storage
         image: supabase/storage-api:v1.74.0
@@ -1052,6 +1126,8 @@ spec:
         - name: v-supabase-data
           mountPath: /var/lib/storage
           subPath: storage
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-supabase-data
         persistentVolumeClaim:
@@ -1083,6 +1159,10 @@ spec:
         homeserver/config-sha256: 263eb2bb414631533de6fd87c1a148acf1bd66ed58ee9c2ca2cca3254218a449
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: supabase-studio
         image: supabase/studio:2026.09.07-sha-7996410
@@ -1175,6 +1255,8 @@ spec:
         - name: d-supabase-studio-functions
           mountPath: /app/edge-functions
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-supabase-snippets
         persistentVolumeClaim:

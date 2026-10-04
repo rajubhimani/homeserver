@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: nocodb
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: nocodb
         image: nocodb/nocodb:2026.09.1
@@ -91,6 +97,8 @@ spec:
         - name: v-nocodb-data
           mountPath: /usr/app/data
           subPath: data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-nocodb-data
         persistentVolumeClaim:

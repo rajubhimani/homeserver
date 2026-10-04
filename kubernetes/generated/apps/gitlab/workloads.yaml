@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: gitlab
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: gitlab
         image: gitlab/gitlab-ce:19.4.1-ce.0
@@ -110,6 +114,8 @@ spec:
           subPath: logs
         - name: v-gitlab-gitlab-data
           mountPath: /var/opt/gitlab
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-gitlab-data
         persistentVolumeClaim:

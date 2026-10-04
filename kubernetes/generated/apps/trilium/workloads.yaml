@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: trilium
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: trilium
         image: triliumnext/trilium:v0.106.0
@@ -74,6 +78,8 @@ spec:
         - name: v-trilium-data
           mountPath: /home/node/trilium-data
           subPath: trilium-data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-trilium-data
         persistentVolumeClaim:

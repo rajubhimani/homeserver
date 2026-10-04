@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: karakeep
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-karakeep-meilisearch
         image: alpine:3.24.2
@@ -29,6 +33,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 karakeep-meilisearch 7700; do echo waiting for karakeep-meilisearch:7700; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: karakeep
         image: ghcr.io/karakeep-app/karakeep:0.33.2
@@ -87,6 +93,8 @@ spec:
         - name: v-karakeep-data
           mountPath: /data
           subPath: data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-karakeep-data
         persistentVolumeClaim:
@@ -116,6 +124,10 @@ spec:
         app.kubernetes.io/name: karakeep-chrome
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: karakeep-chrome
         image: ghcr.io/karakeep-app/karakeep-chrome:151.0.7922.47-r1
@@ -128,6 +140,8 @@ spec:
         envFrom:
         - configMapRef:
             name: homeserver-root
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -151,6 +165,10 @@ spec:
         app.kubernetes.io/name: karakeep-meilisearch
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: karakeep-meilisearch
         image: getmeili/meilisearch:v1.41.0
@@ -190,6 +208,8 @@ spec:
         volumeMounts:
         - name: v-karakeep-karakeep-meilisearch
           mountPath: /meili_data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-karakeep-karakeep-meilisearch
         persistentVolumeClaim:

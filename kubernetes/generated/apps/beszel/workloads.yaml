@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: beszel
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: beszel
         image: henrygd/beszel:0.21.0
@@ -83,6 +87,8 @@ spec:
         - name: v-beszel-data
           mountPath: /beszel_socket
           subPath: socket
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-beszel-data
         persistentVolumeClaim:
@@ -110,6 +116,10 @@ spec:
         app.kubernetes.io/name: beszel-agent
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-beszel
         image: alpine:3.24.2
@@ -117,6 +127,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 beszel 8090; do echo waiting for beszel:8090; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: beszel-agent
         image: henrygd/beszel-agent:0.21.0-alpine
@@ -182,6 +194,7 @@ spec:
           capabilities:
             add:
             - SYS_RAWIO
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-beszel-data
           mountPath: /var/lib/beszel-agent

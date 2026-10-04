@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: erpnext
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: erpnext-create-site
         image: frappe/erpnext:v16.37.0
@@ -38,6 +42,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: erpnext
         image: frappe/erpnext:v16.37.0
@@ -102,6 +108,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-sites
         persistentVolumeClaim:
@@ -131,6 +139,10 @@ spec:
         app.kubernetes.io/name: erpnext-backend
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: erpnext-configurator
         image: frappe/erpnext:v16.37.0
@@ -143,6 +155,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: erpnext-backend
         image: frappe/erpnext:v16.37.0
@@ -191,6 +205,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-sites
         persistentVolumeClaim:
@@ -220,6 +236,10 @@ spec:
         app.kubernetes.io/name: erpnext-db
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: erpnext-db
         image: mariadb:11.8
@@ -272,6 +292,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-db-data
           mountPath: /var/lib/mysql
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-db-data
         persistentVolumeClaim:
@@ -301,6 +323,10 @@ spec:
         app.kubernetes.io/name: erpnext-queue-long
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: erpnext-configurator
         image: frappe/erpnext:v16.37.0
@@ -313,6 +339,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: erpnext-queue-long
         image: frappe/erpnext:v16.37.0
@@ -329,6 +357,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-sites
         persistentVolumeClaim:
@@ -358,6 +388,10 @@ spec:
         app.kubernetes.io/name: erpnext-queue-short
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: erpnext-configurator
         image: frappe/erpnext:v16.37.0
@@ -370,6 +404,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: erpnext-queue-short
         image: frappe/erpnext:v16.37.0
@@ -386,6 +422,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-sites
         persistentVolumeClaim:
@@ -415,6 +453,10 @@ spec:
         app.kubernetes.io/name: erpnext-redis-cache
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: erpnext-redis-cache
         image: valkey/valkey:9.1.2-alpine
@@ -437,6 +479,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -460,6 +504,10 @@ spec:
         app.kubernetes.io/name: erpnext-redis-queue
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: erpnext-redis-queue
         image: valkey/valkey:9.1.2-alpine
@@ -485,6 +533,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-valkey-queue-data
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-valkey-queue-data
         persistentVolumeClaim:
@@ -514,6 +564,10 @@ spec:
         app.kubernetes.io/name: erpnext-scheduler
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: erpnext-configurator
         image: frappe/erpnext:v16.37.0
@@ -526,6 +580,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: erpnext-scheduler
         image: frappe/erpnext:v16.37.0
@@ -540,6 +596,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-sites
         persistentVolumeClaim:
@@ -569,6 +627,10 @@ spec:
         app.kubernetes.io/name: erpnext-websocket
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: erpnext-configurator
         image: frappe/erpnext:v16.37.0
@@ -581,6 +643,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: erpnext-websocket
         image: frappe/erpnext:v16.37.0
@@ -615,6 +679,8 @@ spec:
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-erpnext-erpnext-sites
         persistentVolumeClaim:

@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: penpot-backend
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: penpot-permissions
         image: alpine:3.24.2
         args:
@@ -41,6 +47,7 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-penpot-data
           mountPath: /penpot-assets
@@ -51,6 +58,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 penpot-redis 6379; do echo waiting for penpot-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: penpot-backend
         image: penpotapp/backend:2.18.1
@@ -117,6 +126,8 @@ spec:
         - name: v-penpot-data
           mountPath: /opt/data/assets
           subPath: assets
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-penpot-data
         persistentVolumeClaim:
@@ -146,6 +157,10 @@ spec:
         app.kubernetes.io/name: penpot-exporter
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -156,12 +171,16 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-penpot-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 penpot-redis 6379; do echo waiting for penpot-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: penpot-exporter
         image: penpotapp/exporter:2.18.1
@@ -177,6 +196,8 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/0
         - name: PENPOT_SECRET_KEY
           value: $(PENPOT_SECRET_KEY)
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -200,6 +221,10 @@ spec:
         app.kubernetes.io/name: penpot-frontend
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: penpot-frontend
         image: penpotapp/frontend:2.18.1
@@ -250,6 +275,8 @@ spec:
         - name: v-penpot-data
           mountPath: /opt/data/assets
           subPath: assets
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-penpot-data
         persistentVolumeClaim:
@@ -279,6 +306,10 @@ spec:
         app.kubernetes.io/name: penpot-redis
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: penpot-redis
         image: valkey/valkey:9.1.2-alpine
@@ -309,3 +340,5 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        securityContext:
+          allowPrivilegeEscalation: false

@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: brave
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: brave
         image: lscr.io/linuxserver/brave:latest
@@ -79,6 +83,8 @@ spec:
         - name: v-brave-data
           mountPath: /config
           subPath: config
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-brave-data
         persistentVolumeClaim:

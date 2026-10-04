@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: jellyfin
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: jellyfin
         image: jellyfin/jellyfin:12.1
@@ -76,6 +80,8 @@ spec:
           readOnly: true
         - name: v-jellyfin-metadata
           mountPath: /config/metadata
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-jellyfin-data
         persistentVolumeClaim:

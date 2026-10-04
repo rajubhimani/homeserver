@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: plane-admin
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-admin
         image: makeplane/plane-admin:v1.4.2
@@ -72,6 +78,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -95,6 +103,10 @@ spec:
         app.kubernetes.io/name: plane-api
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -105,18 +117,24 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-mq
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-mq 5672; do echo waiting for plane-mq:5672; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-redis 6379; do echo waiting for plane-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-api
         image: makeplane/plane-backend:v1.4.2
@@ -183,6 +201,8 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 11
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -206,6 +226,10 @@ spec:
         app.kubernetes.io/name: plane-beat
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -216,18 +240,24 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-mq
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-mq 5672; do echo waiting for plane-mq:5672; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-redis 6379; do echo waiting for plane-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-beat
         image: makeplane/plane-backend:v1.4.2
@@ -247,6 +277,8 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/
         - name: SECRET_KEY
           value: $(SECRET_KEY)
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: batch/v1
 kind: Job
@@ -266,6 +298,10 @@ spec:
         app.kubernetes.io/name: plane-migrator
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-plane-mq
         image: alpine:3.24.2
@@ -273,12 +309,16 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 plane-mq 5672; do echo waiting for plane-mq:5672; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-redis 6379; do echo waiting for plane-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-migrator
         image: makeplane/plane-backend:v1.4.2
@@ -296,6 +336,8 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/
         - name: SECRET_KEY
           value: $(SECRET_KEY)
+        securityContext:
+          allowPrivilegeEscalation: false
       restartPolicy: OnFailure
 ---
 apiVersion: apps/v1
@@ -320,6 +362,10 @@ spec:
         app.kubernetes.io/name: plane-minio
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -330,6 +376,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-minio
         image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
@@ -370,6 +418,8 @@ spec:
         - name: v-plane-data
           mountPath: /data
           subPath: uploads
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-plane-data
         persistentVolumeClaim:
@@ -399,6 +449,10 @@ spec:
         app.kubernetes.io/name: plane-mq
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -409,6 +463,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-mq
         image: rabbitmq:4.3.6-alpine
@@ -453,6 +509,8 @@ spec:
         volumeMounts:
         - name: v-plane-plane-rabbitmq-alpine
           mountPath: /var/lib/rabbitmq
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-plane-plane-rabbitmq-alpine
         persistentVolumeClaim:
@@ -484,6 +542,10 @@ spec:
         homeserver/config-sha256: ada8aa2e0e65eb9fd9ea6053261e8c7f4ef404e1797c61d7adb71c864a111d01
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -494,6 +556,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-proxy
         image: makeplane/plane-proxy:v1.4.2
@@ -548,6 +612,8 @@ spec:
           mountPath: /etc/caddy/Caddyfile
           subPath: services-plane-caddyfile
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:
@@ -581,6 +647,10 @@ spec:
         app.kubernetes.io/name: plane-redis
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: plane-redis
         image: valkey/valkey:9.1.2-alpine
@@ -614,6 +684,8 @@ spec:
         volumeMounts:
         - name: v-plane-plane-redis-alpine
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-plane-plane-redis-alpine
         persistentVolumeClaim:
@@ -643,6 +715,10 @@ spec:
         app.kubernetes.io/name: plane-space
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -653,6 +729,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-space
         image: makeplane/plane-space:v1.4.2
@@ -693,6 +771,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -716,6 +796,10 @@ spec:
         app.kubernetes.io/name: plane-web
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -726,6 +810,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-web
         image: makeplane/plane-frontend:v1.4.2
@@ -766,6 +852,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -789,6 +877,10 @@ spec:
         app.kubernetes.io/name: plane-worker
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -799,18 +891,24 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-mq
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-mq 5672; do echo waiting for plane-mq:5672; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plane-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plane-redis 6379; do echo waiting for plane-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plane-worker
         image: makeplane/plane-backend:v1.4.2
@@ -838,3 +936,5 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/
         - name: SECRET_KEY
           value: $(SECRET_KEY)
+        securityContext:
+          allowPrivilegeEscalation: false

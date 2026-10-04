@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: stirling-pdf-lite
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: stirling-pdf-lite
         image: stirlingtools/stirling-pdf:3.0.2-ultra-lite
@@ -86,6 +90,8 @@ spec:
         - name: v-stirling-pdf-lite-data
           mountPath: /pipeline
           subPath: pipeline
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-stirling-pdf-lite-data
         persistentVolumeClaim:

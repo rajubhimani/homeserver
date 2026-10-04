@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: calcom
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: calcom
         image: calcom/cal.com:v6.2.0
@@ -89,5 +95,7 @@ spec:
           timeoutSeconds: 15
           periodSeconds: 10
           failureThreshold: 9
+        securityContext:
+          allowPrivilegeEscalation: false
   strategy:
     type: Recreate

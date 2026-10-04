@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: ollama
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: ollama
         image: ollama/ollama:0.35.1
@@ -67,6 +71,8 @@ spec:
         volumeMounts:
         - name: v-ollama-models
           mountPath: /root/.ollama
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-ollama-models
         persistentVolumeClaim:

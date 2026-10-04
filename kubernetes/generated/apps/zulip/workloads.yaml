@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: zulip
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: zulip
         image: ghcr.io/zulip/zulip-server:12.3-0
@@ -101,6 +105,8 @@ spec:
         volumeMounts:
         - name: v-zulip-zulip-data
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-zulip-zulip-data
         persistentVolumeClaim:
@@ -130,6 +136,10 @@ spec:
         app.kubernetes.io/name: zulip-db
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: zulip-db
         image: homeserver/zulip-postgresql:18-pgroonga4.0.9
@@ -167,6 +177,8 @@ spec:
         volumeMounts:
         - name: v-zulip-zulip-postgres-18
           mountPath: /var/lib/postgresql
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-zulip-zulip-postgres-18
         persistentVolumeClaim:
@@ -196,6 +208,10 @@ spec:
         app.kubernetes.io/name: zulip-memcached
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: zulip-memcached
         image: memcached:1.6.45-alpine
@@ -238,6 +254,8 @@ spec:
         resources:
           limits:
             memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -261,6 +279,10 @@ spec:
         app.kubernetes.io/name: zulip-rabbitmq
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: zulip-rabbitmq
         image: rabbitmq:4.3.6
@@ -313,6 +335,8 @@ spec:
         volumeMounts:
         - name: v-zulip-zulip-rabbitmq
           mountPath: /var/lib/rabbitmq
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-zulip-zulip-rabbitmq
         persistentVolumeClaim:
@@ -342,6 +366,10 @@ spec:
         app.kubernetes.io/name: zulip-redis
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: zulip-redis
         image: valkey/valkey:9.1.2-alpine
@@ -379,6 +407,8 @@ spec:
         volumeMounts:
         - name: v-zulip-zulip-valkey
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-zulip-zulip-valkey
         persistentVolumeClaim:

@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: bichon
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: bichon
         image: rustmailer/bichon:2.1.0
@@ -74,6 +78,8 @@ spec:
         volumeMounts:
         - name: v-bichon-bichon-data
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-bichon-bichon-data
         persistentVolumeClaim:
@@ -101,6 +107,10 @@ spec:
         homeserver/config-sha256: fba9d26f03a8946ddc7a92265a596fdcc46654c75bd369cff63e6a0cf3d77941
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-bichon
         image: alpine:3.24.2
@@ -108,6 +118,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 bichon 15630; do echo waiting for bichon:15630; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: bichon-init
         image: curlimages/curl:8.22.0
@@ -130,6 +142,8 @@ spec:
           mountPath: /init-admin.sh
           subPath: services-bichon-init-admin-sh
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:

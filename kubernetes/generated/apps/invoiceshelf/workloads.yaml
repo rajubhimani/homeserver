@@ -24,6 +24,10 @@ spec:
         homeserver/config-sha256: 2fa7660ee904925f1d39586d419e6fcee9e899a5c1b7749cee3d00232b46150f
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -34,6 +38,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: invoiceshelf
         image: invoiceshelf/invoiceshelf:2.4.6
@@ -100,6 +106,7 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-invoiceshelf-data
           mountPath: /var/www/html/storage

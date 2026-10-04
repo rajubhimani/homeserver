@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: syncthing
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: syncthing-permissions
         image: alpine:3.24
@@ -33,6 +37,7 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-syncthing-syncthing-config
           mountPath: /config
@@ -98,6 +103,8 @@ spec:
         - name: v-syncthing-data
           mountPath: /data
           subPath: data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-syncthing-syncthing-config
         persistentVolumeClaim:

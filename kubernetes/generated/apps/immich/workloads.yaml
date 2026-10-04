@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: immich-ml
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: immich-ml
         image: ghcr.io/immich-app/immich-machine-learning:v3.2.4
@@ -51,6 +55,8 @@ spec:
         volumeMounts:
         - name: v-immich-immich-model-cache
           mountPath: /cache
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-immich-immich-model-cache
         persistentVolumeClaim:
@@ -80,6 +86,10 @@ spec:
         app.kubernetes.io/name: immich-redis
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: immich-redis
         image: valkey/valkey:9.1.2-alpine
@@ -118,6 +128,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 2
           failureThreshold: 35
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -141,6 +153,10 @@ spec:
         app.kubernetes.io/name: immich-server
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-immich-db
         image: alpine:3.24.2
@@ -148,12 +164,16 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 immich-db 5432; do echo waiting for immich-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-immich-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 immich-redis 6379; do echo waiting for immich-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: immich-server
         image: ghcr.io/immich-app/immich-server:v3.2.4
@@ -209,6 +229,8 @@ spec:
           mountPath: /usr/src/app/upload
         - name: v-immich-immich-server-data
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: h-usr-src-app-upload
         hostPath:

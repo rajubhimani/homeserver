@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: plausible
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-plausible-db
         image: alpine:3.24.2
@@ -29,12 +33,16 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 plausible-db 5432; do echo waiting for plausible-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-plausible-events-db
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 plausible-events-db 8123; do echo waiting for plausible-events-db:8123; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plausible
         image: ghcr.io/plausible/community-edition:v3.2.1
@@ -97,6 +105,8 @@ spec:
         volumeMounts:
         - name: v-plausible-plausible-data
           mountPath: /var/lib/plausible
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-plausible-plausible-data
         persistentVolumeClaim:
@@ -128,6 +138,10 @@ spec:
         homeserver/config-sha256: b0b73316238adedda72444968d510258c36d98f3cec07db6b4cc30ac1bc1ed79
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: plausible-events-db
         image: clickhouse/clickhouse-server:26.8.15.10-alpine
@@ -194,6 +208,8 @@ spec:
           mountPath: /etc/clickhouse-server/users.d/default-profile-low-resources-overrides.xml
           subPath: services-plausible-clickhouse-default-profile-low-
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-plausible-plausible-clickhouse-data-alpine
         persistentVolumeClaim:

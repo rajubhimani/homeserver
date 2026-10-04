@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: openproject
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: openproject
         image: openproject/openproject:17.9.1
@@ -84,6 +88,8 @@ spec:
         - name: v-openproject-data
           mountPath: /var/openproject/assets
           subPath: assets
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-openproject-openproject-pgdata
         persistentVolumeClaim:

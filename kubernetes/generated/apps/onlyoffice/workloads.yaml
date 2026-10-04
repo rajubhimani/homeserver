@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: onlyoffice
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: onlyoffice
         image: onlyoffice/documentserver:9.4.0.1
@@ -81,6 +85,8 @@ spec:
         - name: v-onlyoffice-data
           mountPath: /var/lib/onlyoffice
           subPath: lib
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-onlyoffice-data
         persistentVolumeClaim:

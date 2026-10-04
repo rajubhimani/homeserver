@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: silverbullet
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: silverbullet
         image: ghcr.io/silverbulletmd/silverbullet:2.11.1
@@ -68,6 +72,8 @@ spec:
         - name: v-silverbullet-data
           mountPath: /space
           subPath: space
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-silverbullet-data
         persistentVolumeClaim:

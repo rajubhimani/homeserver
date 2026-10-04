@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: open-webui
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: open-webui
         image: ghcr.io/open-webui/open-webui:v0.11.4-slim
@@ -77,6 +81,8 @@ spec:
           subPath: data
         - name: v-open-webui-cache
           mountPath: /app/backend/data/cache
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-open-webui-data
         persistentVolumeClaim:

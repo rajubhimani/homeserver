@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: orangehrm
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: orangehrm
         image: orangehrm/orangehrm:5.9
@@ -62,5 +66,7 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        securityContext:
+          allowPrivilegeEscalation: false
   strategy:
     type: Recreate

@@ -368,6 +368,30 @@ def git_modes(rel: str) -> dict[str, str]:
     return {ln.split("\t", 1)[1]: ln.split()[0] for ln in out.splitlines() if "\t" in ln}
 
 
+def pod_security(co: dict, where: str) -> dict:
+    """Pod-level hardening for every generated pod (hardening items 1-2):
+    - no Kubernetes API token: no app here uses the API (kubernetes.io:
+      "opt out of API credential automounting" when it isn't needed);
+    - seccomp RuntimeDefault: the system-call filter Docker already applies
+      to every Compose container, which Kubernetes leaves off by default.
+    An override can relax seccomp (security: {seccomp: Unconfined, reason})."""
+    sec = co.get("security") or {}
+    if sec and not sec.get("reason"):
+        raise GenError(f"{where}: overrides security exceptions need a reason")
+    return {"automountServiceAccountToken": False,
+            "securityContext": {"seccompProfile": {"type": sec.get("seccomp", "RuntimeDefault")}}}
+
+
+def harden_container(c: dict, co: dict) -> dict:
+    """Container-level: no privilege escalation via setuid programs, unless
+    the container is privileged or its override records why it needs it
+    (security: {privilege_escalation: true, reason})."""
+    sc = c.setdefault("securityContext", {})
+    if not sc.get("privileged") and not (co.get("security") or {}).get("privilege_escalation"):
+        sc["allowPrivilegeEscalation"] = False
+    return c
+
+
 def config_checksum(data: dict[str, str]) -> dict:
     """Pod-template annotation with a hash of the pod's ConfigMap files, so
     changing a repo file rolls the pod: Kubernetes never updates a subPath
@@ -679,7 +703,10 @@ def convert(svc: str) -> dict[str, list[dict]]:
         dw = db_wait(svc)
         if dw and n not in oneshots and s.get("env_file"):
             init.insert(0, dw)
-        pod: dict = {"enableServiceLinks": False}
+        pod: dict = {"enableServiceLinks": False, **pod_security(co, where)}
+        harden_container(container, co)
+        for ic in init:
+            harden_container(ic, co)
         if init:
             pod["initContainers"] = init
         pod["containers"] = [container]
@@ -1189,7 +1216,7 @@ def nginx_plain() -> dict[str, list[dict]]:
             "spec": {"replicas": 1, "revisionHistoryLimit": 3,
                      "selector": {"matchLabels": {"app.kubernetes.io/name": site}},
                      "template": {"metadata": {"labels": labels, **config_checksum(cm_data)}, "spec": {
-                         "enableServiceLinks": False, "containers": [container],
+                         "enableServiceLinks": False, **pod_security({}, site), "containers": [harden_container(container, {})],
                          "volumes": [{"name": "files", "configMap": {"name": f"{site}-files"}}]}}}})
         files.setdefault("services.yaml", []).append({
             "apiVersion": "v1", "kind": "Service", "metadata": {"name": site, "labels": labels},
@@ -1260,7 +1287,7 @@ def add_edge(files: dict, s: dict, header: str, conf: dict) -> None:
         "spec": {"replicas": 1, "revisionHistoryLimit": 3,
                  "selector": {"matchLabels": {"app.kubernetes.io/name": name}},
                  "template": {"metadata": {"labels": labels, **config_checksum(cm_data)}, "spec": {
-                     "enableServiceLinks": False, "containers": [container],
+                     "enableServiceLinks": False, **pod_security({}, name), "containers": [harden_container(container, {})],
                      "volumes": [{"name": "files", "configMap": {"name": f"{name}-edge"}}]}}}})
     files.setdefault("services.yaml", []).append({
         "apiVersion": "v1", "kind": "Service", "metadata": {"name": name, "labels": labels},

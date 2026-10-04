@@ -24,6 +24,10 @@ spec:
         homeserver/config-sha256: 7cdf60426fcb0a02d4399eff258ffd01d6f25c4a3a68f2914f00896fa858742b
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: git-clone
         image: registry.k8s.io/git-sync/git-sync:v4.7.1
@@ -37,6 +41,8 @@ spec:
         volumeMounts:
         - name: repo
           mountPath: /git
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: docs
         image: nginx:1.30.5-alpine
@@ -118,6 +124,8 @@ spec:
           mountPath: /usr/share/nginx/html/_sidebar.md
           subPath: sidebar-md
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:

@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: wallabag
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: wallabag
         image: wallabag/wallabag:2.6.14
@@ -104,6 +110,8 @@ spec:
         - name: v-wallabag-data
           mountPath: /var/www/wallabag/web/assets/images
           subPath: images
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-wallabag-data
         persistentVolumeClaim:

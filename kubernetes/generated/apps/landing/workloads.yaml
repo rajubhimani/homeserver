@@ -24,6 +24,10 @@ spec:
         homeserver/config-sha256: 4d51258548e41c8814e8171f107a795fa0e82689dd5ed82304f78aed8cfbda73
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: landing
         image: nginx:1.30.5-alpine
@@ -90,6 +94,8 @@ spec:
           mountPath: /usr/share/nginx/html/services.json
           subPath: services-json
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:

@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: appflowy-admin
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-appflowy-cloud
         image: alpine:3.24.2
@@ -29,6 +33,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 appflowy-cloud 8000; do echo waiting for appflowy-cloud:8000; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: appflowy-admin
         image: appflowyinc/admin_frontend:0.18.2
@@ -42,6 +48,8 @@ spec:
           value: https://appflowy.$(DOMAIN)
         - name: GOTRUE_URL
           value: https://appflowy.$(DOMAIN)/gotrue
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -65,6 +73,10 @@ spec:
         app.kubernetes.io/name: appflowy-cloud
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-appflowy-db
         image: alpine:3.24.2
@@ -72,6 +84,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 appflowy-db 5432; do echo waiting for appflowy-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: appflowy-minio-setup
         image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
         command:
@@ -79,12 +93,16 @@ spec:
         - -c
         - ' mc alias set appflowy http://appflowy-minio:9000 $(MINIO_ROOT_USER) $(MINIO_ROOT_PASSWORD); mc mb --ignore-existing
           appflowy/appflowy; exit 0; '
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-appflowy-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 appflowy-redis 6379; do echo waiting for appflowy-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: appflowy-cloud
         image: appflowyinc/appflowy_cloud:0.19.0
@@ -149,6 +167,8 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 7
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -172,6 +192,10 @@ spec:
         app.kubernetes.io/name: appflowy-db
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: appflowy-db
         image: pgvector/pgvector:pg16
@@ -210,6 +234,8 @@ spec:
         volumeMounts:
         - name: v-appflowy-appflowy-postgres
           mountPath: /var/lib/postgresql/data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-appflowy-appflowy-postgres
         persistentVolumeClaim:
@@ -239,6 +265,10 @@ spec:
         app.kubernetes.io/name: appflowy-gotrue
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-appflowy-db
         image: alpine:3.24.2
@@ -246,6 +276,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 appflowy-db 5432; do echo waiting for appflowy-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: appflowy-gotrue
         image: appflowyinc/gotrue:0.18.11
@@ -312,6 +344,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 8
+        securityContext:
+          allowPrivilegeEscalation: false
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -335,6 +369,10 @@ spec:
         app.kubernetes.io/name: appflowy-minio
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: appflowy-minio
         image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
@@ -375,6 +413,8 @@ spec:
         - name: v-appflowy-data
           mountPath: /data
           subPath: minio
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-appflowy-data
         persistentVolumeClaim:
@@ -406,6 +446,10 @@ spec:
         homeserver/config-sha256: bf72da8fed7f172a0ec3fbd4f57b74bf2369d5f696e400ccedae3e17ca5872d9
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-appflowy-cloud
         image: alpine:3.24.2
@@ -413,6 +457,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 appflowy-cloud 8000; do echo waiting for appflowy-cloud:8000; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: appflowy-nginx
         image: nginx:1.30.5-alpine
@@ -458,6 +504,8 @@ spec:
           mountPath: /etc/nginx/nginx.conf
           subPath: services-appflowy-nginx-conf
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: files
         configMap:
@@ -491,6 +539,10 @@ spec:
         app.kubernetes.io/name: appflowy-redis
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: appflowy-redis
         image: valkey/valkey:9.1.2-alpine
@@ -524,6 +576,8 @@ spec:
         volumeMounts:
         - name: v-appflowy-appflowy-valkey
           mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-appflowy-appflowy-valkey
         persistentVolumeClaim:
@@ -553,6 +607,10 @@ spec:
         app.kubernetes.io/name: appflowy-web
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-appflowy-cloud
         image: alpine:3.24.2
@@ -560,6 +618,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 appflowy-cloud 8000; do echo waiting for appflowy-cloud:8000; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: appflowy-web
         image: appflowyinc/appflowy_web:0.19.4
@@ -573,3 +633,5 @@ spec:
           value: https://appflowy.$(DOMAIN)/gotrue
         - name: APPFLOWY_WS_BASE_URL
           value: wss://appflowy.$(DOMAIN)/ws
+        securityContext:
+          allowPrivilegeEscalation: false

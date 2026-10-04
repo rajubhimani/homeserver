@@ -229,6 +229,26 @@ uv run kubernetes/cluster.py rmi wallabag                             # free its
 - **One service at a time, images pulled one by one.** Starting a whole tier at once (2026-10-04) pulled and unpacked dozens of images together: the HDD (image store) and the SSD (etcd, databases) saturated, and etcd's slow writes made the API server, scheduler and controller-manager restart repeatedly (5, 16 and 17 times). Ready services then timed out and teardowns failed. etcd is very sensitive to disk latency; on a cluster built for real use, give it a fast disk of its own, or raise its heartbeat and election timeouts (etcd's tuning guide). For kind, that's planned for the next rebuild. A side effect seen the same day: the CloudNativePG operator lost its leader election during the stall and stayed unready for 50 minutes despite three automatic restarts (its admission webhook refused every change: `failed calling webhook "mcluster.cnpg.io" ... connection refused`). `kubectl -n cnpg-system rollout restart deploy/cnpg-controller-manager` recovered it; the databases themselves kept running throughout.
 - **Images are removed after each test** (`rmi`), apart from any image a running service still uses, to keep the image store's disk free.
 
+### Hardening built into every generated pod (2026-10-04)
+
+| Setting | Why | Source |
+|---|---|---|
+| `automountServiceAccountToken: false` | No app here calls the Kubernetes API, so none gets API credentials | [Kubernetes: opt out of API credential automounting](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) |
+| `seccompProfile: RuntimeDefault` | The system-call filter Docker already applies to every Compose container; Kubernetes leaves it off by default | [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) |
+| `allowPrivilegeEscalation: false` | A process can't gain privileges through setuid programs | Pod Security Standards, Restricted |
+
+An app that genuinely needs an exception records it in its override: `security: {privilege_escalation: true, reason: ...}` or `security: {seccomp: Unconfined, reason: ...}`.
+
+### Pod Security Standards
+
+Namespace `apps` warns on anything that breaks **Baseline** and audits **Restricted** (`cluster/namespaces.yaml`). It doesn't enforce yet. A dry run against the running services (`kubectl label --dry-run=server ns apps pod-security.kubernetes.io/enforce=baseline`) lists the remaining Baseline exceptions, all from deliberate features:
+
+- **`hostPort`:** the localhost ports, matching Compose's `127.0.0.1:<port>`.
+- **`hostPath`:** Immich's, Jellyfin's and Nextcloud's host folders. Kubernetes' documented alternative, a local PersistentVolume, would pass Baseline.
+- **Host network and capabilities:** Beszel's agent. The usual practice is a separate, privileged namespace for such agents.
+
+**Restricted** additionally needs non-root users and all capabilities dropped, which most images here (starting as root) don't support.
+
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
 ## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*

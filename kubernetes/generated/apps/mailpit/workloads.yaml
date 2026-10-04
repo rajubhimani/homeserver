@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: mailpit
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: mailpit
         image: axllent/mailpit:v1.31.4
@@ -76,6 +80,8 @@ spec:
         - name: v-mailpit-data
           mountPath: /data
           subPath: data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-mailpit-data
         persistentVolumeClaim:

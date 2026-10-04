@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: uptime-kuma
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-uptime-kuma-db
         image: alpine:3.24.2
@@ -29,6 +33,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 uptime-kuma-db 3306; do echo waiting for uptime-kuma-db:3306; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: uptime-kuma
         image: louislam/uptime-kuma:2.5.5
@@ -90,6 +96,8 @@ spec:
         - name: v-uptime-kuma-data
           mountPath: /app/data
           subPath: data
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-uptime-kuma-data
         persistentVolumeClaim:

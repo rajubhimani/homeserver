@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: cloudflared
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: cloudflared
         image: cloudflare/cloudflared:2026.9.3
@@ -73,3 +77,5 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 5
+        securityContext:
+          allowPrivilegeEscalation: false

@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: guacamole
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-guacamole-db
         image: alpine:3.24.2
@@ -29,12 +33,16 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 guacamole-db 5432; do echo waiting for guacamole-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-guacd
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 guacd 4822; do echo waiting for guacd:4822; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: guacamole
         image: guacamole/guacamole:1.6.0
@@ -121,6 +129,8 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 8
+        securityContext:
+          allowPrivilegeEscalation: false
   strategy:
     type: Recreate
 ---
@@ -146,6 +156,10 @@ spec:
         app.kubernetes.io/name: guacd
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: guacd
         image: guacamole/guacd:1.6.0
@@ -174,3 +188,5 @@ spec:
             port: 4822
           periodSeconds: 2
           failureThreshold: 13
+        securityContext:
+          allowPrivilegeEscalation: false

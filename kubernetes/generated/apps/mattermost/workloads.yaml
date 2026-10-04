@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: mattermost
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: mattermost-permissions
         image: alpine:3.24.2
         args:
@@ -42,6 +48,7 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-mattermost-data
           mountPath: /mattermost-data
@@ -109,6 +116,7 @@ spec:
         securityContext:
           runAsUser: 2000
           runAsGroup: 2000
+          allowPrivilegeEscalation: false
         volumeMounts:
         - name: v-mattermost-data
           mountPath: /mattermost/config

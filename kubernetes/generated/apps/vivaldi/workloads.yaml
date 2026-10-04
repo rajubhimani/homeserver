@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: vivaldi
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: vivaldi
         image: lscr.io/linuxserver/vivaldi:latest
@@ -79,6 +83,8 @@ spec:
         - name: v-vivaldi-data
           mountPath: /config
           subPath: config
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-vivaldi-data
         persistentVolumeClaim:

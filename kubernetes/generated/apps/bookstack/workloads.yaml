@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: bookstack
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: bookstack
         image: lscr.io/linuxserver/bookstack:v26.09.1-ls287
@@ -97,6 +103,8 @@ spec:
         - name: v-bookstack-data
           mountPath: /config
           subPath: config
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-bookstack-data
         persistentVolumeClaim:

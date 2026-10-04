@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/name: listmonk
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-db
         image: alpine:3.24.2
@@ -32,6 +36,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: listmonk
         image: listmonk/listmonk:v6.2.0
@@ -108,6 +114,8 @@ spec:
         - name: v-listmonk-data
           mountPath: /listmonk/uploads
           subPath: uploads
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-listmonk-data
         persistentVolumeClaim:

@@ -24,6 +24,10 @@ spec:
         homeserver/config-sha256: 0629578c31a926735292ddcbdd73753145953ad7fe6a152795ecc32894efa0b4
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-nextcloud-db
         image: alpine:3.24.2
@@ -31,12 +35,16 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 nextcloud-db 5432; do echo waiting for nextcloud-db:5432; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       - name: wait-nextcloud-redis
         image: alpine:3.24.2
         command:
         - sh
         - -c
         - until nc -z -w 2 nextcloud-redis 6379; do echo waiting for nextcloud-redis:6379; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: nextcloud
         image: nextcloud:34.0.4
@@ -126,6 +134,8 @@ spec:
           mountPath: /mnt/seagate
         - name: h-mnt-os-iso
           mountPath: /mnt/os-iso
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-nextcloud-nextcloud-html
         persistentVolumeClaim:
@@ -199,6 +209,10 @@ spec:
         homeserver/config-sha256: 9f3966ebb99087d3f389aafa7c6f7e0abde63107d1bf2dc54d678b8114d74ca7
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: wait-nextcloud
         image: alpine:3.24.2
@@ -206,6 +220,8 @@ spec:
         - sh
         - -c
         - until nc -z -w 2 nextcloud 80; do echo waiting for nextcloud:80; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: nextcloud-cron
         image: nextcloud:34.0.4
@@ -244,6 +260,8 @@ spec:
         - name: h-mnt-os-iso
           mountPath: /mnt/os-iso
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
       volumes:
       - name: v-nextcloud-nextcloud-html
         persistentVolumeClaim:
@@ -293,6 +311,10 @@ spec:
         app.kubernetes.io/name: nextcloud-redis
     spec:
       enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: nextcloud-redis
         image: valkey/valkey:9.1.2-alpine
@@ -331,3 +353,5 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 2
           failureThreshold: 35
+        securityContext:
+          allowPrivilegeEscalation: false
