@@ -58,7 +58,7 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 
 **Production right now:**
 - **Kubernetes (kind, on this host) serves the stack.** Docker is down except `wg-easy` (WireGuard stays on Docker by decision).
-- **The public tunnel is OFF:** `cloudflared` is under `stopped:` in `kubernetes/deploy/prod.yaml`, held off during the 2026-10-04 rebuild until the data check (§3).
+- **The public tunnel is ON** (2026-10-05, after the import): `cloudflared` is in the running list, 4 connections registered, the public hostnames answer, and `nginx-plain` logs the visitor's real IP.
 - **Prod runs** (`kubernetes/deploy/prod.yaml`): MIN, CORE, miniflux, bookstack, airflow, temporal, dagster, observability.
 - **Exported services:** adguard-home atuin authentik beszel clamav cloudflared docs firefly forgejo guacamole immich it-tools jellyfin landing mailpit nextcloud nginx-plain ntfy onlyoffice plausible uptime-kuma vaultwarden whiteboard.
 
@@ -74,7 +74,7 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 
 1. ~~Backup store + Velero~~ **done 2026-10-05:** the location is `Available`; a manual Backup of one service (beszel) completed with no errors. The full nightly schedule runs at 03:30.
 2. **Per-app check of the imported data (owner):** row counts already match (§0); log in to each CORE app and check it. Pods have settled except what's in §5.
-3. **Tunnel back on (after step 2, and after Cloudflare's Connectors list shows no stray connector):** `uv run kubernetes/k8s.py up cloudflared --env prod`, commit, push. Then check the public hostnames and real client IPs (`docs/17` "Real client IPs").
+3. ~~Tunnel back on~~ **done 2026-10-05** (public hostnames and real client IPs checked).
 4. **`cluster.py restore`.** Design notes:
    - **Volumes:** a Velero `Restore` CR (selector `homeserver/service=<svc>`) after deleting that service's Deployments and PVCs, with ArgoCD paused (`argo_pause`).
    - **Own Postgres (point in time):** delete the Cluster and recreate it with `bootstrap.recovery` from the ObjectStore under a **new** `serverName` (CNPG refuses an archive that isn't empty), then reconcile with ArgoCD's desired spec.
