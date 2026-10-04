@@ -106,6 +106,10 @@ Stops Jellyfin, applies the settings below (each documented with its own symptom
 
 Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct-attached storage — high concurrency is hard on network shares (SMB/NFS).
 
+## On Kubernetes
+
+Generated from this compose file. The media library (`MEDIA_ROOT`) is mounted read-only from the host, as Compose mounts it. `METADATA_ROOT` becomes its own volume, copied in by `cluster.py import`. The probe is the image's own `HEALTHCHECK`. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Troubleshooting: `SQLite Error 5: 'database is locked'` during large library scans
 
 **Symptom:** `Microsoft.Data.Sqlite.SqliteException: SQLite Error 5: 'database is locked'`, sometimes with a DB command timing out at the full 30s `CommandTimeout`, repeating throughout a large scan.

@@ -50,6 +50,10 @@ Confirmed against Plausible's own current docs.
 - **`MAXMIND_LICENSE_KEY` (`.env`) is required for Locations stats — set on this instance.** Without it, the app logs `[locus] [geolocation] database failed to load (:remote): {:http, 401, "Unauthorized"}` on a recurring retry (roughly hourly), forever, since MaxMind's GeoLite2 databases have required a free registered account + license key since December 2019 — there's no way to fetch one anonymously anymore. Nothing else breaks without it; page view/visitor tracking works fine either way, only the **Locations** panel has no country/city data to show. Signed up at [maxmind.com](https://www.maxmind.com/en/geolite2/signup) (free) and generated a license key under **Services → My License Key** — when prompted "Will this key be used for geoipupdate?", chose **No** (Plausible fetches the database itself directly; the paired Account ID that answering "Yes" requires is only for MaxMind's separate `geoipupdate` tool, which Plausible doesn't use — confirmed only `MAXMIND_LICENSE_KEY` is needed, no account ID field exists in Plausible's own config). Verified live post-restart: a real 31MB `GeoLite2-City.mmdb.gz` downloaded inside the container and `/api/health` reports all green, no more 401s.
 
 
+## On Kubernetes
+
+Generated from this compose file. `plausible-db` becomes a CloudNativePG cluster with superuser access, because Plausible logs in as `postgres` (Compose sets no `POSTGRES_USER`) and creates its own database; the password comes from `.env`. ClickHouse (`plausible-events-db`) is a regular workload with its volumes, unpacked with their original owner on import. Its ports (8123, 9000) are declared in `kubernetes/overrides/plausible.yaml`, because Compose never publishes them. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Fresh-install verification (2026-10-03)
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 2 sites and 687 events restored; healthcheck moved to `/api/system/health/ready`. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).

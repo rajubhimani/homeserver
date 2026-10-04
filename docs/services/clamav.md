@@ -85,6 +85,10 @@ An unhealthy `clamav` (stale signatures included, via the check above) is alerte
 Until 2026-10-03 a separate `clamav-watchdog` container (a curl loop on the Docker socket) sent the same alert. It was removed as redundant with Uptime Kuma. The ntfy alert credentials it used now live in `services/ntfy/.env` (`NTFY_ALERT_URL`/`NTFY_ALERT_TOKEN`).
 
 
+## On Kubernetes
+
+Generated from this compose file. `CACHE_ROOT` (the signature database) becomes its own volume. `cluster.py import` copies it in so the first start is quick; freshclam would otherwise download it again. ClamAV keeps no other data, so it has no snapshot. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Fresh-install verification (2026-10-03)
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless (signatures re-downloaded); stale-signature alerting moved to Uptime Kuma. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).

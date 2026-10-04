@@ -178,6 +178,10 @@ Error response from daemon: failed to set up container networking: driver failed
 **Fix used here:** bind DNS to the host's actual LAN IP instead of the wildcard — set `DNS_BIND_IP` in `.env` (see `.env.example` for how to find it via `ip -4 addr`) and both `compose.dev.yml`/`compose.prod.yml` publish `${DNS_BIND_IP}:53:53` rather than `0.0.0.0:53:53`. Avoids the conflict on both platforms without touching host DNS config. Caveat: if the host's LAN IP changes (DHCP lease renewal), `DNS_BIND_IP` needs updating and the container restarting — set a DHCP reservation on your router for this host to avoid that. The web UI (port 8123/3000) is unaffected by any of this either way — it starts and passes its healthcheck regardless of the DNS port's fate.
 
 
+## On Kubernetes
+
+Generated from this compose file. `adguard-watchdog` doesn't run, because the liveness probe restarts AdGuard instead. **DNS (port 53) isn't reachable from your LAN on kind:** the port is bound to `DNS_BIND_IP`, which isn't one of the localhost ports kind forwards, so only the web UI is tested there. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Fresh-install verification (2026-10-03)
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: config restored, answering DNS on the LAN IP. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).

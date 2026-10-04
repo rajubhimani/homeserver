@@ -106,6 +106,10 @@ Uses external MariaDB (`uptime-kuma-db`, own container in this service's compose
 - Monitor types and notification providers above were verified against the 2.5.0 tag's own source (`src/pages/EditMonitor.vue`, `server/monitor-types/`, `server/notification-providers/`) and its GitHub release notes — not assumed from the latest Uptime Kuma docs, which describe a newer feature set than this pin.
 
 
+## On Kubernetes
+
+Generated from this compose file. `uptime-kuma-db` becomes a mariadb-operator `MariaDB` on the same `mariadb:12.3.3` image, which is also the operator's default. The Docker socket mount is left out: only the "Docker container" monitor type needs it, and HTTP/TCP monitors work unchanged. The probe is the image's own `HEALTHCHECK`. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Fresh-install verification (2026-10-03)
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: all 187 monitors restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).

@@ -17,7 +17,7 @@ A step-by-step guide, with every command, for running this stack on Kubernetes *
 
 The design and its reasons are in [`research/kubernetes-compose-parity-plan.md`](../research/kubernetes-compose-parity-plan.md).
 
-> **Status (2026-10-03): being built in phases.** Each section below is filled in only once its commands are implemented and tested. Sections marked *(coming in phase N)* aren't usable yet. Docker Compose stays the system you actually run until you decide otherwise.
+> **Status (2026-10-04): being built in phases. MIN and CORE run on kind with real data (step 8).** Each section below is filled in only once its commands are implemented and tested. Sections marked *(coming in phase N)* aren't usable yet. Docker Compose stays the system you actually run until you decide otherwise.
 
 ## Before you start
 
@@ -137,7 +137,7 @@ uv run kubernetes/cluster.py status     # pods, services, volume claims, routes
 ```
 
 - **The test cluster uses `DOMAIN=k8s.local`**, so apps build their links for the test hostnames, not your real domain.
-- **cloudflared is prod-only:** it is never deployed to the test cluster, and its tunnel token isn't copied there. Your public sites keep pointing at Docker.
+- **cloudflared is prod-only:** it is never deployed with `--env test`, and its tunnel token isn't copied there, so your public sites keep pointing at Docker. To serve your real domain from the cluster instead, see Step 8 ("Serving your real domain").
 
 **Try it:** every route answers on `127.0.0.1:18080` with its test hostname:
 
@@ -251,7 +251,7 @@ Kubernetes' guidance is to avoid `hostPort` unless needed. Matching Compose's lo
 | Folder | Mounted | Why |
 |---|---|---|
 | Jellyfin `MEDIA_ROOT` | read-only | Compose mounts it read-only too |
-| Nextcloud `OS_ISO_ROOT` | read-only | Only read |
+| Nextcloud `OS_ISO_ROOT` | read-write in `nextcloud`, read-only in `nextcloud-cron` | Exactly Compose's mounts (the read-only flag comes from Compose's `:ro`; the node mount is writable if any container writes) |
 | Immich `UPLOAD_LOCATION` | **read-write** | Immich refuses to start unless it can write its `.immich` check files |
 
 **Immich shares your real photo folder, and Compose snapshots don't include it** (only Immich's database). Before testing Immich on Kubernetes:
@@ -263,7 +263,42 @@ Kubernetes' guidance is to avoid `hostPort` unless needed. Matching Compose's lo
 `immich-offline-remover` doesn't run on Kubernetes, so a test never removes library entries. Back on Docker, `restore immich` brings back the database. The photo folder is the same one, with at most some new thumbnails.
 
 Logins: protected hostnames (nginx-plain's `auth_request`, e.g. `browser.`) keep the Authentik sign-in through Traefik's ForwardAuth middleware, as in [Authentik's Traefik guide](https://docs.goauthentik.io/add-secure-apps/providers/proxy/server_traefik/). The same Authentik providers work unchanged.
-## Step 9 — Going back to Docker *(written with step 8)*
+### Running the real-data window
+
+How it ran on 2026-10-03/04, in this order:
+
+1. **Fresh snapshots on Docker.** `uv run homeserver.py prod backup <svc...>` stops each service (taking a snapshot) and starts it again. Snapshots can be older than the data: check the date, or use `--live-db`.
+2. **Serving your real domain from the cluster.** The Cloudflare tunnel's hostnames point at `http://nginx-plain:80` (set on Cloudflare's dashboard). On the cluster, a Service of that name points at Traefik, so the tunnel works unchanged. **Never run the tunnel in both places at once**, or Cloudflare splits traffic between them:
+   ```bash
+   uv run kubernetes/cluster.py secrets --env prod      # real DOMAIN + the tunnel token
+   uv run homeserver.py prod down cloudflared           # Docker's tunnel off first
+   uv run kubernetes/cluster.py apply --env prod        # routes for your real domain + the tunnel
+   ```
+3. **Stop Docker's services** that the cluster will run (`homeserver.py prod down <svc...>`, which snapshots them), so two copies never share a host folder, a host port or memory. For services you just backed up, add `--no-backup`.
+4. **Bring services up in batches**, the light ones first and the heavy ones (Jellyfin, Nextcloud, Immich, OnlyOffice, ClamAV, Plausible) one at a time: `secrets`, `apply`, wait for the database and volumes, then `import`. Pulling and unpacking large images saturates an HDD, and containerd times out under that load.
+5. **Before Immich starts,** count its trash: `kubectl -n apps exec immich-db-1 -c postgres -- psql -d immich -tAc 'select count(*) from asset where "deletedAt" is not null'`. With 0, the nightly trash-empty job has nothing to delete in the shared photo folder.
+
+Things found during the window, all fixed in the generator or the services themselves:
+- Nextcloud logged in as an installer-made `oc_admin` role; it now reads its database login from `.env` (`docs/services/nextcloud.md`).
+- Mailpit's SMTP port wasn't declared, so mail sends timed out on Kubernetes (`docs/services/mailpit.md`).
+- Images' own `HEALTHCHECK`s are ignored by Kubernetes; they're now carried as probes.
+- Authentik's chart probes need their 3 s timeout.
+
+## Step 9 — Going back to Docker
+
+Changes made on the cluster don't flow back: Docker restarts from its own data, as it was when you stopped it.
+
+```bash
+uv run kubernetes/cluster.py delete       # frees the tunnel, the localhost ports and UDP 51820; host folders are kept
+uv run homeserver.py prod up core         # starts MIN + CORE again (cloudflared, wg-easy and Jellyfin included)
+uv run homeserver.py status
+```
+
+- **Delete the whole cluster, not just its tunnel.** kind holds the same `127.0.0.1` ports (and WireGuard's UDP 51820) that Docker needs.
+- **Docker's databases and volumes were never touched.** `down` keeps them, and `up` starts from them, so no restore is needed.
+- **Immich:** the photo folder is shared. At most it has new thumbnails from the cluster, which Docker's Immich ignores or regenerates.
+- **Nextcloud:** from its next start under Docker it logs in with `.env`'s `POSTGRES_USER` (`config/db.config.php`) instead of `oc_admin`. That's intended; check `curl -s localhost:8081/status.php` after the start.
+- **Want the cluster's changes on Docker?** That's a migration in the other direction (dump from CloudNativePG, `homeserver.py restore`), not part of this test.
 
 ## Why it's built this way (sources)
 
