@@ -124,9 +124,13 @@ def cmd_create(_a) -> None:
         maps = "".join(f"      - containerPort: {pt}\n        hostPort: {pt}\n        protocol: {proto.upper()}\n"
                        for pt, proto in ports)
         text = text.replace("    extraMounts:\n", maps + "    extraMounts:\n", 1)
-    for node_path, host, ro in host_mounts():
-        text += (f"      - hostPath: {host}\n        containerPath: {node_path}\n"
-                 + ("        readOnly: true\n" if ro else ""))
+    # Into the extraMounts list: it's followed by kubeadmConfigPatches, so
+    # appending at the end would land in the wrong list (kind: "cannot
+    # unmarshal !!map into string", 2026-10-04).
+    mounts = "".join(f"      - hostPath: {host}\n        containerPath: {node_path}\n"
+                     + ("        readOnly: true\n" if ro else "") for node_path, host, ro in host_mounts())
+    assert "    kubeadmConfigPatches:\n" in text, "kind-config template: kubeadmConfigPatches moved"
+    text = text.replace("    kubeadmConfigPatches:\n", mounts + "    kubeadmConfigPatches:\n", 1)
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
         f.write(text)
     try:
