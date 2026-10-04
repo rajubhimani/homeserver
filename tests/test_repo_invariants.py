@@ -290,3 +290,36 @@ def test_env_files_are_owner_only():
     loose = [str(f.relative_to(REPO)) for f in [REPO / ".env", REPO / "kubernetes/.env", *REPO.glob("services/*/.env")]
              if f.is_file() and f.stat().st_mode & 0o077]
     assert not loose, f"readable by others (chmod 600): {loose}"
+
+
+# Images that deliberately track a moving tag, each with its documented reason.
+MOVING_TAG_EXCEPTIONS = {
+    # Public-facing remote browsers: security patches as soon as they ship
+    # (docs/services/firefox.md, "Image tag — deliberate exception").
+    "brave", "chromium", "firefox", "mullvad-browser", "librewolf", "zen", "helium", "chrome", "edge", "vivaldi",
+}
+MOVING_TAGS = {"latest", "release", "stable", "main", "master", "nightly", "edge", "dev", ""}
+
+
+def test_images_are_pinned():
+    """Every image is pinned to a version, or by digest when the project
+    publishes no version tags (Excalidraw). Moving tags only for the
+    documented exceptions above."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("k8s_generate", REPO / "kubernetes/generate.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    bad = []
+    for s in hs._SERVICES_DATA["services"]:
+        if not hs.is_managed_service(s) or s["slug"] in MOVING_TAG_EXCEPTIONS:
+            continue
+        for n, c in gen.load_compose(s["slug"])["services"].items():
+            if not c.get("image"):
+                continue
+            img = gen.image_ref(s["slug"], c["image"], s["slug"])
+            if "@sha256:" in img:
+                continue
+            name = img.rsplit("/", 1)[-1]
+            if (name.split(":", 1)[1] if ":" in name else "") in MOVING_TAGS:
+                bad.append(f"{s['slug']}/{c.get('container_name') or n}: {img}")
+    assert not bad, f"images on a moving tag (pin a version, or a digest): {bad}"

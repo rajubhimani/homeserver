@@ -16,6 +16,10 @@ uv run homeserver.py dev up excalidraw
 
 Open `https://excalidraw.<domain>/` (or `http://<host>:8116` in dev).
 
+## Image version
+
+Excalidraw publishes **only `latest`** on Docker Hub; its versioned image tags stopped in 2021 (`sha-…` builds), and its GitHub releases (v0.18.x) are for the npm package. So `compose.yml` pins `latest` **by digest** (`excalidraw/excalidraw:latest@sha256:f7ee…`, the image updated 2026-05-06). The image can't change underneath, and Docker and Kubernetes run the identical build. To update, read the current digest (`curl -s https://hub.docker.com/v2/repositories/excalidraw/excalidraw/tags/latest`), check the changes since, and bump the digest deliberately.
+
 ## Important limitation: no server-side persistence or self-hosted collaboration
 
 The official `excalidraw/excalidraw` image is **just the static frontend** — a pre-built JS app served by nginx. There's no database, no `DATA_ROOT`, and nothing in `service_data/` for this service:
