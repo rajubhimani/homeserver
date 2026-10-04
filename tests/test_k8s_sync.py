@@ -348,3 +348,16 @@ def test_localhost_ports_mirror_compose():
             for ip, host, tgt, proto in gen.published_ports(s):
                 if ip == "127.0.0.1" and svc != "nginx-plain":
                     assert (svc, host) in in_list, f"{svc}: 127.0.0.1:{host} missing from host-ports.yaml"
+
+
+def test_cluster_cli_commands_all_exist():
+    """Every action cluster.py dispatches to is defined (a refactor once
+    dropped cmd_rmi and the CLI failed with a NameError at run time)."""
+    src = (K8S / "cluster.py").read_text()
+    spec = importlib.util.spec_from_file_location("k8s_cluster", K8S / "cluster.py")
+    mod = importlib.util.module_from_spec(spec)
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec.loader.exec_module(mod)
+    for name in set(re.findall(r'"[a-z]+": (cmd_[a-z_]+)', src)):
+        assert callable(getattr(mod, name, None)), f"cluster.py dispatches to undefined {name}"

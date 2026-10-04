@@ -602,6 +602,40 @@ def smoke_check(svc: str, ctx: list[str], timeout: int) -> list[str]:
     return notes
 
 
+def service_images(svc: str) -> set[str]:
+    """Every image a service's generated manifests use (containers + init)."""
+    out = set()
+    for f in (K8S / "generated/apps" / svc).glob("*.yaml"):
+        for d in yaml.safe_load_all(f.read_text()):
+            spec = ((d or {}).get("spec") or {})
+            pod = (spec.get("template") or {}).get("spec") or {}
+            for c in pod.get("containers", []) + pod.get("initContainers", []):
+                out.add(c["image"])
+            if spec.get("imageName"):
+                out.add(spec["imageName"])
+    return out
+
+
+def cmd_rmi(a) -> None:
+    """Remove stopped services' images from the kind node's image store
+    (K8S_IMAGES_PATH): not images any running pod still uses."""
+    node = f"{cfg()['K8S_CLUSTER_NAME']}-control-plane"
+    in_use = set(subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "get", "pods", "-A", "-o",
+                                 "jsonpath={range .items[*]}{range .spec.containers[*]}{.image}{\"\\n\"}{end}"
+                                 "{range .spec.initContainers[*]}{.image}{\"\\n\"}{end}{end}"],
+                                capture_output=True, text=True).stdout.split())
+    wanted = set()
+    for svc in services(a.services):
+        wanted |= service_images(svc)
+    for img in sorted(wanted - in_use):
+        ref = img if "/" in img.split(":")[0] or "." in img.split("/")[0] else f"docker.io/library/{img}"
+        r = subprocess.run(["docker", "exec", node, "crictl", "rmi", ref], capture_output=True, text=True)
+        print(("removed " if r.returncode == 0 else "kept    ") + img + ("" if r.returncode == 0 else f"  ({r.stderr.strip()[:80]})"))
+    kept = sorted(wanted & in_use)
+    if kept:
+        print("still in use by running pods: " + ", ".join(kept))
+
+
 def cmd_status(_a) -> None:
     kubectl("get", "pods,svc,pvc,httproute", "-n", NAMESPACE, "-o", "wide", check=False)
 
