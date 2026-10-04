@@ -7,6 +7,7 @@
     uv run kubernetes/cluster.py import  <svc...> [--snapshot TS]  # copy a Compose snapshot's data into the cluster
     uv run kubernetes/cluster.py export  [svc...]  # the cluster's data (database dumps, volume tars) -> K8S_EXPORT_PATH
     uv run kubernetes/cluster.py import  [svc...] --from-export DIR  # ... and back, e.g. into a rebuilt cluster
+    uv run kubernetes/cluster.py archive <folder>  # copy the backup store (all backups) to e.g. the Passport
     uv run kubernetes/cluster.py images  <svc...>  # build a service's local images (Compose build:) and load them into kind
     uv run kubernetes/cluster.py smoke   <svc...> [--keep]  # start with empty data on test hostnames, check, remove
     uv run kubernetes/cluster.py rmi     <svc...>  # remove a stopped service's images from the kind node (frees disk)
@@ -205,7 +206,7 @@ def env_hash(data: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
-BACKUP_KEYS = ["BACKUP_STORE_ROOT_USER", "BACKUP_STORE_ROOT_PASSWORD"] + [
+BACKUP_KEYS = ["BACKUP_STORE_ROOT_USER", "BACKUP_STORE_ROOT_PASSWORD", "BACKUP_VELERO_REPO_PASSWORD"] + [
     f"BACKUP_{b.upper()}_{k}" for b in ("postgres", "velero", "dumps") for k in ("ACCESS_KEY", "SECRET_KEY")]
 
 
@@ -244,6 +245,16 @@ def cmd_secrets(a) -> None:
         {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
          "metadata": {"name": "kubernetes", "namespace": SECRET_STORE_NS, "labels": {"app.kubernetes.io/part-of": "homeserver"}},
          "stringData": keys}))
+    # Velero encrypts its kopia repository with this password. Its default is
+    # one static key shared by every Velero install, and the password can only
+    # be set before the first backup (velero.io file-system-backup), so it's
+    # created here, before ArgoCD installs Velero. Never change it afterwards:
+    # older backups would become unreadable. `archive` keeps a copy with them.
+    kubectl("apply", "-f", "-", input=yaml.safe_dump_all([
+        {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "velero"}},
+        {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+         "metadata": {"name": "velero-repo-credentials", "namespace": "velero"},
+         "stringData": {"repository-password": keys["BACKUP_VELERO_REPO_PASSWORD"]}}]))
     prod_only = set(load_scope().get("prod_only") or [])
     for svc in services(a.services):
         env_file = REPO / "services" / svc / ".env"
@@ -667,6 +678,38 @@ def import_export(a) -> None:
             argo_pause(svc, False)
 
 
+def cmd_archive(a) -> None:
+    """Copy the backup store (every bucket: database archives, volume
+    backups, dumps) to a folder, e.g. the Passport, like homeserver.py
+    archive. Incremental (mc mirror): only new objects are copied. The copy
+    includes kubernetes/.env, which holds the keys and Velero's repository
+    password: without it the volume backups can't be decrypted."""
+    if not a.services:
+        sys.exit("name the destination folder: cluster.py archive /run/media/<you>/Passport/homeserver")
+    dest = Path(a.services[0]).expanduser()
+    if not dest.is_dir():
+        sys.exit(f"{dest} doesn't exist: create it (or mount the drive) first")
+    out = dest / "k8s-backup-store"
+    out.mkdir(exist_ok=True)
+    keys = ensure_backup_keys()
+    pf = subprocess.Popen(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", "backup", "port-forward",
+                           "svc/backup-store", "19000:9000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        time.sleep(3)
+        mirror = ('mc alias set src http://127.0.0.1:19000 "$U" "$P" >/dev/null && '
+                  'for b in $(mc ls src | awk \'{print $NF}\'); do mc mirror --overwrite --preserve "src/$b" "/out/$b"; done')
+        run(["docker", "run", "--rm", "--network", "host", "-e", "MC_CONFIG_DIR=/tmp/.mc",
+             "-e", f"U={keys['BACKUP_STORE_ROOT_USER']}", "-e", f"P={keys['BACKUP_STORE_ROOT_PASSWORD']}",
+             "--user", f"{os.getuid()}:{os.getgid()}", "-v", f"{out}:/out", VERSIONS["MC_IMAGE"], "sh", "-c", mirror])
+    finally:
+        pf.terminate()
+    envcopy = out / "kubernetes.env"
+    envcopy.write_text((K8S / ".env").read_text())
+    envcopy.chmod(0o600)
+    total = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
+    print(f"archived the backup store to {out} ({total / 2**30:.1f} GiB), with kubernetes.env (keep it private)")
+
+
 def cmd_validate(a) -> None:
     """Server-side dry run of each service's manifests: the API server checks
     schemas, operator CRDs and field values without creating anything, and
@@ -876,7 +919,7 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "images", "smoke", "rmi", "validate", "status", "delete"])
+    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
@@ -886,7 +929,7 @@ def main() -> int:
     ap.add_argument("--live-db", action="store_true", help="import: own Postgres from the running Compose container (pg_dump)")
     ap.add_argument("--from-export", help="import: a folder written by export (K8S_EXPORT_PATH/<timestamp>)")
     a = ap.parse_args()
-    {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "export": cmd_export, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
+    {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "export": cmd_export, "archive": cmd_archive, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
      "status": cmd_status, "delete": cmd_delete}[a.action](a)
     return 0
 
