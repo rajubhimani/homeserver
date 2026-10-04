@@ -382,11 +382,6 @@ spec:
     targetPort: 8200
     nodePort: 30124
     protocol: TCP
-  - name: h8443
-    port: 8443
-    targetPort: 8443
-    nodePort: 30443
-    protocol: TCP
   - name: h9444
     port: 9444
     targetPort: 9444

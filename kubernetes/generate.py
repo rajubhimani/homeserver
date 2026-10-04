@@ -1535,7 +1535,10 @@ def local_access() -> dict[str, list[dict]]:
                 ports.append({"containerPort": hp, "hostPort": hp, "hostIP": ip,
                               **({"protocol": "UDP"} if proto == "udp" else {})})
     for e in entries:
-        if e["node"] >= NODE_PORT_BASE and not e.get("direct"):
+        # nginx-plain's ports are Traefik's own node ports (kind maps them
+        # straight there); the proxy holding one too broke Traefik's Service
+        # ("provided port is already allocated", 2026-10-04).
+        if e["node"] >= NODE_PORT_BASE and not e.get("direct") and e["svc"] != "nginx-plain":
             nodeports.append({"name": f"h{e['host']}", "port": e["host"], "targetPort": e["host"],
                               "nodePort": e["node"], "protocol": e["protocol"].upper()})
     conf = "\n".join([

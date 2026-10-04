@@ -665,3 +665,14 @@ def test_backups_cover_every_database_and_volume():
                         if "-host-" in (v.get("persistentVolumeClaim") or {}).get("claimName", "")}
                 excl = set((tmpl["metadata"].get("annotations") or {}).get("backup.velero.io/backup-volumes-excludes", "").split(","))
                 assert host <= excl, f"{svc}/{o['metadata']['name']}: host folders {sorted(host - excl)} would be copied by Velero"
+
+
+def test_local_access_never_takes_traefiks_node_ports():
+    """Traefik's node ports (kubernetes/cluster/traefik/values.yaml) belong to
+    Traefik alone; the local-access proxy's NodePort Service must not claim
+    them, or one of the two Services fails to apply."""
+    values = yaml.safe_load((K8S / "cluster/traefik/values.yaml").read_text())
+    traefik = {p["nodePort"] for p in values["ports"].values() if isinstance(p, dict) and p.get("nodePort")}
+    svc = next(d for d in yaml.safe_load_all((GENERATED / "apps/local-access/services.yaml").read_text()) if d)
+    taken = {p["nodePort"] for p in svc["spec"]["ports"]}
+    assert not traefik & taken, f"local-access claims Traefik's node ports {sorted(traefik & taken)}"
