@@ -129,6 +129,14 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 
 Everything that can differ between deployments lives in the service's `.env`, following [twelve-factor "config in the environment"](https://12factor.net/config). That covers backing-service endpoints, ports, credentials, URLs and versions. Compose files keep only wiring that's the same everywhere. The same values map one-to-one onto Kubernetes ConfigMaps and Secrets.
 
+**Layout.** Every `.env` and `.env.example` has three labelled sections, so it's clear what each runtime uses (`scripts/env_sections.py` arranges them, and a test keeps them arranged):
+
+1. **Common: Docker Compose and Kubernetes.** Almost everything: endpoints, credentials, versions.
+2. **Docker Compose only.** `DATA_ROOT` (volumes replace it on Kubernetes), plus the few values Kubernetes replaces, e.g. landing's `UPSTREAM_SUFFIX` and `WG_EASY_HOST`, and Beszel's `HUB_URL`.
+3. **Kubernetes.** Comments only: what `kubernetes/generate.py` sets instead (from `kubernetes/overrides/<svc>.yaml` `env:`).
+
+Nothing gets commented or uncommented to switch runtimes: one `.env` works for both, and `cluster.py secrets` loads the whole file. After adding a key, run `uv run scripts/env_sections.py --real` to put it in its section.
+
 Backing-service endpoints use the same variable names in every service, defaulting to the local container:
 
 | Variable | What | Example default |

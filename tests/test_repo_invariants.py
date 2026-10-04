@@ -272,3 +272,12 @@ def test_cache_containers_use_valkey_not_redis():
         if re.match(r"^\s*image:\s*[\"']?(docker\.io/)?(library/)?redis[:@\"'\s]", line)
     )
     assert not offenders, f"use valkey/valkey instead of redis: {offenders}"
+
+
+def test_env_examples_have_docker_and_kubernetes_sections():
+    """Every .env.example is laid out Common / Docker Compose only / Kubernetes
+    (scripts/env_sections.py), so it's clear what each runtime uses: run
+    `uv run scripts/env_sections.py` after adding a key."""
+    import subprocess
+    proc = subprocess.run(["uv", "run", "scripts/env_sections.py", "--check"], cwd=REPO, capture_output=True, text=True)
+    assert proc.returncode == 0, "not arranged (run uv run scripts/env_sections.py):\n" + proc.stdout
