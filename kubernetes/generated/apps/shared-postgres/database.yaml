@@ -49,6 +49,8 @@ spec:
     size: 5Gi
     storageClass: fast
   resources:
+    requests:
+      memory: 2Gi
     limits:
       memory: 2Gi
   inheritedMetadata:

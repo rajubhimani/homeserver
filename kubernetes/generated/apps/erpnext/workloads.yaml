@@ -298,6 +298,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 8
         resources:
+          requests:
+            memory: 1024Mi
           limits:
             memory: 1024Mi
         volumeMounts:

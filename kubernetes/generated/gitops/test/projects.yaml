@@ -16,6 +16,7 @@ spec:
   - https://cloudnative-pg.github.io/charts
   - https://helm.mariadb.com/mariadb-operator
   - https://kubernetes-sigs.github.io/headlamp/
+  - https://kubernetes-sigs.github.io/metrics-server/
   - https://stakater.github.io/stakater-charts
   - https://traefik.github.io/charts
   - https://vmware-tanzu.github.io/helm-charts

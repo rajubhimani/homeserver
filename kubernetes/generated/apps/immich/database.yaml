@@ -67,6 +67,8 @@ spec:
     size: 10Gi
     storageClass: fast
   resources:
+    requests:
+      memory: 2Gi
     limits:
       memory: 2Gi
   inheritedMetadata:

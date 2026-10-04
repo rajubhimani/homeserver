@@ -111,6 +111,8 @@ spec:
           periodSeconds: 30
           failureThreshold: 6
         resources:
+          requests:
+            memory: 1024Mi
           limits:
             memory: 1024Mi
         securityContext:

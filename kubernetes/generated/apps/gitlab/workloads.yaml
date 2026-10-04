@@ -95,6 +95,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 65
         resources:
+          requests:
+            memory: 6Gi
           limits:
             memory: 6Gi
         volumeMounts:

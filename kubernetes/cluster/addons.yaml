@@ -78,6 +78,16 @@
   chart: velero
   version: VELERO_CHART_VERSION
   values_from: velero
+- name: metrics-server         # usage for kubectl top / Headlamp, to size requests from real data
+  namespace: kube-system
+  repo: https://kubernetes-sigs.github.io/metrics-server/
+  chart: metrics-server
+  version: METRICS_SERVER_CHART_VERSION
+  values_object:
+    # kind's kubelets serve a self-signed certificate (metrics-server's
+    # README: "--kubelet-insecure-tls" for test clusters such as kind). On a
+    # cluster with signed kubelet serving certificates, drop this.
+    args: [--kubelet-insecure-tls]
 - name: ops-routes             # argocd.k8s.local, headlamp.k8s.local
   namespace: argocd
   path: kubernetes/generated/platform/ops-routes

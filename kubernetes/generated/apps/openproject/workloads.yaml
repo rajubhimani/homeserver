@@ -77,6 +77,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 17
         resources:
+          requests:
+            memory: 3Gi
           limits:
             memory: 3Gi
         volumeMounts:

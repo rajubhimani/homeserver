@@ -614,7 +614,8 @@ def convert(svc: str) -> dict[str, list[dict]]:
         lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
         if lim.get("memory") or s.get("mem_limit"):
             m = mem(lim.get("memory") or s.get("mem_limit"))
-            container["resources"] = {"limits": {"memory": m}}
+            # request = limit: the memory is reserved, not just capped
+            container["resources"] = {"requests": {"memory": m}, "limits": {"memory": m}}
         sc: dict = {}
         if s.get("cap_add"):
             sc["capabilities"] = {"add": sorted(s["cap_add"])}
@@ -1023,7 +1024,8 @@ def cnpg_cluster(name: str, svc: str, params: dict, limit: str | None, size: str
             **extra,
             "postgresql": {"parameters": params, **({"pg_hba": hba} if hba else {}), **pg_extra},
             "storage": {"size": size, "storageClass": "fast"},
-            **({"resources": {"limits": {"memory": limit}}} if limit else {}),
+            # requests = limits: CloudNativePG recommends Guaranteed QoS for Postgres
+            **({"resources": {"requests": {"memory": limit}, "limits": {"memory": limit}}} if limit else {}),
             "inheritedMetadata": {"labels": labels},
             "managed": {"services": {"additional": [
                 {"selectorType": "rw", "serviceTemplate": {"metadata": {"name": name, "labels": labels}}}]}},
@@ -1134,7 +1136,8 @@ def own_mariadb(svc: str, n: str, s: dict, ov: dict) -> dict | None:
             **({"myCnf": "\n".join(["[mariadb]"] + [a[2:] for a in args if a.startswith("--")]) + "\n"}
                if any(a.startswith("--") for a in args) else {}),
             "storage": {"size": ((ov.get("storage") or {}).get(c) or {}).get("size", "5Gi"), "storageClassName": "fast"},
-            **({"resources": {"limits": {"memory": mem(lim["memory"])}}} if lim.get("memory") else {}),
+            **({"resources": {"requests": {"memory": mem(lim["memory"])}, "limits": {"memory": mem(lim["memory"])}}}
+               if lim.get("memory") else {}),
             "inheritMetadata": {"labels": labels},
         },
     }
@@ -1187,7 +1190,7 @@ def shared_mariadb() -> dict[str, list[dict]]:
             "myCnf": "\n".join(cnf) + "\n",
             "env": [{"name": "MARIADB_AUTO_UPGRADE", "value": "1"}],  # as in Compose
             "storage": {"size": (ov.get("storage") or {}).get("size", "5Gi"), "storageClassName": "fast"},
-            **({"resources": {"limits": {"memory": lim}}} if lim else {}),
+            **({"resources": {"requests": {"memory": lim}, "limits": {"memory": lim}}} if lim else {}),
             "inheritMetadata": {"labels": labels},
         },
     }
@@ -1877,6 +1880,14 @@ def homeserver_config(env: str, domain: str) -> dict[str, list[dict]]:
                              # test: apps build their own links for the test hostnames
                              "data": {"DOMAIN": TEST_DOMAIN if env == "test" else domain,
                                       "TZ": root.get("TZ", "Asia/Kolkata")}}],
+        # Every container gets a small request unless it sets its own, so no
+        # pod is BestEffort (evicted first under memory pressure). No default
+        # limits: Compose sets none either. Per-service requests come from
+        # measured usage (overrides). kubernetes.io/docs/concepts/policy/limit-range
+        "limits.yaml": [{"apiVersion": "v1", "kind": "LimitRange",
+                         "metadata": {"name": "default-requests", "namespace": NAMESPACE, "labels": labels},
+                         "spec": {"limits": [{"type": "Container",
+                                              "defaultRequest": {"cpu": "10m", "memory": "64Mi"}}]}}],
         "secret-store.yaml": [
             {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": SECRET_STORE_NS, "labels": {
                 **labels, "pod-security.kubernetes.io/enforce": "restricted"}}},

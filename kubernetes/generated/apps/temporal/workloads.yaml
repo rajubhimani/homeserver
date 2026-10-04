@@ -148,6 +148,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 16
         resources:
+          requests:
+            memory: 768Mi
           limits:
             memory: 768Mi
         volumeMounts:
@@ -214,6 +216,8 @@ spec:
         - name: TEMPORAL_CLI_ADDRESS
           value: temporal:7233
         resources:
+          requests:
+            memory: 128Mi
           limits:
             memory: 128Mi
         securityContext:
@@ -297,6 +301,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 7
         resources:
+          requests:
+            memory: 256Mi
           limits:
             memory: 256Mi
         securityContext:
@@ -378,6 +384,8 @@ spec:
         - name: TEMPORAL_NAMESPACES
           value: $(TEMPORAL_NAMESPACES)
         resources:
+          requests:
+            memory: 256Mi
           limits:
             memory: 256Mi
         volumeMounts:

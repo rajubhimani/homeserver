@@ -97,6 +97,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 35
         resources:
+          requests:
+            memory: 1536Mi
           limits:
             memory: 1536Mi
         volumeMounts:
@@ -171,6 +173,8 @@ spec:
           periodSeconds: 30
           failureThreshold: 10
         resources:
+          requests:
+            memory: 512Mi
           limits:
             memory: 512Mi
         volumeMounts:
@@ -253,6 +257,8 @@ spec:
           periodSeconds: 30
           failureThreshold: 10
         resources:
+          requests:
+            memory: 128Mi
           limits:
             memory: 128Mi
         securityContext:
@@ -333,6 +339,8 @@ spec:
           periodSeconds: 10
           failureThreshold: 8
         resources:
+          requests:
+            memory: 256Mi
           limits:
             memory: 256Mi
         volumeMounts:
@@ -407,6 +415,8 @@ spec:
           periodSeconds: 30
           failureThreshold: 10
         resources:
+          requests:
+            memory: 128Mi
           limits:
             memory: 128Mi
         volumeMounts:
