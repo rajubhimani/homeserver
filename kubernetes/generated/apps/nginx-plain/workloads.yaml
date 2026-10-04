@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nginx-plain
     app.kubernetes.io/name: browser-hub
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -92,8 +94,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nginx-plain
     app.kubernetes.io/name: nginx-plain
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

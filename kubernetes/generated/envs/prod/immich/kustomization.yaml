@@ -5,3 +5,20 @@ namespace: apps
 resources:
 - ../../../apps/immich
 - routes.yaml
+patches:
+- target:
+    kind: Cluster
+    name: immich-db
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
+- target:
+    kind: Deployment
+    name: immich-ml
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: immich-redis
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: immich-server
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

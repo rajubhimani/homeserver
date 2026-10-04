@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: guacamole
     app.kubernetes.io/name: guacamole
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -135,8 +137,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: guacamole
     app.kubernetes.io/name: guacd
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: beszel
     app.kubernetes.io/name: beszel
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -99,6 +101,8 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: beszel
     app.kubernetes.io/name: beszel-agent
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
   selector:
     matchLabels:
@@ -210,6 +214,8 @@ spec:
       - key: node-role.kubernetes.io/master
         operator: Exists
         effect: NoSchedule
+      nodeSelector:
+        homeserver/stopped: 'true'
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:

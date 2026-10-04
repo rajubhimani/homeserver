@@ -4,3 +4,8 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/clamav
+patches:
+- target:
+    kind: Deployment
+    name: clamav
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

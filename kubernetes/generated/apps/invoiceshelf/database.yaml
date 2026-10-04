@@ -7,6 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: invoiceshelf
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   mariaDbRef:
     name: shared-mariadb
@@ -25,6 +27,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: invoiceshelf
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   mariaDbRef:
     name: shared-mariadb
@@ -40,6 +44,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: invoiceshelf
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   mariaDbRef:
     name: shared-mariadb

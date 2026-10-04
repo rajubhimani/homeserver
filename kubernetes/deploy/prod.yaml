@@ -1,0 +1,20 @@
+# What ArgoCD deploys for the 'prod' environment (docs/17 "GitOps"). Edit,
+# run kubernetes/generate.py, commit and push: ArgoCD applies it. Or use
+# 'uv run kubernetes/k8s.py up|down <target> --env prod', which edits this
+# file the same way homeserver.py up/down picks services.
+#
+# repo/revision: the git repo and branch ArgoCD follows.
+# running: targets that run, as homeserver.py takes them (min, core, daily,
+#   browser, office, automation-ai, all, group:<name>, or service names).
+#   Every other ported service is deployed stopped: its config, volumes and
+#   databases exist, nothing runs. Shared Postgres/MariaDB start when a
+#   running service needs them.
+# stopped: services taken out of a running target ('down jellyfin' while
+#   'core' runs).
+# auto_sync: ArgoCD applies every pushed change by itself (and undoes manual
+#   changes in the cluster); false = press Sync in the ArgoCD UI.
+repo: https://github.com/rajubhimani/homeserver.git
+revision: feature/k8s-generated
+running: [min, core]
+stopped: []
+auto_sync: false

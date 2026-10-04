@@ -7,6 +7,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plausible
+  annotations:
+    cnpg.io/hibernation: 'on'
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:18.6-202608131513-standard-trixie

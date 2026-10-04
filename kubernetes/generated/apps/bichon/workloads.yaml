@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: bichon
     app.kubernetes.io/name: bichon
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -148,3 +150,4 @@ spec:
             path: services-bichon-init-admin-sh
             mode: 420
       restartPolicy: OnFailure
+  suspend: true

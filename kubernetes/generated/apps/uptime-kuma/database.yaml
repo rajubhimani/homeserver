@@ -7,6 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: uptime-kuma
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   image: mariadb:12.3.3
   rootPasswordSecretKeyRef:
@@ -31,3 +33,4 @@ spec:
     labels:
       app.kubernetes.io/part-of: homeserver
       homeserver/service: uptime-kuma
+  suspend: true

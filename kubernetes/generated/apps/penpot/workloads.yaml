@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: penpot
     app.kubernetes.io/name: penpot-backend
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -143,8 +145,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: penpot
     app.kubernetes.io/name: penpot-exporter
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -207,8 +211,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: penpot
     app.kubernetes.io/name: penpot-frontend
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -287,8 +293,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: penpot
     app.kubernetes.io/name: penpot-redis
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

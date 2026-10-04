@@ -7,6 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   cluster:
     name: shared-postgres
@@ -23,6 +25,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   cluster:
     name: shared-postgres
@@ -40,6 +44,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   cluster:
     name: shared-postgres

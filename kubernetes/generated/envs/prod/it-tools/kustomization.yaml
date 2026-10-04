@@ -5,3 +5,8 @@ namespace: apps
 resources:
 - ../../../apps/it-tools
 - routes.yaml
+patches:
+- target:
+    kind: Deployment
+    name: it-tools
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

@@ -5,3 +5,12 @@ namespace: apps
 resources:
 - ../../../apps/forgejo
 - routes.yaml
+patches:
+- target:
+    kind: Cluster
+    name: forgejo-db
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
+- target:
+    kind: Deployment
+    name: forgejo
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

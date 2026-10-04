@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
     app.kubernetes.io/name: nextcloud
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -187,8 +189,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
     app.kubernetes.io/name: nextcloud-cron
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -290,8 +294,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
     app.kubernetes.io/name: nextcloud-redis
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

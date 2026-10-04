@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: ghostfolio
     app.kubernetes.io/name: ghostfolio
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -107,8 +109,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: ghostfolio
     app.kubernetes.io/name: ghostfolio-redis
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

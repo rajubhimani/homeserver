@@ -7,6 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   capacity:
     storage: 1Ti
@@ -35,6 +37,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes:
   - ReadWriteOnce
@@ -51,6 +55,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes:
   - ReadWriteOnce
@@ -66,6 +72,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes:
   - ReadWriteOnce
@@ -81,6 +89,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes:
   - ReadWriteOnce
@@ -96,6 +106,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes:
   - ReadWriteOnce
@@ -111,6 +123,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes:
   - ReadWriteOnce

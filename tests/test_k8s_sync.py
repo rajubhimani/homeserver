@@ -435,3 +435,130 @@ def test_config_file_upstreams_have_service_ports():
             have = ports.get(name, set()) | ports.get(n, set())
             gaps += [f"{svc}/{name}:{p}" for p in sorted(wanted - have)]
     assert not gaps, f"config files reach ports their Services don't have: {gaps}"
+
+
+# ── GitOps (docs/17 "GitOps") ────────────────────────────────────────────
+
+def _apps_objects(svc: str) -> list[dict]:
+    out = []
+    for f in sorted((GENERATED / "apps" / svc).glob("*.yaml")):
+        if f.name != "kustomization.yaml":
+            out += [d for d in yaml.safe_load_all(f.read_text()) if d]
+    return out
+
+
+def test_services_are_generated_stopped():
+    """The base of every service is stopped: ArgoCD creates config, volumes
+    and databases, and only the env's running list switches them on. Objects
+    that hold data are never pruned or deleted by ArgoCD."""
+    for svc in PORTED:
+        for o in _apps_objects(svc):
+            k, spec, ann = o["kind"], o.get("spec") or {}, o["metadata"].get("annotations") or {}
+            where = f"{svc}: {k}/{o['metadata']['name']}"
+            if k == "Deployment":
+                assert spec["replicas"] == 0, where
+            elif k == "DaemonSet":
+                assert spec["template"]["spec"]["nodeSelector"].get(gen.STOPPED_NODE_SELECTOR[0]), where
+            elif k in ("Job", "MariaDB"):
+                assert spec["suspend"] is True, where
+            elif k == "Cluster":
+                assert ann.get(gen.CNPG_HIBERNATION) == "on", where
+            if k in gen.KEEP_KINDS:
+                assert ann.get("argocd.argoproj.io/sync-options") == "Prune=false,Delete=false", where
+
+
+def test_env_overlays_follow_the_running_list():
+    """envs/<env>/<svc> switches the service on exactly when
+    kubernetes/deploy/<env>.yaml runs it, with one patch per stopped object."""
+    for env in gen.ENVS:
+        running = gen.running_services(env)
+        for svc in PORTED:
+            k = GENERATED / "envs" / env / svc / "kustomization.yaml"
+            if not k.is_file():
+                continue
+            patches = yaml.safe_load(k.read_text()).get("patches") or []
+            if svc in running:
+                assert patches == gen.running_patches(_apps_objects(svc)), f"{env}/{svc}"
+                assert gen.started(_apps_objects(svc)) != _apps_objects(svc) or not patches
+            else:
+                assert not patches, f"{env}/{svc} runs but kubernetes/deploy/{env}.yaml doesn't list it"
+        for app, spec in gen.shared_db_apps().items():
+            if app in running and not gen.external_db(app):
+                assert gen.SHARED[spec["engine"]] in running, f"{env}: {app} runs without its shared database"
+
+
+def test_no_secret_in_git_and_every_referenced_secret_is_built():
+    """Git holds no Secret objects. Every Secret a generated object reads
+    (envFrom, secretKeyRef, CNPG/mariadb-operator references) is built by an
+    ExternalSecret of the same service, or of the shared server it uses."""
+    built, refs = {}, []
+
+    def walk(node, svc):
+        if isinstance(node, dict):
+            for key in ("secretRef", "secretKeyRef", "passwordSecret", "superuserSecret",
+                        "rootPasswordSecretKeyRef", "passwordSecretKeyRef"):
+                if isinstance(node.get(key), dict) and node[key].get("name"):
+                    refs.append((svc, node[key]["name"]))
+            if isinstance(node.get("secret"), dict) and node["secret"].get("secretName"):
+                refs.append((svc, node["secret"]["secretName"]))
+            for v in node.values():
+                walk(v, svc)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, svc)
+
+    for svc in PORTED:
+        for o in _apps_objects(svc):
+            assert o["kind"] != "Secret", f"{svc}: a Secret object in git"
+            if o["kind"] == "ExternalSecret":
+                built[o["spec"]["target"]["name"]] = svc
+                assert o["spec"]["dataFrom"] == [{"extract": {"key": svc}}], f"{svc} reads another service's store"
+            else:
+                walk(o, svc)
+    missing = sorted({f"{svc}: {name}" for svc, name in refs if name not in built})
+    assert not missing, "Secrets nothing builds:\n  " + "\n  ".join(missing)
+
+
+def test_gitops_projects_and_addons():
+    """Services can only reach their own namespaces; the ApplicationSet's
+    project is fixed (never templated); every add-on version is pinned in
+    versions.env and every add-on folder exists."""
+    addons = yaml.safe_load((K8S / "cluster/addons.yaml").read_text())
+    for a in addons:
+        if a.get("chart"):
+            assert a["version"] in gen.VERSIONS, f"{a['name']}: {a['version']} not in versions.env"
+            if a.get("values"):
+                assert (REPO / a["values"]).is_file(), a["name"]
+        else:
+            assert (REPO / a["path"]).is_dir(), f"{a['name']}: {a['path']} missing"
+    for env in gen.ENVS:
+        docs = {d["metadata"]["name"]: d for f in (GENERATED / "gitops" / env).glob("*.yaml")
+                if f.name != "kustomization.yaml" for d in yaml.safe_load_all(f.read_text()) if d}
+        appset = docs["services"]
+        assert appset["spec"]["template"]["spec"]["project"] == "homeserver"
+        assert appset["spec"]["syncPolicy"]["preserveResourcesOnDeletion"] is True
+        assert "argocd.argoproj.io/skip-reconcile" in appset["spec"]["preservedFields"]["annotations"]
+        proj = docs["homeserver"]["spec"]
+        assert {d["namespace"] for d in proj["destinations"]} == {gen.NAMESPACE, gen.LOCAL_ACCESS_NS, gen.SECRET_STORE_NS}
+        assert {a["name"] for a in addons} <= set(docs)
+
+
+def test_k8s_py_up_down_edit_the_running_list(tmp_path, monkeypatch):
+    """'down jellyfin' while core runs records it as stopped; 'up jellyfin'
+    clears that; 'down core' leaves MIN running, as homeserver.py does."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec = importlib.util.spec_from_file_location("k8s_cli2", K8S / "k8s.py")
+    k8s = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(k8s)
+    (tmp_path / "test.yaml").write_text("# comment kept\nrepo: r\nrevision: b\nrunning: [min, core]\nstopped: []\n")
+    for mod in (k8s, gen, _sys.modules["generate"]):
+        monkeypatch.setattr(mod, "DEPLOY_DIR", tmp_path)
+    jelly = "jellyfin" if "jellyfin" in PORTED else hs.SERVICES_CORE[-1]
+    _, after = k8s.edit("test", "down", [jelly])
+    assert jelly not in after and "authentik" in after
+    assert "# comment kept" in (tmp_path / "test.yaml").read_text()
+    _, after = k8s.edit("test", "up", [jelly])
+    assert jelly in after
+    _, after = k8s.edit("test", "down", ["core"])
+    assert set(hs.SERVICES_MIN) & set(PORTED) <= after and not (set(hs.SERVICES_CORE) & after)

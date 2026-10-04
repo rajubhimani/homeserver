@@ -5,3 +5,8 @@ namespace: apps
 resources:
 - ../../../apps/landing
 - routes.yaml
+patches:
+- target:
+    kind: Deployment
+    name: landing
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

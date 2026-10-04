@@ -5,3 +5,12 @@ namespace: apps
 resources:
 - ../../../apps/uptime-kuma
 - routes.yaml
+patches:
+- target:
+    kind: MariaDB
+    name: uptime-kuma-db
+  patch: "- op: replace\n  path: /spec/suspend\n  value: false\n"
+- target:
+    kind: Deployment
+    name: uptime-kuma
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

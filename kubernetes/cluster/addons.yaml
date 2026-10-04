@@ -1,0 +1,62 @@
+# Platform add-ons ArgoCD installs (generate.py renders one Application each
+# into kubernetes/generated/gitops/<env>/). Versions come from versions.env
+# (the key in `version`); everything here follows the "LTS, always" fallback:
+# each project's newest community-supported release. docs/17 "GitOps".
+#
+# chart add-ons: repo + chart + version key, values from a file in this repo
+# (`values`) or inline (`values_object`). Others: a kustomize folder (`path`).
+
+- name: argocd                 # ArgoCD manages itself after cluster.py bootstrap
+  namespace: argocd
+  path: kubernetes/generated/platform/argocd
+- name: gateway-api            # Gateway API CRDs (ingress-nginx was retired March 2026)
+  namespace: default
+  path: kubernetes/generated/platform/gateway-api
+- name: cluster-base           # namespaces, storage classes
+  namespace: default
+  path: kubernetes/cluster/base
+- name: traefik                # Gateway API implementation, the cluster's router
+  namespace: infra
+  repo: https://traefik.github.io/charts
+  chart: traefik
+  version: TRAEFIK_CHART_VERSION
+  values: kubernetes/cluster/traefik/values.yaml
+- name: cloudnative-pg         # Postgres operator (shared + own databases)
+  namespace: cnpg-system
+  repo: https://cloudnative-pg.github.io/charts
+  chart: cloudnative-pg
+  version: CNPG_CHART_VERSION
+  release: cnpg
+- name: mariadb-operator-crds
+  namespace: mariadb-operator
+  repo: https://helm.mariadb.com/mariadb-operator
+  chart: mariadb-operator-crds
+  version: MARIADB_OPERATOR_VERSION
+- name: mariadb-operator       # MariaDB operator (shared + Uptime Kuma's own)
+  namespace: mariadb-operator
+  repo: https://helm.mariadb.com/mariadb-operator
+  chart: mariadb-operator
+  version: MARIADB_OPERATOR_VERSION
+- name: external-secrets       # builds every app Secret from the secret store
+  namespace: external-secrets
+  repo: https://charts.external-secrets.io
+  chart: external-secrets
+  version: EXTERNAL_SECRETS_CHART_VERSION
+- name: reloader               # restarts a workload when its Secret changes
+  namespace: reloader
+  repo: https://stakater.github.io/stakater-charts
+  chart: reloader
+  version: RELOADER_CHART_VERSION
+  values_object:
+    reloader:
+      # Patches an annotation, not an env var, so ArgoCD sees no drift
+      # (Reloader docs: "use the annotations reload strategy to avoid sync drift").
+      reloadStrategy: annotations
+- name: headlamp               # Kubernetes web UI (kubernetes-sigs), headlamp.k8s.local
+  namespace: headlamp
+  repo: https://kubernetes-sigs.github.io/headlamp/
+  chart: headlamp
+  version: HEADLAMP_CHART_VERSION
+- name: ops-routes             # argocd.k8s.local, headlamp.k8s.local
+  namespace: argocd
+  path: kubernetes/generated/platform/ops-routes

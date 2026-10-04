@@ -5,3 +5,16 @@ namespace: apps
 resources:
 - ../../../apps/guacamole
 - routes.yaml
+patches:
+- target:
+    kind: Cluster
+    name: guacamole-db
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
+- target:
+    kind: Deployment
+    name: guacamole
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: guacd
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

@@ -793,7 +793,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
     for name, path in sorted(host_pvs.items()):
         # Static local PV bound to exactly this claim; Retain, so deleting the
         # claim never touches the folder. Nodes holding the folders carry the
-        # label homeserver/host-folders=true (cluster.py install on kind).
+        # label homeserver/host-folders=true (cluster.py bootstrap on kind).
         files.setdefault("storage.yaml", []).extend([
             {"apiVersion": "v1", "kind": "PersistentVolume",
              "metadata": {"name": f"{NAMESPACE}-{name}", "labels": labels_svc},
@@ -1637,17 +1637,344 @@ def network_policy(svc: str) -> dict:
                      "policyTypes": ["Ingress"], "ingress": rules}}
 
 
+# ── stopped by default (ArgoCD: git = config, k8s.py = on/off) ────────────
+# docs/17 "GitOps". apps/<svc> is every service stopped: config, volumes and
+# databases exist, nothing runs. The env overlay (envs/<env>/<svc>) switches
+# it on when kubernetes/deploy/<env>.yaml lists it (running_patches), so what
+# runs is a git change ArgoCD applies, like homeserver.py up/down on Docker.
+
+STOPPED_NODE_SELECTOR = ("homeserver/stopped", "true")  # no node carries it: a DaemonSet's "0 replicas"
+CNPG_HIBERNATION = "cnpg.io/hibernation"
+# Objects that hold data: never pruned when they leave git, never deleted with
+# their Application (ArgoCD sync options); removing data stays a deliberate
+# k8s.py/kubectl step, as 'reset' is on Docker.
+KEEP_KINDS = {"PersistentVolumeClaim", "PersistentVolume", "Cluster", "MariaDB", "Database", "DatabaseRole",
+              "User", "Grant"}
+KEEP_OPTIONS = "Prune=false,Delete=false"
+
+
+def stopped(files: dict[str, list[dict]]) -> None:
+    """Mark every workload and database of a service as stopped, in place."""
+    for objs in files.values():
+        for o in objs:
+            k, spec = o["kind"], o.get("spec") or {}
+            meta = o["metadata"]
+            if k == "Deployment":
+                spec["replicas"] = 0
+            elif k == "DaemonSet":
+                pod = spec["template"]["spec"]
+                pod["nodeSelector"] = {**(pod.get("nodeSelector") or {}), STOPPED_NODE_SELECTOR[0]: STOPPED_NODE_SELECTOR[1]}
+            elif k == "Job":
+                spec["suspend"] = True
+            elif k == "Cluster":  # CloudNativePG: initdb once, then hibernate (verified on kind)
+                meta["annotations"] = {**(meta.get("annotations") or {}), CNPG_HIBERNATION: "on"}
+            elif k == "MariaDB":
+                spec["suspend"] = True
+            if k in KEEP_KINDS:
+                meta["annotations"] = {**(meta.get("annotations") or {}), "argocd.argoproj.io/sync-options": KEEP_OPTIONS}
+
+
+def running_patches(objs: list[dict]) -> list[dict]:
+    """Kustomize patches that undo stopped() for one environment's running
+    services: the overlay in envs/<env>/<svc> switches the service on."""
+    out = []
+    for o in objs:
+        k, name = o["kind"], o["metadata"]["name"]
+        if k == "Deployment":
+            ops = [{"op": "replace", "path": "/spec/replicas", "value": 1}]
+        elif k == "DaemonSet":
+            ops = [{"op": "remove", "path": "/spec/template/spec/nodeSelector/" + STOPPED_NODE_SELECTOR[0].replace("/", "~1")}]
+        elif k in ("Job", "MariaDB"):
+            ops = [{"op": "replace", "path": "/spec/suspend", "value": False}]
+        elif k == "Cluster":
+            ops = [{"op": "remove", "path": "/metadata/annotations/" + CNPG_HIBERNATION.replace("/", "~1")}]
+        else:
+            continue
+        out.append({"target": {"kind": k, "name": name}, "patch": yaml.safe_dump(ops, sort_keys=False)})
+    return out
+
+
+def started(objs: list[dict]) -> list[dict]:
+    """The running form of a service's stopped objects (what the overlay's
+    patches produce), for cluster.py's smoke tests and imports."""
+    import copy
+    objs = copy.deepcopy(objs)
+    for o in objs:
+        k, spec, meta = o["kind"], o.get("spec") or {}, o["metadata"]
+        if k == "Deployment":
+            spec["replicas"] = 1
+        elif k == "DaemonSet":
+            (spec["template"]["spec"].get("nodeSelector") or {}).pop(STOPPED_NODE_SELECTOR[0], None)
+        elif k in ("Job", "MariaDB"):
+            spec["suspend"] = False
+        elif k == "Cluster":
+            (meta.get("annotations") or {}).pop(CNPG_HIBERNATION, None)
+    return objs
+
+
+# ── deployment list (kubernetes/deploy/<env>.yaml) ───────────────────────
+
+DEPLOY_DIR = K8S_DIR / "deploy"
+ENVS = ("test", "prod")
+
+
+def load_deploy(env: str) -> dict:
+    f = DEPLOY_DIR / f"{env}.yaml"
+    d = yaml.safe_load(f.read_text()) if f.is_file() else None
+    if not d or not d.get("repo") or not d.get("revision"):
+        raise GenError(f"kubernetes/deploy/{env}.yaml: needs repo and revision")
+    return d
+
+
+def running_services(env: str) -> set[str]:
+    """Ported services the env's running list switches on, plus the shared
+    database servers any of them needs (homeserver.py's ensure_shared_db)."""
+    sys.path.insert(0, str(K8S_DIR))
+    from targets import TargetError, resolve
+    d = load_deploy(env)
+    try:
+        on, _ = resolve(list(d.get("running") or []), "up")
+        off, _ = resolve(list(d.get("stopped") or []), "down")
+    except TargetError as e:
+        raise GenError(f"kubernetes/deploy/{env}.yaml: {e}")
+    ported = set(load_scope().get("ported") or [])
+    run = {s for s in on if s in ported} - set(off)
+    for app, spec in shared_db_apps().items():
+        if app in run and not external_db(app):
+            run.add(SHARED[spec["engine"]])
+    return run
+
+
+# ── secrets: External Secrets Operator (docs/17 "Secrets") ────────────────
+# Git holds only references. cluster.py secrets copies each services/<svc>/.env
+# into Secret <svc> in SECRET_STORE_NS (the store, readable only by ESO);
+# each ExternalSecret below builds the Secrets the service needs from it. A
+# managed cloud swaps the store (AWS/GCP/Azure secret managers) by changing the
+# ClusterSecretStore only: the apps keep reading the same Secrets.
+
+SECRET_STORE_NS = "homeserver-secrets"
+SECRET_STORE = "homeserver-env"
+ESO_API = "external-secrets.io/v1"
+
+
+def external_secret(name: str, svc: str, *, template: dict | None = None, labels: dict | None = None) -> dict:
+    target: dict = {"name": name, "creationPolicy": "Owner", "deletionPolicy": "Retain"}
+    tmpl: dict = {"engineVersion": "v2"}
+    if labels:
+        tmpl["metadata"] = {"labels": labels}
+    if template:
+        tmpl.update(template)
+    else:
+        tmpl["mergePolicy"] = "Merge"  # every .env key, as Compose's env_file
+    target["template"] = tmpl
+    return {"apiVersion": ESO_API, "kind": "ExternalSecret",
+            "metadata": {"name": name, "labels": {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}},
+            "spec": {"refreshInterval": "1m", "secretStoreRef": {"kind": "ClusterSecretStore", "name": SECRET_STORE},
+                     "target": target, "dataFrom": [{"extract": {"key": svc}}]}}
+
+
+def basic_auth_template(user: str, password_key: str) -> dict:
+    """A kubernetes.io/basic-auth Secret (CNPG's login format); user is a
+    literal or an .env key ('$KEY')."""
+    u = "{{ " + f'index . "{user[1:]}"' + " }}" if user.startswith("$") else user
+    return {"type": "kubernetes.io/basic-auth",
+            "data": {"username": u, "password": "{{ " + f'index . "{password_key}"' + " }}"}}
+
+
+def service_secrets(svc: str) -> list[dict]:
+    """Every Secret cluster.py used to build from this service's .env."""
+    if not (SERVICES_DIR / svc / ".env.example").is_file():
+        return []
+    ex = load_env(SERVICES_DIR / svc / ".env.example")
+    spec = shared_db_apps().get(svc)
+    # mariadb-operator re-reads a password Secret only when it carries this
+    # label (User.passwordSecretKeyRef docs), so rotation = edit .env.
+    watch = {"k8s.mariadb.com/watch": ""} if svc == "shared-mariadb" or (spec and spec["engine"] == "mariadb") else None
+    out = [external_secret(f"{svc}-env", svc, labels=watch)]
+    reload = {"cnpg.io/reload": "true"}  # CNPG applies a changed password
+    if svc == "shared-postgres":
+        user = "$POSTGRES_USER" if "POSTGRES_USER" in ex else "postgres"
+        out.append(external_secret(f"{svc}-superuser", svc, template=basic_auth_template(user, "POSTGRES_PASSWORD"),
+                                   labels=reload))
+    if (own := own_db_keys(svc)):
+        user = f"${own['user_key']}" if own["user_key"] else own["user"]
+        out.append(external_secret(own["secret"], svc, template=basic_auth_template(user, own["password_key"]),
+                                   labels=reload))
+    if spec and spec["engine"] == "postgres":
+        user = spec["user_key"][1:] if spec["user_key"].startswith("=") else f"${spec['user_key']}"
+        pw = spec["password_key"]
+        if pw.startswith("="):
+            raise GenError(f"{svc}: a literal shared-db password can't come from a Secret")
+        out.append(external_secret(f"{svc}-db-role", svc, template=basic_auth_template(user, pw), labels=reload))
+    return out
+
+
+def reload_on_secret_change(files: dict[str, list[dict]]) -> None:
+    """Pods read env only at start: Reloader restarts a workload when a Secret
+    it references changes (its annotations strategy keeps ArgoCD in sync)."""
+    for objs in files.values():
+        for o in objs:
+            if o["kind"] in ("Deployment", "DaemonSet", "StatefulSet"):
+                o["metadata"]["annotations"] = {**(o["metadata"].get("annotations") or {}),
+                                                "secret.reloader.stakater.com/auto": "true"}
+
+
+def homeserver_config(env: str, domain: str) -> dict[str, list[dict]]:
+    """The cluster-wide pieces every service relies on: the root .env values
+    (ConfigMap homeserver-root) and the secret store ESO reads from."""
+    root = load_env(REPO / ".env") or load_env(REPO / ".env.example")
+    labels = {"app.kubernetes.io/part-of": "homeserver"}
+    sa = "external-secrets-reader"
+    return {
+        "configmaps.yaml": [{"apiVersion": "v1", "kind": "ConfigMap",
+                             "metadata": {"name": ROOT_CONFIGMAP, "namespace": NAMESPACE, "labels": labels},
+                             # test: apps build their own links for the test hostnames
+                             "data": {"DOMAIN": TEST_DOMAIN if env == "test" else domain,
+                                      "TZ": root.get("TZ", "Asia/Kolkata")}}],
+        "secret-store.yaml": [
+            {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": SECRET_STORE_NS, "labels": {
+                **labels, "pod-security.kubernetes.io/enforce": "restricted"}}},
+            {"apiVersion": "v1", "kind": "ServiceAccount", "metadata": {"name": sa, "namespace": SECRET_STORE_NS}},
+            # Read-only, and only in the store namespace (external-secrets.io provider/kubernetes).
+            {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+             "metadata": {"name": sa, "namespace": SECRET_STORE_NS},
+             "rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["get", "list", "watch"]},
+                       {"apiGroups": ["authorization.k8s.io"], "resources": ["selfsubjectrulesreviews"],
+                        "verbs": ["create"]}]},
+            {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+             "metadata": {"name": sa, "namespace": SECRET_STORE_NS},
+             "subjects": [{"kind": "ServiceAccount", "name": sa, "namespace": SECRET_STORE_NS}],
+             "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": sa}},
+            {"apiVersion": ESO_API, "kind": "ClusterSecretStore", "metadata": {"name": SECRET_STORE, "labels": labels},
+             "spec": {
+                 # Only ExternalSecrets in the apps namespace may read the store.
+                 "conditions": [{"namespaces": [NAMESPACE]}],
+                 "provider": {"kubernetes": {
+                     "remoteNamespace": SECRET_STORE_NS,
+                     "server": {"caProvider": {"type": "ConfigMap", "name": "kube-root-ca.crt", "key": "ca.crt",
+                                               "namespace": SECRET_STORE_NS}},
+                     "auth": {"serviceAccount": {"name": sa, "namespace": SECRET_STORE_NS}}}}}},
+        ],
+    }
+
+
+# ── GitOps: ArgoCD (docs/17 "GitOps") ─────────────────────────────────────
+# generated/gitops/<env>/ is the root ArgoCD applies (cluster.py bootstrap
+# applies it once; afterwards ArgoCD manages it, itself included): two
+# projects, one Application per platform add-on (kubernetes/cluster/
+# addons.yaml, versions from versions.env), and one ApplicationSet that turns
+# every generated/envs/<env>/<svc> folder into an Application.
+
+ARGOCD_NS = "argocd"
+IN_CLUSTER = "https://kubernetes.default.svc"
+OPS_HOSTS = {"argocd": ("argocd-server", ARGOCD_NS, 80), "headlamp": ("headlamp", "headlamp", 80)}
+
+
+def gitops(env: str) -> dict[str, list[dict]]:
+    d = load_deploy(env)
+    repo, rev = d["repo"], d["revision"]
+    addons = yaml.safe_load((K8S_DIR / "cluster/addons.yaml").read_text())
+    sync_auto = {"automated": {"prune": True, "selfHeal": True}} if d.get("auto_sync") else {}
+    retry = {"limit": 10, "backoff": {"duration": "30s", "factor": 2, "maxDuration": "5m"}}
+    meta = lambda name: {"name": name, "namespace": ARGOCD_NS, "labels": {"app.kubernetes.io/part-of": "homeserver"}}  # noqa: E731
+    gen = f"kubernetes/generated"
+    projects = [
+        {"apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject", "metadata": meta("platform"),
+         "spec": {"description": "Cluster add-ons: routing, operators, secrets, GitOps, UI",
+                  "sourceRepos": [repo] + sorted({a["repo"] for a in addons if a.get("repo")}),
+                  "destinations": [{"server": IN_CLUSTER, "namespace": "*"}],
+                  "clusterResourceWhitelist": [{"group": "*", "kind": "*"}]}},
+        # Services may only touch their own namespaces and the few
+        # cluster-wide kinds the generator emits.
+        {"apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject", "metadata": meta("homeserver"),
+         "spec": {"description": "Services generated from Docker Compose",
+                  "sourceRepos": [repo],
+                  "destinations": [{"server": IN_CLUSTER, "namespace": ns}
+                                   for ns in (NAMESPACE, LOCAL_ACCESS_NS, SECRET_STORE_NS)],
+                  "clusterResourceWhitelist": [{"group": "", "kind": "Namespace"},
+                                               {"group": "", "kind": "PersistentVolume"},
+                                               {"group": "external-secrets.io", "kind": "ClusterSecretStore"}]}},
+    ]
+    apps = [{"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": meta("root"),
+             "spec": {"project": "platform",
+                      "source": {"repoURL": repo, "targetRevision": rev, "path": f"{gen}/gitops/{env}"},
+                      "destination": {"server": IN_CLUSTER, "namespace": ARGOCD_NS},
+                      "syncPolicy": {**sync_auto, "retry": retry}}}]
+    for a in addons:
+        if a.get("chart"):
+            sources = [{"repoURL": a["repo"], "chart": a["chart"], "targetRevision": VERSIONS[a["version"]],
+                        "helm": {"releaseName": a.get("release", a["name"]),
+                                 **({"valueFiles": [f"$values/{a['values']}"]} if a.get("values") else {}),
+                                 **({"valuesObject": a["values_object"]} if a.get("values_object") else {})}}]
+            if a.get("values"):
+                sources.append({"repoURL": repo, "targetRevision": rev, "ref": "values"})
+            src = {"sources": sources}
+        else:
+            src = {"source": {"repoURL": repo, "targetRevision": rev, "path": a["path"].replace("{env}", env)}}
+        apps.append({"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": meta(a["name"]),
+                     "spec": {"project": "platform", **src,
+                              "destination": {"server": IN_CLUSTER, "namespace": a["namespace"]},
+                              "syncPolicy": {**sync_auto, "retry": retry,
+                                             "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}})
+    appset = {
+        "apiVersion": "argoproj.io/v1alpha1", "kind": "ApplicationSet", "metadata": meta("services"),
+        "spec": {
+            "goTemplate": True, "goTemplateOptions": ["missingkey=error"],
+            "generators": [{"git": {"repoURL": repo, "revision": rev,
+                                    "directories": [{"path": f"{gen}/envs/{env}/*"}]}}],
+            # Deleting the ApplicationSet never deletes the services' objects.
+            "syncPolicy": {"preserveResourcesOnDeletion": True},
+            # cluster.py pauses one service (smoke tests, imports) with this.
+            "preservedFields": {"annotations": ["argocd.argoproj.io/skip-reconcile"]},
+            "template": {
+                "metadata": {"name": "{{.path.basename}}", "labels": {"app.kubernetes.io/part-of": "homeserver"}},
+                "spec": {
+                    "project": "homeserver",  # fixed, never templated (ApplicationSet security docs)
+                    "source": {"repoURL": repo, "targetRevision": rev, "path": "{{.path.path}}"},
+                    "destination": {"server": IN_CLUSTER, "namespace": NAMESPACE},
+                    "syncPolicy": {**sync_auto, "retry": retry}}}}}
+    return {"projects.yaml": projects, "applications.yaml": apps, "services.yaml": [appset]}
+
+
+def platform_files() -> dict[str, dict[str, list[dict] | str]]:
+    """Kustomize folders for add-ons installed from a pinned upstream manifest."""
+    v = VERSIONS
+    routes = []
+    for host, (svc, ns, port) in OPS_HOSTS.items():
+        routes.append({"apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
+                       "metadata": {"name": host, "namespace": ns, "labels": {"app.kubernetes.io/part-of": "homeserver"}},
+                       # Ops UIs only on this machine's test hostname, never on the public domain.
+                       "spec": {"parentRefs": [GATEWAY], "hostnames": [f"{host}.{TEST_DOMAIN}"],
+                                "rules": [{"backendRefs": [{"name": svc, "port": port}]}]}})
+    return {
+        "argocd": {"kustomization.yaml": {
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": ARGOCD_NS,
+            "resources": [f"https://raw.githubusercontent.com/argoproj/argo-cd/{v['ARGOCD_VERSION']}/manifests/install.yaml"],
+            # TLS ends at Traefik (ArgoCD docs, operator-manual/ingress)
+            "patches": [{"target": {"kind": "ConfigMap", "name": "argocd-cmd-params-cm"},
+                         "patch": yaml.safe_dump([{"op": "add", "path": "/data", "value": {"server.insecure": "true"}}])}]}},
+        "gateway-api": {"kustomization.yaml": {
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            "resources": [f"https://github.com/kubernetes-sigs/gateway-api/releases/download/{v['GATEWAY_API_VERSION']}/standard-install.yaml"]}},
+        "ops-routes": {"routes.yaml": routes,
+                       "kustomization.yaml": {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+                                              "resources": ["routes.yaml"]}},
+    }
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
     return HEADER.format(svc=svc) + "---\n".join(yaml.dump(o, Dumper=_Dumper, sort_keys=False, width=120, allow_unicode=True) for o in objs)
 
 
-def kustomization(resources: list[str], namespace: str | None = NAMESPACE) -> str:
+def kustomization(resources: list[str], namespace: str | None = NAMESPACE, patches: list[dict] | None = None) -> str:
     k = {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization"}
     if namespace:
         k["namespace"] = namespace
     k["resources"] = resources
+    if patches:
+        k["patches"] = patches  # this environment runs the service (kubernetes/deploy/<env>.yaml)
     return "# GENERATED by kubernetes/generate.py — do not edit.\n" + yaml.safe_dump(k, sort_keys=False)
 
 
@@ -1657,6 +1984,7 @@ def render(out: Path) -> list[str]:
     prod_only = set(scope.get("prod_only") or [])
     domain = load_env(REPO / ".env").get("DOMAIN") or load_env(REPO / ".env.example").get("DOMAIN", "example.com")
     written = []
+    running = {env: running_services(env) for env in ENVS}
     for svc in ported:
         if svc == "shared-postgres":
             files = shared_postgres()
@@ -1672,6 +2000,11 @@ def render(out: Path) -> list[str]:
             if svc == "authentik":
                 files["middleware.yaml"] = [authentik_middleware()]
         files["networkpolicies.yaml"] = [network_policy(svc)]
+        if (es := service_secrets(svc)):
+            files["secrets.yaml"] = es
+        reload_on_secret_change(files)
+        stopped(files)
+        all_objs = [o for objs in files.values() for o in objs]
         d = out / "apps" / svc
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(files.items()):
@@ -1688,7 +2021,8 @@ def render(out: Path) -> list[str]:
             if routes:
                 (ed / "routes.yaml").write_text(dump(routes, svc))
                 res.append("routes.yaml")
-            (ed / "kustomization.yaml").write_text(kustomization(res))
+            (ed / "kustomization.yaml").write_text(kustomization(
+                res, patches=running_patches(all_objs) if svc in running[env] else None))
     la = local_access()
     d = out / "apps" / "local-access"
     d.mkdir(parents=True, exist_ok=True)
@@ -1699,6 +2033,29 @@ def render(out: Path) -> list[str]:
         ed = out / "envs" / env / "local-access"
         ed.mkdir(parents=True, exist_ok=True)
         (ed / "kustomization.yaml").write_text(kustomization(["../../../apps/local-access"], namespace=LOCAL_ACCESS_NS))
+    for env, dom in (("test", TEST_DOMAIN), ("prod", domain)):
+        hc = homeserver_config(env, domain)
+        d = out / "apps" / f"homeserver-config-{env}"
+        d.mkdir(parents=True, exist_ok=True)
+        for fname, objs in sorted(hc.items()):
+            (d / fname).write_text(dump(objs, "homeserver-config"))
+        (d / "kustomization.yaml").write_text(kustomization(sorted(hc), namespace=None))
+        ed = out / "envs" / env / "homeserver-config"
+        ed.mkdir(parents=True, exist_ok=True)
+        (ed / "kustomization.yaml").write_text(kustomization([f"../../../apps/homeserver-config-{env}"], namespace=None))
+        g = out / "gitops" / env
+        g.mkdir(parents=True, exist_ok=True)
+        go = gitops(env)
+        for fname, objs in sorted(go.items()):
+            (g / fname).write_text(dump(objs, "gitops"))
+        (g / "kustomization.yaml").write_text(kustomization(sorted(go), namespace=None))
+    for name, fs in platform_files().items():
+        d = out / "platform" / name
+        d.mkdir(parents=True, exist_ok=True)
+        for fname, content in fs.items():
+            (d / fname).write_text(dump(content, name) if isinstance(content, list)
+                                   else "# GENERATED by kubernetes/generate.py — do not edit.\n"
+                                   + yaml.safe_dump(content, sort_keys=False))
     (out / "host-ports.yaml").write_text(
         "# GENERATED by kubernetes/generate.py: Compose's 127.0.0.1 ports -> kind node ports.\n"
         "# cluster.py create binds each on 127.0.0.1 (kind adds port mappings only at creation).\n"

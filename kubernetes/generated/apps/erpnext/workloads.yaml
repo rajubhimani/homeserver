@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -120,8 +122,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-backend
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -217,8 +221,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-db
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -304,8 +310,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-queue-long
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -369,8 +377,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-queue-short
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -434,8 +444,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-redis-cache
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -485,8 +497,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-redis-queue
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -545,8 +559,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-scheduler
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -608,8 +624,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: erpnext
     app.kubernetes.io/name: erpnext-websocket
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

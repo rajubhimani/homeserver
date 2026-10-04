@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: airflow
     app.kubernetes.io/name: airflow-apiserver
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -267,8 +269,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: airflow
     app.kubernetes.io/name: airflow-dag-processor
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -517,8 +521,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: airflow
     app.kubernetes.io/name: airflow-scheduler
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -781,8 +787,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: airflow
     app.kubernetes.io/name: airflow-triggerer
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

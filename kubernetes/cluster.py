@@ -2,9 +2,8 @@
 """Create and drive the kind test cluster that runs the generated manifests.
 
     uv run kubernetes/cluster.py create            # kind cluster from cluster/kind-config.template.yaml + kubernetes/.env
-    uv run kubernetes/cluster.py install           # Gateway API, namespaces, Traefik, storage classes, DB operators
-    uv run kubernetes/cluster.py secrets [svc...]  # services/<svc>/.env -> Secret <svc>-env; root .env -> ConfigMap
-    uv run kubernetes/cluster.py apply   [svc...]  # kubectl apply -k kubernetes/generated/envs/<env>/<svc>
+    uv run kubernetes/cluster.py bootstrap --env E # ArgoCD + the secret store; ArgoCD then installs everything from git
+    uv run kubernetes/cluster.py secrets [svc...]  # services/<svc>/.env -> the secret store (ESO builds the app Secrets)
     uv run kubernetes/cluster.py import  <svc...> [--snapshot TS]  # copy a Compose snapshot's data into the cluster
     uv run kubernetes/cluster.py images  <svc...>  # build a service's local images (Compose build:) and load them into kind
     uv run kubernetes/cluster.py smoke   <svc...> [--keep]  # start with empty data on test hostnames, check, remove
@@ -15,8 +14,11 @@
 
 Defaults to all ported services (kubernetes/scope.yaml) and --env test.
 Versions come from kubernetes/versions.env, host paths/ports from
-kubernetes/.env. Secrets are built in memory from each service's .env and
-piped to kubectl: never written to disk or git. Guide: docs/17.
+kubernetes/.env. What runs is git's job (kubernetes/deploy/<env>.yaml, applied
+by ArgoCD); this script only does what git can't: create the cluster, the
+one-time bootstrap, secrets, data imports and tests. Secrets are built in
+memory from each service's .env and piped to kubectl: never written to disk
+or git. Guide: docs/17.
 """
 
 from __future__ import annotations
@@ -38,7 +40,8 @@ import yaml
 K8S = Path(__file__).resolve().parent
 REPO = K8S.parent
 sys.path.insert(0, str(K8S))
-from generate import load_compose, load_env, load_overrides, load_scope, own_db_keys, own_mariadb, own_postgres, shared_db_apps, slug  # noqa: E402
+from generate import (ARGOCD_NS, SECRET_STORE_NS, load_compose, load_env, load_overrides, load_scope,  # noqa: E402
+                      own_mariadb, own_postgres, shared_db_apps, slug, started)
 
 VERSIONS = load_env(K8S / "versions.env")
 NAMESPACE = "apps"
@@ -169,69 +172,46 @@ def host_path(svc: str, key: str) -> str:
     return str((REPO / "services" / svc / val).resolve())
 
 
-def cmd_install(_a) -> None:
-    v = VERSIONS
-    kubectl("apply", "--server-side", "-f",
-            f"https://github.com/kubernetes-sigs/gateway-api/releases/download/{v['GATEWAY_API_VERSION']}/standard-install.yaml")
-    kubectl("apply", "-f", str(K8S / "cluster/namespaces.yaml"))
-    run(["helm", "--kube-context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "upgrade", "--install", "traefik", "traefik",
-         "--repo", "https://traefik.github.io/charts", "--version", v["TRAEFIK_CHART_VERSION"],
-         "--namespace", "infra", "-f", str(K8S / "cluster/traefik/values.yaml"), "--wait", "--timeout", "5m"])
-    # kind's local-path provisioner: allow the fast/bulk folders, then the classes.
+def cmd_bootstrap(a) -> None:
+    """Once per cluster: prepare this machine's node, install ArgoCD from its
+    pinned manifest, fill the secret store, and hand ArgoCD the root of
+    kubernetes/generated/gitops/<env>. From then on ArgoCD installs and
+    updates everything from git, itself included (docs/17 "GitOps")."""
+    # kind's local-path provisioner: allow the fast/bulk folders the storage
+    # classes use. Node setup, not cluster config, so it stays here.
     conf = {"nodePathMap": [{"node": "DEFAULT_PATH_FOR_NON_LISTED_NODES",
                              "paths": ["/var/local-path-provisioner", "/var/k8s/fast", "/var/k8s/bulk"]}]}
     kubectl("-n", "local-path-storage", "patch", "configmap", "local-path-config", "--type", "merge",
             "-p", json.dumps({"data": {"config.json": json.dumps(conf, indent=1)}}))
-    kubectl("apply", "-f", str(K8S / "cluster/storage.yaml"))
     # The node holding the host folders (kind: its only node); on a real
     # cluster, label the machine that has them instead.
     kubectl("label", "nodes", "--all", "homeserver/host-folders=true", "--overwrite")
-    # Database operators: CloudNativePG (shared + own Postgres) and
-    # mariadb-operator (shared MariaDB). Both watch every namespace.
-    kubectl("apply", "--server-side", "-f",
-            f"https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v{v['CNPG_VERSION']}/cnpg-{v['CNPG_VERSION']}.yaml")
-    kubectl("-n", "cnpg-system", "rollout", "status", "deployment/cnpg-controller-manager", "--timeout=5m")
-    for chart in ("mariadb-operator-crds", "mariadb-operator"):
-        run(["helm", "--kube-context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "upgrade", "--install", chart, chart,
-             "--repo", "https://helm.mariadb.com/mariadb-operator", "--version", v["MARIADB_OPERATOR_VERSION"],
-             "--namespace", "mariadb-operator", "--create-namespace", "--wait", "--timeout", "5m"])
+    # ArgoCD's CRDs are too large for client-side apply (ArgoCD install docs).
+    kubectl("apply", "--server-side", "--force-conflicts", "-k", str(K8S / "generated/platform/argocd"))
+    for d in ("argocd-server", "argocd-repo-server", "argocd-applicationset-controller"):
+        kubectl("-n", ARGOCD_NS, "rollout", "status", f"deployment/{d}", "--timeout=10m")
+    kubectl("-n", ARGOCD_NS, "rollout", "status", "statefulset/argocd-application-controller", "--timeout=10m")
+    cmd_secrets(argparse.Namespace(services=[], env=a.env))
+    kubectl("apply", "-k", str(K8S / "generated/gitops" / a.env))
+    print(f"\nArgoCD now deploys kubernetes/generated/gitops/{a.env} from git.\n"
+          f"UI: http://argocd.k8s.local:{cfg()['K8S_HTTP_PORT']} (once Traefik is up), user admin, password:\n"
+          f"  kubectl --context kind-{cfg()['K8S_CLUSTER_NAME']} -n {ARGOCD_NS} get secret argocd-initial-admin-secret"
+          " -o jsonpath='{.data.password}' | base64 -d")
 
 
 def env_hash(data: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
-def secret_manifest(name: str, data: dict[str, str], kind: str = "Opaque", labels: dict | None = None) -> str:
-    return yaml.safe_dump({"apiVersion": "v1", "kind": "Secret", "type": kind,
-                           "metadata": {"name": name, "namespace": NAMESPACE,
-                                        "labels": {"app.kubernetes.io/part-of": "homeserver", **(labels or {})},
-                                        "annotations": {"homeserver/env-sha256": env_hash(data)}},
-                           "stringData": data})
-
-
-def current_hash(name: str) -> str | None:
-    """The env hash on the Secret in the cluster, or None if it doesn't exist."""
-    p = subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "get", "secret",
-                        name, "-o", "jsonpath={.metadata.annotations.homeserver/env-sha256}"],
-                       capture_output=True, text=True)
-    return p.stdout.strip() if p.returncode == 0 else None
-
-
-def basic_auth(name: str, user: str, password: str) -> str:
-    """CNPG reads logins from kubernetes.io/basic-auth Secrets; the reload
-    label makes it apply a changed password (rotation = edit .env, re-run)."""
-    return secret_manifest(name, {"username": user, "password": password},
-                           "kubernetes.io/basic-auth", {"cnpg.io/reload": "true"})
-
-
 def cmd_secrets(a) -> None:
-    root = load_env(REPO / ".env")
-    if a.env == "test":
-        root["DOMAIN"] = TEST_DOMAIN  # apps build their own links for the test hostnames
-    cm = {"apiVersion": "v1", "kind": "ConfigMap",
-          "metadata": {"name": "homeserver-root", "namespace": NAMESPACE},
-          "data": {"DOMAIN": root.get("DOMAIN", ""), "TZ": root.get("TZ", "Asia/Kolkata")}}
-    kubectl("apply", "-f", "-", input=yaml.safe_dump(cm))
+    """Copy each services/<svc>/.env into the secret store (Secret <svc> in
+    namespace homeserver-secrets, readable only by External Secrets). The
+    generated ExternalSecrets build every Secret the apps use from it
+    (<svc>-env, database logins); Reloader restarts pods whose Secret changed.
+    The one step git can't do: secrets never go into the repo."""
+    kubectl("apply", "-f", "-", input=yaml.safe_dump(
+        {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": SECRET_STORE_NS, "labels": {
+            "app.kubernetes.io/part-of": "homeserver", "pod-security.kubernetes.io/enforce": "restricted"}}}))
     prod_only = set(load_scope().get("prod_only") or [])
     for svc in services(a.services):
         env_file = REPO / "services" / svc / ".env"
@@ -240,40 +220,31 @@ def cmd_secrets(a) -> None:
         if not env_file.is_file():
             continue
         env = load_env(env_file)
-        spec = shared_db_apps().get(svc)
-        # mariadb-operator re-reads a password Secret only when it carries
-        # this label (User.passwordSecretKeyRef docs), so rotation = edit .env.
-        watch = {"k8s.mariadb.com/watch": ""} if svc == "shared-mariadb" or (spec and spec["engine"] == "mariadb") else None
-        before = current_hash(f"{svc}-env")
-        kubectl("apply", "-f", "-", input=secret_manifest(f"{svc}-env", env, labels=watch))
-        # (Operator-run servers are left to their operator.)
-        if before and before != env_hash(env) and svc not in ("shared-postgres", "shared-mariadb"):
-            # Pods read env only at start: restart this service's workloads,
-            # the kubectl form of Helm's documented checksum/config roll.
-            kubectl("rollout", "restart", "deployment,statefulset,daemonset", "-n", NAMESPACE,
-                    "-l", f"homeserver/service={svc}", check=False)
-        if svc == "shared-postgres":
-            kubectl("apply", "-f", "-", input=basic_auth(f"{svc}-superuser", env.get("POSTGRES_USER", "postgres"),
-                                                         env.get("POSTGRES_PASSWORD", "")))
-        if (own := own_db_keys(svc)):
-            # A CORE app's own CNPG cluster: its database owner login.
-            # (<svc>-db-superuser for apps that log in as postgres.)
-            user = env.get(own["user_key"], own["user"]) if own["user_key"] else own["user"]
-            kubectl("apply", "-f", "-", input=basic_auth(own["secret"], user, env.get(own["password_key"], "")))
-        if spec and spec["engine"] == "postgres":
-            # Same values homeserver.py's shared_db_creds reads from this .env.
-            val = lambda k: k[1:] if k.startswith("=") else env.get(k, "")  # noqa: E731
-            kubectl("apply", "-f", "-", input=basic_auth(f"{svc}-db-role", val(spec["user_key"]),
-                                                         val(spec["password_key"])))
+        kubectl("apply", "-f", "-", input=yaml.safe_dump(
+            {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+             "metadata": {"name": svc, "namespace": SECRET_STORE_NS,
+                          "labels": {"app.kubernetes.io/part-of": "homeserver"},
+                          "annotations": {"homeserver/env-sha256": env_hash(env)}},
+             "stringData": env}))
 
 
-def cmd_apply(a) -> None:
-    for svc in services(a.services):
-        d = K8S / "generated/envs" / a.env / svc
-        if not d.is_dir():
-            print(f"skip {svc}: not rendered for env {a.env}")
-            continue
-        kubectl("apply", "-k", str(d))
+def argo_pause(svc: str, paused: bool) -> None:
+    """Stop ArgoCD from reconciling one service while a script works on it
+    (ArgoCD's skip-reconcile annotation; the ApplicationSet preserves it)."""
+    ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", ARGOCD_NS]
+    if subprocess.run(ctx + ["get", "application", svc], capture_output=True).returncode != 0:
+        return  # no ArgoCD, or no Application for it
+    subprocess.run(ctx + ["annotate", "application", svc, "--overwrite",
+                          "argocd.argoproj.io/skip-reconcile=true" if paused else "argocd.argoproj.io/skip-reconcile-"],
+                   capture_output=True, check=True)
+
+
+def apply_started(svc: str, env: str) -> None:
+    """Apply a service in its running form, whatever git says (smoke tests)."""
+    out = subprocess.run(["kubectl", "kustomize", str(K8S / "generated/envs" / env / svc)],
+                         capture_output=True, text=True, check=True).stdout
+    objs = started([o for o in yaml.safe_load_all(out) if o])
+    kubectl("apply", "-f", "-", input="---\n".join(yaml.safe_dump(o, sort_keys=False) for o in objs), check=False)
 
 
 def snapshot_dir(svc: str, ts: str | None) -> Path | None:
@@ -337,6 +308,7 @@ def cmd_import(a) -> None:
         snap = snapshot_dir(svc, a.snapshot)
         print(f"== {svc}: " + (f"snapshot {snap.name}" if snap else "no snapshot (homeserver.py takes one on every 'down'); copy_from folders only"))
         data_tar = next(snap.glob("service_data_*.tar.gz"), None) if snap else None
+        argo_pause(svc, True)  # ArgoCD would undo the scale-down below
         scale(svc, 0)
         if data_tar and has_pvc(svc, f"{svc}-data"):
             unpack(data_tar, pvc_host_path(f"{svc}-data"))
@@ -357,6 +329,7 @@ def cmd_import(a) -> None:
         scale(svc, 1)
         # DaemonSets can't scale to 0: restart them to pick up the restored files.
         kubectl("rollout", "restart", "daemonset", "-n", NAMESPACE, "-l", f"homeserver/service={svc}", check=False)
+        argo_pause(svc, False)  # back to what git says (stopped services stop again)
 
 
 LIVE_DB = False
@@ -570,15 +543,11 @@ def cmd_smoke(a) -> None:
     ctx = ["kubectl", "--context", f"kind-{c['K8S_CLUSTER_NAME']}", "-n", NAMESPACE]
     names = services(a.services)
     shared = {s["engine"] for svc, s in shared_db_apps().items() if svc in names}
+    cmd_secrets(argparse.Namespace(services=[], env="prod"))  # the store; ESO builds the Secrets
     for engine in sorted(shared):  # the shared servers they need, as homeserver.py starts them
         server = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}[engine]
-        env = load_env(REPO / "services" / server / ".env")
-        kubectl("apply", "-f", "-", input=secret_manifest(f"{server}-env", env,
-                                                          labels={"k8s.mariadb.com/watch": ""} if engine == "mariadb" else None))
-        if engine == "postgres":
-            kubectl("apply", "-f", "-", input=basic_auth(f"{server}-superuser", env.get("POSTGRES_USER", "postgres"),
-                                                        env.get("POSTGRES_PASSWORD", "")))
-        kubectl("apply", "-k", str(K8S / "generated/envs/test" / server))
+        argo_pause(server, True)
+        apply_started(server, "test")
         kind = "cluster" if engine == "postgres" else "mariadb"
         kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"{kind}/{server}", "--timeout=900s", check=False)
     results = {}
@@ -588,14 +557,17 @@ def cmd_smoke(a) -> None:
         for img in sorted(service_images(svc)):  # one at a time
             ref = img if "/" in img.split(":")[0] or "." in img.split("/")[0] else f"docker.io/library/{img}"
             subprocess.run(["docker", "exec", node, "crictl", "pull", ref], capture_output=True)
-        cmd_secrets(argparse.Namespace(services=[svc], env="prod"))  # Secrets only; DOMAIN stays as is
-        kubectl("apply", "-k", str(K8S / "generated/envs/test" / svc), check=False)
+        argo_pause(svc, True)  # ArgoCD would stop it again: git says it isn't running
+        apply_started(svc, "test")
         results[svc] = smoke_check(svc, ctx, a.timeout)
         print(("OK   " if not results[svc] else "FAIL ") + svc + "".join(f"\n     {n}" for n in results[svc]), flush=True)
         if not a.keep:
             kubectl("delete", "-k", str(K8S / "generated/envs/test" / svc), "--ignore-not-found", "--timeout=300s", check=False)
             wait_for_calm_disk()
             cmd_rmi(argparse.Namespace(services=[svc]))
+            argo_pause(svc, False)  # ArgoCD recreates it as git has it (stopped)
+    for engine in sorted(shared):
+        argo_pause({"postgres": "shared-postgres", "mariadb": "shared-mariadb"}[engine], False)
     print("\n==== smoke results")
     for svc, notes in results.items():
         print(f"{'OK  ' if not notes else 'FAIL'} {svc}")
@@ -717,7 +689,7 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "install", "secrets", "apply", "import", "images", "smoke", "rmi", "validate", "status", "delete"])
+    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "images", "smoke", "rmi", "validate", "status", "delete"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
@@ -726,7 +698,7 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=900, help="smoke: seconds to wait for readiness")
     ap.add_argument("--live-db", action="store_true", help="import: own Postgres from the running Compose container (pg_dump)")
     a = ap.parse_args()
-    {"create": cmd_create, "install": cmd_install, "secrets": cmd_secrets, "apply": cmd_apply, "import": cmd_import, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
+    {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
      "status": cmd_status, "delete": cmd_delete}[a.action](a)
     return 0
 

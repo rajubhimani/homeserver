@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: karakeep
     app.kubernetes.io/name: karakeep
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -105,8 +107,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: karakeep
     app.kubernetes.io/name: karakeep-chrome
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -146,8 +150,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: karakeep
     app.kubernetes.io/name: karakeep-meilisearch
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

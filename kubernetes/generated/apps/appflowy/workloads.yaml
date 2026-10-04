@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-admin
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -61,8 +63,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-cloud
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -180,8 +184,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-db
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -253,8 +259,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-gotrue
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -359,8 +367,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-minio
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -436,8 +446,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-nginx
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -524,8 +536,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-redis
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -592,8 +606,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: appflowy
     app.kubernetes.io/name: appflowy-web
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

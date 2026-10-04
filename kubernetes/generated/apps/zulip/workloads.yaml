@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: zulip
     app.kubernetes.io/name: zulip
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -117,8 +119,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: zulip
     app.kubernetes.io/name: zulip-db
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -189,8 +193,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: zulip
     app.kubernetes.io/name: zulip-memcached
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -260,8 +266,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: zulip
     app.kubernetes.io/name: zulip-rabbitmq
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -347,8 +355,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: zulip
     app.kubernetes.io/name: zulip-redis
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

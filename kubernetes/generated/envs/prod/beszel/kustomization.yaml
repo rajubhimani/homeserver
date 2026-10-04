@@ -5,3 +5,12 @@ namespace: apps
 resources:
 - ../../../apps/beszel
 - routes.yaml
+patches:
+- target:
+    kind: Deployment
+    name: beszel
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: DaemonSet
+    name: beszel-agent
+  patch: "- op: remove\n  path: /spec/template/spec/nodeSelector/homeserver~1stopped\n"

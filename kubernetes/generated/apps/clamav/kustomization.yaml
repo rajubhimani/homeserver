@@ -5,6 +5,7 @@ namespace: apps
 resources:
 - configmaps.yaml
 - networkpolicies.yaml
+- secrets.yaml
 - services.yaml
 - storage.yaml
 - workloads.yaml

@@ -5,3 +5,16 @@ namespace: apps
 resources:
 - ../../../apps/authentik
 - routes.yaml
+patches:
+- target:
+    kind: Cluster
+    name: authentik-db
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
+- target:
+    kind: Deployment
+    name: authentik-server
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: authentik-worker
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

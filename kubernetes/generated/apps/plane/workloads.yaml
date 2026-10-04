@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-admin
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -91,8 +93,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-api
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -216,8 +220,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-beat
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -343,6 +349,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       restartPolicy: OnFailure
+  suspend: true
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -352,8 +359,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-minio
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -441,8 +450,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-mq
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -532,8 +543,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-proxy
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -632,8 +645,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-redis
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -700,8 +715,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-space
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -783,8 +800,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-web
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -866,8 +885,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: plane
     app.kubernetes.io/name: plane-worker
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

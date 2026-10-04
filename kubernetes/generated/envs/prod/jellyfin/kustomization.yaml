@@ -5,3 +5,8 @@ namespace: apps
 resources:
 - ../../../apps/jellyfin
 - routes.yaml
+patches:
+- target:
+    kind: Deployment
+    name: jellyfin
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

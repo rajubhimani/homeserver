@@ -13,7 +13,7 @@ A step-by-step guide, with every command, for running this stack on Kubernetes *
   - own databases for CORE;
   - one Valkey cache per app;
   - the same images, healthchecks and `.env` settings.
-- **The same commands:** `k8s.py up/down/backup/restore` behave like `homeserver.py`.
+- **Deployed from git (GitOps):** ArgoCD applies whatever the repo says, including which services run (`kubernetes/deploy/<env>.yaml`). Moving to another cluster or a managed cloud = install ArgoCD and point it at the repo. `k8s.py up/down` edit that list with `homeserver.py`'s tier meanings.
 
 The design and its reasons are in [`research/kubernetes-compose-parity-plan.md`](../research/kubernetes-compose-parity-plan.md).
 
@@ -129,13 +129,13 @@ $EDITOR kubernetes/.env
 Then:
 
 ```bash
-uv run kubernetes/cluster.py create     # kind cluster, Kubernetes 1.35.8 (takes ~3 min)
-uv run kubernetes/cluster.py install    # Gateway API, namespaces, Traefik, storage classes fast/bulk
-uv run kubernetes/cluster.py secrets    # each services/<svc>/.env -> Secret <svc>-env (piped, never written to disk)
-uv run kubernetes/cluster.py apply      # every ported service (or name some: apply docs landing)
-uv run kubernetes/cluster.py status     # pods, services, volume claims, routes
-uv run kubernetes/cluster.py validate   # server-side dry run of every service; fails on errors and on deprecated APIs/fields
+uv run kubernetes/cluster.py create                # kind cluster, Kubernetes 1.35.8 (takes ~3 min)
+uv run kubernetes/cluster.py bootstrap --env test  # ArgoCD + the secret store; ArgoCD installs the rest from git (Step 6)
+uv run kubernetes/cluster.py status                # pods, services, volume claims, routes
+uv run kubernetes/cluster.py validate              # server-side dry run of every service; fails on errors and on deprecated APIs/fields
 ```
+
+ArgoCD reads the repo from GitHub, so it deploys what is **pushed** to the branch in `kubernetes/deploy/<env>.yaml`, not your working copy.
 
 - **The test cluster uses `DOMAIN=k8s.local`**, so apps build their links for the test hostnames, not your real domain.
 - **cloudflared is prod-only:** it is never deployed with `--env test`, and its tunnel token isn't copied there, so your public sites keep pointing at Docker. To serve your real domain from the cluster instead, see Step 8 ("Serving your real domain").
@@ -157,29 +157,41 @@ For a browser, add the hostnames to `/etc/hosts` (`127.0.0.1 www.k8s.local docs.
 
 ## Step 3 — Secrets from your `.env` files
 
-The same `.env` files Docker uses are the only source of secrets. Nothing secret is in git or in `kubernetes/generated/`; a test fails if a value from any `.env` shows up there.
+The same `.env` files Docker uses are the only source of secrets. Nothing secret is in git, not even encrypted (the repo is public); a test fails if a value from any `.env` shows up in `kubernetes/generated/`.
+
+**How (decided 2026-10-04):** the [External Secrets Operator](https://external-secrets.io) (ESO), with a store inside the cluster:
 
 ```bash
-uv run kubernetes/cluster.py secrets                 # every ported service
-uv run kubernetes/cluster.py secrets miniflux        # or just some
+uv run kubernetes/cluster.py secrets                 # every ported service (bootstrap runs it once)
+uv run kubernetes/cluster.py secrets miniflux        # or just some, after editing their .env
 ```
 
-What it creates in namespace `apps` (built in memory, piped to `kubectl`, never written to disk):
+1. `secrets` copies each `services/<svc>/.env` into Secret `<svc>` in namespace `homeserver-secrets`: the **store**. It's built in memory and piped to `kubectl`, never written to disk. Only ESO can read that namespace, through a read-only Role; its `ClusterSecretStore` serves only the `apps` namespace.
+2. Each service's generated `ExternalSecret`s (in git, holding names only) build the Secrets the app uses:
 
-| From | Secret | Used by |
+| ExternalSecret builds | From the store's `<svc>` | Used by |
 |---|---|---|
-| `services/<svc>/.env` | `<svc>-env` (every key) | the app's containers (`envFrom`) |
-| `services/shared-postgres/.env` `POSTGRES_USER`/`POSTGRES_PASSWORD` | `shared-postgres-superuser` (basic-auth) | CloudNativePG's admin login |
-| a shared-Postgres app's `.env` user/password keys (`services.json` `shared_db`) | `<svc>-db-role` (basic-auth) | CloudNativePG creates the app's login with it |
-| root `.env` `DOMAIN`, `TZ` | ConfigMap `homeserver-root` (`DOMAIN=k8s.local` in test) | every app |
+| `<svc>-env` (every key) | all of `services/<svc>/.env` | the app's containers (`envFrom`) |
+| `shared-postgres-superuser` (basic-auth) | `POSTGRES_USER`/`POSTGRES_PASSWORD` | CloudNativePG's admin login |
+| `<svc>-db-owner` / `<svc>-db-superuser` (basic-auth) | the CORE app's own database user/password keys | its own CloudNativePG cluster |
+| `<svc>-db-role` (basic-auth) | the shared-Postgres app's user/password keys (`services.json` `shared_db`) | CloudNativePG creates the app's login with it |
 
-**Changing a value or password:** edit the `.env` and run `secrets` again. Each Secret carries a hash of its `.env`; when it changes, `secrets` restarts that service's pods so they read the new values (the kubectl form of [Helm's `checksum/config` pattern](https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments)). Database logins follow by themselves: the role Secrets carry the `cnpg.io/reload` label, and the MariaDB apps' `<svc>-env` Secrets carry `k8s.mariadb.com/watch`, the labels each operator needs before it re-reads a changed password.
+Plus ConfigMap `homeserver-root` (root `.env` `DOMAIN`, `TZ`; `DOMAIN=k8s.local` in test), generated into git (`envs/<env>/homeserver-config`) because neither value is secret.
 
-**Later, in a cloud:** the External Secrets Operator can fill the same Secret names from AWS Secrets Manager, Azure Key Vault or GCP Secret Manager. No manifest changes.
+**Changing a value or password:** edit the `.env` and run `secrets` again. ESO refreshes the app's Secrets within a minute. [Reloader](https://github.com/stakater/Reloader) then restarts every workload whose Secret changed; it marks the restart with an annotation, the strategy its docs give for staying in sync with ArgoCD. Database logins follow by themselves: the login Secrets carry `cnpg.io/reload`, and the MariaDB apps' `<svc>-env` carry `k8s.mariadb.com/watch`, the labels each operator needs before it re-reads a changed password.
+
+**Why ESO, not secrets in git** (options compared 2026-10-04, ArgoCD's [secret management guide](https://argo-cd.readthedocs.io/en/stable/operator-manual/secret-management/)):
+
+| Option | Verdict |
+|---|---|
+| SOPS in git | ArgoCD needs a plugin to decrypt it, which ArgoCD's docs advise against (ArgoCD would hold the secrets, and keep them in plaintext in its Redis cache). It's the homelab favourite with Flux, not ArgoCD. |
+| Sealed Secrets | Simple, but tied to one cluster's key, and every secret would be public, encrypted, forever in this public repo. |
+| **ESO, store in the cluster (chosen)** | Nothing secret in git. `.env` stays the one source for Docker and Kubernetes. |
+| ESO, cloud store | The same manifests: moving to AWS Secrets Manager, Azure Key Vault or GCP Secret Manager changes only the `ClusterSecretStore` (`generate.py` `homeserver_config`). Apps keep reading the same Secret names. |
 
 ## Step 4 — Databases: shared and own
 
-Same layout as Docker: apps above CORE share one Postgres and one MariaDB; CORE apps keep their own (phase 3). Two operators run them, installed by `cluster.py install`:
+Same layout as Docker: apps above CORE share one Postgres and one MariaDB; CORE apps keep their own (phase 3). Two operators run them, installed by ArgoCD (Step 6):
 
 | Docker | Kubernetes | Operator |
 |---|---|---|
@@ -190,17 +202,18 @@ Same layout as Docker: apps above CORE share one Postgres and one MariaDB; CORE 
 Apps keep their `.env` unchanged: `DB_HOST=shared-postgres` / `shared-mariadb` is the Service name in Kubernetes too, and each app waits for it before starting (`wait-db`).
 
 ```bash
-uv run kubernetes/cluster.py secrets shared-postgres shared-mariadb miniflux bookstack
-uv run kubernetes/cluster.py apply   shared-postgres shared-mariadb       # the servers first
-kubectl -n apps get cluster,mariadb                                        # wait: "Cluster in healthy state" / Ready True
-uv run kubernetes/cluster.py apply   miniflux bookstack                   # then the apps
+uv run kubernetes/k8s.py up miniflux bookstack --env test   # the shared servers start with them
+git add kubernetes/deploy kubernetes/generated && git commit -m "k8s: run miniflux, bookstack" && git push
+kubectl -n apps get cluster,mariadb                          # "Cluster in healthy state" / Ready True
 kubectl -n apps get databaserole,databases.postgresql.cnpg.io,users,grants,databases.k8s.mariadb.com
 ```
 
 Things that work differently from Docker, on purpose:
 
 - **Isolation between apps.** Docker runs `REVOKE ALL ON DATABASE … FROM PUBLIC`; CloudNativePG doesn't manage privileges, so the generator writes `pg_hba` rules instead: each app's login may connect only to its own database(s), and is rejected everywhere else.
-- **Deleting a manifest never drops data.** Roles and databases use `retain` (CloudNativePG) and `cleanupPolicy: Skip` (mariadb-operator, whose default is to drop). Remove a database by hand if you really mean it.
+- **Deleting a manifest never drops data.** Roles and databases use `retain` (CloudNativePG) and `cleanupPolicy: Skip` (mariadb-operator, whose default is to drop), and ArgoCD never prunes or deletes them (Step 6). Remove a database by hand if you really mean it.
+- **A stopped Postgres is hibernated** (CloudNativePG's [declarative hibernation](https://cloudnative-pg.io/docs/1.30/declarative_hibernation/)): pods gone, volumes kept. A database created stopped is initialised once and then hibernated (verified on kind, 2026-10-04).
+- **A MariaDB server can't be stopped from git.** mariadb-operator has no scale-to-zero ([open request #356](https://github.com/mariadb-operator/mariadb-operator/issues/356)); its `suspend` only pauses the operator. So one is created (`suspend: false`) the first time a running app needs it and then keeps running: Uptime Kuma's own (CORE, always on anyway) and `shared-mariadb` (768 MB cap) once BookStack, InvoiceShelf or OrangeHRM has run.
 - **A database outside the cluster** (RDS, Cloud SQL, Azure): point `DB_HOST` in the app's `.env.example` at it and regenerate; the generator then emits no role or database for that app, like `homeserver.py`'s `shared_db_external()`.
 - **Names come from `.env.example`.** The generated output can't depend on one machine's `.env`, so a test checks your `.env` uses the same database/user names.
 
@@ -219,7 +232,7 @@ Every service is started once with **empty data** before you use it, to catch wh
 
 ```bash
 uv run kubernetes/cluster.py images temporal zulip --drop-host-copy   # locally built images (Compose build:) into kind
-uv run kubernetes/cluster.py smoke excalidraw karakeep homebox        # one at a time: pull, apply, wait, check, remove
+uv run kubernetes/cluster.py smoke excalidraw karakeep homebox        # one at a time: pull, start, wait, check, remove
 uv run kubernetes/cluster.py smoke wallabag --keep                    # leave it running to inspect
 uv run kubernetes/cluster.py rmi wallabag                             # free its images afterwards
 ```
@@ -228,6 +241,7 @@ uv run kubernetes/cluster.py rmi wallabag                             # free its
 - **Login-protected apps** (behind Authentik) are checked directly at their Service, because Authentik has no provider for test hostnames and answers 404.
 - **One service at a time, images pulled one by one.** Starting a whole tier at once (2026-10-04) pulled and unpacked dozens of images together: the HDD (image store) and the SSD (etcd, databases) saturated, and etcd's slow writes made the API server, scheduler and controller-manager restart repeatedly (5, 16 and 17 times). Ready services then timed out and teardowns failed. etcd is very sensitive to disk latency; on a cluster built for real use, give it a fast disk of its own, or raise its heartbeat and election timeouts (etcd's tuning guide). For kind, that's planned for the next rebuild. A side effect seen the same day: the CloudNativePG operator lost its leader election during the stall and stayed unready for 50 minutes despite three automatic restarts (its admission webhook refused every change: `failed calling webhook "mcluster.cnpg.io" ... connection refused`). `kubectl -n cnpg-system rollout restart deploy/cnpg-controller-manager` recovered it; the databases themselves kept running throughout.
 - **Images are removed after each test** (`rmi`), apart from any image a running service still uses, to keep the image store's disk free.
+- **ArgoCD is paused for the service under test** (its `skip-reconcile` annotation), because git says the service is stopped. Afterwards ArgoCD recreates it as git has it. `import` does the same while it copies data.
 
 ### Deprecation and currency audit (2026-10-04)
 
@@ -299,7 +313,10 @@ Kubelet health probes stay allowed: verified, a pod under a deny-all policy stay
 | Question | Decision | Why |
 |---|---|---|
 | Localhost ports | One local-access proxy | Same `localhost:<port>` URLs as Compose; apps can enforce Pod Security Baseline |
-| ArgoCD's git branch | A setting (`kubernetes/.env`); `feature/k8s-generated` now, `develop` after the merge | No rework when the branch changes |
+| ArgoCD's git branch | `revision` in `kubernetes/deploy/<env>.yaml`; `feature/k8s-generated` now, `develop` after the merge | No rework when the branch changes |
+| What decides which services run | **Git:** the `running` list in `kubernetes/deploy/<env>.yaml`, applied by ArgoCD (Step 5) | Easy to switch clusters or clouds: everything, including what runs, comes from the repo |
+| Secrets | **External Secrets Operator** with an in-cluster store filled from `.env` (Step 3) | Nothing secret in the public repo; switching to a cloud secret manager changes only the store |
+| `down` takes a backup (Compose) | Becomes scheduled backups plus CloudNativePG's continuous WAL archive (phase 5) | A git commit can't run a backup first; WAL restores to any point in time, not only to the last `down` |
 | Network policies | Ingress first; egress later | Kubernetes' documented starting point; egress has to list every app's external calls |
 
 ### Follow-ups after all phases
@@ -309,8 +326,66 @@ Kubelet health probes stay allowed: verified, a pod under a deny-all policy stay
 - **etcd disk priority** (`ionice`) and a faster, separate disk for kind's image store.
 - **The remaining hardening items:** image scanning, Cloudflare Access/WAF, Authentik two-factor, Docker socket proxy.
 
-## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
-## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
+## Step 5 — Start services by tier, like `homeserver.py`
+
+What runs is in git, one file per environment, `kubernetes/deploy/<env>.yaml`:
+
+```yaml
+repo: https://github.com/rajubhimani/homeserver.git
+revision: feature/k8s-generated   # the branch ArgoCD follows
+running: [min, core]              # targets as homeserver.py takes them
+stopped: []                       # services taken out of a running target
+auto_sync: false                  # true: ArgoCD applies every push by itself
+```
+
+Every ported service is **deployed stopped**. Its config, volumes and databases exist (`generated/apps/<svc>`: 0 replicas, Postgres hibernated, Jobs suspended), and the environment's overlay (`generated/envs/<env>/<svc>`) switches it on when the list includes it. Shared Postgres/MariaDB are on whenever a running service uses them.
+
+`k8s.py` edits the list with `homeserver.py`'s meanings and re-renders `generated/`:
+
+```bash
+uv run kubernetes/k8s.py up core --env test        # MIN + CORE ('up core' implies MIN)
+uv run kubernetes/k8s.py down jellyfin --env test  # recorded under stopped: while core runs
+uv run kubernetes/k8s.py down core --env test      # only CORE; MIN keeps running
+uv run kubernetes/k8s.py status --env test         # git's list next to what the cluster runs
+git add kubernetes/deploy kubernetes/generated && git commit -m "k8s: ..." && git push
+```
+
+Nothing changes in the cluster until the push. Then ArgoCD applies it: by itself with `auto_sync: true`, otherwise with **Sync** in its UI. A test checks the overlays match the list.
+
+## Step 6 — ArgoCD and Headlamp
+
+`cluster.py bootstrap --env <env>` is the only manual install. It:
+
+1. installs ArgoCD from its pinned manifest;
+2. fills the secret store (Step 3);
+3. applies `generated/gitops/<env>`.
+
+From then on ArgoCD installs and updates everything from git, itself included. Versions come from `kubernetes/versions.env`, and the add-on list is `kubernetes/cluster/addons.yaml`:
+
+| ArgoCD Application | What | From |
+|---|---|---|
+| `root` | the folder below (app of apps) | `generated/gitops/<env>` |
+| `argocd` | ArgoCD itself, its UI behind Traefik (`server.insecure`, as ArgoCD's ingress docs say for a TLS-terminating proxy) | pinned `install.yaml` |
+| `gateway-api`, `cluster-base` | Gateway API CRDs; namespaces and storage classes | pinned release; `kubernetes/cluster/base` |
+| `traefik`, `cloudnative-pg`, `mariadb-operator(-crds)` | router and database operators | Helm charts |
+| `external-secrets`, `reloader` | secrets (Step 3) | Helm charts |
+| `headlamp`, `ops-routes` | Kubernetes web UI; the two UIs' routes | Helm chart; generated |
+| one per service (ApplicationSet `services`) | `generated/envs/<env>/<svc>` | generated |
+
+**Safety built in:**
+- **Two ArgoCD projects.** Services (`homeserver`) may deploy only to `apps`, `local-access` and the secret store's namespace, plus three cluster-wide kinds (Namespace, PersistentVolume, ClusterSecretStore). The project is fixed in the ApplicationSet, never templated (ArgoCD's ApplicationSet security note). Add-ons use `platform`.
+- **Data is never deleted by ArgoCD.** Volumes, PersistentVolumes and database objects carry `Prune=false,Delete=false`. Deleting the ApplicationSet keeps every service's objects (`preserveResourcesOnDeletion`).
+- **`auto_sync` starts off,** so the first sync is reviewed in the UI before anything changes.
+
+**The UIs (only on this machine, never on the public domain):**
+- **ArgoCD:** `http://argocd.k8s.local:18080`, user `admin`. `bootstrap` prints the command that shows the first password.
+- **Headlamp:** `http://headlamp.k8s.local:18080`. Sign in with a token from `kubectl -n headlamp create token headlamp`.
+
+Add both names to `/etc/hosts`.
+
+**Logs (Grafana + Loki) and CrowdSec** come with the observability port (phase 4, next).
+
+**Status (2026-10-04):** written and tested offline: generator tests, and every folder renders with `kubectl kustomize`. The first `bootstrap` happens at the next cluster rebuild, together with encryption at rest. The current cluster was installed by the old `install` command (CloudNativePG from its manifest), so a Helm-installed second copy can't be added on top of it.
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
 ## Step 8 — Testing with your real data
 
@@ -367,12 +442,12 @@ How it ran on 2026-10-03/04, in this order:
 1. **Fresh snapshots on Docker.** `uv run homeserver.py prod backup <svc...>` stops each service (taking a snapshot) and starts it again. Snapshots can be older than the data: check the date, or use `--live-db`.
 2. **Serving your real domain from the cluster.** The Cloudflare tunnel's hostnames point at `http://nginx-plain:80` (set on Cloudflare's dashboard). On the cluster, a Service of that name points at Traefik, so the tunnel works unchanged. **Never run the tunnel in both places at once**, or Cloudflare splits traffic between them:
    ```bash
-   uv run kubernetes/cluster.py secrets --env prod      # real DOMAIN + the tunnel token
+   uv run kubernetes/cluster.py secrets --env prod      # the store, with the tunnel token
    uv run homeserver.py prod down cloudflared           # Docker's tunnel off first
-   uv run kubernetes/cluster.py apply --env prod        # routes for your real domain + the tunnel
+   uv run kubernetes/cluster.py bootstrap --env prod    # ArgoCD follows kubernetes/deploy/prod.yaml (real domain + tunnel)
    ```
 3. **Stop Docker's services** that the cluster will run (`homeserver.py prod down <svc...>`, which snapshots them), so two copies never share a host folder, a host port or memory. For services you just backed up, add `--no-backup`.
-4. **Bring services up in batches**, the light ones first and the heavy ones (Jellyfin, Nextcloud, Immich, OnlyOffice, ClamAV, Plausible) one at a time: `secrets`, `apply`, wait for the database and volumes, then `import`. Pulling and unpacking large images saturates an HDD, and containerd times out under that load.
+4. **Bring services up in batches**, the light ones first and the heavy ones (Jellyfin, Nextcloud, Immich, OnlyOffice, ClamAV, Plausible) one at a time: `secrets`, `apply` (today: add them to the `running` list a few at a time), wait for the database and volumes, then `import`. Pulling and unpacking large images saturates an HDD, and containerd times out under that load.
 5. **Before Immich starts,** count its trash: `kubectl -n apps exec immich-db-1 -c postgres -- psql -d immich -tAc 'select count(*) from asset where "deletedAt" is not null'`. With 0, the nightly trash-empty job has nothing to delete in the shared photo folder.
 
 Things found during the window, all fixed in the generator or the services themselves:

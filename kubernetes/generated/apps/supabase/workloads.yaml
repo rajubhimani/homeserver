@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-auth
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -137,8 +139,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-db
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -290,8 +294,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-envoy
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -414,8 +420,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-edge-functions
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -529,8 +537,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-imgproxy
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -604,8 +614,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-meta
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -685,8 +697,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-pooler
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -823,8 +837,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: realtime-dev-supabase-realtime
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -935,8 +951,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-rest
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -1022,8 +1040,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-storage
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -1148,8 +1168,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
     app.kubernetes.io/name: supabase-studio
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

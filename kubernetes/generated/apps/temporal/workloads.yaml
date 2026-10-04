@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
     app.kubernetes.io/name: temporal
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -142,8 +144,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
     app.kubernetes.io/name: temporal-admin-tools
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -194,8 +198,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
     app.kubernetes.io/name: temporal-ui
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -275,8 +281,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: temporal
     app.kubernetes.io/name: temporal-worker
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

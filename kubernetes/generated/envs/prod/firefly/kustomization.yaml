@@ -5,3 +5,20 @@ namespace: apps
 resources:
 - ../../../apps/firefly
 - routes.yaml
+patches:
+- target:
+    kind: Cluster
+    name: firefly-db
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
+- target:
+    kind: Deployment
+    name: firefly
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: firefly-cron
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
+    name: firefly-importer
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

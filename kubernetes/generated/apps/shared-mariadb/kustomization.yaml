@@ -5,3 +5,4 @@ namespace: apps
 resources:
 - database.yaml
 - networkpolicies.yaml
+- secrets.yaml

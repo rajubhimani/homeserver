@@ -8,8 +8,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: firefly
     app.kubernetes.io/name: firefly
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -148,8 +150,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: firefly
     app.kubernetes.io/name: firefly-cron
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -201,8 +205,10 @@ metadata:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: firefly
     app.kubernetes.io/name: firefly-importer
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 3
   selector:
     matchLabels:

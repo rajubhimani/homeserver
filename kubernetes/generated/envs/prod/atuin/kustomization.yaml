@@ -5,3 +5,12 @@ namespace: apps
 resources:
 - ../../../apps/atuin
 - routes.yaml
+patches:
+- target:
+    kind: Cluster
+    name: atuin-db
+  patch: "- op: remove\n  path: /metadata/annotations/cnpg.io~1hibernation\n"
+- target:
+    kind: Deployment
+    name: atuin
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

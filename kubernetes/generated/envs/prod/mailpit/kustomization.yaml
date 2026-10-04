@@ -5,3 +5,8 @@ namespace: apps
 resources:
 - ../../../apps/mailpit
 - routes.yaml
+patches:
+- target:
+    kind: Deployment
+    name: mailpit
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
