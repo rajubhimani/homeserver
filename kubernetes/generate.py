@@ -1983,7 +1983,12 @@ def gitops(env: str) -> dict[str, list[dict]]:
                          "spec": {"project": "homeserver",
                                   "source": {"repoURL": h["repo"], "chart": h["chart"],
                                              "targetRevision": dagster_version() if svc == "dagster" else h["version"],
-                                             "helm": {"releaseName": h["release"], "valuesObject": values}},
+                                             # The chart's values schema fetches Kubernetes schemas from
+                                             # raw.githubusercontent.com on every render (timed out in
+                                             # ArgoCD, 2026-10-04); ArgoCD documents this switch. The
+                                             # values are checked by tests/test_k8s_sync.py instead.
+                                             "helm": {"releaseName": h["release"], "valuesObject": values,
+                                                      "skipSchemaValidation": True}},
                                   "destination": {"server": IN_CLUSTER, "namespace": NAMESPACE},
                                   "syncPolicy": {**sync_auto, "retry": retry}}})
     appset = {

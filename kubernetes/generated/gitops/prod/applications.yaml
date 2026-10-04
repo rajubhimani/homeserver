@@ -692,6 +692,7 @@ spec:
                   cpu: '1'
               securityContext:
                 allowPrivilegeEscalation: false
+      skipSchemaValidation: true
   destination:
     server: https://kubernetes.default.svc
     namespace: apps
