@@ -46,17 +46,6 @@ spec:
             name: homeserver-root
         - secretRef:
             name: cloudflared-env
-        readinessProbe:
-          exec:
-            command:
-            - cloudflared
-            - tunnel
-            - --metrics
-            - localhost:9002
-            - ready
-          timeoutSeconds: 10
-          periodSeconds: 30
-          failureThreshold: 3
         livenessProbe:
           exec:
             command:

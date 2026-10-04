@@ -181,16 +181,6 @@ spec:
           value: $(GUNICORN_TIMEOUT)
         - name: GUNICORN_WORKERS
           value: $(GUNICORN_WORKERS)
-        readinessProbe:
-          exec:
-            command:
-            - wait-for-it
-            - -t
-            - '5'
-            - 127.0.0.1:8000
-          timeoutSeconds: 5
-          periodSeconds: 30
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:
@@ -270,15 +260,6 @@ spec:
             secretKeyRef:
               name: erpnext-env
               key: DB_PASSWORD
-        readinessProbe:
-          exec:
-            command:
-            - healthcheck.sh
-            - --connect
-            - --innodb_initialized
-          timeoutSeconds: 5
-          periodSeconds: 10
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:
@@ -492,14 +473,6 @@ spec:
         envFrom:
         - configMapRef:
             name: homeserver-root
-        readinessProbe:
-          exec:
-            command:
-            - valkey-cli
-            - ping
-          timeoutSeconds: 5
-          periodSeconds: 30
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:
@@ -545,14 +518,6 @@ spec:
         envFrom:
         - configMapRef:
             name: homeserver-root
-        readinessProbe:
-          exec:
-            command:
-            - valkey-cli
-            - ping
-          timeoutSeconds: 5
-          periodSeconds: 30
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:
@@ -701,16 +666,6 @@ spec:
             name: homeserver-root
         - secretRef:
             name: erpnext-env
-        readinessProbe:
-          exec:
-            command:
-            - wait-for-it
-            - -t
-            - '5'
-            - 127.0.0.1:9000
-          timeoutSeconds: 5
-          periodSeconds: 30
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:

@@ -610,6 +610,14 @@ def convert(svc: str) -> dict[str, list[dict]]:
         # image's own, copied verbatim into the override in Docker's format.
         container.update(probe_set(s.get("healthcheck") if (s.get("healthcheck") or {}).get("test")
                                    else co.get("image_healthcheck"), env_keys, where))
+        if not (listen[n] or udp.get(n)):
+            # No ports, so no traffic for readiness to steer: liveness (and
+            # startup) only, as the official Airflow chart does for its
+            # scheduler and triggerer. Kubernetes runs probes concurrently, so
+            # two `airflow jobs check` CLIs on top of the triggerer exceeded
+            # its Compose memory limit (OOMKilled, 2026-10-04); Docker runs
+            # one healthcheck at a time.
+            container.pop("readinessProbe", None)
         container.update(co.get("probes") or {})
         lim = ((s.get("deploy") or {}).get("resources") or {}).get("limits") or {}
         if lim.get("memory") or s.get("mem_limit"):

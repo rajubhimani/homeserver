@@ -74,16 +74,6 @@ spec:
               key: MONGODB_REPLICA_SET_NAME
         - name: ALLOW_EMPTY_PASSWORD
           value: 'yes'
-        readinessProbe:
-          exec:
-            command:
-            - mongosh
-            - mongodb://mongodb:27017/?directConnection=true
-            - --eval
-            - db.adminCommand('ping')
-          timeoutSeconds: 10
-          periodSeconds: 30
-          failureThreshold: 10
         livenessProbe:
           exec:
             command:
@@ -163,16 +153,6 @@ spec:
         envFrom:
         - configMapRef:
             name: homeserver-root
-        readinessProbe:
-          exec:
-            command:
-            - wget
-            - -q
-            - --spider
-            - http://localhost:8222/healthz
-          timeoutSeconds: 5
-          periodSeconds: 30
-          failureThreshold: 3
         livenessProbe:
           exec:
             command:

@@ -165,14 +165,6 @@ spec:
             secretKeyRef:
               name: beszel-env
               key: BESZEL_AGENT_TOKEN
-        readinessProbe:
-          exec:
-            command:
-            - /agent
-            - health
-          timeoutSeconds: 5
-          periodSeconds: 60
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:

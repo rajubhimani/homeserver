@@ -97,14 +97,16 @@ def test_images_match_compose_exactly():
 
 
 def test_every_workload_is_probed_or_explained():
-    """Compose healthchecks become probes; a long-running container without one
+    """Compose healthchecks become probes (readiness + liveness, or liveness
+    only for containers without ports); a long-running container without one
     must be on tests/test_healthchecks.py's documented exception lists."""
     from test_healthchecks import IMAGE_HEALTHCHECK, NO_HEALTHCHECK
     for f, doc in _generated_docs():
         if doc.get("kind") not in ("Deployment", "StatefulSet", "DaemonSet"):
             continue
         for c in doc["spec"]["template"]["spec"]["containers"]:
-            if "readinessProbe" not in c:
+            # Containers without ports carry liveness only (no traffic to steer).
+            if "readinessProbe" not in c and "livenessProbe" not in c:
                 assert c["name"] in IMAGE_HEALTHCHECK or c["name"] in NO_HEALTHCHECK, \
                     f"{f.parent.name}/{c['name']}: no probe and no documented reason"
 

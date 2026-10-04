@@ -577,14 +577,6 @@ spec:
           value: '16.8'
         - name: IMGPROXY_USE_ETAG
           value: 'true'
-        readinessProbe:
-          exec:
-            command:
-            - imgproxy
-            - health
-          timeoutSeconds: 5
-          periodSeconds: 5
-          failureThreshold: 3
         livenessProbe:
           exec:
             command:
@@ -777,18 +769,6 @@ spec:
           value: $(SECRET_KEY_BASE)
         - name: VAULT_ENC_KEY
           value: $(VAULT_ENC_KEY)
-        readinessProbe:
-          exec:
-            command:
-            - curl
-            - -sSfL
-            - --head
-            - -o
-            - /dev/null
-            - http://127.0.0.1:4000/api/health
-          timeoutSeconds: 5
-          periodSeconds: 10
-          failureThreshold: 10
         livenessProbe:
           exec:
             command:

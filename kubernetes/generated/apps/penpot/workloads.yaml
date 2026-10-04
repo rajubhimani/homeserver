@@ -100,15 +100,6 @@ spec:
           value: $(PENPOT_SMTP_USERNAME)
         - name: PENPOT_STORAGE_ASSETS_FS_DIRECTORY
           value: /opt/data/assets
-        readinessProbe:
-          exec:
-            command:
-            - curl
-            - -fsS
-            - http://localhost:6060/readyz
-          timeoutSeconds: 10
-          periodSeconds: 30
-          failureThreshold: 5
         livenessProbe:
           exec:
             command:
