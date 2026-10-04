@@ -102,6 +102,8 @@ spec:
           value: $(SMTP_USER)
         - name: GOTRUE_URI_ALLOW_LIST
           value: $(ADDITIONAL_REDIRECT_URLS)
+        ports:
+        - containerPort: 9999
         readinessProbe:
           exec:
             command:
@@ -474,6 +476,8 @@ spec:
           value: http://supabase-envoy:8000
         - name: VERIFY_JWT
           value: $(FUNCTIONS_VERIFY_JWT)
+        ports:
+        - containerPort: 9000
         readinessProbe:
           exec:
             command:
@@ -650,6 +654,8 @@ spec:
           value: postgres
         - name: PG_META_PORT
           value: '8080'
+        ports:
+        - containerPort: 8080
         readinessProbe:
           exec:
             command:
@@ -889,6 +895,8 @@ spec:
           value: $(SECRET_KEY_BASE)
         - name: SEED_SELF_HOST
           value: 'true'
+        ports:
+        - containerPort: 4000
         readinessProbe:
           exec:
             command:
@@ -985,6 +993,8 @@ spec:
           value: 'false'
         - name: PGRST_JWT_SECRET
           value: ${JWT_SECRET}
+        ports:
+        - containerPort: 3000
         readinessProbe:
           exec:
             command:
@@ -1082,6 +1092,8 @@ spec:
           value: $(SUPABASE_PUBLIC_URL)
         - name: TENANT_ID
           value: $(STORAGE_TENANT_ID)
+        ports:
+        - containerPort: 5000
         readinessProbe:
           exec:
             command:

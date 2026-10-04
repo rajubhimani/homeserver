@@ -51,6 +51,8 @@ spec:
           value: https://plane.$(DOMAIN)
         - name: NEXT_PUBLIC_API_BASE_URL
           value: https://plane.$(DOMAIN)
+        ports:
+        - containerPort: 3000
         readinessProbe:
           exec:
             command:
@@ -174,6 +176,8 @@ spec:
           value: https://plane.$(DOMAIN)
         - name: WEB_URL
           value: https://plane.$(DOMAIN)
+        ports:
+        - containerPort: 8000
         readinessProbe:
           exec:
             command:
@@ -739,6 +743,8 @@ spec:
           value: https://plane.$(DOMAIN)
         - name: NEXT_PUBLIC_API_BASE_URL
           value: https://plane.$(DOMAIN)
+        ports:
+        - containerPort: 3000
         readinessProbe:
           exec:
             command:
@@ -820,6 +826,8 @@ spec:
           value: https://plane.$(DOMAIN)
         - name: NEXT_PUBLIC_API_BASE_URL
           value: https://plane.$(DOMAIN)
+        ports:
+        - containerPort: 3000
         readinessProbe:
           exec:
             command:

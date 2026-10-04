@@ -418,3 +418,20 @@ def test_every_service_has_an_ingress_policy():
             if target in ("shared-postgres", "shared-mariadb"):
                 continue  # covered by the shared_db rule, checked by the generator
             assert ok, f"{src} -> {target}:{sorted(ports)} not allowed by {target}'s policy"
+
+
+def test_config_file_upstreams_have_service_ports():
+    """Ports a service's own config files use for its containers (nginx.conf,
+    Caddyfile, Envoy cds.yaml) are on those containers' Services: Docker
+    reaches any port, Kubernetes only declared ones (AppFlowy's gotrue,
+    Plane's web, Supabase's auth/rest/... on 2026-10-04)."""
+    ports = _service_ports()
+    gaps = []
+    for svc in PORTED:
+        comp = gen.load_compose(svc)["services"]
+        cname = {n: (s.get("container_name") or n) for n, s in comp.items()}
+        for n, wanted in gen.repo_config_ports(svc, comp, cname).items():
+            name = re.sub(r"[^a-z0-9-]", "-", cname[n].lower())
+            have = ports.get(name, set()) | ports.get(n, set())
+            gaps += [f"{svc}/{name}:{p}" for p in sorted(wanted - have)]
+    assert not gaps, f"config files reach ports their Services don't have: {gaps}"

@@ -48,6 +48,8 @@ spec:
           value: https://appflowy.$(DOMAIN)
         - name: GOTRUE_URL
           value: https://appflowy.$(DOMAIN)/gotrue
+        ports:
+        - containerPort: 3000
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -317,6 +319,8 @@ spec:
           value: https://appflowy.$(DOMAIN)/**,appflowy-flutter://**
         - name: PORT
           value: '9999'
+        ports:
+        - containerPort: 9999
         readinessProbe:
           exec:
             command:
@@ -628,5 +632,7 @@ spec:
           value: https://appflowy.$(DOMAIN)/gotrue
         - name: APPFLOWY_WS_BASE_URL
           value: wss://appflowy.$(DOMAIN)/ws
+        ports:
+        - containerPort: 80
         securityContext:
           allowPrivilegeEscalation: false

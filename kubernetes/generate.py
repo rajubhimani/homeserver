@@ -402,6 +402,40 @@ def config_checksum(data: dict[str, str]) -> dict:
     return {"annotations": {"homeserver/config-sha256": h}}
 
 
+def repo_config_ports(svc: str, services: dict, cname: dict) -> dict[str, set[int]]:
+    """{compose service: ports} named as <container>:<port> in the repo files
+    and folders this service mounts (nginx.conf, Caddyfile, Envoy configs)."""
+    names = {}
+    for n, s in services.items():
+        names[(s.get("container_name") or n)] = n
+        names[n] = n
+    texts = []
+    for s in services.values():
+        for m in s.get("volumes") or []:
+            src = str(m.get("source", ""))
+            path = Path(src)
+            if not src.startswith(str(REPO)) or not path.exists():
+                continue
+            files = [path] if path.is_file() else [f for f in path.rglob("*") if f.is_file()]
+            for f in files:
+                if f.stat().st_size < 1_000_000:
+                    try:
+                        texts.append(f.read_text())
+                    except UnicodeDecodeError:
+                        pass
+    out: dict[str, set[int]] = {}
+    pat = re.compile(r"(?<![\w.-])(" + "|".join(re.escape(k) for k in sorted(names, key=len, reverse=True)) + r"):(\d{2,5})\b")
+    # Envoy's style puts them on separate lines (Supabase's cds.yaml):
+    #   address: supabase-auth
+    #   port_value: 9999
+    envoy = re.compile(r"address:\s*([a-z0-9.-]+)\s*\n\s*port_value:\s*(\d+)")
+    for text in texts:
+        for host, port in pat.findall(text) + envoy.findall(text):
+            if host in names:
+                out.setdefault(names[host], set()).add(int(port))
+    return out
+
+
 def data_volume(svc: str, kind: str, key: str, mo: dict, ov: dict, pvcs: dict) -> tuple[str, str, str | None]:
     """-> (pod volume name, PVC name, subPath). Compose's ${DATA_ROOT} is one
     folder per service, its subfolders mounted separately: here one PVC
@@ -458,6 +492,10 @@ def convert(svc: str) -> dict[str, list[dict]]:
     host_pvs: dict[str, str] = {}  # PVC name -> node path of a host folder
     labels_svc = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
 
+    # Ports the service's own mounted config files reach its containers on
+    # (AppFlowy's nginx.conf "appflowy-gotrue:9999", Plane's Caddyfile
+    # "plane-web:3000"): Docker reaches any port, Kubernetes only declared ones.
+    config_ports = repo_config_ports(svc, services, cname)
     # Ports each container listens on (for Services and depends_on waits).
     listen: dict[str, list[int]] = {}
     udp: dict[str, set[int]] = {}
@@ -466,6 +504,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
         ports = sorted(tcp_ports | {int(x) for x in (s.get("expose") or [])})
         ports += [int(p) for p in (ov_c.get(cname[n], {}).get("ports") or []) if int(p) not in ports]
         ports += [p for _, p in routes.get(cname[n], []) if p not in ports]
+        ports += [p for p in config_ports.get(n, ()) if p not in ports]
         listen[n] = sorted(set(ports))
 
     oneshots = {n for n, s in services.items() if str(s.get("restart", "")).strip('"') in ("no", "on-failure")}
