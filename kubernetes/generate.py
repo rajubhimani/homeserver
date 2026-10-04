@@ -2340,9 +2340,11 @@ def backup_store() -> dict[str, list[dict] | dict]:
                      # Velero without a policy, 2026-10-04).
                      f'mc admin policy create store {bucket}-only /tmp/{bucket}.json && '
                      f'mc admin user add store "$BACKUP_{u}_ACCESS_KEY" "$BACKUP_{u}_SECRET_KEY" && '
-                     f'(mc admin user info store "$BACKUP_{u}_ACCESS_KEY" | grep -q "{bucket}-only" || '
-                     f'mc admin policy attach store {bucket}-only --user "$BACKUP_{u}_ACCESS_KEY") && '
-                     f'mc admin user info store "$BACKUP_{u}_ACCESS_KEY" | grep -q "{bucket}-only"')
+                     # (the mc image has no grep: the shell's case does the matching)
+                     f'case "$(mc admin user info store "$BACKUP_{u}_ACCESS_KEY")" in *{bucket}-only*) ;; '
+                     f'*) mc admin policy attach store {bucket}-only --user "$BACKUP_{u}_ACCESS_KEY" ;; esac && '
+                     f'case "$(mc admin user info store "$BACKUP_{u}_ACCESS_KEY")" in *{bucket}-only*) '
+                     f'echo "{bucket}: user holds {bucket}-only" ;; *) echo "{bucket}: policy missing" >&2; exit 1 ;; esac')
     setup = "set -e; " + " && ".join(['mc alias set store http://backup-store:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'] + users)
     es_root = external_secret("backup-store-root", "backup-store", template={"data": {
         "MINIO_ROOT_USER": '{{ index . "BACKUP_STORE_ROOT_USER" }}',
