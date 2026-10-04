@@ -486,7 +486,7 @@ uv run kubernetes/cluster.py import --env prod --from-export /mnt/mydata/k8s-dat
 uv run kubernetes/k8s.py up cloudflared --env prod && git commit -am "k8s: tunnel back on" && git push
 ```
 
-**The tunnel stays off until the data is back.** Between `bootstrap` and `import` the apps run empty, and a fresh app often lets its first visitor create the admin account (Authentik's initial setup, for one). Taking cloudflared out of the running list first keeps those pages unreachable from the internet.
+**The tunnel stays off until the data is back.** Between `bootstrap` and `import` the apps run empty, and a fresh app often lets its first visitor create the admin account (Authentik's initial setup, for one). Taking cloudflared out of the running list first keeps those pages unreachable from the internet. `import --from-export` starts again only the services in the running list (found 2026-10-05: it used to scale every exported service up, the stopped tunnel included, so the tunnel's pod was created while the apps were still empty).
 
 `export` takes a `pg_dump`/`mariadb-dump` of each database the service uses (its own, or its databases on the shared servers), consistent while it runs. It also takes a tar of each data volume, with the service briefly stopped. Host folders (Immich's photos, Jellyfin's media) are left in place. `import --from-export` unpacks the volumes and restores each database as the app's own login. `export` stops, without deleting anything, if any dump fails. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
 

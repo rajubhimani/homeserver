@@ -695,3 +695,24 @@ def test_port_variable_defaults_match_env_example():
             if ex.get(var, default) != default:
                 gaps.append(f"{svc}: {var}={ex[var]} in .env.example, {default} in compose.prod.yml")
     assert not gaps, "\n".join(gaps)
+
+
+def test_import_never_starts_a_stopped_service(tmp_path, monkeypatch):
+    """import --from-export scaled every exported service back up, the tunnel
+    included, though git lists it as stopped: while the apps are still being
+    filled, a connected tunnel would expose them empty (their first visitor
+    can create the admin account). Only the running list may be started."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec = importlib.util.spec_from_file_location("k8s_cluster_import", K8S / "cluster.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    import generate
+    scaled = []
+    monkeypatch.setattr(generate, "running_services", lambda env: {"docs"})
+    monkeypatch.setattr(mod, "argo_pause", lambda svc, paused: None)
+    monkeypatch.setattr(mod, "scale", lambda svc, n: scaled.append((svc, n)))
+    (tmp_path / "export.json").write_text(json.dumps({
+        "docs": {"volumes": [], "dbs": []}, "cloudflared": {"volumes": [], "dbs": []}}))
+    mod.import_export(type("A", (), {"from_export": str(tmp_path), "services": [], "env": "prod"})())
+    assert scaled == [("docs", 1)], scaled

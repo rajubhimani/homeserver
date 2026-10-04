@@ -663,6 +663,8 @@ def import_export(a) -> None:
     the service stopped, then each database restored as its app's login."""
     src = Path(a.from_export)
     manifest = json.loads((src / "export.json").read_text())
+    from generate import running_services
+    running = running_services(a.env)
     for svc in a.services or list(manifest):
         entry = manifest[svc]
         print(f"== {svc}: from {src.name}", flush=True)
@@ -682,7 +684,10 @@ def import_export(a) -> None:
                         subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", NAMESPACE, "exec",
                                         "-i", db["pod"], "--", "sh", "-c",
                                         f'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" {db["db"]}'], stdin=fh, check=True)
-            scale(svc, 1)
+            # Only what git says runs: a stopped service (the tunnel, above all,
+            # which must stay off until the data is back) is never started here.
+            if svc in running:
+                scale(svc, 1)
         finally:
             argo_pause(svc, False)
 
