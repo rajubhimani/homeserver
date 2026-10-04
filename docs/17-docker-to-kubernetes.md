@@ -134,6 +134,7 @@ uv run kubernetes/cluster.py install    # Gateway API, namespaces, Traefik, stor
 uv run kubernetes/cluster.py secrets    # each services/<svc>/.env -> Secret <svc>-env (piped, never written to disk)
 uv run kubernetes/cluster.py apply      # every ported service (or name some: apply docs landing)
 uv run kubernetes/cluster.py status     # pods, services, volume claims, routes
+uv run kubernetes/cluster.py validate   # server-side dry run of every service: the API server checks it, nothing is created
 ```
 
 - **The test cluster uses `DOMAIN=k8s.local`**, so apps build their links for the test hostnames, not your real domain.

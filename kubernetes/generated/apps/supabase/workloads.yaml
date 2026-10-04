@@ -287,7 +287,7 @@ spec:
         homeserver/service: supabase
         app.kubernetes.io/name: supabase-envoy
       annotations:
-        homeserver/config-sha256: 54b9dbf7b31250fe5288bdf2cc6a3b276aa486bece310f9e62f6ab3cd86a32c8
+        homeserver/config-sha256: 8e17cf6e15b4fd2b1710534db5ab0a80371712ff344395b479911cee374d0bb2
     spec:
       enableServiceLinks: false
       initContainers:
@@ -767,23 +767,23 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: realtime-dev.supabase-realtime
+  name: realtime-dev-supabase-realtime
   labels:
     app.kubernetes.io/part-of: homeserver
     homeserver/service: supabase
-    app.kubernetes.io/name: realtime-dev.supabase-realtime
+    app.kubernetes.io/name: realtime-dev-supabase-realtime
 spec:
   replicas: 1
   revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app.kubernetes.io/name: realtime-dev.supabase-realtime
+      app.kubernetes.io/name: realtime-dev-supabase-realtime
   template:
     metadata:
       labels:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: supabase
-        app.kubernetes.io/name: realtime-dev.supabase-realtime
+        app.kubernetes.io/name: realtime-dev-supabase-realtime
     spec:
       enableServiceLinks: false
       initContainers:
@@ -794,7 +794,7 @@ spec:
         - -c
         - until nc -z -w 2 supabase-db 5432; do echo waiting for supabase-db:5432; sleep 2; done
       containers:
-      - name: realtime-dev.supabase-realtime
+      - name: realtime-dev-supabase-realtime
         image: supabase/realtime:v2.134.10
         envFrom:
         - configMapRef:

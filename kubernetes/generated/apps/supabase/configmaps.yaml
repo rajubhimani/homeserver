@@ -348,7 +348,11 @@ data:
                 - endpoint:
                     address:
                       socket_address:
-                        address: realtime-dev.supabase-realtime
+                        # Connect by the Compose service name (Docker and Kubernetes
+                        # both resolve it); Realtime still picks its tenant from the
+                        # Host header (host_rewrite_literal realtime-dev.supabase-realtime
+                        # in lds.template.yaml), as supabase-kubernetes does.
+                        address: supabase-realtime
                         port_value: 4000
         health_checks:
           - timeout: 2s

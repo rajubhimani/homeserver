@@ -424,7 +424,10 @@ def convert(svc: str) -> dict[str, list[dict]]:
     ov_c = ov.get("containers") or {}
     env_keys = set(load_env(SERVICES_DIR / svc / ".env.example"))
     services: dict = compose.get("services") or {}
-    cname = {n: (s.get("container_name") or n) for n, s in services.items()}
+    # Kubernetes names are DNS labels: a container_name with dots (Supabase's
+    # realtime-dev.supabase-realtime) gets dashes; the Compose service name
+    # stays reachable through its alias Service.
+    cname = {n: re.sub(r"[^a-z0-9-]", "-", (s.get("container_name") or n).lower()) for n, s in services.items()}
     routes = nginx_routes()
     files: dict[str, list[dict]] = {}
     pvcs: dict[str, dict] = {}

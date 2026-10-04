@@ -6,6 +6,7 @@
     uv run kubernetes/cluster.py secrets [svc...]  # services/<svc>/.env -> Secret <svc>-env; root .env -> ConfigMap
     uv run kubernetes/cluster.py apply   [svc...]  # kubectl apply -k kubernetes/generated/envs/<env>/<svc>
     uv run kubernetes/cluster.py import  <svc...> [--snapshot TS]  # copy a Compose snapshot's data into the cluster
+    uv run kubernetes/cluster.py validate [svc...]   # server-side dry run: the API server checks every manifest, nothing is created
     uv run kubernetes/cluster.py status
     uv run kubernetes/cluster.py delete            # remove the kind cluster (host data folders are kept)
 
@@ -474,6 +475,25 @@ def import_volume(svc: str, vol_tar: Path) -> None:
     unpack(vol_tar, pvc_host_path(f"{svc}-{slug(vol)}"))
 
 
+def cmd_validate(a) -> None:
+    """Server-side dry run of each service's manifests: the API server checks
+    schemas, operator CRDs and field values without creating anything."""
+    bad = []
+    names = services(a.services)
+    for svc in names:
+        d = K8S / "generated/envs" / a.env / svc
+        if not d.is_dir():
+            continue
+        p = subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "apply", "--dry-run=server",
+                            "-k", str(d)], capture_output=True, text=True)
+        if p.returncode != 0:
+            bad.append(svc)
+            print(f"FAIL {svc}: " + " | ".join(l for l in p.stderr.splitlines() if l.strip() and not l.startswith("Warning"))[:400])
+    print(f"{len(names) - len(bad)}/{len(names)} pass the server-side dry run")
+    if bad:
+        sys.exit(1)
+
+
 def cmd_status(_a) -> None:
     kubectl("get", "pods,svc,pvc,httproute", "-n", NAMESPACE, "-o", "wide", check=False)
 
@@ -485,13 +505,13 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "install", "secrets", "apply", "import", "status", "delete"])
+    ap.add_argument("action", choices=["create", "install", "secrets", "apply", "import", "validate", "status", "delete"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
     ap.add_argument("--live-db", action="store_true", help="import: own Postgres from the running Compose container (pg_dump)")
     a = ap.parse_args()
-    {"create": cmd_create, "install": cmd_install, "secrets": cmd_secrets, "apply": cmd_apply, "import": cmd_import,
+    {"create": cmd_create, "install": cmd_install, "secrets": cmd_secrets, "apply": cmd_apply, "import": cmd_import, "validate": cmd_validate,
      "status": cmd_status, "delete": cmd_delete}[a.action](a)
     return 0
 
