@@ -676,3 +676,20 @@ def test_local_access_never_takes_traefiks_node_ports():
     svc = next(d for d in yaml.safe_load_all((GENERATED / "apps/local-access/services.yaml").read_text()) if d)
     taken = {p["nodePort"] for p in svc["spec"]["ports"]}
     assert not traefik & taken, f"local-access claims Traefik's node ports {sorted(traefik & taken)}"
+
+
+def test_port_variable_defaults_match_env_example():
+    """Compose ports written as ${VAR:-default} are read with the default;
+    .env.example must set the same value, or Docker and Kubernetes would
+    publish different localhost ports."""
+    gaps = []
+    for svc in PORTED:
+        d = REPO / "services" / svc
+        f = d / "compose.prod.yml"
+        if not f.is_file():
+            continue
+        ex = gen.load_env(d / ".env.example")
+        for var, default in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):-(\d+)\}", f.read_text()):
+            if ex.get(var, default) != default:
+                gaps.append(f"{svc}: {var}={ex[var]} in .env.example, {default} in compose.prod.yml")
+    assert not gaps, "\n".join(gaps)

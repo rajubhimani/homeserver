@@ -95,6 +95,8 @@ data:
             8125 orangehrm.apps.svc.cluster.local:80;
             8085 gitlab.apps.svc.cluster.local:80;
             2224 gitlab.apps.svc.cluster.local:22;
+            8134 observability.apps.svc.cluster.local:3000;
+            8135 prometheus.apps.svc.cluster.local:9090;
             8139 dagster-webserver.apps.svc.cluster.local:3000;
         }
         server {
@@ -175,6 +177,8 @@ data:
             listen 8125;
             listen 8085;
             listen 2224;
+            listen 8134;
+            listen 8135;
             listen 8139;
             proxy_pass $backend;
             proxy_timeout 1h;

@@ -37,3 +37,5 @@ spec:
     ports:
     - protocol: TCP
       port: 3000
+    - protocol: TCP
+      port: 9090

@@ -235,6 +235,16 @@
   protocol: tcp
   svc: supabase
   container: supabase-envoy
+- host: 8134
+  node: 30176
+  protocol: tcp
+  svc: observability
+  container: observability
+- host: 8135
+  node: 30177
+  protocol: tcp
+  svc: observability
+  container: prometheus
 - host: 8136
   node: 30154
   protocol: tcp

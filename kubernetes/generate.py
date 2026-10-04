@@ -1415,6 +1415,15 @@ NODE_PORT_BASE = 30100
 TRAEFIK_NODE_PORTS = {80: 30080, 443: 30443}
 
 
+PORT_DEFAULT = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*:-(\d+)\}")
+
+
+def port_default(v) -> str:
+    """${GRAFANA_PORT:-8134} -> 8134: Compose's own default (no-interpolate
+    keeps the expression; a test checks .env.example agrees)."""
+    return PORT_DEFAULT.sub(r"\1", str(v))
+
+
 def published_ports(s: dict) -> list[tuple[str, int, int, str]]:
     """[(host IP, host port, container port, protocol)] for Compose ports
     bound to a literal address (127.0.0.1 and the 10.8.0.1 VPN mirror);
@@ -1422,9 +1431,9 @@ def published_ports(s: dict) -> list[tuple[str, int, int, str]]:
     out = []
     for p in s.get("ports") or []:
         if isinstance(p, dict):
-            ip, hp, tgt, proto = p.get("host_ip"), p.get("published"), p.get("target"), p.get("protocol", "tcp")
+            ip, hp, tgt, proto = p.get("host_ip"), port_default(p.get("published")), p.get("target"), p.get("protocol", "tcp")
         else:
-            spec, _, proto = str(p).partition("/")
+            spec, _, proto = port_default(p).partition("/")
             parts = spec.split(":")
             if len(parts) != 3:
                 continue
@@ -1441,9 +1450,9 @@ def loopback_ports(s: dict) -> list[tuple[int, int, str]]:
     for p in s.get("ports") or []:
         if isinstance(p, dict):
             if p.get("host_ip") == "127.0.0.1" and p.get("published"):
-                out.append((int(p["published"]), int(p["target"]), p.get("protocol", "tcp")))
+                out.append((int(port_default(p["published"])), int(p["target"]), p.get("protocol", "tcp")))
         else:
-            spec, _, proto = str(p).partition("/")
+            spec, _, proto = port_default(p).partition("/")
             parts = spec.split(":")
             if len(parts) == 3 and parts[0] == "127.0.0.1":
                 out.append((int(parts[1]), int(parts[2]), proto or "tcp"))
@@ -1928,7 +1937,10 @@ def homeserver_config(env: str, domain: str) -> dict[str, list[dict]]:
 
 ARGOCD_NS = "argocd"
 IN_CLUSTER = "https://kubernetes.default.svc"
-OPS_HOSTS = {"argocd": ("argocd-server", ARGOCD_NS, 80), "headlamp": ("headlamp", "headlamp", 80)}
+OPS_HOSTS = {"argocd": ("argocd-server", ARGOCD_NS, 80), "headlamp": ("headlamp", "headlamp", 80),
+             # Grafana has no public route (internal-only, as on Docker); this test
+             # hostname reaches it only from this machine.
+             "grafana": ("observability", NAMESPACE, 3000)}
 
 
 def gitops(env: str) -> dict[str, list[dict]]:
