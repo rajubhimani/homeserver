@@ -281,3 +281,12 @@ def test_env_examples_have_docker_and_kubernetes_sections():
     import subprocess
     proc = subprocess.run(["uv", "run", "scripts/env_sections.py", "--check"], cwd=REPO, capture_output=True, text=True)
     assert proc.returncode == 0, "not arranged (run uv run scripts/env_sections.py):\n" + proc.stdout
+
+
+def test_env_files_are_owner_only():
+    """.env files hold passwords and tokens: mode 600, so only the owner reads
+    them (homeserver.py, docker compose and cluster.py all run as the owner).
+    Fix with: chmod 600 .env kubernetes/.env services/*/.env"""
+    loose = [str(f.relative_to(REPO)) for f in [REPO / ".env", REPO / "kubernetes/.env", *REPO.glob("services/*/.env")]
+             if f.is_file() and f.stat().st_mode & 0o077]
+    assert not loose, f"readable by others (chmod 600): {loose}"

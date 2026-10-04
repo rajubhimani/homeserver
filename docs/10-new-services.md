@@ -135,6 +135,8 @@ Everything that can differ between deployments lives in the service's `.env`, fo
 2. **Docker Compose only.** `DATA_ROOT` (volumes replace it on Kubernetes), plus the few values Kubernetes replaces, e.g. landing's `UPSTREAM_SUFFIX` and `WG_EASY_HOST`, and Beszel's `HUB_URL`.
 3. **Kubernetes.** Comments only: what `kubernetes/generate.py` sets instead (from `kubernetes/overrides/<svc>.yaml` `env:`).
 
+**Permissions:** `.env` files hold passwords, so keep them mode 600 (`chmod 600 .env kubernetes/.env services/*/.env`); a test checks it.
+
 Nothing gets commented or uncommented to switch runtimes: one `.env` works for both, and `cluster.py secrets` loads the whole file. After adding a key, run `uv run scripts/env_sections.py --real` to put it in its section.
 
 Backing-service endpoints use the same variable names in every service, defaulting to the local container:
