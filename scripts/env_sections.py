@@ -19,7 +19,9 @@ comment lines directly above it. Idempotent: re-running rebuilds the sections.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -117,7 +119,12 @@ def main() -> int:
             if new != old:
                 stale.append(str(f.relative_to(REPO)))
                 if not a.check:
-                    f.write_text(new)
+                    # Whole-file replace (readers never see a half-written
+                    # .env), keeping the original permissions.
+                    tmp = f.with_name(f.name + ".arranging")
+                    tmp.write_text(new)
+                    shutil.copymode(f, tmp)
+                    os.replace(tmp, f)
     if a.check:
         print("\n".join(stale) or "all arranged")
         return 1 if stale else 0
