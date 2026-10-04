@@ -111,7 +111,7 @@ Uses external MariaDB (`uptime-kuma-db`, own container in this service's compose
 
 ## On Kubernetes
 
-Generated from this compose file. `uptime-kuma-db` becomes a mariadb-operator `MariaDB` on the same `mariadb:12.3.3` image, which is also the operator's default. The Docker socket mount is left out: only the "Docker container" monitor type needs it, and HTTP/TCP monitors work unchanged. The probe is the image's own `HEALTHCHECK`. Guide: [docs/17](../17-docker-to-kubernetes.md).
+Generated from this compose file. `uptime-kuma-db` becomes a mariadb-operator `MariaDB` on the same `mariadb:12.3.3` image, which is also the operator's default. The Docker socket mount is left out: only the "Docker container" monitor type needs it, and HTTP/TCP monitors work unchanged. Its startup probe is 15 minutes (the operator's default kills a slow first initialisation), then the image's own `HEALTHCHECK`. Guide: [docs/17](../17-docker-to-kubernetes.md).
 
 ## Fresh-install verification (2026-10-03)
 

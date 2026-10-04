@@ -31,6 +31,10 @@ spec:
       memory: 768Mi
     limits:
       memory: 768Mi
+  startupProbe:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 90
   inheritMetadata:
     labels:
       app.kubernetes.io/part-of: homeserver

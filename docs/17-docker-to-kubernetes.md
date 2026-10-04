@@ -202,6 +202,8 @@ Same layout as Docker: apps above CORE share one Postgres and one MariaDB; CORE 
 
 Apps keep their `.env` unchanged: `DB_HOST=shared-postgres` / `shared-mariadb` is the Service name in Kubernetes too, and each app waits for it before starting (`wait-db`).
 
+**MariaDB's first start needs a long startup probe (found 2026-10-05).** On a fresh volume under the load of a whole-cluster start, initialising the data directory outlasts mariadb-operator's default startup probe (about 50 s). The kubelet killed it half-way and left a corrupt data directory (`ibdata1` with a zeroed header, or a root password never set), and the pod crash-looped. Every generated `MariaDB` resource now sets `startupProbe` to 10 s x 90 (15 minutes), the tuning mariadb-operator documents ([configuration](https://github.com/mariadb-operator/mariadb-operator/blob/main/docs/configuration.md)); liveness and readiness begin only after it passes. A volume already damaged this way holds nothing but the aborted initialisation: move its files aside and let the pod initialise again.
+
 ```bash
 uv run kubernetes/k8s.py up miniflux bookstack --env test   # the shared servers start with them
 git add kubernetes/deploy kubernetes/generated && git commit -m "k8s: run miniflux, bookstack" && git push

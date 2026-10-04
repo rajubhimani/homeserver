@@ -1146,9 +1146,18 @@ def own_mariadb(svc: str, n: str, s: dict, ov: dict) -> dict | None:
             "storage": {"size": ((ov.get("storage") or {}).get(c) or {}).get("size", "5Gi"), "storageClassName": "fast"},
             **({"resources": {"requests": {"memory": mem(lim["memory"])}, "limits": {"memory": mem(lim["memory"])}}}
                if lim.get("memory") else {}),
+            "startupProbe": MARIADB_STARTUP_PROBE,
             "inheritMetadata": {"labels": labels},
         },
     }
+
+
+# First start initialises the data directory; on a loaded or slow disk that
+# outlasts the operator's default startup probe (~50 s), the kubelet kills it
+# half-way and the datadir is left corrupt. mariadb-operator documents tuning
+# startupProbe on the MariaDB resource (docs/configuration.md); liveness and
+# readiness only begin once it passes, so a long budget costs nothing later.
+MARIADB_STARTUP_PROBE = {"periodSeconds": 10, "timeoutSeconds": 5, "failureThreshold": 90}
 
 
 def own_db_keys(svc: str) -> dict | None:
@@ -1199,6 +1208,7 @@ def shared_mariadb() -> dict[str, list[dict]]:
             "env": [{"name": "MARIADB_AUTO_UPGRADE", "value": "1"}],  # as in Compose
             "storage": {"size": (ov.get("storage") or {}).get("size", "5Gi"), "storageClassName": "fast"},
             **({"resources": {"requests": {"memory": lim}, "limits": {"memory": lim}}} if lim else {}),
+            "startupProbe": MARIADB_STARTUP_PROBE,
             "inheritMetadata": {"labels": labels},
         },
     }

@@ -27,6 +27,8 @@ Same mechanism as [shared-postgres](shared-postgres.md#moving-one-apps-database-
 
 ## On Kubernetes
 
+The `MariaDB` resource sets a 15-minute `startupProbe` (10 s x 90): the operator's default (about 50 s) kills a first start that is still initialising on a slow or loaded disk and leaves a corrupt data directory. See `docs/17` ("MariaDB's first start needs a long startup probe").
+
 Generated as a [mariadb-operator](https://github.com/mariadb-operator/mariadb-operator) `MariaDB` named `shared-mariadb`: the same official `mariadb:11.8` image, the same `my.cnf` settings and 768Mi limit, root password from this `.env`. Each `shared_db` app gets a `User`, `Database` (utf8mb4 / utf8mb4_unicode_ci) and `Grant` (`ALL PRIVILEGES` on its own database only), the same grants `homeserver.py` creates. Two operator defaults are overridden on purpose: `cleanupPolicy: Skip` (the default `Delete` would drop the database when its manifest goes away) and `maxUserConnections: 0` (the default caps each user at 10 connections; Compose has no per-user cap). Commands: [docs/17](../17-docker-to-kubernetes.md) step 4.
 
 ## Status
