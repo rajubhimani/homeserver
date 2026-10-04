@@ -75,7 +75,7 @@ spec:
         - name: v-jellyfin-data
           mountPath: /cache
           subPath: cache
-        - name: h-media
+        - name: v-jellyfin-host-jellyfin-media
           mountPath: /media
           readOnly: true
         - name: v-jellyfin-metadata
@@ -86,10 +86,9 @@ spec:
       - name: v-jellyfin-data
         persistentVolumeClaim:
           claimName: jellyfin-data
-      - name: h-media
-        hostPath:
-          path: /var/k8s/host/jellyfin-media
-          type: Directory
+      - name: v-jellyfin-host-jellyfin-media
+        persistentVolumeClaim:
+          claimName: jellyfin-host-jellyfin-media
       - name: v-jellyfin-metadata
         persistentVolumeClaim:
           claimName: jellyfin-metadata

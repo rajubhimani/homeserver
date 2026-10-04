@@ -23,3 +23,15 @@ parameters:
   pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Retain
+---
+# Host folders services read or write in place (Jellyfin's library, Immich's
+# photos, Nextcloud's OS images): static local PersistentVolumes generated per
+# service, never provisioned or deleted by Kubernetes
+# (kubernetes.io/docs/concepts/storage/volumes/#local).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: host
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

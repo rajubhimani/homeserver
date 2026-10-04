@@ -252,7 +252,7 @@ Applied by `cluster.py create` (so from the next cluster rebuild on):
 Namespace `apps` warns on anything that breaks **Baseline** and audits **Restricted** (`cluster/namespaces.yaml`). It doesn't enforce yet. A dry run against the running services (`kubectl label --dry-run=server ns apps pod-security.kubernetes.io/enforce=baseline`) lists the remaining Baseline exceptions, all from deliberate features:
 
 - **`hostPort`:** the localhost ports, matching Compose's `127.0.0.1:<port>`.
-- **`hostPath`:** Immich's, Jellyfin's and Nextcloud's host folders. Kubernetes' documented alternative, a local PersistentVolume, would pass Baseline.
+- ~~**`hostPath`:** Immich's, Jellyfin's and Nextcloud's host folders~~. Since 2026-10-04 these are **local PersistentVolumes** ([Kubernetes: local volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local)): StorageClass `host` (no provisioner, `Retain`, so deleting a claim never touches the folder), one static PV per folder, bound to nodes labelled `homeserver/host-folders=true` (set by `cluster.py install` on kind; on a real cluster, label the machine that has the folders). The path and read-only flag are unchanged. Applies on their next apply.
 - **Host network and capabilities:** Beszel's agent. The usual practice is a separate, privileged namespace for such agents.
 
 **Restricted** additionally needs non-root users and all capabilities dropped, which most images here (starting as root) don't support.

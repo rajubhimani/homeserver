@@ -225,17 +225,16 @@ spec:
           periodSeconds: 30
           failureThreshold: 6
         volumeMounts:
-        - name: h-usr-src-app-upload
+        - name: v-immich-host-immich-upload
           mountPath: /usr/src/app/upload
         - name: v-immich-immich-server-data
           mountPath: /data
         securityContext:
           allowPrivilegeEscalation: false
       volumes:
-      - name: h-usr-src-app-upload
-        hostPath:
-          path: /var/k8s/host/immich-upload
-          type: Directory
+      - name: v-immich-host-immich-upload
+        persistentVolumeClaim:
+          claimName: immich-host-immich-upload
       - name: v-immich-immich-server-data
         persistentVolumeClaim:
           claimName: immich-immich-server-data

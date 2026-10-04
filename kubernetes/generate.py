@@ -455,6 +455,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
     routes = nginx_routes()
     files: dict[str, list[dict]] = {}
     pvcs: dict[str, dict] = {}
+    host_pvs: dict[str, str] = {}  # PVC name -> node path of a host folder
     labels_svc = {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}
 
     # Ports each container listens on (for Services and depends_on waits).
@@ -626,6 +627,18 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 if not hp:
                     raise GenError(f"{where}: host path {key} -> {tgt}; add overrides/{svc}.yaml "
                                    f"containers.{c}.mounts.{tgt}: {{hostPath: <path on the node>}} or skip it")
+                if mo.get("env"):
+                    # A host folder from the service's .env (media, photos, ISOs):
+                    # a local PersistentVolume, Kubernetes' documented,
+                    # scheduler-aware form of node storage (hostPath is "not safe
+                    # for production" and fails Pod Security Baseline).
+                    pvc = f"{svc}-host-{slug(Path(hp).name)}"
+                    host_pvs[pvc] = hp
+                    vname = f"v-{slug(pvc)}"[:63]
+                    if not any(v["name"] == vname for v in pod_vols):
+                        pod_vols.append({"name": vname, "persistentVolumeClaim": {"claimName": pvc}})
+                    mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
+                    continue
                 vname = f"h-{slug(tgt)}"[:63]
                 pod_vols.append({"name": vname, "hostPath": {"path": hp, "type": "Directory"}})
                 mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
@@ -747,6 +760,23 @@ def convert(svc: str) -> dict[str, list[dict]]:
                                   [{"name": f"p{p}-udp", "port": p, "targetPort": p, "protocol": "UDP"}
                                    for p in sorted(udp.get(n) or [])]}})
 
+    for name, path in sorted(host_pvs.items()):
+        # Static local PV bound to exactly this claim; Retain, so deleting the
+        # claim never touches the folder. Nodes holding the folders carry the
+        # label homeserver/host-folders=true (cluster.py install on kind).
+        files.setdefault("storage.yaml", []).extend([
+            {"apiVersion": "v1", "kind": "PersistentVolume",
+             "metadata": {"name": f"{NAMESPACE}-{name}", "labels": labels_svc},
+             "spec": {"capacity": {"storage": "1Ti"}, "accessModes": ["ReadWriteOnce"],
+                      "persistentVolumeReclaimPolicy": "Retain", "storageClassName": "host",
+                      "claimRef": {"namespace": NAMESPACE, "name": name},
+                      "local": {"path": path},
+                      "nodeAffinity": {"required": {"nodeSelectorTerms": [{"matchExpressions": [
+                          {"key": "homeserver/host-folders", "operator": "In", "values": ["true"]}]}]}}}},
+            {"apiVersion": "v1", "kind": "PersistentVolumeClaim",
+             "metadata": {"name": name, "labels": labels_svc},
+             "spec": {"accessModes": ["ReadWriteOnce"], "storageClassName": "host",
+                      "volumeName": f"{NAMESPACE}-{name}", "resources": {"requests": {"storage": "1Gi"}}}}])
     for name, spec in sorted(pvcs.items()):
         files.setdefault("storage.yaml", []).append({
             "apiVersion": "v1", "kind": "PersistentVolumeClaim",

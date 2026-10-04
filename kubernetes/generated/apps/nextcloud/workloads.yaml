@@ -132,7 +132,7 @@ spec:
           readOnly: true
         - name: v-nextcloud-user-data
           mountPath: /mnt/seagate
-        - name: h-mnt-os-iso
+        - name: v-nextcloud-host-nextcloud-os-iso
           mountPath: /mnt/os-iso
         securityContext:
           allowPrivilegeEscalation: false
@@ -168,10 +168,9 @@ spec:
       - name: v-nextcloud-user-data
         persistentVolumeClaim:
           claimName: nextcloud-user-data
-      - name: h-mnt-os-iso
-        hostPath:
-          path: /var/k8s/host/nextcloud-os-iso
-          type: Directory
+      - name: v-nextcloud-host-nextcloud-os-iso
+        persistentVolumeClaim:
+          claimName: nextcloud-host-nextcloud-os-iso
       - name: files
         configMap:
           name: nextcloud-files
@@ -257,7 +256,7 @@ spec:
           mountPath: /var/www/html/data
         - name: v-nextcloud-nextcloud-custom-apps
           mountPath: /var/www/html/custom_apps
-        - name: h-mnt-os-iso
+        - name: v-nextcloud-host-nextcloud-os-iso
           mountPath: /mnt/os-iso
           readOnly: true
         securityContext:
@@ -275,10 +274,9 @@ spec:
       - name: v-nextcloud-nextcloud-custom-apps
         persistentVolumeClaim:
           claimName: nextcloud-nextcloud-custom-apps
-      - name: h-mnt-os-iso
-        hostPath:
-          path: /var/k8s/host/nextcloud-os-iso
-          type: Directory
+      - name: v-nextcloud-host-nextcloud-os-iso
+        persistentVolumeClaim:
+          claimName: nextcloud-host-nextcloud-os-iso
       - name: files
         configMap:
           name: nextcloud-cron-files

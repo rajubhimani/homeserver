@@ -183,6 +183,9 @@ def cmd_install(_a) -> None:
     kubectl("-n", "local-path-storage", "patch", "configmap", "local-path-config", "--type", "merge",
             "-p", json.dumps({"data": {"config.json": json.dumps(conf, indent=1)}}))
     kubectl("apply", "-f", str(K8S / "cluster/storage.yaml"))
+    # The node holding the host folders (kind: its only node); on a real
+    # cluster, label the machine that has them instead.
+    kubectl("label", "nodes", "--all", "homeserver/host-folders=true", "--overwrite")
     # Database operators: CloudNativePG (shared + own Postgres) and
     # mariadb-operator (shared MariaDB). Both watch every namespace.
     kubectl("apply", "--server-side", "-f",
