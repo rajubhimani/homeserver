@@ -93,7 +93,9 @@ Router UIs vary enormously. On this homeserver's router (Sercomm AOT-4221SR, an 
 
 ## On Kubernetes
 
-**Out of scope for now (2026-10-04): wg-easy stays on Docker.** What's below is prepared but not deployed (`kubernetes/scope.yaml` lists it as skipped).
+**wg-easy stays on Docker, also when the rest runs on Kubernetes (decided 2026-10-04).** The VPN is how you reach this machine when something breaks, so it runs independently of the cluster. That's common homelab practice ([discussion](https://piefed.nullspace.lol/post/95468)); wg-easy's own docs cover only Docker, Podman and dockerless installs, and on Kubernetes it needs privileged rights in its namespace ([TrueCharts guide](https://truecharts.trueforge.org/charts/stable/wg-easy/setup-guide/)). What's below is prepared but not deployed (`kubernetes/scope.yaml` lists it as skipped).
+
+**When kind runs next to it:** the cluster must not claim UDP 51820 or `127.0.0.1:51821`. Neither appears in `kubernetes/generated/host-ports.yaml` or in any `node_ports` while wg-easy is skipped. kind fixes its port mappings at creation, so a cluster created while wg-easy was in scope has to be re-created before Docker's wg-easy can start.
 
 wg-easy has no Kubernetes guide upstream; its docs cover Docker, Podman, dockerless, Traefik and Caddy. So `kubernetes/overrides/wg-easy.yaml` mirrors this compose file, which is our own design:
 

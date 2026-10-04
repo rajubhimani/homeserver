@@ -51,5 +51,5 @@ prod_only:
 
 # Not run on Kubernetes, each with the replacement.
 skipped:
-  wg-easy: "Out of scope for now (decided 2026-10-04): stays on Docker. Prepared in overrides/wg-easy.yaml (host network, UDP 51820 node port, web UI on the node); see docs/services/wg-easy.md."
+  wg-easy: "Stays on Docker (decided 2026-10-04): the VPN is how this machine is reached when something breaks, so it runs independently of the cluster (common homelab practice; wg-easy documents only Docker, Podman and dockerless installs). Prepared in overrides/wg-easy.yaml should that change."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
