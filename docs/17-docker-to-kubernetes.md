@@ -134,7 +134,7 @@ uv run kubernetes/cluster.py install    # Gateway API, namespaces, Traefik, stor
 uv run kubernetes/cluster.py secrets    # each services/<svc>/.env -> Secret <svc>-env (piped, never written to disk)
 uv run kubernetes/cluster.py apply      # every ported service (or name some: apply docs landing)
 uv run kubernetes/cluster.py status     # pods, services, volume claims, routes
-uv run kubernetes/cluster.py validate   # server-side dry run of every service: the API server checks it, nothing is created
+uv run kubernetes/cluster.py validate   # server-side dry run of every service; fails on errors and on deprecated APIs/fields
 ```
 
 - **The test cluster uses `DOMAIN=k8s.local`**, so apps build their links for the test hostnames, not your real domain.
@@ -228,6 +228,12 @@ uv run kubernetes/cluster.py rmi wallabag                             # free its
 - **Login-protected apps** (behind Authentik) are checked directly at their Service, because Authentik has no provider for test hostnames and answers 404.
 - **One service at a time, images pulled one by one.** Starting a whole tier at once (2026-10-04) pulled and unpacked dozens of images together: the HDD (image store) and the SSD (etcd, databases) saturated, and etcd's slow writes made the API server, scheduler and controller-manager restart repeatedly (5, 16 and 17 times). Ready services then timed out and teardowns failed. etcd is very sensitive to disk latency; on a cluster built for real use, give it a fast disk of its own, or raise its heartbeat and election timeouts (etcd's tuning guide). For kind, that's planned for the next rebuild. A side effect seen the same day: the CloudNativePG operator lost its leader election during the stall and stayed unready for 50 minutes despite three automatic restarts (its admission webhook refused every change: `failed calling webhook "mcluster.cnpg.io" ... connection refused`). `kubectl -n cnpg-system rollout restart deploy/cnpg-controller-manager` recovered it; the databases themselves kept running throughout.
 - **Images are removed after each test** (`rmi`), apart from any image a running service still uses, to keep the image store's disk free.
+
+### Deprecation and currency audit (2026-10-04)
+
+- **Kubernetes APIs and fields:** a server-side dry run of all 75 services gave **0 deprecation warnings**. `validate` now fails on any.
+- **Component logs** (Traefik, CloudNativePG, mariadb-operator, local-path, kindnet, API server, controller-manager, scheduler): no deprecation notices. etcd's one notice (`--snapshot-count is deprecated in 3.6`) comes from kubeadm's default etcd setup, which kind uses, not from this repo.
+- **Versions:** every pinned component (`kubernetes/versions.env`) is its project's latest release: kind, Gateway API, CloudNativePG, mariadb-operator, the Traefik chart, Argo CD, Headlamp, Velero, local-path and git-sync. Kubernetes stays on 1.35 on purpose (managed-cloud parity).
 
 ### Hardening built into every generated pod (2026-10-04)
 

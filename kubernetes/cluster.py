@@ -512,8 +512,9 @@ def import_volume(svc: str, vol_tar: Path) -> None:
 
 def cmd_validate(a) -> None:
     """Server-side dry run of each service's manifests: the API server checks
-    schemas, operator CRDs and field values without creating anything."""
-    bad = []
+    schemas, operator CRDs and field values without creating anything, and
+    warns about deprecated APIs or fields, which fail the check too."""
+    bad, pss = [], set()
     names = services(a.services)
     for svc in names:
         d = K8S / "generated/envs" / a.env / svc
@@ -521,10 +522,16 @@ def cmd_validate(a) -> None:
             continue
         p = subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "apply", "--dry-run=server",
                             "-k", str(d)], capture_output=True, text=True)
-        if p.returncode != 0:
+        warnings = [l for l in p.stderr.splitlines() if l.startswith("Warning")]
+        deprecated = [w for w in warnings if "deprecat" in w.lower()]
+        pss.update(svc for w in warnings if "PodSecurity" in w)
+        if p.returncode != 0 or deprecated:
             bad.append(svc)
-            print(f"FAIL {svc}: " + " | ".join(l for l in p.stderr.splitlines() if l.strip() and not l.startswith("Warning"))[:400])
-    print(f"{len(names) - len(bad)}/{len(names)} pass the server-side dry run")
+            errors = [l for l in p.stderr.splitlines() if l.strip() and not l.startswith("Warning")]
+            print(f"FAIL {svc}: " + " | ".join(errors + deprecated)[:500])
+    print(f"{len(names) - len(bad)}/{len(names)} pass the server-side dry run (errors and deprecated APIs/fields fail it)")
+    if pss:
+        print(f"Pod Security warnings (known exceptions, docs/17): {len(pss)} service(s)")
     if bad:
         sys.exit(1)
 
