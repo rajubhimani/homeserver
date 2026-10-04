@@ -6,6 +6,9 @@
     uv run kubernetes/cluster.py secrets [svc...]  # services/<svc>/.env -> Secret <svc>-env; root .env -> ConfigMap
     uv run kubernetes/cluster.py apply   [svc...]  # kubectl apply -k kubernetes/generated/envs/<env>/<svc>
     uv run kubernetes/cluster.py import  <svc...> [--snapshot TS]  # copy a Compose snapshot's data into the cluster
+    uv run kubernetes/cluster.py images  <svc...>  # build a service's local images (Compose build:) and load them into kind
+    uv run kubernetes/cluster.py smoke   <svc...> [--keep]  # start with empty data on test hostnames, check, remove
+    uv run kubernetes/cluster.py rmi     <svc...>  # remove a stopped service's images from the kind node (frees disk)
     uv run kubernetes/cluster.py validate [svc...]   # server-side dry run: the API server checks every manifest, nothing is created
     uv run kubernetes/cluster.py status
     uv run kubernetes/cluster.py delete            # remove the kind cluster (host data folders are kept)
@@ -494,6 +497,111 @@ def cmd_validate(a) -> None:
         sys.exit(1)
 
 
+def cmd_images(a) -> None:
+    """Services whose Compose builds an image (build:): build it with Compose
+    and load it into the kind node, which can't pull a local-only image."""
+    for svc in services(a.services):
+        d = REPO / "services" / svc
+        compose = load_compose(svc)
+        built = [(n, s["image"]) for n, s in compose["services"].items() if s.get("build")]
+        if not built:
+            print(f"{svc}: no locally built images")
+            continue
+        run(["docker", "compose", "-f", str(d / "compose.yml"), "--env-file", str(d / ".env"), "build",
+             *[n for n, _ in built]])
+        for _, image in built:
+            img = image.replace("$$", "$")
+            if "${" in img:
+                from generate import image_ref
+                img = image_ref(svc, image, svc)
+            run(["kind", "load", "docker-image", img, "--name", cfg()["K8S_CLUSTER_NAME"]])
+            if a.drop_host_copy:
+                run(["docker", "rmi", img], check=False)  # kind has its own copy now
+
+
+def cmd_smoke(a) -> None:
+    """Start services with empty data on the test hostnames (*.k8s.local,
+    reachable only on this machine, so a fresh app's first-visitor setup
+    page is never public), one service at a time: pull its images one by one
+    (parallel pulls and unpacks saturated the disks and stalled etcd), apply,
+    wait until every workload is ready, check its routes over HTTP, then
+    remove it and its images (--keep leaves it running)."""
+    c = cfg()
+    node = f"{c['K8S_CLUSTER_NAME']}-control-plane"
+    ctx = ["kubectl", "--context", f"kind-{c['K8S_CLUSTER_NAME']}", "-n", NAMESPACE]
+    names = services(a.services)
+    shared = {s["engine"] for svc, s in shared_db_apps().items() if svc in names}
+    for engine in sorted(shared):  # the shared servers they need, as homeserver.py starts them
+        server = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}[engine]
+        env = load_env(REPO / "services" / server / ".env")
+        kubectl("apply", "-f", "-", input=secret_manifest(f"{server}-env", env,
+                                                          labels={"k8s.mariadb.com/watch": ""} if engine == "mariadb" else None))
+        if engine == "postgres":
+            kubectl("apply", "-f", "-", input=basic_auth(f"{server}-superuser", env.get("POSTGRES_USER", "postgres"),
+                                                        env.get("POSTGRES_PASSWORD", "")))
+        kubectl("apply", "-k", str(K8S / "generated/envs/test" / server))
+        kind = "cluster" if engine == "postgres" else "mariadb"
+        kubectl("wait", "-n", NAMESPACE, "--for=condition=Ready", f"{kind}/{server}", "--timeout=900s", check=False)
+    results = {}
+    for svc in names:
+        print(f"\n==== {svc}", flush=True)
+        for img in sorted(service_images(svc)):  # one at a time
+            ref = img if "/" in img.split(":")[0] or "." in img.split("/")[0] else f"docker.io/library/{img}"
+            subprocess.run(["docker", "exec", node, "crictl", "pull", ref], capture_output=True)
+        cmd_secrets(argparse.Namespace(services=[svc], env="prod"))  # Secrets only; DOMAIN stays as is
+        kubectl("apply", "-k", str(K8S / "generated/envs/test" / svc), check=False)
+        results[svc] = smoke_check(svc, ctx, a.timeout)
+        print(("OK   " if not results[svc] else "FAIL ") + svc + "".join(f"\n     {n}" for n in results[svc]), flush=True)
+        if not a.keep:
+            kubectl("delete", "-k", str(K8S / "generated/envs/test" / svc), "--ignore-not-found", "--timeout=300s", check=False)
+            cmd_rmi(argparse.Namespace(services=[svc]))
+    print("\n==== smoke results")
+    for svc, notes in results.items():
+        print(f"{'OK  ' if not notes else 'FAIL'} {svc}")
+        for n in notes:
+            print(f"     {n}")
+
+
+def smoke_check(svc: str, ctx: list[str], timeout: int) -> list[str]:
+    """Wait for the service's workloads, then check every route's backend:
+    through Traefik for open routes; for routes behind authentik (whose
+    outpost has no provider for test hostnames) directly at the Service,
+    from the edge pod."""
+    notes = []
+    deadline = time.time() + timeout
+    for kind in ("deployment", "statefulset", "daemonset"):
+        for o in subprocess.run(ctx + ["get", kind, "-l", f"homeserver/service={svc}", "-o", "name"],
+                                capture_output=True, text=True).stdout.split():
+            left = max(30, int(deadline - time.time()))
+            if subprocess.run(ctx + ["rollout", "status", o, f"--timeout={left}s"], capture_output=True).returncode != 0:
+                name = o.split("/", 1)[1]
+                state = subprocess.run(ctx + ["get", "pods", "-l", f"app.kubernetes.io/name={name}", "-o",
+                                              "jsonpath={range .items[*]}{range .status.initContainerStatuses[*]}init {.name}:{.state.waiting.reason}{.state.terminated.reason} {end}{range .status.containerStatuses[*]}{.name}:{.state.waiting.reason}{.state.terminated.reason} r{.restartCount} {end}{end}"],
+                                       capture_output=True, text=True).stdout.strip()
+                log = subprocess.run(ctx + ["logs", o, "--all-containers", "--tail=2"], capture_output=True, text=True).stdout.strip().splitlines()
+                notes.append(f"{name} NOT READY [{state}] " + " | ".join(l[:160] for l in log[-2:]))
+    routes = K8S / "generated/envs/test" / svc / "routes.yaml"
+    for r in (yaml.safe_load_all(routes.read_text()) if routes.is_file() else []):
+        if not r or r.get("kind") != "HTTPRoute":
+            continue
+        rules = r["spec"].get("rules", [])
+        protected = any(f.get("type") == "ExtensionRef" for rule in rules for f in rule.get("filters", []))
+        for h in r["spec"].get("hostnames", []):
+            if protected:
+                be = rules[-1]["backendRefs"][0]
+                code = subprocess.run(ctx + ["exec", "deploy/nginx-plain", "--", "curl", "-s", "-o", "/dev/null", "-m", "15",
+                                             "-w", "%{http_code}", f"http://{be['name']}:{be['port']}/"],
+                                      capture_output=True, text=True).stdout
+                where = f"{be['name']}:{be['port']} (behind the login)"
+            else:
+                code = subprocess.run(["curl", "-s", "-o", "/dev/null", "-m", "15", "-w", "%{http_code}", "-H", f"Host: {h}",
+                                       f"http://127.0.0.1:{cfg()['K8S_HTTP_PORT']}/"], capture_output=True, text=True).stdout
+                where = h
+            if not code.startswith(("2", "3")) and code not in ("401", "403"):
+                notes.append(f"{where} -> HTTP {code}")
+    return notes
+
+
 def cmd_status(_a) -> None:
     kubectl("get", "pods,svc,pvc,httproute", "-n", NAMESPACE, "-o", "wide", check=False)
 
@@ -505,13 +613,16 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "install", "secrets", "apply", "import", "validate", "status", "delete"])
+    ap.add_argument("action", choices=["create", "install", "secrets", "apply", "import", "images", "smoke", "rmi", "validate", "status", "delete"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
+    ap.add_argument("--keep", action="store_true", help="smoke: leave the services running")
+    ap.add_argument("--drop-host-copy", action="store_true", help="images: remove Docker's copy after loading it into kind")
+    ap.add_argument("--timeout", type=int, default=900, help="smoke: seconds to wait for readiness")
     ap.add_argument("--live-db", action="store_true", help="import: own Postgres from the running Compose container (pg_dump)")
     a = ap.parse_args()
-    {"create": cmd_create, "install": cmd_install, "secrets": cmd_secrets, "apply": cmd_apply, "import": cmd_import, "validate": cmd_validate,
+    {"create": cmd_create, "install": cmd_install, "secrets": cmd_secrets, "apply": cmd_apply, "import": cmd_import, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
      "status": cmd_status, "delete": cmd_delete}[a.action](a)
     return 0
 

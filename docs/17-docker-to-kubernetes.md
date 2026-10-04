@@ -213,6 +213,22 @@ kubectl -n apps exec shared-postgres-1 -- psql -c '\du'                  # roles
 kubectl -n apps exec shared-postgres-1 -- psql -c '\l'                   # databases + owners
 ```
 
+### Smoke-testing services above CORE
+
+Every service is started once with **empty data** before you use it, to catch what the generator got wrong:
+
+```bash
+uv run kubernetes/cluster.py images temporal zulip --drop-host-copy   # locally built images (Compose build:) into kind
+uv run kubernetes/cluster.py smoke excalidraw karakeep homebox        # one at a time: pull, apply, wait, check, remove
+uv run kubernetes/cluster.py smoke wallabag --keep                    # leave it running to inspect
+uv run kubernetes/cluster.py rmi wallabag                             # free its images afterwards
+```
+
+- **Test hostnames only.** `smoke` uses `*.k8s.local`, reachable only on this machine. A fresh app often lets the first visitor create the admin account, so it must never be reachable on your real domain.
+- **Login-protected apps** (behind Authentik) are checked directly at their Service, because Authentik has no provider for test hostnames and answers 404.
+- **One service at a time, images pulled one by one.** Starting a whole tier at once (2026-10-04) pulled and unpacked dozens of images together: the HDD (image store) and the SSD (etcd, databases) saturated, and etcd's slow writes made the API server, scheduler and controller-manager restart repeatedly (5, 16 and 17 times). Ready services then timed out and teardowns failed. etcd is very sensitive to disk latency; on a cluster built for real use, give it a fast disk of its own, or raise its heartbeat and election timeouts (etcd's tuning guide). For kind, that's planned for the next rebuild.
+- **Images are removed after each test** (`rmi`), apart from any image a running service still uses, to keep the image store's disk free.
+
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
 ## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
