@@ -378,3 +378,22 @@ def test_cluster_cli_commands_all_exist():
     spec.loader.exec_module(mod)
     for name in set(re.findall(r'"[a-z]+": (cmd_[a-z_]+)', src)):
         assert callable(getattr(mod, name, None)), f"cluster.py dispatches to undefined {name}"
+
+
+def test_k8s_py_resolves_targets_like_homeserver():
+    """k8s.py up/down use homeserver.py's tier semantics: 'up core' brings MIN
+    too, 'down core' only CORE, group: from services.json, no duplicates."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec = importlib.util.spec_from_file_location("k8s_cli", K8S / "k8s.py")
+    k8s = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(k8s)
+    up_core, _ = k8s.resolve(["core"], "up")
+    assert up_core == hs.SERVICES_MIN + hs.SERVICES_CORE
+    down_core, _ = k8s.resolve(["core"], "down")
+    assert down_core == hs.SERVICES_CORE
+    down_all, _ = k8s.resolve(["all"], "down")
+    assert down_all[0] == hs.SERVICES_EXTRA[-1], "down all stops in reverse order"
+    grp = next(iter(hs.SERVICE_GROUPS))
+    g, expanded = k8s.resolve([f"group:{grp}", f"group:{grp}"], "up")
+    assert expanded and len(g) == len(set(g)) == len(set(hs.SERVICE_GROUPS[grp]))

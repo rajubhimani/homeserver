@@ -99,7 +99,7 @@ class Kube:
         return subprocess.run(cmd, check=check, text=True, capture_output=quiet)
 
     def get(self, *args: str) -> dict:
-        p = subprocess.run(self.base + list(args) + ["-o", "json"], capture_output=True, text=True)
+        p = subprocess.run(self.base + ["get"] + list(args) + ["-o", "json"], capture_output=True, text=True)
         if p.returncode != 0:
             # Never report an unreachable API as "not deployed".
             sys.exit(f"kubectl failed: {p.stderr.strip()[:200]}")
