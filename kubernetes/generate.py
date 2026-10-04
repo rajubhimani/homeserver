@@ -1971,7 +1971,9 @@ def gitops(env: str) -> dict[str, list[dict]]:
             src = {"sources": sources}
         else:
             src = {"source": {"repoURL": repo, "targetRevision": rev, "path": a["path"].replace("{env}", env)}}
-        apps.append({"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": meta(a["name"]),
+        m = meta(a["name"])
+        m["annotations"] = {"argocd.argoproj.io/sync-wave": str(a.get("wave", 0))}
+        apps.append({"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": m,
                      "spec": {"project": "platform", **src,
                               "destination": {"server": IN_CLUSTER, "namespace": a["namespace"]},
                               "syncPolicy": {**sync_auto, "retry": retry,
@@ -2011,6 +2013,21 @@ def gitops(env: str) -> dict[str, list[dict]]:
     return {"projects.yaml": projects, "applications.yaml": apps, "services.yaml": [appset]}
 
 
+APP_HEALTH = """hs = {}
+hs.status = "Progressing"
+hs.message = ""
+if obj.status ~= nil then
+  if obj.status.health ~= nil then
+    hs.status = obj.status.health.status
+    if obj.status.health.message ~= nil then
+      hs.message = obj.status.health.message
+    end
+  end
+end
+return hs
+"""
+
+
 def platform_files() -> dict[str, dict[str, list[dict] | str]]:
     """Kustomize folders for add-ons installed from a pinned upstream manifest."""
     v = VERSIONS
@@ -2027,7 +2044,13 @@ def platform_files() -> dict[str, dict[str, list[dict] | str]]:
             "resources": [f"https://raw.githubusercontent.com/argoproj/argo-cd/{v['ARGOCD_VERSION']}/manifests/install.yaml"],
             # TLS ends at Traefik (ArgoCD docs, operator-manual/ingress)
             "patches": [{"target": {"kind": "ConfigMap", "name": "argocd-cmd-params-cm"},
-                         "patch": yaml.safe_dump([{"op": "add", "path": "/data", "value": {"server.insecure": "true"}}])}]}},
+                         "patch": yaml.safe_dump([{"op": "add", "path": "/data", "value": {"server.insecure": "true"}}])},
+                        # Applications report their own health, so the root app's sync
+                        # waves wait for each add-on (ArgoCD docs, operator-manual/health,
+                        # "Argo CD App"): the documented app-of-apps setting.
+                        {"patch": yaml.safe_dump({"apiVersion": "v1", "kind": "ConfigMap",
+                                                  "metadata": {"name": "argocd-cm"},
+                                                  "data": {"resource.customizations.health.argoproj.io_Application": APP_HEALTH}})}]}},
         "gateway-api": {"kustomization.yaml": {
             "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
             "resources": [f"https://github.com/kubernetes-sigs/gateway-api/releases/download/{v['GATEWAY_API_VERSION']}/standard-install.yaml"]}},

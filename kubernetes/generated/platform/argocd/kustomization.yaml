@@ -9,3 +9,9 @@ patches:
     kind: ConfigMap
     name: argocd-cmd-params-cm
   patch: "- op: add\n  path: /data\n  value:\n    server.insecure: 'true'\n"
+- patch: "apiVersion: v1\ndata:\n  resource.customizations.health.argoproj.io_Application:\
+    \ \"hs = {}\\nhs.status = \\\"\\\n    Progressing\\\"\\nhs.message = \\\"\\\"\\\
+    nif obj.status ~= nil then\\n  if obj.status.health\\\n    \\ ~= nil then\\n \
+    \   hs.status = obj.status.health.status\\n    if obj.status.health.message\\\n\
+    \    \\ ~= nil then\\n      hs.message = obj.status.health.message\\n    end\\\
+    n  end\\n\\\n    end\\nreturn hs\\n\"\nkind: ConfigMap\nmetadata:\n  name: argocd-cm\n"

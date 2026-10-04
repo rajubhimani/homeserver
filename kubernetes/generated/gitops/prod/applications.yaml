@@ -34,6 +34,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-3'
 spec:
   project: platform
   source:
@@ -64,6 +66,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-3'
 spec:
   project: platform
   source:
@@ -94,6 +98,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-3'
 spec:
   project: platform
   source:
@@ -124,6 +130,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -161,6 +169,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -193,6 +203,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -225,6 +237,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -257,6 +271,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -289,6 +305,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -324,6 +342,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -356,6 +376,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-3'
 spec:
   project: platform
   sources:
@@ -391,6 +413,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
 spec:
   project: platform
   sources:
@@ -423,6 +447,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
 spec:
   project: platform
   source:
@@ -453,6 +479,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
 spec:
   project: platform
   sources:
@@ -523,6 +551,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   project: platform
   sources:
@@ -558,6 +588,8 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
 spec:
   project: platform
   source:

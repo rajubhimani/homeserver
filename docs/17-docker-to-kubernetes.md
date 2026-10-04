@@ -383,6 +383,14 @@ From then on ArgoCD installs and updates everything from git, itself included. V
 | `headlamp`, `ops-routes` | Kubernetes web UI; the two UIs' routes | Helm chart; generated |
 | one per service (ApplicationSet `services`) | `generated/envs/<env>/<svc>` | generated |
 
+**Install order (sync waves):** each add-on carries a `wave` in `addons.yaml`, and every wave waits until the previous one is healthy:
+- **-3:** CRDs, namespaces and cert-manager;
+- **-2:** operators, External Secrets, Traefik and the UIs;
+- **-1:** the Barman plugin, the backup store and Velero;
+- **0:** the services.
+
+ArgoCD needs its documented app-of-apps health check for Applications to make the waits work; it's set in `argocd-cm`. Without waves, the first start on 2026-10-04 pulled every image at once and drove disk pressure to 60%. The databases then waited on a Barman plugin whose own certificate couldn't be issued until cert-manager's image arrived.
+
 **Safety built in:**
 - **Two ArgoCD projects.** Services (`homeserver`) may deploy only to `apps`, `local-access` and the secret store's namespace, plus three cluster-wide kinds (Namespace, PersistentVolume, ClusterSecretStore). The project is fixed in the ApplicationSet, never templated (ArgoCD's ApplicationSet security note). Add-ons use `platform`.
 - **Data is never deleted by ArgoCD.** Volumes, PersistentVolumes and database objects carry `Prune=false,Delete=false`. Deleting the ApplicationSet keeps every service's objects (`preserveResourcesOnDeletion`).
