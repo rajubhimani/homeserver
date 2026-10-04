@@ -1233,7 +1233,7 @@ def host_ports() -> list[dict]:
             if s.get("network_mode") == "host":
                 for port in co.get("ports") or []:
                     entries.append({"svc": svc, "container": c, "host": int(port), "target": int(port),
-                                    "protocol": "tcp", "node": int(port)})
+                                    "protocol": "tcp", "node": int(port), "direct": True})
                 continue
             for host, target, proto in loopback_ports(s):
                 e = {"svc": svc, "container": c, "host": host, "target": target, "protocol": proto}
@@ -1254,7 +1254,8 @@ def host_port_services(svc: str) -> list[dict]:
     """NodePort Services <container>-host for the service's localhost ports."""
     by_c: dict[str, list[dict]] = {}
     for e in host_ports():
-        if e["svc"] == svc and e["svc"] != "nginx-plain" and e["node"] >= NODE_PORT_BASE:
+        # host-network containers listen on the node itself: no Service
+        if e["svc"] == svc and e["svc"] != "nginx-plain" and not e.get("direct"):
             by_c.setdefault(e["container"], []).append(e)
     out = []
     for c, es in sorted(by_c.items()):

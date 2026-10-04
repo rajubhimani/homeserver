@@ -36,7 +36,6 @@ ported:
   - onlyoffice
   - whiteboard
   - jellyfin
-  - wg-easy
   - forgejo
   - atuin
   - guacamole
@@ -52,4 +51,5 @@ prod_only:
 
 # Not run on Kubernetes, each with the replacement.
 skipped:
+  wg-easy: "Out of scope for now (decided 2026-10-04): stays on Docker. Prepared in overrides/wg-easy.yaml (host network, UDP 51820 node port, web UI on the node); see docs/services/wg-easy.md."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."

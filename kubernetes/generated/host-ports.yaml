@@ -140,8 +140,3 @@
   protocol: tcp
   svc: authentik
   container: authentik-server
-- host: 51821
-  node: 51821
-  protocol: tcp
-  svc: wg-easy
-  container: wg-easy

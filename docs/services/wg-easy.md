@@ -93,6 +93,8 @@ Router UIs vary enormously. On this homeserver's router (Sercomm AOT-4221SR, an 
 
 ## On Kubernetes
 
+**Out of scope for now (2026-10-04): wg-easy stays on Docker.** What's below is prepared but not deployed (`kubernetes/scope.yaml` lists it as skipped).
+
 wg-easy has no Kubernetes guide upstream; its docs cover Docker, Podman, dockerless, Traefik and Caddy. So `kubernetes/overrides/wg-easy.yaml` mirrors this compose file, which is our own design:
 
 - **Network:** host networking, which on kind is the node's network.
