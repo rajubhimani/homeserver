@@ -149,7 +149,7 @@ curl -H "Host: docs.k8s.local" http://127.0.0.1:18080/      # docs
 
 For a browser, add the hostnames to `/etc/hosts` (`127.0.0.1 www.k8s.local docs.k8s.local beszel.k8s.local`) and open `http://docs.k8s.local:18080`.
 
-**Where data lives:** volumes appear as readable folders, e.g. `~/k8s-data/fast/apps/beszel-data/`.
+**Where data lives:** volumes appear as readable folders, e.g. `~/k8s-data/fast/apps/beszel-data/`. The storage classes create `local` PersistentVolumes, not the provisioner's default `hostPath`: Velero's file-system backup (phase 5) supports only `local` ones. This applies to volumes created after 2026-10-04, so the whole cluster from the next rebuild.
 
 **Remove it all:** `uv run kubernetes/cluster.py delete` (the data folders are kept; delete them by hand if you want).
 
