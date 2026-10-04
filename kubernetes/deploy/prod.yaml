@@ -15,8 +15,8 @@
 #   changes in the cluster); false = press Sync in the ArgoCD UI.
 repo: https://github.com/rajubhimani/homeserver.git
 revision: feature/k8s-generated
-running: [min, core, miniflux, bookstack, airflow, temporal, dagster, observability, cloudflared]
-stopped: []
+running: [min, core, miniflux, bookstack, airflow, temporal, dagster, observability]
+stopped: [cloudflared]
 auto_sync: true
 # backup: where backups go (docs/17 "Backups"). endpoint: any S3 API; the
 #   default is the cluster's own MinIO (namespace backup). Switching to AWS
