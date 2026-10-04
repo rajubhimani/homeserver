@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/observability
+- routes.yaml
 patches:
 - target:
     kind: Deployment

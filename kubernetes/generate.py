@@ -941,13 +941,18 @@ def route_objects(svc: str, domain: str) -> list[dict]:
     routes = nginx_routes()
     for n, s in (compose.get("services") or {}).items():
         c = s.get("container_name") or n
-        if (ov_c.get(c) or {}).get("skip") or c not in routes:
+        # nginx-plain's upstream is a name Docker DNS resolves: the container
+        # name, or the Compose service key when they differ (Grafana's
+        # container is "observability", its upstream "grafana"). Either way
+        # that name is a Service here.
+        up = c if c in routes else n if n in routes else None
+        if (ov_c.get(c) or {}).get("skip") or up is None:
             continue
-        out += http_route(c, svc, sorted({h for h, _ in routes[c]}), {"name": c, "port": routes[c][0][1]}, domain)
+        out += http_route(c, svc, sorted({h for h, _ in routes[up]}), {"name": up, "port": routes[up][0][1]}, domain)
         # nginx-plain's redirect-only blocks that point at this container's
         # hostnames -> Gateway API's standard RequestRedirect filter (path and
         # query are kept, like $request_uri).
-        own = {h for h, _ in routes[c]}
+        own = {h for h, _ in routes[up]}
         redirects = [(f, to, code) for f, to, code in nginx_redirects() if to in own]
         if redirects:
             out.append({
@@ -1966,8 +1971,9 @@ def homeserver_config(env: str, domain: str) -> dict[str, list[dict]]:
 ARGOCD_NS = "argocd"
 IN_CLUSTER = "https://kubernetes.default.svc"
 OPS_HOSTS = {"argocd": ("argocd-server", ARGOCD_NS, 80), "headlamp": ("headlamp", "headlamp", 80),
-             # Grafana has no public route (internal-only, as on Docker); this test
-             # hostname reaches it only from this machine.
+             # Grafana's public route is generated with the service, like on Docker
+             # (nginx-plain's grafana.${DOMAIN} block); this one is the always-on
+             # local hostname for this machine.
              "grafana": ("observability", NAMESPACE, 3000),
              # The backup store's console (MinIO), root login from kubernetes/.env.
              "backup": ("backup-store", "backup", 9001)}

@@ -4,3 +4,4 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/observability
+- routes.yaml

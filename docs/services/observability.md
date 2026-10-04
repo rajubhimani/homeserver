@@ -34,6 +34,8 @@ To add real application metrics for a specific service later: add a scrape targe
 
 Only **`grafana.${DOMAIN}`** gets a public nginx-plain route. Prometheus, Loki, Alloy, cAdvisor, and node-exporter have no authentication of their own — they're reachable only over the internal `homeserver` Docker network (Prometheus/Loki via Grafana's datasource proxy, cadvisor/node-exporter via Prometheus's scrape). Prometheus does get a **dev-only host port** (`8135`, loopback-only in prod) for verifying scrape targets directly at `http://localhost:8135/targets` — don't rely on that in prod without also putting auth in front of it if you ever need it exposed further.
 
+**On Kubernetes** Grafana's public route comes from the same nginx-plain block: the generator matches a route's upstream (`grafana`) against the container name (`observability`) *or* the Compose service key. It matched the container name only until 2026-10-05, so `grafana.<DOMAIN>` answered 404 on the cluster until that was fixed.
+
 ## Setup
 
 ```bash

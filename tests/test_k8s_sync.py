@@ -740,3 +740,14 @@ def test_dagster_webserver_probe_follows_its_service_port():
     app = next(d for d in docs if d["metadata"]["name"] == "dagster-chart")
     values = app["spec"]["source"]["helm"]["valuesObject"]["dagsterWebserver"]
     assert values["readinessProbe"]["httpGet"]["port"] == values["service"]["port"] == 3000
+
+
+def test_a_route_is_found_by_the_compose_service_key_too():
+    """nginx-plain's grafana.${DOMAIN} block points at `grafana`, the Compose
+    service key; the container is named `observability`. Routes were matched by
+    container name only, so Grafana's public hostname answered 404 on the
+    cluster (2026-10-05)."""
+    docs = [d for d in yaml.safe_load_all((K8S / "generated/envs/prod/observability/routes.yaml").read_text()) if d]
+    route = next(d for d in docs if d["kind"] == "HTTPRoute")
+    assert any(h.startswith("grafana.") for h in route["spec"]["hostnames"])
+    assert route["spec"]["rules"][0]["backendRefs"][0] == {"name": "grafana", "port": 3000}

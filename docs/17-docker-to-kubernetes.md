@@ -409,7 +409,7 @@ echo '127.0.0.1 argocd.k8s.local headlamp.k8s.local grafana.k8s.local backup.k8s
 |---|---|---|
 | ArgoCD | `http://argocd.k8s.local:18080` | every app's Synced/Healthy state and the sync waves |
 | Headlamp | `http://headlamp.k8s.local:18080` | pods, events, logs |
-| Grafana | `http://grafana.k8s.local:18080` | metrics and logs (no public route, as on Docker) |
+| Grafana | `http://grafana.k8s.local:18080` (public: `https://grafana.<DOMAIN>`, own login, like on Docker) | metrics and logs |
 | Backup store (MinIO console) | `http://backup.k8s.local:18080` | buckets: WAL archives, base backups, Velero, dumps |
 
 **Signing in.** Run these in your own terminal: they print the secret on screen and never write it anywhere. Replace `kind-homeserver-test` with `kind-$K8S_CLUSTER_NAME` if you changed the cluster name in `kubernetes/.env`.
