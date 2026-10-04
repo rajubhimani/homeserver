@@ -66,6 +66,8 @@ uv run homeserver.py dev update dagster      # rebuilds the image and restarts
 
 ## On Kubernetes
 
+The webserver serves on 3000 (as in Compose), so the generated chart values move its readiness probe to port 3000 too. The chart's probe is fixed to its default service port, 80, and its `values.yaml` says to update the probes when `service.port` changes; left alone the pod was never Ready (found 2026-10-05).
+
 Dagster runs from its **official Helm chart** (`dagster-io/helm`; decided 2026-10-04 over generating it from Compose). `kubernetes/overrides/dagster.yaml` marks it, and `generate.py` writes the chart's values into the ArgoCD Application `dagster-chart` (`generated/gitops/<env>`):
 
 - **Names as in Compose:** Services `dagster-webserver:3000` and `dagster-user-code:4000`, so the route and `.env` endpoints don't change.

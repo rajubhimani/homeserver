@@ -730,3 +730,13 @@ def test_a_probe_never_goes_through_the_pods_own_service():
     for probe in ("readinessProbe", "livenessProbe", "startupProbe"):
         assert main[probe].get("tcpSocket") == {"port": 7233}, (probe, main[probe])
         assert "exec" not in main[probe]
+
+
+def test_dagster_webserver_probe_follows_its_service_port():
+    """The chart's readiness probe is fixed to port 80 (its default service
+    port); the webserver serves on 3000 like Compose, so a probe left on 80 is
+    refused forever and the pod is never Ready (2026-10-05)."""
+    docs = [d for d in yaml.safe_load_all((K8S / "generated/gitops/prod/applications.yaml").read_text()) if d]
+    app = next(d for d in docs if d["metadata"]["name"] == "dagster-chart")
+    values = app["spec"]["source"]["helm"]["valuesObject"]["dagsterWebserver"]
+    assert values["readinessProbe"]["httpGet"]["port"] == values["service"]["port"] == 3000

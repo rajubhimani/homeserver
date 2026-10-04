@@ -2146,6 +2146,10 @@ def dagster_values(running: bool) -> dict:
         "telemetry": {"enabled": False},  # as Compose's dagster.yaml
         "dagsterWebserver": {"nameOverride": "webserver",  # Service dagster-webserver:3000, as in Compose
                              "replicaCount": 1 if running else 0, "service": {"port": 3000},
+                             # The chart's readiness probe is fixed to port 80, its default
+                             # service port; its values.yaml says to move the probes when
+                             # service.port changes. Helm merges maps: path and timings stay.
+                             "readinessProbe": {"httpGet": {"port": 3000}},
                              "image": official, "labels": labels,
                              "resources": {"limits": {"memory": lim("dagster-webserver")}}, **secure},
         "dagsterDaemon": {"enabled": running, "image": official, "labels": labels,
