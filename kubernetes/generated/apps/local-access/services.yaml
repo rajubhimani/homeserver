@@ -202,11 +202,6 @@ spec:
     targetPort: 8122
     nodePort: 30116
     protocol: TCP
-  - name: h8123
-    port: 8123
-    targetPort: 8123
-    nodePort: 30117
-    protocol: TCP
   - name: h8125
     port: 8125
     targetPort: 8125

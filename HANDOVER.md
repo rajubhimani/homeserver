@@ -60,7 +60,7 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 - **Kubernetes (kind, on this host) serves the stack.** Docker is down except `wg-easy` (WireGuard stays on Docker by decision).
 - **The public tunnel is ON** (2026-10-05, after the import): `cloudflared` is in the running list, 4 connections registered, the public hostnames answer, and `nginx-plain` logs the visitor's real IP.
 - **Prod runs** (`kubernetes/deploy/prod.yaml`): MIN, CORE, miniflux, bookstack, airflow, temporal, dagster, observability.
-- **Exported services:** adguard-home atuin authentik beszel clamav cloudflared docs firefly forgejo guacamole immich it-tools jellyfin landing mailpit nextcloud nginx-plain ntfy onlyoffice plausible uptime-kuma vaultwarden whiteboard.
+- **Exported services:** (adguard-home was dropped 2026-10-05: back on Docker) atuin authentik beszel clamav cloudflared docs firefly forgejo guacamole immich it-tools jellyfin landing mailpit nextcloud nginx-plain ntfy onlyoffice plausible uptime-kuma vaultwarden whiteboard.
 
 | Phase | Status |
 |---|---|

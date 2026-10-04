@@ -29,7 +29,6 @@ data:
             8443 traefik.infra.svc.cluster.local:443;
             8118 ntfy.apps.svc.cluster.local:80;
             3001 uptime-kuma.apps.svc.cluster.local:3001;
-            8123 adguard-home.apps.svc.cluster.local:3000;
             8200 vaultwarden.apps.svc.cluster.local:80;
             8102 firefly.apps.svc.cluster.local:8080;
             8104 firefly-importer.apps.svc.cluster.local:8080;
@@ -111,7 +110,6 @@ data:
             listen 8443;
             listen 8118;
             listen 3001;
-            listen 8123;
             listen 8200;
             listen 8102;
             listen 8104;

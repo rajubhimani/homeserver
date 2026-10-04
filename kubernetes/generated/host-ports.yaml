@@ -190,11 +190,6 @@
   protocol: tcp
   svc: atuin
   container: atuin
-- host: 8123
-  node: 30117
-  protocol: tcp
-  svc: adguard-home
-  container: adguard-home
 - host: 8125
   node: 30147
   protocol: tcp

@@ -183,7 +183,7 @@ Error response from daemon: failed to set up container networking: driver failed
 
 ## On Kubernetes
 
-Generated from this compose file. `adguard-watchdog` doesn't run, because the liveness probe restarts AdGuard instead. **DNS (port 53) isn't reachable from your LAN on kind:** the port is bound to `DNS_BIND_IP`, which isn't one of the localhost ports kind forwards, so only the web UI is tested there. Guide: [docs/17](../17-docker-to-kubernetes.md).
+**AdGuard Home stays on Docker (decided 2026-10-05), like wg-easy.** It is the LAN's DNS, so it has to answer when the cluster is down or being rebuilt, and its port 53 must bind the host's LAN IP (`DNS_BIND_IP`; systemd-resolved holds 127.0.0.53:53), which a kind cluster can only map when it is created. It was ported and ran on kind for a day, but nothing could reach its DNS port, so its dashboard stayed empty: no device on the LAN used it. `kubernetes/scope.yaml` lists it as skipped. Run it with `uv run homeserver.py prod up adguard-home`; the DNS address must be the one your router or devices use (`DNS_BIND_IP`, ideally a DHCP reservation, or a static address with its netmask and gateway set).
 
 ## Fresh-install verification (2026-10-03)
 

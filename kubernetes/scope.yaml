@@ -27,7 +27,6 @@ ported:
   # Phase 3 — the rest of CORE
   - ntfy
   - uptime-kuma
-  - adguard-home
   - vaultwarden
   - firefly
   - immich
@@ -113,6 +112,7 @@ prod_only:
 
 # Not run on Kubernetes, each with the replacement.
 skipped:
+  adguard-home: "Stays on Docker (decided 2026-10-05, like wg-easy): it is the LAN's DNS, so it must answer when the cluster is down or being rebuilt, and its port 53 has to bind the host's LAN IP (DNS_BIND_IP), which kind only maps at cluster creation. Compose stays the way to run it."
   wg-easy: "Stays on Docker (decided 2026-10-04): the VPN is how this machine is reached when something breaks, so it runs independently of the cluster (common homelab practice; wg-easy documents only Docker, Podman and dockerless installs). Prepared in overrides/wg-easy.yaml should that change."
   coolify: "Docker PaaS: deploys apps as Docker containers through the socket. On Kubernetes, ArgoCD and the generated manifests do that job."
   dockge: "Docker Compose stack manager (needs the socket). Kubernetes UIs are the ArgoCD UI and Headlamp."

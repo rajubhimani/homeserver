@@ -587,7 +587,7 @@ uv run homeserver.py status
 | Authentik, Firefly, Firefly importer, Immich, Guacamole, Nextcloud (app and Apache log), Forgejo, Vaultwarden, Jellyfin, ntfy, docs, landing, IT-Tools | ✅ never the fake | edge + each app's trusted-proxy setting (`docs/services/<svc>.md`, "Real client IPs") |
 | Plausible | ✅ | reads `CF-Connecting-IP` itself |
 | Beszel, Uptime Kuma | ⚠️ the proxy, until set once in the app's UI | PocketBase *User IP proxy headers* = `X-Real-IP`; Uptime Kuma *Trust Proxy* = on |
-| AdGuard | ✅ on kind | `trusted_proxies` + `10.0.0.0/8` (YAML) |
+| AdGuard | stays on Docker (LAN DNS; `docs/services/adguard-home.md`) | `trusted_proxies` + `10.0.0.0/8` (YAML) |
 | Atuin | — | records no client IPs |
 
 **Rule for the future:** check every app that records or acts on a visitor IP with a failed login through the tunnel **and** a faked `X-Forwarded-For`. It must log the real address, never the fake one or a cluster address.
