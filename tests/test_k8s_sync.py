@@ -397,3 +397,24 @@ def test_k8s_py_resolves_targets_like_homeserver():
     grp = next(iter(hs.SERVICE_GROUPS))
     g, expanded = k8s.resolve([f"group:{grp}", f"group:{grp}"], "up")
     assert expanded and len(g) == len(set(g)) == len(set(hs.SERVICE_GROUPS[grp]))
+
+
+def test_every_service_has_an_ingress_policy():
+    """Each ported service ships a NetworkPolicy selecting its pods, and every
+    in-cluster endpoint another service uses is allowed on its port."""
+    for svc in PORTED:
+        f = GENERATED / "apps" / svc / "networkpolicies.yaml"
+        assert f.is_file(), f"{svc}: no network policy"
+        pol = next(d for d in yaml.safe_load_all(f.read_text()) if d)
+        assert pol["spec"]["podSelector"]["matchLabels"]["homeserver/service"] == svc
+    for src in PORTED:
+        for target, ports in gen.endpoint_targets(src).items():
+            pol = gen.network_policy(target)
+            ok = any(any((fr.get("podSelector") or {}).get("matchLabels", {}).get("homeserver/service") == src
+                         or (fr.get("namespaceSelector") or {}).get("matchLabels", {}).get("kubernetes.io/metadata.name") == "apps"
+                         for fr in r["from"])
+                     and (not r.get("ports") or ports & {p["port"] for p in r["ports"]})
+                     for r in pol["spec"]["ingress"])
+            if target in ("shared-postgres", "shared-mariadb"):
+                continue  # covered by the shared_db rule, checked by the generator
+            assert ok, f"{src} -> {target}:{sorted(ports)} not allowed by {target}'s policy"

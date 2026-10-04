@@ -280,7 +280,19 @@ Namespace `apps` warns on anything that breaks **Baseline** and audits **Restric
 7. **Operators:** CloudNativePG and mariadb-operator may reach their database pods (status and replication ports).
 8. **Localhost ports:** traffic arriving through the node (kind port mappings, `hostPort`) is allowed for the published ports only.
 
-A test will check every service has a policy and that each `.env` endpoint is covered. A smoke test per tier will confirm nothing legitimate is blocked.
+**Built (2026-10-04)** in `generate.py` (`network_policy`), one `networkpolicies.yaml` per service, with every rule **scoped to ports**. A service's own database pods share its label, so a rule meant for the web page must not open the database port:
+
+| Allowed into service S from | Ports |
+|---|---|
+| S's own pods (app ↔ its database and cache) | all |
+| Traefik, the local-access proxy, the watchers (landing, Uptime Kuma, the Browser Hub) | S's web ports: its routes plus the ports Compose publishes |
+| Each service whose `.env.example` or Compose `environment` names S (`MAIL_HOST=mailpit`, `TEMPORAL_ADDRESS=temporal:7233`, …) | exactly those ports |
+| Shared Postgres / MariaDB: only the apps declaring `shared_db` | 5432 / 3306 |
+| The database operators (CloudNativePG, mariadb-operator) | all (status checks, replication) |
+| Notification sinks (Mailpit, ntfy) from any app, since apps also configure them in their own UIs | delivery port only (1025 / 80) |
+| cloudflared → the edge | 80 |
+
+Kubelet health probes stay allowed: verified, a pod under a deny-all policy stayed ready. A test checks every service has its policy and every endpoint is allowed on its port. Writing them surfaced a hardcoded address: Airflow's example DAG called `temporal:7233` directly, against the rule that Temporal clients use Temporal's environment configuration. It now uses `TEMPORAL_ADDRESS` from `.env`. The policies take effect when each service is next applied; the per-tier smoke tests and the CORE rollout verify that nothing legitimate is blocked.
 
 ### Decisions for phase 4 (2026-10-04)
 

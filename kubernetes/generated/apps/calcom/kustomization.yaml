@@ -4,5 +4,6 @@ kind: Kustomization
 namespace: apps
 resources:
 - database.yaml
+- networkpolicies.yaml
 - services.yaml
 - workloads.yaml

@@ -21,7 +21,7 @@ spec:
         homeserver/service: airflow
         app.kubernetes.io/name: airflow-apiserver
       annotations:
-        homeserver/config-sha256: 7e8f33c0541890aeac7cb60daaa3c4d0d6fbea357db00f5cc6ddd4fd9f843fa2
+        homeserver/config-sha256: 30735158c75b9a26029d45c45af9a327686b5e116f5d1a84e9b4ec5194c9901c
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -280,7 +280,7 @@ spec:
         homeserver/service: airflow
         app.kubernetes.io/name: airflow-dag-processor
       annotations:
-        homeserver/config-sha256: 7e8f33c0541890aeac7cb60daaa3c4d0d6fbea357db00f5cc6ddd4fd9f843fa2
+        homeserver/config-sha256: 30735158c75b9a26029d45c45af9a327686b5e116f5d1a84e9b4ec5194c9901c
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -530,7 +530,7 @@ spec:
         homeserver/service: airflow
         app.kubernetes.io/name: airflow-scheduler
       annotations:
-        homeserver/config-sha256: 7e8f33c0541890aeac7cb60daaa3c4d0d6fbea357db00f5cc6ddd4fd9f843fa2
+        homeserver/config-sha256: 30735158c75b9a26029d45c45af9a327686b5e116f5d1a84e9b4ec5194c9901c
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -794,7 +794,7 @@ spec:
         homeserver/service: airflow
         app.kubernetes.io/name: airflow-triggerer
       annotations:
-        homeserver/config-sha256: 7e8f33c0541890aeac7cb60daaa3c4d0d6fbea357db00f5cc6ddd4fd9f843fa2
+        homeserver/config-sha256: 30735158c75b9a26029d45c45af9a327686b5e116f5d1a84e9b4ec5194c9901c
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

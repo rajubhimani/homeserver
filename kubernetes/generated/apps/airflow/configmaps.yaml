@@ -340,10 +340,21 @@ data:
     def example_cross_service_pipeline():
         @task
         def trigger_dagster_materialization_via_temporal() -> str:
+            import os
+
             from temporalio.client import Client
+            from temporalio.envconfig import ClientConfig
 
             async def _run() -> str:
-                client = await Client.connect("temporal:7233")
+                # Temporal's standard environment configuration, as the worker uses
+                # (TEMPORAL_ADDRESS, TEMPORAL_API_KEY, TEMPORAL_TLS*, ...): Temporal
+                # Cloud is an .env change, never a code change.
+                config = ClientConfig.load_client_connect_config()
+                if not config.get("api_key"):  # empty key = none (self-hosted, plain text)
+                    config.pop("api_key", None)
+                    if config.get("tls") is True and "TEMPORAL_TLS" not in os.environ:
+                        config.pop("tls")
+                client = await Client.connect(**config)
                 return await client.execute_workflow(
                     "MaterializeDagsterAssetWorkflow",
                     "report_job",

@@ -5,6 +5,7 @@ namespace: apps
 resources:
 - database.yaml
 - middleware.yaml
+- networkpolicies.yaml
 - services.yaml
 - storage.yaml
 - workloads.yaml

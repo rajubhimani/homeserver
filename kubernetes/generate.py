@@ -1504,6 +1504,100 @@ def local_access() -> dict[str, list[dict]]:
     }
 
 
+# ── network policies (ingress) ────────────────────────────────────────────
+# One allow-list NetworkPolicy per service (docs/17 "Network policies"): a pod
+# becomes isolated once a policy selects it, so services are isolated one by
+# one, with no namespace-wide deny that could catch anything else. Egress is
+# a follow-up. Kubelet health probes stay allowed (verified on kind).
+
+WATCHERS = ("landing", "uptime-kuma", "nginx-plain")  # health pages, monitors, Browser Hub
+SINKS = {"mailpit": 1025, "ntfy": 80}  # delivery ports apps also configure in their own UIs
+_ENDPOINT = re.compile(r"(?:^|//|@|\s|=)([a-z][a-z0-9-]+):(\d{2,5})\b")
+_OWNERS: dict[str, str] | None = None
+
+
+def container_owners() -> dict[str, str]:
+    """Every in-cluster name (container name, Compose service name) -> service."""
+    global _OWNERS
+    if _OWNERS is None:
+        _OWNERS = {}
+        for svc in load_scope().get("ported") or []:
+            for n, s in (load_compose(svc).get("services") or {}).items():
+                c = re.sub(r"[^a-z0-9-]", "-", (s.get("container_name") or n).lower())
+                _OWNERS[c] = svc
+                _OWNERS.setdefault(n, svc)
+    return _OWNERS
+
+
+def endpoint_targets(svc: str) -> dict[str, set[int]]:
+    """{service: ports} this one connects to by in-cluster name: host:port
+    values and HOST/PORT pairs in .env.example, plus Compose environment."""
+    owners = container_owners()
+    ex = load_env(SERVICES_DIR / svc / ".env.example")
+    values = list(ex.values())
+    for s in (load_compose(svc).get("services") or {}).values():
+        env = s.get("environment") or {}
+        values += [str(v) for v in (env.values() if isinstance(env, dict) else env)]
+    out: dict[str, set[int]] = {}
+    for v in values:
+        for host, port in _ENDPOINT.findall(" " + v):
+            if host in owners and owners[host] != svc:
+                out.setdefault(owners[host], set()).add(int(port))
+    for k, v in ex.items():
+        if re.search(r"HOST(NAME)?$", k) and v in owners and owners[v] != svc:
+            pk = re.sub(r"HOST(NAME)?$", "PORT", k)
+            if ex.get(pk, "").isdigit():
+                out.setdefault(owners[v], set()).add(int(ex[pk]))
+    return out
+
+
+def web_ports(svc: str) -> set[int]:
+    """Ports the router, the localhost proxy and the watchers may use: the
+    service's route ports and the container ports Compose publishes."""
+    names = {c for c, s in container_owners().items() if s == svc}
+    out = {port for c, rs in nginx_routes().items() if c in names for _, port in rs}
+    for s in (load_compose(svc).get("services") or {}).values():
+        out |= {tgt for _, _, tgt, _ in published_ports(s)}
+    if svc == "nginx-plain":
+        out.add(80)  # the edge and the Browser Hub
+    return out
+
+
+def network_policy(svc: str) -> dict:
+    ported = load_scope().get("ported") or []
+    by_ns = lambda ns: {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": ns}}}  # noqa: E731
+    by_svc = lambda s: {"podSelector": {"matchLabels": {"homeserver/service": s}}}  # noqa: E731
+    tcp = lambda ports: [{"protocol": "TCP", "port": p} for p in sorted(ports)]  # noqa: E731
+    rules: list[dict] = [{"from": [by_svc(svc)]}]  # its own pods: app <-> its database and cache
+    web = web_ports(svc)
+    if web:
+        watchers = [w for w in WATCHERS if w != svc]
+        rules.append({"from": [by_ns("infra"), by_ns(LOCAL_ACCESS_NS)] + [by_svc(w) for w in watchers],
+                      "ports": tcp(web)})
+    for src in sorted(ported):
+        ports = endpoint_targets(src).get(svc) if src != svc and svc not in SHARED.values() else None
+        if ports:
+            rules.append({"from": [by_svc(src)], "ports": tcp(ports)})
+    if svc in SHARED.values():
+        engine = next(e for e, s in SHARED.items() if s == svc)
+        users = sorted(a for a, spec in shared_db_apps().items() if spec["engine"] == engine and a in ported)
+        rules.append({"from": [by_svc(a) for a in users], "ports": tcp({5432 if engine == "postgres" else 3306})})
+    if svc == "nginx-plain":
+        rules.append({"from": [by_svc("cloudflared")], "ports": tcp({80})})  # the tunnel's way in
+    has_operator_db = svc in SHARED.values() or any(
+        own_postgres(svc, n, s, load_overrides(svc)) or own_mariadb(svc, n, s, load_overrides(svc))
+        for n, s in (load_compose(svc).get("services") or {}).items())
+    if has_operator_db:  # status checks, replication
+        rules.append({"from": [by_ns("cnpg-system"), by_ns("mariadb-operator")]})
+    if svc in SINKS:  # apps also set these up in their own UIs: delivery port only
+        rules.append({"from": [by_ns(NAMESPACE)], "ports": tcp({SINKS[svc]})})
+    return {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+            "metadata": {"name": f"{svc}-ingress", "labels": {"app.kubernetes.io/part-of": "homeserver",
+                                                                "homeserver/service": svc}},
+            "spec": {"podSelector": {"matchLabels": {"homeserver/service": svc}},
+                     "policyTypes": ["Ingress"], "ingress": rules}}
+
+
 # ── output ────────────────────────────────────────────────────────────────
 
 def dump(objs: list[dict], svc: str) -> str:
@@ -1538,6 +1632,7 @@ def render(out: Path) -> list[str]:
                 files["database.yaml"] = dbo
             if svc == "authentik":
                 files["middleware.yaml"] = [authentik_middleware()]
+        files["networkpolicies.yaml"] = [network_policy(svc)]
         d = out / "apps" / svc
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(files.items()):
