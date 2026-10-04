@@ -236,11 +236,6 @@ spec:
           value: https://penpot.$(DOMAIN)
         ports:
         - containerPort: 8080
-          hostPort: 8131
-          hostIP: 127.0.0.1
-        - containerPort: 8080
-          hostPort: 8131
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

@@ -45,11 +45,6 @@ spec:
           value: wg-easy.apps.svc.cluster.local
         ports:
         - containerPort: 80
-          hostPort: 8080
-          hostIP: 127.0.0.1
-        - containerPort: 80
-          hostPort: 8080
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -113,5 +108,3 @@ spec:
           - key: services-landing-nginx-conf
             path: services-landing-nginx-conf
             mode: 420
-  strategy:
-    type: Recreate

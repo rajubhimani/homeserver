@@ -14,21 +14,3 @@ spec:
   - name: p3000
     port: 3000
     targetPort: 3000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: edge-host
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: edge
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: edge
-  ports:
-  - name: h8160
-    port: 3000
-    targetPort: 3000
-    nodePort: 30171
-    protocol: TCP

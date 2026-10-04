@@ -65,11 +65,6 @@ spec:
           value: $(POSTGRES_USER)
         ports:
         - containerPort: 9000
-          hostPort: 9925
-          hostIP: 127.0.0.1
-        - containerPort: 9000
-          hostPort: 9925
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

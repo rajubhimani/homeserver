@@ -69,11 +69,6 @@ spec:
           value: $(TZ)
         ports:
         - containerPort: 3333
-          hostPort: 8162
-          hostIP: 127.0.0.1
-        - containerPort: 3333
-          hostPort: 8162
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -103,8 +98,6 @@ spec:
           failureThreshold: 17
         securityContext:
           allowPrivilegeEscalation: false
-  strategy:
-    type: Recreate
 ---
 apiVersion: apps/v1
 kind: Deployment

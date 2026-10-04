@@ -61,11 +61,6 @@ spec:
           value: '1'
         ports:
         - containerPort: 8080
-          hostPort: 8093
-          hostIP: 127.0.0.1
-        - containerPort: 8080
-          hostPort: 8093
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -95,5 +90,3 @@ spec:
           failureThreshold: 6
         securityContext:
           allowPrivilegeEscalation: false
-  strategy:
-    type: Recreate

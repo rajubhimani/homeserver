@@ -83,11 +83,6 @@ spec:
           value: https://n8n.$(DOMAIN)/
         ports:
         - containerPort: 5678
-          hostPort: 8120
-          hostIP: 127.0.0.1
-        - containerPort: 5678
-          hostPort: 8120
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

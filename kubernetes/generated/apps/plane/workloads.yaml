@@ -396,6 +396,8 @@ spec:
           value: $(MINIO_ROOT_PASSWORD)
         - name: MINIO_ROOT_USER
           value: $(MINIO_ROOT_USER)
+        ports:
+        - containerPort: 9000
         readinessProbe:
           exec:
             command:
@@ -575,11 +577,6 @@ spec:
           value: '80'
         ports:
         - containerPort: 80
-          hostPort: 8100
-          hostIP: 127.0.0.1
-        - containerPort: 80
-          hostPort: 8100
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -622,8 +619,6 @@ spec:
           - key: services-plane-caddyfile
             path: services-plane-caddyfile
             mode: 493
-  strategy:
-    type: Recreate
 ---
 apiVersion: apps/v1
 kind: Deployment

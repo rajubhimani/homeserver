@@ -59,17 +59,12 @@ spec:
         - name: TZ
           value: $(TZ)
         ports:
+        - containerPort: 8384
         - containerPort: 22000
         - containerPort: 21027
           protocol: UDP
         - containerPort: 22000
           protocol: UDP
-        - containerPort: 8384
-          hostPort: 8087
-          hostIP: 127.0.0.1
-        - containerPort: 8384
-          hostPort: 8087
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

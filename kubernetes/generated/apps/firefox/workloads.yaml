@@ -47,11 +47,6 @@ spec:
           value: /firefox/
         ports:
         - containerPort: 3000
-          hostPort: 8145
-          hostIP: 127.0.0.1
-        - containerPort: 3000
-          hostPort: 8145
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

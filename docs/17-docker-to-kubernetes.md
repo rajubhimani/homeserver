@@ -282,6 +282,21 @@ Namespace `apps` warns on anything that breaks **Baseline** and audits **Restric
 
 A test will check every service has a policy and that each `.env` endpoint is covered. A smoke test per tier will confirm nothing legitimate is blocked.
 
+### Decisions for phase 4 (2026-10-04)
+
+| Question | Decision | Why |
+|---|---|---|
+| Localhost ports | One local-access proxy | Same `localhost:<port>` URLs as Compose; apps can enforce Pod Security Baseline |
+| ArgoCD's git branch | A setting (`kubernetes/.env`); `feature/k8s-generated` now, `develop` after the merge | No rework when the branch changes |
+| Network policies | Ingress first; egress later | Kubernetes' documented starting point; egress has to list every app's external calls |
+
+### Follow-ups after all phases
+
+- **Egress network policies:** restrict outgoing traffic per app (DNS, the external APIs each app calls, mail, update checks).
+- **Beszel's agent in its own privileged namespace,** so `apps` can enforce Baseline.
+- **etcd disk priority** (`ionice`) and a faster, separate disk for kind's image store.
+- **The remaining hardening items:** image scanning, Cloudflare Access/WAF, Authentik two-factor, Docker socket proxy.
+
 ## Step 5 — Start services by tier, like `homeserver.py` *(coming in phase 3–4)*
 ## Step 6 — ArgoCD, Headlamp and logs *(coming in phase 4)*
 ## Step 7 — Backups: `down` backs up, `restore` brings it back *(coming in phase 5)*
@@ -307,7 +322,7 @@ What `import` does for each service:
 
 Use `--live-db` when the newest snapshot is older than the data you want. **Seen on 2026-10-03:** Authentik's newest snapshot came from right after a `reset`, so it held a blank Authentik; the live database had the applications and users.
 
-**Localhost ports work like under Compose.** Every port a `compose.prod.yml` publishes on a fixed address becomes the container's `hostPort` + `hostIP` (`127.0.0.1`, and the `10.8.0.1` VPN mirror), which is Kubernetes' form of `127.0.0.1:8088:9000`:
+**Localhost ports work like under Compose,** served by **one local-access proxy** (decided 2026-10-04) rather than a `hostPort` on every app. The proxy is a small nginx in namespace `local-access` (`generated/apps/local-access`). Its `stream` module forwards each port Compose publishes (`127.0.0.1`, plus the `10.8.0.1` VPN mirror) at the TCP level to the app's Service, so web, SSH and TLS all work, and it resolves names per connection, so services that aren't running don't stop it. Only this pod holds host ports, so namespace `apps` can meet Pod Security Baseline (which forbids `hostPort`). The proxy's ports:
 
 - **On a cluster that runs on your machine** (k3s, kubeadm…), `localhost:8088` answers directly.
 - **On kind**, the node is a container, so the generator also writes NodePort Services and `generated/host-ports.yaml`, and `cluster.py create` binds each port on `127.0.0.1` with kind's port mappings. kind adds mappings only at creation, so a newly ported service needs a rebuild for its port; its `*.<domain>` route works without one.

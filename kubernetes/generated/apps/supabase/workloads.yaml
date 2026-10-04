@@ -349,11 +349,6 @@ spec:
           value: $(SUPABASE_SECRET_KEY)
         ports:
         - containerPort: 8000
-          hostPort: 8133
-          hostIP: 127.0.0.1
-        - containerPort: 8000
-          hostPort: 8133
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -408,8 +403,6 @@ spec:
           - key: services-supabase-volumes-api-envoy-lds-template-y
             path: services-supabase-volumes-api-envoy-lds-template-y
             mode: 420
-  strategy:
-    type: Recreate
 ---
 apiVersion: apps/v1
 kind: Deployment

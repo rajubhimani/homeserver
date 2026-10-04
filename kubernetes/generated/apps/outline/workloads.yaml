@@ -91,11 +91,6 @@ spec:
           value: https://outline.$(DOMAIN)
         ports:
         - containerPort: 3000
-          hostPort: 8114
-          hostIP: 127.0.0.1
-        - containerPort: 3000
-          hostPort: 8114
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

@@ -234,11 +234,6 @@ spec:
           value: https://temporal.$(DOMAIN)
         ports:
         - containerPort: 8080
-          hostPort: 8138
-          hostIP: 127.0.0.1
-        - containerPort: 8080
-          hostPort: 8138
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -271,8 +266,6 @@ spec:
             memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false
-  strategy:
-    type: Recreate
 ---
 apiVersion: apps/v1
 kind: Deployment

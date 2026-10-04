@@ -36,11 +36,6 @@ spec:
             name: ollama-env
         ports:
         - containerPort: 11434
-          hostPort: 8110
-          hostIP: 127.0.0.1
-        - containerPort: 11434
-          hostPort: 8110
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

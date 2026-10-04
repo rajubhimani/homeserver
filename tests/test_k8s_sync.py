@@ -278,6 +278,13 @@ def test_env_endpoints_reach_a_service_port():
     so a missing `expose:` silently breaks the call (Mailpit's SMTP 1025
     hung Firefly's login, 2026-10-04)."""
     ports = _service_ports()
+    # Every container the cluster runs: an endpoint naming one that has no
+    # Service at all is as broken as a missing port (AppFlowy's MinIO,
+    # 2026-10-04: "dns error" for appflowy-minio).
+    workloads = set()
+    for f, doc in _generated_docs():
+        if doc.get("kind") in ("Deployment", "StatefulSet", "DaemonSet"):
+            workloads |= {c["name"] for c in doc["spec"]["template"]["spec"]["containers"]}
     gaps = []
     for svc in PORTED:
         ex = gen.load_env(REPO / "services" / svc / ".env.example")
@@ -285,6 +292,8 @@ def test_env_endpoints_reach_a_service_port():
             for host, port in re.findall(r"(?:^|//|@)([a-z][a-z0-9-]+):(\d{2,5})\b", v):
                 if host in ports and int(port) not in ports[host]:
                     gaps.append(f"{svc}: {k} -> {host}:{port}")
+                elif host not in ports and host in workloads:
+                    gaps.append(f"{svc}: {k} -> {host}:{port} (no Service)")
             if re.search(r"HOST(NAME)?$", k) and v in ports:
                 pk = re.sub(r"HOST(NAME)?$", "PORT", k)
                 if ex.get(pk, "").isdigit() and int(ex[pk]) not in ports[v]:
@@ -343,11 +352,19 @@ def test_localhost_ports_mirror_compose():
     assert len({(e["host"], e["protocol"]) for e in hp}) == len(hp), "duplicate host port"
     assert len({(e["node"], e["protocol"]) for e in hp}) == len(hp), "duplicate node port"
     in_list = {(e["svc"], e["host"]) for e in hp}
+    la = next(d for d in yaml.safe_load_all((GENERATED / "apps/local-access/workloads.yaml").read_text()) if d)
+    bound = {(pt["hostIP"], pt["hostPort"]) for pt in la["spec"]["template"]["spec"]["containers"][0]["ports"]}
     for svc in PORTED:
         for n, s in gen.load_compose(svc)["services"].items():
             for ip, host, tgt, proto in gen.published_ports(s):
                 if ip == "127.0.0.1" and svc != "nginx-plain":
                     assert (svc, host) in in_list, f"{svc}: 127.0.0.1:{host} missing from host-ports.yaml"
+                assert (ip, host) in bound, f"{svc}: {ip}:{host} not served by the local-access proxy"
+    # Only the proxy holds host ports, so apps can meet Pod Security Baseline.
+    for f, doc in _generated_docs():
+        if doc.get("kind") in ("Deployment", "StatefulSet", "DaemonSet") and f.parent.name != "local-access":
+            for c in doc["spec"]["template"]["spec"]["containers"]:
+                assert not any(pt.get("hostPort") for pt in c.get("ports", [])), f"{f.parent.name}/{c['name']} holds a hostPort"
 
 
 def test_cluster_cli_commands_all_exist():

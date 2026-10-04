@@ -21,21 +21,3 @@ spec:
     port: 53
     targetPort: 53
     protocol: UDP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: adguard-home-host
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: adguard-home
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: adguard-home
-  ports:
-  - name: h8123
-    port: 3000
-    targetPort: 3000
-    nodePort: 30117
-    protocol: TCP

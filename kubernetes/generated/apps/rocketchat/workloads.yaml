@@ -254,11 +254,6 @@ spec:
           value: monolith+nats://nats:4222
         ports:
         - containerPort: 3000
-          hostPort: 8142
-          hostIP: 127.0.0.1
-        - containerPort: 3000
-          hostPort: 8142
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

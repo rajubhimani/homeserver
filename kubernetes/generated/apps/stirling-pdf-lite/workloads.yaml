@@ -45,11 +45,6 @@ spec:
           value: $(STIRLING_ADMIN_USER)
         ports:
         - containerPort: 8080
-          hostPort: 8090
-          hostIP: 127.0.0.1
-        - containerPort: 8080
-          hostPort: 8090
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

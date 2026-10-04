@@ -34,11 +34,6 @@ spec:
             name: homeserver-root
         ports:
         - containerPort: 80
-          hostPort: 8116
-          hostIP: 127.0.0.1
-        - containerPort: 80
-          hostPort: 8116
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -71,5 +66,3 @@ spec:
           failureThreshold: 5
         securityContext:
           allowPrivilegeEscalation: false
-  strategy:
-    type: Recreate

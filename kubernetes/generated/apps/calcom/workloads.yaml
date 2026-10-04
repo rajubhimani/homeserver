@@ -57,11 +57,6 @@ spec:
           value: https://calcom.$(DOMAIN)
         ports:
         - containerPort: 3000
-          hostPort: 8129
-          hostIP: 127.0.0.1
-        - containerPort: 3000
-          hostPort: 8129
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -97,5 +92,3 @@ spec:
           failureThreshold: 9
         securityContext:
           allowPrivilegeEscalation: false
-  strategy:
-    type: Recreate

@@ -201,11 +201,6 @@ spec:
           value: $(CACHE_PORT)
         ports:
         - containerPort: 2283
-          hostPort: 2283
-          hostIP: 127.0.0.1
-        - containerPort: 2283
-          hostPort: 2283
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

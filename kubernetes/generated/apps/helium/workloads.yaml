@@ -47,11 +47,6 @@ spec:
           value: /helium/
         ports:
         - containerPort: 3000
-          hostPort: 8158
-          hostIP: 127.0.0.1
-        - containerPort: 3000
-          hostPort: 8158
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

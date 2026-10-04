@@ -14,21 +14,3 @@ spec:
   - name: p8080
     port: 8080
     targetPort: 8080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: erpnext-host
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: erpnext
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: erpnext
-  ports:
-  - name: h8153
-    port: 8080
-    targetPort: 8080
-    nodePort: 30164
-    protocol: TCP

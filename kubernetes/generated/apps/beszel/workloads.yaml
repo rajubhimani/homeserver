@@ -45,11 +45,6 @@ spec:
           value: 'false'
         ports:
         - containerPort: 8090
-          hostPort: 8106
-          hostIP: 127.0.0.1
-        - containerPort: 8090
-          hostPort: 8106
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

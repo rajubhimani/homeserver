@@ -64,11 +64,6 @@ spec:
           value: postgres://postgres:$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/plausible
         ports:
         - containerPort: 8000
-          hostPort: 8130
-          hostIP: 127.0.0.1
-        - containerPort: 8000
-          hostPort: 8130
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

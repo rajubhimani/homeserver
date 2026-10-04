@@ -534,17 +534,8 @@ def convert(svc: str) -> dict[str, list[dict]]:
         # machine localhost:<port> (and the VPN mirror on 10.8.0.1) answers
         # like under Compose. (kind's node is a container: its NodePort
         # Services + port mappings carry the same ports out; see host_ports.)
-        published = published_ports(s)
-        if published:
-            # A port bound to host addresses is declared once per address; a
-            # plain entry for the same port next to them would overlap
-            # (Kubernetes warns "overlapping port definition").
-            bound = {(tgt, "UDP" if proto == "udp" else "TCP") for _, _, tgt, proto in published}
-            container["ports"] = [pt for pt in container.get("ports", [])
-                                  if (pt["containerPort"], pt.get("protocol", "TCP")) not in bound]
-            container["ports"] += [{"containerPort": tgt, "hostPort": hp, "hostIP": ip,
-                                    **({"protocol": "UDP"} if proto == "udp" else {})}
-                                   for ip, hp, tgt, proto in published]
+        # Compose's published ports are served by the local-access proxy
+        # (local_access()), not by host ports on the app itself.
         # Compose's healthcheck, or (Kubernetes ignores image HEALTHCHECKs) the
         # image's own, copied verbatim into the override in Docker's format.
         container.update(probe_set(s.get("healthcheck") if (s.get("healthcheck") or {}).get("test")
@@ -741,8 +732,8 @@ def convert(svc: str) -> dict[str, list[dict]]:
             spec: dict = {"selector": {"matchLabels": {"app.kubernetes.io/name": c}}, "template": tmpl}
             if kind == "Deployment":
                 spec = {"replicas": 1, "revisionHistoryLimit": 3, **spec}
-                if any("persistentVolumeClaim" in v for v in pod_vols) or published:
-                    # RWO volumes / host ports: never two pods at once
+                if any("persistentVolumeClaim" in v for v in pod_vols):
+                    # RWO volumes: never two pods at once
                     spec["strategy"] = {"type": "Recreate"}
             spec.update(co.get("workload") or {})
             obj["spec"] = spec
@@ -1423,22 +1414,94 @@ def host_ports() -> list[dict]:
     return sorted(entries, key=lambda e: (e["host"], e["protocol"]))
 
 
-def host_port_services(svc: str) -> list[dict]:
-    """NodePort Services <container>-host for the service's localhost ports."""
-    by_c: dict[str, list[dict]] = {}
-    for e in host_ports():
-        # host-network containers listen on the node itself: no Service
-        if e["svc"] == svc and e["svc"] != "nginx-plain" and not e.get("direct"):
-            by_c.setdefault(e["container"], []).append(e)
-    out = []
-    for c, es in sorted(by_c.items()):
-        out.append({"apiVersion": "v1", "kind": "Service",
-                    "metadata": {"name": f"{c}-host", "labels": {"app.kubernetes.io/part-of": "homeserver",
-                                                                "homeserver/service": svc}},
-                    "spec": {"type": "NodePort", "selector": {"app.kubernetes.io/name": c},
-                             "ports": [{"name": f"h{e['host']}", "port": e["target"], "targetPort": e["target"],
-                                        "nodePort": e["node"], "protocol": e["protocol"].upper()} for e in es]}})
-    return out
+LOCAL_ACCESS_NS = "local-access"
+LOCAL_ACCESS_HEALTH_PORT = 8399
+TRAEFIK_BACKENDS = {80: "traefik.infra.svc.cluster.local:80", 443: "traefik.infra.svc.cluster.local:443"}
+
+
+def local_access() -> dict[str, list[dict]]:
+    """Compose's published ports (127.0.0.1:<port>, and the 10.8.0.1 VPN
+    mirror) served by ONE proxy in its own namespace, instead of a hostPort
+    on every app: apps can then meet Pod Security Baseline, which forbids
+    hostPort. nginx's stream module forwards each port at the TCP level (web,
+    SSH, TLS alike) to the app's Service, resolving names per connection so
+    services that aren't running don't stop the proxy. On a cluster on this
+    machine its hostPorts bind the same addresses as Compose; on kind, its
+    NodePort Service carries the lock-file node ports (host-ports.yaml)."""
+    entries = host_ports()
+    listen, maps, ports, nodeports = [], [], [], []
+    seen = set()
+    for svc in load_scope().get("ported") or []:
+        compose = load_compose(svc)
+        for n, s in (compose.get("services") or {}).items():
+            c = re.sub(r"[^a-z0-9-]", "-", (s.get("container_name") or n).lower())
+            for ip, hp, tgt, proto in published_ports(s):
+                backend = (TRAEFIK_BACKENDS.get(tgt) if svc == "nginx-plain"
+                           else f"{c}.{NAMESPACE}.svc.cluster.local:{tgt}")
+                if not backend:
+                    continue
+                if (hp, proto) not in seen:
+                    seen.add((hp, proto))
+                    listen.append(f"        listen {hp}{' udp' if proto == 'udp' else ''};")
+                    maps.append(f"        {hp} {backend};")
+                ports.append({"containerPort": hp, "hostPort": hp, "hostIP": ip,
+                              **({"protocol": "UDP"} if proto == "udp" else {})})
+    for e in entries:
+        if e["node"] >= NODE_PORT_BASE and not e.get("direct"):
+            nodeports.append({"name": f"h{e['host']}", "port": e["host"], "targetPort": e["host"],
+                              "nodePort": e["node"], "protocol": e["protocol"].upper()})
+    conf = "\n".join([
+        "# GENERATED by kubernetes/generate.py (local_access): Compose's published ports.",
+        "worker_processes 1;",
+        "events { worker_connections 4096; }",
+        "http {",
+        f"    server {{ listen {LOCAL_ACCESS_HEALTH_PORT}; location = /_health {{ access_log off; return 200 \"ok\\n\"; }} }}",
+        "}",
+        "stream {",
+        "    resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;",
+        "    map $server_port $backend {",
+        *maps,
+        "    }",
+        "    server {",
+        *listen,
+        "        proxy_pass $backend;",
+        "        proxy_timeout 1h;",
+        "    }",
+        "}",
+        ""])
+    labels = {"app.kubernetes.io/part-of": "homeserver", "app.kubernetes.io/name": "local-access"}
+    cm = {"nginx.conf": conf}
+    nginx_image = next(iter(load_compose("nginx-plain")["services"].values()))["image"]
+    container = harden_container({
+        "name": "local-access", "image": nginx_image, "ports": ports,
+        "readinessProbe": {"httpGet": {"path": "/_health", "port": LOCAL_ACCESS_HEALTH_PORT}, "periodSeconds": 10},
+        "livenessProbe": {"httpGet": {"path": "/_health", "port": LOCAL_ACCESS_HEALTH_PORT}, "periodSeconds": 10,
+                          "failureThreshold": 6},
+        "volumeMounts": [{"name": "conf", "mountPath": "/etc/nginx/nginx.conf", "subPath": "nginx.conf", "readOnly": True}],
+    }, {})
+    return {
+        "namespace.yaml": [{"apiVersion": "v1", "kind": "Namespace",
+                            "metadata": {"name": LOCAL_ACCESS_NS, "labels": {
+                                # hostPort is a Baseline violation by design here: this is
+                                # the one place that holds them (docs/17 "Localhost ports").
+                                "pod-security.kubernetes.io/warn": "baseline",
+                                "pod-security.kubernetes.io/audit": "restricted"}}}],
+        "configmaps.yaml": [{"apiVersion": "v1", "kind": "ConfigMap",
+                             "metadata": {"name": "local-access", "labels": labels}, "data": cm}],
+        "workloads.yaml": [{"apiVersion": "apps/v1", "kind": "Deployment",
+                            "metadata": {"name": "local-access", "labels": labels},
+                            "spec": {"replicas": 1, "revisionHistoryLimit": 3,
+                                     "strategy": {"type": "Recreate"},  # host ports: never two pods at once
+                                     "selector": {"matchLabels": {"app.kubernetes.io/name": "local-access"}},
+                                     "template": {"metadata": {"labels": labels, **config_checksum(cm)},
+                                                  "spec": {"enableServiceLinks": False, **pod_security({}, "local-access"),
+                                                           "containers": [container],
+                                                           "volumes": [{"name": "conf", "configMap": {"name": "local-access"}}]}}}}],
+        "services.yaml": [{"apiVersion": "v1", "kind": "Service",
+                           "metadata": {"name": "local-access", "labels": labels},
+                           "spec": {"type": "NodePort", "selector": {"app.kubernetes.io/name": "local-access"},
+                                    "ports": nodeports}}],
+    }
 
 
 # ── output ────────────────────────────────────────────────────────────────
@@ -1475,8 +1538,6 @@ def render(out: Path) -> list[str]:
                 files["database.yaml"] = dbo
             if svc == "authentik":
                 files["middleware.yaml"] = [authentik_middleware()]
-        if hp := host_port_services(svc):
-            files.setdefault("services.yaml", []).extend(hp)
         d = out / "apps" / svc
         d.mkdir(parents=True, exist_ok=True)
         for fname, objs in sorted(files.items()):
@@ -1494,6 +1555,16 @@ def render(out: Path) -> list[str]:
                 (ed / "routes.yaml").write_text(dump(routes, svc))
                 res.append("routes.yaml")
             (ed / "kustomization.yaml").write_text(kustomization(res))
+    la = local_access()
+    d = out / "apps" / "local-access"
+    d.mkdir(parents=True, exist_ok=True)
+    for fname, objs in sorted(la.items()):
+        (d / fname).write_text(dump(objs, "local-access"))
+    (d / "kustomization.yaml").write_text(kustomization(sorted(la), namespace=LOCAL_ACCESS_NS))
+    for env in ("test", "prod"):
+        ed = out / "envs" / env / "local-access"
+        ed.mkdir(parents=True, exist_ok=True)
+        (ed / "kustomization.yaml").write_text(kustomization(["../../../apps/local-access"], namespace=LOCAL_ACCESS_NS))
     (out / "host-ports.yaml").write_text(
         "# GENERATED by kubernetes/generate.py: Compose's 127.0.0.1 ports -> kind node ports.\n"
         "# cluster.py create binds each on 127.0.0.1 (kind adds port mappings only at creation).\n"

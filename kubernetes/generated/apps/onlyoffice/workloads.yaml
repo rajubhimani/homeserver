@@ -43,11 +43,6 @@ spec:
           value: $(JWT_SECRET)
         ports:
         - containerPort: 80
-          hostPort: 8150
-          hostIP: 127.0.0.1
-        - containerPort: 80
-          hostPort: 8150
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

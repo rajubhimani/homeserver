@@ -76,17 +76,7 @@ spec:
           value: $(AUTHENTIK_SECRET_KEY)
         ports:
         - containerPort: 9000
-          hostPort: 8088
-          hostIP: 127.0.0.1
-        - containerPort: 9000
-          hostPort: 8088
-          hostIP: 10.8.0.1
         - containerPort: 9443
-          hostPort: 9444
-          hostIP: 127.0.0.1
-        - containerPort: 9443
-          hostPort: 9444
-          hostIP: 10.8.0.1
         startupProbe:
           httpGet:
             path: /-/health/live/

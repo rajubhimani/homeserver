@@ -14,21 +14,3 @@ spec:
   - name: p80
     port: 80
     targetPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: excalidraw-host
-  labels:
-    app.kubernetes.io/part-of: homeserver
-    homeserver/service: excalidraw
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: excalidraw
-  ports:
-  - name: h8116
-    port: 80
-    targetPort: 80
-    nodePort: 30143
-    protocol: TCP

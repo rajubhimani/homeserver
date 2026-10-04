@@ -95,11 +95,6 @@ spec:
           value: Asia/Kolkata
         ports:
         - containerPort: 8080
-          hostPort: 8102
-          hostIP: 127.0.0.1
-        - containerPort: 8080
-          hostPort: 8102
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
@@ -254,11 +249,6 @@ spec:
           value: https://firefly.$(DOMAIN)
         ports:
         - containerPort: 8080
-          hostPort: 8104
-          hostIP: 127.0.0.1
-        - containerPort: 8080
-          hostPort: 8104
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:

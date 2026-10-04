@@ -85,11 +85,6 @@ spec:
           value: UTC
         ports:
         - containerPort: 8065
-          hostPort: 8141
-          hostIP: 127.0.0.1
-        - containerPort: 8065
-          hostPort: 8141
-          hostIP: 10.8.0.1
         readinessProbe:
           exec:
             command:
