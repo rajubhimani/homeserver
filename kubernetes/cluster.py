@@ -86,16 +86,22 @@ def cmd_create(_a) -> None:
 
 def host_mounts() -> list[tuple[str, str, bool]]:
     """[(node path, host path, read-only)] from every ported service's
-    overrides; the host path is the .env value Compose uses."""
+    overrides; the host path is the .env value Compose uses. Read-only into
+    the node only if every container mounting it is :ro in Compose (e.g.
+    nextcloud writes OS_ISO_ROOT, nextcloud-cron only reads it)."""
     out: dict[str, tuple[str, bool]] = {}
     for svc in load_scope().get("ported") or []:
-        for co in (load_overrides(svc).get("containers") or {}).values():
-            for mo in (co.get("mounts") or {}).values():
+        compose = load_compose(svc)["services"]
+        for cname, co in (load_overrides(svc).get("containers") or {}).items():
+            s = next((s for n, s in compose.items() if (s.get("container_name") or n) == cname), {})
+            for tgt, mo in (co.get("mounts") or {}).items():
                 if mo.get("hostPath") and mo.get("env"):
                     host = host_path(svc, mo["env"])
                     if not Path(host).is_dir():
                         sys.exit(f"{svc}: {mo['env']}={host} is not a folder on this host")
-                    out[mo["hostPath"]] = (host, bool(mo.get("readOnly")))
+                    ro = any(m.get("target") == tgt and m.get("read_only") for m in s.get("volumes") or [])
+                    prev = out.get(mo["hostPath"], (host, True))
+                    out[mo["hostPath"]] = (host, prev[1] and ro)
     return [(k, v[0], v[1]) for k, v in sorted(out.items())]
 
 

@@ -570,7 +570,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
                                    f"containers.{c}.mounts.{tgt}: {{hostPath: <path on the node>}} or skip it")
                 vname = f"h-{slug(tgt)}"[:63]
                 pod_vols.append({"name": vname, "hostPath": {"path": hp, "type": "Directory"}})
-                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro or mo.get("readOnly") else {})})
+                mounts.append({"name": vname, "mountPath": tgt, **({"readOnly": True} if ro else {})})
         if s.get("devices") and co.get("devices") == "skip" and not co.get("devices_reason"):
             raise GenError(f"{where}: devices: skip needs devices_reason")
         for dev in ([] if co.get("devices") == "skip" else s.get("devices") or []):
