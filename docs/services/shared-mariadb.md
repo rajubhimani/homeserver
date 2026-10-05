@@ -25,6 +25,12 @@ It's the one version every intended user accepts. OrangeHRM's installer requires
 
 Same mechanism as [shared-postgres](shared-postgres.md#moving-one-apps-database-to-a-managed-service). Each app reads **`DB_HOST`/`DB_PORT`** (default `shared-mariadb`/`3306`) from its own `.env`, and `homeserver.py` stops managing the database once `DB_HOST` points elsewhere. Managed MariaDB exists on **AWS RDS only** (11.8.9 and 12.3.3). Azure retired its MariaDB service in 2025 and GCP never had one; [MariaDB Cloud](https://mariadb.com/products/cloud/) covers all three clouds. OrangeHRM stores its host in its own config through the web installer, so update that as well.
 
+## On Kubernetes
+
+The `MariaDB` resource sets a 15-minute `startupProbe` (10 s x 90): the operator's default (about 50 s) kills a first start that is still initialising on a slow or loaded disk and leaves a corrupt data directory. See `docs/17` ("MariaDB's first start needs a long startup probe").
+
+Generated as a [mariadb-operator](https://github.com/mariadb-operator/mariadb-operator) `MariaDB` named `shared-mariadb`: the same official `mariadb:11.8` image, the same `my.cnf` settings and 768Mi limit, root password from this `.env`. Each `shared_db` app gets a `User`, `Database` (utf8mb4 / utf8mb4_unicode_ci) and `Grant` (`ALL PRIVILEGES` on its own database only), the same grants `homeserver.py` creates. Two operator defaults are overridden on purpose: `cleanupPolicy: Skip` (the default `Delete` would drop the database when its manifest goes away) and `maxUserConnections: 0` (the default caps each user at 10 connections; Compose has no per-user cap). Commands: [docs/17](../17-docker-to-kubernetes.md) step 4.
+
 ## Status
 
 Created 2026-10-01. BookStack was converted first as the pilot, verified live: auto-start, provisioning (user granted on its own database only), snapshot `.sql` dump, backup → drop → restore round trip, and auto-stop when it went down. Users: [bookstack](bookstack.md), [invoiceshelf](invoiceshelf.md), [orangehrm](orangehrm.md). OrangeHRM is set up through its web installer: enter host `shared-mariadb` plus its `.env` database/user/password, and homeserver.py has already created them.

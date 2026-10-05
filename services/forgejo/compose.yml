@@ -44,10 +44,11 @@ services:
       FORGEJO__server__SSH_PORT: 2223
       FORGEJO__service__DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-true}
       FORGEJO__security__INSTALL_LOCK: "true"
-      # v16+ no longer trusts all proxies by default (was REVERSE_PROXY_TRUSTED_PROXIES=*
-      # in the image) — scope it to the internal Docker network so nginx-plain's
-      # X-Forwarded-For/X-Real-IP are still honored correctly.
-      FORGEJO__service__REVERSE_PROXY_TRUSTED_PROXIES: 172.18.0.0/16
+      # Real client IPs behind the reverse proxy (nginx-plain, or Traefik on
+      # Kubernetes): Forgejo reads these from [security] (it was set under
+      # [service] until 2026-10-04, which Forgejo ignored). Values in .env.
+      FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES: ${REVERSE_PROXY_TRUSTED_PROXIES}
+      FORGEJO__security__REVERSE_PROXY_LIMIT: ${REVERSE_PROXY_LIMIT}
       FORGEJO__actions__ENABLED: "true"
       # Put the requested common choices first in the repository license picker.
       # These names match Forgejo's bundled SPDX template filenames.

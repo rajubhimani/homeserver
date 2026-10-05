@@ -91,7 +91,6 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Zulip | [docs/services/zulip.md](services/zulip.md) |
 | Mail-Archiver | [docs/services/mail-archiver.md](services/mail-archiver.md) |
 | Bichon | [docs/services/bichon.md](services/bichon.md) |
-| CrowdSec | [docs/services/crowdsec.md](services/crowdsec.md) |
 | ClamAV | [docs/services/clamav.md](services/clamav.md) |
 | OrangeHRM | [docs/services/orangehrm.md](services/orangehrm.md) |
 | NocoDB | [docs/services/nocodb.md](services/nocodb.md) |
@@ -128,6 +127,16 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 ### Configuration lives in `.env` (twelve-factor)
 
 Everything that can differ between deployments lives in the service's `.env`, following [twelve-factor "config in the environment"](https://12factor.net/config). That covers backing-service endpoints, ports, credentials, URLs and versions. Compose files keep only wiring that's the same everywhere. The same values map one-to-one onto Kubernetes ConfigMaps and Secrets.
+
+**Layout.** Every `.env` and `.env.example` has three labelled sections, so it's clear what each runtime uses (`scripts/env_sections.py` arranges them, and a test keeps them arranged):
+
+1. **Common: Docker Compose and Kubernetes.** Almost everything: endpoints, credentials, versions.
+2. **Docker Compose only.** `DATA_ROOT` (volumes replace it on Kubernetes), plus the few values Kubernetes replaces, e.g. landing's `UPSTREAM_SUFFIX` and `WG_EASY_HOST`, and Beszel's `HUB_URL`.
+3. **Kubernetes.** Comments only: what `kubernetes/generate.py` sets instead (from `kubernetes/overrides/<svc>.yaml` `env:`).
+
+**Permissions:** `.env` files hold passwords, so keep them mode 600 (`chmod 600 .env kubernetes/.env services/*/.env`); a test checks it.
+
+Nothing gets commented or uncommented to switch runtimes: one `.env` works for both, and `cluster.py secrets` loads the whole file. After adding a key, run `uv run scripts/env_sections.py --real` to put it in its section.
 
 Backing-service endpoints use the same variable names in every service, defaulting to the local container:
 
@@ -171,6 +180,10 @@ Airflow, Dagster and Temporal have managed cloud counterparts, and this stack ke
 
 - Apps reach these only through env/config (host, port, credentials, S3 endpoint), never a hardcoded address, so switching is a `.env` change plus a data copy (`dump`/snapshot).
 - Apps that have their own hosted edition (n8n Cloud, GitLab.com, Mattermost Cloud, Rocket.Chat Cloud, Supabase Cloud, Plausible, Grafana Cloud…) need nothing extra. The hosted edition always runs the same or a newer version, and their export/import goes from older to newer.
+
+### Kubernetes is generated, never hand-edited
+
+`kubernetes/generated/` is rendered from Compose by `kubernetes/generate.py`. After any Compose, `.env.example` or route change to a ported service, run `uv run kubernetes/generate.py` and commit the result; `tests/test_k8s_sync.py` fails until you do. Kubernetes-only details go in `kubernetes/overrides/<svc>.yaml`, and a new service is added to `kubernetes/scope.yaml` (ported, or skipped with a reason). Guide: [17 — Moving from Docker Compose to Kubernetes](17-docker-to-kubernetes.md).
 
 ## How fixes are chosen
 

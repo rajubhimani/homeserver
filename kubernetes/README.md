@@ -1,5 +1,7 @@
 # kubernetes/ — parallel Kubernetes experiment
 
+> **Status (2026-10-03): being rebuilt.** The hand-written pilot below drifted from Compose and has been moved to `kubernetes/legacy/` (reference only, not applied). Kubernetes is now **generated from Compose** so the two can't drift, with the same shared/own database layout. Plan: [`research/kubernetes-compose-parity-plan.md`](../research/kubernetes-compose-parity-plan.md); step-by-step guide with every command: [17 — Moving from Docker Compose to Kubernetes](../docs/17-docker-to-kubernetes.md). Pinned versions: [`kubernetes/versions.env`](versions.env). Deployed by ArgoCD from git (GitOps): what runs is `kubernetes/deploy/<env>.yaml`, the add-ons are `kubernetes/cluster/addons.yaml`, secrets come through the External Secrets Operator (guide steps 3, 5, 6). Sections below describe the old pilot until each phase replaces them.
+
 A separate, parallel setup to the Docker Compose stack that makes up the rest
 of this repo — not a replacement for it. The compose stack keeps running
 as-is; this folder is where the same services get ported to Kubernetes
@@ -398,9 +400,7 @@ handful of examples:
 | forgejo | 3002 (HTTP), 2223 (SSH) | `forgejo/compose.dev.yml` |
 
 Exceptions: `cloudflared` has no inbound port (outbound tunnel client only —
-no Service/HTTPRoute/lan-service at all) and `crowdsec` exposes nothing
-(detection-only, matches `docs/11-services-reference.md`'s own "no port
-exposed" note).
+no Service/HTTPRoute/lan-service at all).
 
 Gotcha hit once already: editing an existing `LoadBalancer` Service's `port:`
 in place does **not** cleanly re-provision the underlying proxy container —
@@ -556,7 +556,7 @@ reconciling ArgoCD against everything in git, service by service.
 **Known architectural gaps, documented in-file, not oversights:**
 
 - **Docker-socket-dependent tools still in the pilot** (beszel-agent,
-  authentik-worker, crowdsec, cadvisor, alloy) mount `/var/run/docker.sock`
+  authentik-worker, cadvisor, alloy) mount `/var/run/docker.sock`
   via `hostPath` as currently configured — same underlying problem as the
   4 removed services above (no live socket on a containerd `kind` node),
   but these 5 differ in one important way: the Docker socket is an

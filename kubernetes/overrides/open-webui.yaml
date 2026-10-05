@@ -1,0 +1,5 @@
+containers:
+  open-webui:
+    mounts:
+      # Model cache (MODELS_ROOT, re-downloadable): own volume on the HDD.
+      /app/backend/data/cache: {volume: cache, size: 20Gi, class: bulk}

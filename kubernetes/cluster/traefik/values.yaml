@@ -18,11 +18,18 @@ providers:
   kubernetesCRD:
     enabled: true
 
-# Chart's own auto-created Gateway only allows routes from its own namespace
-# and would drift under future `helm upgrade`s — disabled in favor of our own
-# explicit, git-owned Gateway (kubernetes/cluster/traefik/gateway.yaml).
+# The chart creates the Gateway itself (its documented way); the generated
+# HTTPRoutes attach to it by name from the apps namespace, so routes from
+# every namespace are allowed (the chart's default is its own namespace only).
 gateway:
-  enabled: false
+  enabled: true
+  name: homeserver-gateway
+  listeners:
+    web:
+      port: 8000
+      protocol: HTTP
+      namespacePolicy:
+        from: All
 
 # Chart 41.3.0's own appVersion default already matches this — pinned
 # explicitly anyway, not left to the chart default, so a future chart bump
@@ -30,13 +37,24 @@ gateway:
 # edit here. v3.7.10+ is also the version this cluster's Gateway API CRDs
 # (v1.6.1) were verified against — see kubernetes/TROUBLESHOOTING.md's
 # Gateway API section.
-image:
-  tag: v3.7.11
 
-# On the original Docker-Desktop-backed pilot box, LoadBalancer Services
-# auto-exposed on localhost with no extra setup. This branch has since moved
-# to a plain-`kind`-on-Linux host, which has no such magic — MetalLB
-# (kubernetes/cluster/metallb/) now provides the real IP this Service gets,
-# same as every other LoadBalancer Service in this cluster.
+
+# The image comes from the chart (41.6.1 ships Traefik v3.7.13, its tested
+# version); the chart version is pinned in kubernetes/versions.env.
+
+# kind maps these NodePorts to 127.0.0.1:${K8S_HTTP_PORT}/${K8S_HTTPS_PORT} on the host.
 service:
-  type: LoadBalancer
+  spec:
+    type: NodePort   # chart 41.x: the Service type lives under service.spec
+ports:
+  web:
+    nodePort: 30080
+    # Requests from the tunnel arrive through the edge nginx (Service
+    # nginx-plain), which sets X-Real-IP, X-Forwarded-For and
+    # X-Forwarded-Proto from Cloudflare's headers. Traefik keeps X-Forwarded-*
+    # and X-Real-Ip only from listed sources (forwardedHeaders.trustedIPs), so
+    # trust the pod network (kind's default podSubnet). docs/17 "Real client IPs".
+    forwardedHeaders:
+      trustedIPs: ["10.244.0.0/16"]
+  websecure:
+    nodePort: 30443

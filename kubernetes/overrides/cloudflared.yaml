@@ -1,0 +1,4 @@
+containers:
+  cloudflared-watchdog:
+    skip: true
+    reason: "Restarts cloudflared through the Docker socket; on Kubernetes the cloudflared liveness probe restarts it."

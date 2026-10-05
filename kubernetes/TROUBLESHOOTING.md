@@ -449,7 +449,7 @@ to allow it):
    on the `D:` drive, never touched by wiping `C:\...\AppData\Local\Docker`.
    Rebuilding the platform from here is mechanical, not "start over":
    - Reinstall Gateway API CRDs (same command as initial setup, see README).
-   - Reapply `kubernetes/cluster/namespaces.yaml` directly (bootstraps the
+   - Reapply `kubernetes/cluster/base/namespaces.yaml` directly (bootstraps the
      `argocd` namespace ArgoCD needs to install into — chicken-and-egg,
      ArgoCD can't create its own namespace before it exists).
    - Bootstrap ArgoCD itself:

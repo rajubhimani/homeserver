@@ -32,6 +32,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 | `--fresh` (`up` only) | Skips the auto-restore described below. It deletes nothing; use `reset` for a real fresh start. |
 | `--profile <name>` | Also starts that Compose profile's containers, e.g. GitLab's CI runner. |
 | `--no-ml` (`up immich` only) | Starts Immich without its machine-learning container. |
+| `--no-wg` (`prod`) | Doesn't start wg-easy first (step 3 below); it stays as it is, e.g. stopped on purpose. Binding `10.8.0.1` then only works with `net.ipv4.ip_nonlocal_bind=1` (`docker/host-boot-safety.sh`); the flag warns if that is off. |
 | `--no-backup` (`down`) | Stops without taking a snapshot. |
 | `--snapshot <ts>` (`restore`) | Restores a specific snapshot instead of the latest (`snapshots <service>` lists them). |
 | `--image <repo:tag>` (`migrate`) | The Postgres image to migrate a per-service `<service>-db` to. |
@@ -41,7 +42,7 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 
 1. **Shared database:** if the service uses one (`"shared_db"` in `services.json`), [shared-postgres](services/shared-postgres.md) or [shared-mariadb](services/shared-mariadb.md) starts first if it isn't already running, and the service's own database and login are created if missing. An existing database is never wiped. An app whose `DB_HOST` (in its `.env`) points outside the stack, such as a managed database, is skipped: the shared server isn't started or touched for it.
 2. **Auto-restore:** if the service has **no** volumes, **no** `service_data/data/<service>/` folder and **no** database on its shared server, but a snapshot exists, `up` restores the snapshot before starting. `--fresh` skips this.
-3. **WireGuard:** in `prod`, `wg-easy` starts first if its tunnel address isn't up yet, because every service binds a port to `10.8.0.1`.
+3. **WireGuard:** in `prod`, `wg-easy` starts first if its tunnel address isn't up yet, because every service binds a port to `10.8.0.1`. `--no-wg` skips this.
 4. **Proxy swap:** starting `nginx-plain` stops `nginx` (Nginx Proxy Manager), and vice versa. Only one proxy can hold ports 80/443.
 5. **Forced reload:** `landing` and `nginx-plain` are always restarted on `up` so their templates pick up config changes.
 6. **Data-drive check:** a service refuses to start if its data sits on a drive from `/etc/fstab` that isn't mounted, or is mounted read-only.

@@ -707,10 +707,6 @@
       }
     },
     {
-      "slug": "crowdsec",
-      "tier": "extra"
-    },
-    {
       "slug": "observability",
       "tier": "extra",
       "name": "Grafana",

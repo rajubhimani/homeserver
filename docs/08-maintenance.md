@@ -422,14 +422,16 @@ Raise it (`max_user_instances` is a separate, much lower-ceiling limit
 than `max_user_watches` — raising the latter doesn't help here):
 
 ```bash
-sudo sysctl -w fs.inotify.max_user_instances=1024   # takes effect immediately, no restart needed
-
-# Persist across reboots:
-sudo tee /etc/sysctl.d/99-docker-inotify.conf <<'EOF'
-fs.inotify.max_user_instances=1024
-EOF
-sudo sysctl --system
+sudo tee /etc/sysctl.d/99-inotify.conf <<'SYSCTL'
+# Many containers (Docker + a kind Kubernetes node) each need inotify instances
+# and watches; the defaults (128 / ~270k) run out ("Too many open files").
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+SYSCTL
+sudo sysctl --system | grep inotify     # takes effect immediately, survives reboots
 ```
+
+Running a **kind** Kubernetes node next to the Compose stack makes this **required**, not optional. On 2026-10-03, with the defaults still in place, `systemd` started failing with `Failed to allocate manager object: Too many open files` minutes after the test cluster came up. [kind's known issues](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files) recommend raising both limits.
 
 Verify:
 
@@ -723,7 +725,7 @@ For the full MIN/CORE procedure (reset each service, check the empty install, re
 
 ```bash
 uv sync            # once — installs pytest (dev dependency only; homeserver.py stays pure-stdlib)
-uv run pytest      # ~1s, never touches Docker
+uv run pytest      # ~20s (the Kubernetes sync test renders every service with `docker compose config`); never changes Docker
 ```
 
 - **`tests/test_lifecycle.py`, `tests/test_shared_db.py`** run the real `homeserver.py` code (`main()`, `do_up`, `do_down`, backup/restore…) against `FakeBackend` (`tests/conftest.py`), an in-memory implementation of the `DockerBackend` interface. Any real `subprocess.run` fails the test, so the live stack can't be touched. They cover:
@@ -741,5 +743,7 @@ uv run pytest      # ~1s, never touches Docker
 
   Legitimate exceptions are listed in that file with a reason.
 
-Run it after any change to `homeserver.py`, `services.json`, a compose file, a `.env.example` or a doc. When you add a `DockerBackend` method, `FakeBackend` must implement it too: it subclasses the ABC, so the suite errors out until it does.
+Run it after any change to `homeserver.py`, `services.json`, a compose file, a `.env.example` or a doc.
+
+**One test per check, not per service (since 2026-10-04).** A check that applies to every service, container or shared-database app is one test. It runs over all of them with `each()` from `tests/conftest.py` and fails once, listing every offender. The assertions are the same as one test per service, so nothing is lost, and a failure shows the whole picture at once. This took the suite from 1110 tests in about 4 minutes to 132 in about 20 seconds. Each merged check was verified by injecting a fault (an unknown tier, a missing VPN port mirror, a removed healthcheck) and seeing it reported by name. Write new per-service checks the same way: a `_check(item)` with plain asserts, and a `test_…()` that calls `each(items, _check)`. When you add a `DockerBackend` method, `FakeBackend` must implement it too: it subclasses the ABC, so the suite errors out until it does.
 

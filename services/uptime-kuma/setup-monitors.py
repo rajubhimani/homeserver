@@ -19,11 +19,19 @@ container (restart: "no"/on-failure), which exits by design and would
 otherwise sit permanently "down". Re-run --all --prune after every
 add/remove/rename so monitoring always matches the repo.
 
+--k8s is the mode for the Kubernetes deployment (docs/17): Docker Container
+monitors read the Docker socket, which pods don't have, so they all report
+down. It plans monitors from the generated manifests instead (see
+k8s_monitors.py): an HTTP check per public hostname, and a TCP check per
+database and cache. Disabled for services the env doesn't run. With --prune
+it also deletes the Docker Container monitors, which can't work there.
+
 Run with: uv run services/uptime-kuma/setup-monitors.py [--all [--prune]]
+          uv run services/uptime-kuma/setup-monitors.py --k8s [--prune] [--env prod]
 """
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["uptime-kuma-api>=1.2.1"]
+# dependencies = ["uptime-kuma-api>=1.2.1", "pyyaml"]
 # ///
 
 import argparse
@@ -163,12 +171,26 @@ def main() -> None:
         help="With --all: delete Docker Container monitors on the homeserver docker host whose "
         "container no longer exists in any services/*/compose.yml (removed/renamed services).",
     )
+    parser.add_argument("--k8s", action="store_true",
+                        help="Kubernetes mode: HTTP checks on the public hostnames and TCP checks on the "
+                        "databases/caches, planned from the generated manifests (see k8s_monitors.py).")
+    parser.add_argument("--env", default="prod", help="With --k8s: which kubernetes/deploy/<env>.yaml decides what is enabled (default: %(default)s)")
     args = parser.parse_args()
-    if args.prune and not args.all:
+    if args.k8s and args.all:
+        parser.error("--k8s and --all are different modes")
+    if args.prune and not (args.all or args.k8s):
         parser.error("--prune needs --all (without --all the script only sees running containers, "
                      "so every stopped service would look 'removed')")
 
-    if args.all:
+    if args.k8s:
+        sys.path.insert(0, str(SERVICE_DIR))
+        import k8s_monitors
+        plan = k8s_monitors.plan(args.env)
+        print(f"Planned {len(plan)} monitor(s) for {args.env}: "
+              f"{sum(m['kind'] == 'http' for m in plan)} public URL, {sum(m['kind'] == 'tcp' for m in plan)} TCP; "
+              f"{sum(m['active'] for m in plan)} enabled.")
+        container_tiers, one_shots = {}, set()
+    elif args.all:
         container_tiers, one_shots = all_defined_containers()
         if not container_tiers:
             print("No containers discovered across services/*/compose.yml. Nothing to do.")
@@ -208,7 +230,9 @@ def main() -> None:
 
         hosts = api.get_docker_hosts()
         host = next((h for h in hosts if h["name"] == DOCKER_HOST_NAME), None)
-        if host:
+        if args.k8s:
+            host_id = host["id"] if host else None  # only to find the Docker monitors to prune
+        elif host:
             host_id = host["id"]
             print(f"Reusing existing docker host '{DOCKER_HOST_NAME}' (id={host_id}).")
         else:
@@ -246,6 +270,32 @@ def main() -> None:
 
         existing_monitors = api.get_monitors()
         existing_names = {m["name"] for m in existing_monitors}
+
+        if args.k8s:
+            created = skipped = pruned = 0
+            for m in plan:
+                if m["name"] in existing_names:
+                    skipped += 1
+                    continue
+                common = dict(name=m["name"], interval=args.interval, notificationIDList=notification_id_list,
+                              resendInterval=30)
+                if m["kind"] == "http":
+                    result = api.add_monitor(type=MonitorType.HTTP, url=m["url"], maxredirects=0,
+                                             accepted_statuscodes=k8s_monitors.ACCEPTED_STATUS, **common)
+                else:
+                    result = api.add_monitor(type=MonitorType.PORT, hostname=m["hostname"], port=m["port"], **common)
+                if not m["active"]:
+                    api.pause_monitor(result["monitorID"])  # pausing is its own event, see below
+                created += 1
+                print(f"  + {m['name']}{'' if m['active'] else '  (disabled: ' + m['service'] + ' is not running)'}")
+            if args.prune:
+                for mon in existing_monitors:
+                    if mon.get("type") == MonitorType.DOCKER and mon.get("docker_host") == host_id:
+                        api.delete_monitor(mon["id"])
+                        pruned += 1
+                        print(f"  - {mon['name']}  (removed: Docker Container monitors can't work on Kubernetes)")
+            print(f"\nDone. Created {created} monitor(s), skipped {skipped} already-existing, pruned {pruned} Docker monitor(s).")
+            return
 
         created = 0
         skipped = 0

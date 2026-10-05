@@ -6,7 +6,9 @@ services:
     # Karakeep's own docker-compose.yml has since moved to a chrome image
     # they build and publish themselves; switched to that instead of chasing
     # a GCR fix or a Docker Hub mirror, since it also tracks the app version.
-    image: ghcr.io/karakeep-app/karakeep-chrome:release
+    # Karakeep's own compose uses :release; this is the same image by its
+    # version tag (identical digest on 2026-10-04), so it can't change unannounced.
+    image: ghcr.io/karakeep-app/karakeep-chrome:151.0.7922.47-r1
     container_name: karakeep-chrome
     restart: unless-stopped
     init: true

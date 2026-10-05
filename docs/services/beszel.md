@@ -118,11 +118,15 @@ Other hub knobs exist (`DISABLE_PASSWORD_AUTH`, `USER_CREATION` for OIDC, `MFA_O
 
 `beszel-agent` runs with `network_mode: host` instead of joining the `homeserver` bridge network — it's the only service that does. This is required for it to report real host-level network throughput; on the bridge network it would only see its own virtual interface. It talks to the hub over a shared local Unix socket (`${DATA_ROOT}/socket`), not the Docker network, so it has no need to resolve other containers by name.
 
-Because of the host-network mode, the agent's `HUB_URL` must point at the hub's **published host port** (`http://localhost:8106`), not its container port (`8090`) — update it if the hub's port mapping ever changes.
+Because of the host-network mode, the agent's `HUB_URL` (in `.env` since 2026-10-04, previously hardcoded in `compose.yml`) must point at the hub's **published host port** (`http://localhost:8106`), not its container port (`8090`); update it if the hub's port mapping ever changes. On Kubernetes the agent reaches the hub's Service instead (`http://beszel:8090`, set by `kubernetes/overrides/beszel.yaml`).
 
 `TOKEN`/`KEY` are blank on first start — the agent refuses to run without them and crash-loops (`Failed to load public keys: no key provided`) until paired as above. The crash-loop is expected/harmless (`restart: unless-stopped`), not a bug.
 
 It also reports per-container Docker stats via the mounted `${DOCKER_SOCKET}` (read-only).
+
+## Real client IPs
+
+Beszel is built on PocketBase, which records the client IP in its request logs and uses it for rate limits. PocketBase reads a forwarded header only when *Settings → Application → User IP proxy headers* names one (stored in the database; Beszel has no environment variable for it, and `TRUSTED_PROXY_IPS` belongs to a different feature). Set it to `X-Real-IP` in the PocketBase admin panel (`/_/`), leaving *use leftmost IP* off. The edge and nginx-plain both set that header from Cloudflare's `CF-Connecting-IP`, so it's correct and can't be faked through the tunnel. Until then Beszel logs the proxy's address (seen on Kubernetes: `10.244.0.126`).
 
 ## Troubleshooting
 
@@ -136,3 +140,7 @@ Reset to an empty install, came up healthy, then restored from its `reset-backup
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## On Kubernetes: "fingerprint mismatch" after the move
+
+The hub stores one fingerprint per token record: it sets it on an agent's first connection and refuses any later agent whose fingerprint differs (`internal/hub/agent_connect.go`: "fingerprint mismatch"). The agent on Kubernetes runs on the kind node, a different machine identity from the Docker host's, so the imported hub rejects it and the system shows as down (agent log: `WebSocket connected ... reason=fingerprint mismatch`). Fix, in the hub UI: **Settings -> Tokens & Fingerprints**, open the row's menu on the system, **Delete fingerprint**. The agent reconnects within seconds and the hub records its new fingerprint. (Beszel's docs don't cover this; the page and the reset are in its source, `tokens-fingerprints.tsx`.) The agent now reports the kind node, not the physical host's CPU, memory and disks.

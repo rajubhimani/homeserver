@@ -52,6 +52,9 @@ Confirmed against Bitwarden's own current Help Center, not assumed from memory.
 - **Collections:** shared-folder equivalents inside an organization — create one under the org's Collections page, then assign members/groups to it with their own permission level (view vs. edit). An item can belong to several collections; a member only sees the collections they've been granted access to, so collections are the actual sharing/access-control unit, not the organization membership alone.
 - **Admin panel vs. vault login — these are separate accounts/purposes.** The `/admin` panel (gated by `ADMIN_TOKEN`, see above) is instance-level administration: user list, diagnostics, disabling accounts, server config overrides. It has no vault of its own and isn't where you store or view passwords — that's the normal login at `https://vaultwarden.${DOMAIN}` with a real user account, same as any Bitwarden client.
 
+## Real client IPs
+
+`IP_HEADER=CF-Connecting-IP` (`.env`, since 2026-10-04; it was `X-Real-IP`). Vaultwarden logs this address for failed logins and uses it for login rate limiting. Cloudflare sets `CF-Connecting-IP` itself, so a visitor can't fake it through the tunnel, and it reaches Vaultwarden under Docker (nginx-plain) and Kubernetes (Traefik) alike. `X-Real-IP` isn't passed on by Traefik. `X-Forwarded-For` isn't safe here, because Vaultwarden takes its *first* entry, which a visitor can fake (`src/auth.rs`). Verified: a failed login through the tunnel logs the real IP.
 
 ## Fresh-install verification (2026-10-03)
 

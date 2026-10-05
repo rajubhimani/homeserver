@@ -1,0 +1,13 @@
+containers:
+  mattermost:
+    # The image's own HEALTHCHECK (mattermost/mattermost-team-edition:11.7.8), verbatim (kubernetes/image_healthcheck.py);
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py checks it.
+    image_healthcheck:
+      test:
+      - CMD
+      - /mattermost/bin/mmctl
+      - system
+      - status
+      - --local
+      interval: 30s
+      timeout: 10s

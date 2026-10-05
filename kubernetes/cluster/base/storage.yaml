@@ -1,0 +1,60 @@
+# Three storage classes mirroring the host disk layout: fast and bulk on the
+# SSD, backup on the HDD (a backup must not share a disk with its data). All use the local-path provisioner kind
+# ships; nodePath picks the folder, pathPattern keeps folder names readable
+# (<namespace>/<pvc-name>/) for inspection and backups.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast
+  annotations:
+    # local, not the provisioner's default hostPath: Velero's file-system
+    # backup supports local PersistentVolumes only (velero.io file-system-backup,
+    # "hostPath volumes are not supported"). Verified on kind 2026-10-04.
+    defaultVolumeType: local
+provisioner: rancher.io/local-path
+parameters:
+  nodePath: /var/k8s/fast
+  pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: bulk
+  annotations:
+    # local, not the provisioner's default hostPath: Velero's file-system
+    # backup supports local PersistentVolumes only (velero.io file-system-backup,
+    # "hostPath volumes are not supported"). Verified on kind 2026-10-04.
+    defaultVolumeType: local
+provisioner: rancher.io/local-path
+parameters:
+  nodePath: /var/k8s/bulk
+  pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: backup
+  annotations:
+    defaultVolumeType: local
+provisioner: rancher.io/local-path
+parameters:
+  nodePath: /var/k8s/backup
+  pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+# Host folders services read or write in place (Jellyfin's library, Immich's
+# photos, Nextcloud's OS images): static local PersistentVolumes generated per
+# service, never provisioned or deleted by Kubernetes
+# (kubernetes.io/docs/concepts/storage/volumes/#local).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: host
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

@@ -53,3 +53,10 @@ There's no end-user "registration" concept at the platform level — `DASHBOARD_
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## On Kubernetes
+
+
+nginx-plain and landing proxy to `supabase-kong:8000`, a Docker network alias on the envoy container. The generator makes a Service for every Compose network alias and finds a route's upstream by container name, Compose service key or alias, so `supabase.<domain>` is routed on the cluster (it had no route until 2026-10-05).
+Generated from this compose file. Realtime's upstream container name `realtime-dev.supabase-realtime` can't be a Kubernetes name (no dots), so it becomes `realtime-dev-supabase-realtime`. Envoy's `cds.yaml` connects to the Compose service name `supabase-realtime` (since 2026-10-04), which Docker's DNS and the generated alias Service both answer. Realtime still selects its `realtime-dev` tenant from the Host header (`host_rewrite_literal` in `lds.template.yaml`), the same approach as Supabase's own [supabase-kubernetes](https://github.com/supabase-community/supabase-kubernetes). Guide: [docs/17](../17-docker-to-kubernetes.md).
+

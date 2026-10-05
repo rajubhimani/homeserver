@@ -1,0 +1,63 @@
+# kind test cluster, rendered by kubernetes/cluster.py from this template and
+# kubernetes/.env (the $${...} placeholders). One node: this runs next to the live
+# Compose stack, so it stays small (docs/17-docker-to-kubernetes.md).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ${K8S_CLUSTER_NAME}
+nodes:
+  - role: control-plane
+    image: ${KIND_NODE_IMAGE}
+    extraPortMappings:
+      # Traefik's NodePorts (cluster/traefik/values.yaml) -> loopback on the host
+      - containerPort: 30080
+        hostPort: ${K8S_HTTP_PORT}
+        listenAddress: "127.0.0.1"
+      - containerPort: 30443
+        hostPort: ${K8S_HTTPS_PORT}
+        listenAddress: "127.0.0.1"
+    extraMounts:
+      # Storage classes "fast", "bulk" (SSD) and "backup" (HDD), see cluster/base/storage.yaml
+      - hostPath: ${K8S_FAST_PATH}
+        containerPath: /var/k8s/fast
+      - hostPath: ${K8S_BULK_PATH}
+        containerPath: /var/k8s/bulk
+      - hostPath: ${K8S_BACKUP_PATH}
+        containerPath: /var/k8s/backup
+      # The node's image store, so image copies land on the roomy disk
+      - hostPath: ${K8S_IMAGES_PATH}
+        containerPath: /var/lib/containerd
+      # Encryption-at-rest config for Secrets (written by cluster.py create
+      # from K8S_SECRETS_ENCRYPTION_KEY; never in git)
+      - hostPath: ${K8S_ENCRYPTION_DIR}
+        containerPath: /etc/kubernetes/encryption
+        readOnly: true
+    kubeadmConfigPatches:
+      # Secrets encrypted at rest with secretbox: rated "Strong" in the
+      # Kubernetes docs, which call aescbc "Weak" and aesgcm only usable with
+      # automatic key rotation (kubernetes.io/docs/tasks/administer-cluster/
+      # encrypt-data). kms v2 is the choice once a cloud KMS is available.
+      #
+      # Longer leader-election leases for the scheduler and controller-manager
+      # (defaults 15s/10s): on 2026-10-04 slow etcd writes (shared, weak SSD)
+      # made both lose their leases and restart 16-17 times; a single control
+      # plane has no other instance to hand over to, so riding out a stall is
+      # the better outcome.
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          extraArgs:   # map form: kind renders kubeadm v1beta3 here
+            encryption-provider-config: /etc/kubernetes/encryption/config.yaml
+          extraVolumes:
+            - name: encryption
+              hostPath: /etc/kubernetes/encryption
+              mountPath: /etc/kubernetes/encryption
+              readOnly: true
+              pathType: Directory
+        controllerManager:
+          extraArgs:
+            leader-elect-lease-duration: 60s
+            leader-elect-renew-deadline: 45s
+        scheduler:
+          extraArgs:
+            leader-elect-lease-duration: 60s
+            leader-elect-renew-deadline: 45s

@@ -103,6 +103,16 @@ docker exec immich-server curl -s http://localhost:2283/api/server/version
 - Uses a custom Postgres image with pgvector (`ghcr.io/immich-app/postgres`) — see the `homeserver-postgres` skill for why its `command:` override must keep `-c config_file=/etc/postgresql/postgresql.conf` as the first flag
 - Major version bumps (e.g. v2 → v3) break compatibility with older mobile app builds — the server only supports the matching major client version. Update the mobile app(s) before or right after bumping the server's major version. Minor/patch bumps don't have this constraint.
 
+## On Kubernetes
+
+Generated from this compose file:
+
+- **Database:** `immich-db` becomes a CloudNativePG cluster on CNPG's standard PostgreSQL 18.6 image, with VectorChord 0.5.3 (the release Compose runs) added as an image-volume extension. That follows Immich's own example (`immich-charts`, `local/cloudnative-pg.yaml`). A Service named `immich-database` keeps `DB_URL` working.
+- **Photos:** `UPLOAD_LOCATION` is mounted read-write from the real folder. Snapshots don't include it, so have your own copy first, and stop Compose's Immich before Kubernetes' starts.
+- **Offline remover:** `immich-offline-remover` doesn't run on Kubernetes.
+
+Commands and caveats: [docs/17](../17-docker-to-kubernetes.md) step 8.
+
 ## Troubleshooting: `immich-server` crash-loops with `Failed to read .../.immich: ENOENT`
 
 **Symptom:** Immich does a create→read→overwrite self-check on a hidden `.immich` marker file in each `upload/` subdirectory on every boot (see [Immich's system-integrity docs](https://docs.immich.app/administration/system-integrity)). On Windows Docker Desktop, the read step can fail immediately after the write succeeds, even though the file is independently readable via a plain `docker run` — not a permissions or race issue, just how this host's bind mount behaves under Immich's own Node.js process.

@@ -1,0 +1,117 @@
+# Platform add-ons ArgoCD installs (generate.py renders one Application each
+# into kubernetes/generated/gitops/<env>/). Versions come from versions.env
+# (the key in `version`); everything here follows the "LTS, always" fallback:
+# each project's newest community-supported release. docs/17 "GitOps".
+#
+# wave: install order (ArgoCD sync waves, lowest first; each waits until the
+# previous wave is healthy): -3 CRDs, namespaces, cert-manager; -2 operators,
+# secrets, routing; -1 what needs those (Barman plugin, backup store, Velero);
+# services come last (wave 0). Avoids starting everything at once, which
+# saturated the disks on the first start (2026-10-04).
+#
+# chart add-ons: repo + chart + version key, values from a file in this repo
+# (`values`) or inline (`values_object`). Others: a kustomize folder (`path`).
+
+- name: argocd                 # ArgoCD manages itself after cluster.py bootstrap
+  wave: -3
+  namespace: argocd
+  path: kubernetes/generated/platform/argocd
+- name: gateway-api            # Gateway API CRDs (ingress-nginx was retired March 2026)
+  wave: -3
+  namespace: default
+  path: kubernetes/generated/platform/gateway-api
+- name: cluster-base           # namespaces, storage classes
+  wave: -3
+  namespace: default
+  path: kubernetes/cluster/base
+- name: traefik                # Gateway API implementation, the cluster's router
+  wave: -2
+  namespace: infra
+  repo: https://traefik.github.io/charts
+  chart: traefik
+  version: TRAEFIK_CHART_VERSION
+  values: kubernetes/cluster/traefik/values.yaml
+- name: cloudnative-pg         # Postgres operator (shared + own databases)
+  wave: -2
+  namespace: cnpg-system
+  repo: https://cloudnative-pg.github.io/charts
+  chart: cloudnative-pg
+  version: CNPG_CHART_VERSION
+  release: cnpg
+- name: mariadb-operator-crds
+  wave: -2
+  namespace: mariadb-operator
+  repo: https://helm.mariadb.com/mariadb-operator
+  chart: mariadb-operator-crds
+  version: MARIADB_OPERATOR_VERSION
+- name: mariadb-operator       # MariaDB operator (shared + Uptime Kuma's own)
+  wave: -2
+  namespace: mariadb-operator
+  repo: https://helm.mariadb.com/mariadb-operator
+  chart: mariadb-operator
+  version: MARIADB_OPERATOR_VERSION
+- name: external-secrets       # builds every app Secret from the secret store
+  wave: -2
+  namespace: external-secrets
+  repo: https://charts.external-secrets.io
+  chart: external-secrets
+  version: EXTERNAL_SECRETS_CHART_VERSION
+- name: reloader               # restarts a workload when its Secret changes
+  wave: -2
+  namespace: reloader
+  repo: https://stakater.github.io/stakater-charts
+  chart: reloader
+  version: RELOADER_CHART_VERSION
+  values_object:
+    reloader:
+      # Patches an annotation, not an env var, so ArgoCD sees no drift
+      # (Reloader docs: "use the annotations reload strategy to avoid sync drift").
+      reloadStrategy: annotations
+- name: headlamp               # Kubernetes web UI (kubernetes-sigs), headlamp.k8s.local
+  wave: -2
+  namespace: headlamp
+  repo: https://kubernetes-sigs.github.io/headlamp/
+  chart: headlamp
+  version: HEADLAMP_CHART_VERSION
+  values_from: headlamp         # kubernetes/deploy/<env>.yaml headlamp_auth: token | authentik
+- name: cert-manager           # certificates; required by the Barman Cloud plugin
+  wave: -3
+  namespace: cert-manager
+  repo: https://charts.jetstack.io
+  chart: cert-manager
+  version: CERT_MANAGER_CHART_VERSION
+  values_object:
+    crds: {enabled: true}
+- name: plugin-barman-cloud    # CloudNativePG backups: WAL archive + base backups to S3 (docs/17 "Backups")
+  wave: -1
+  namespace: cnpg-system       # must sit next to the CNPG operator (plugin install docs)
+  repo: https://cloudnative-pg.github.io/charts
+  chart: plugin-barman-cloud
+  version: BARMAN_CLOUD_PLUGIN_CHART_VERSION
+- name: backup-store           # the cluster's own S3 store (MinIO, pgsty fork) for all backups
+  wave: -1
+  namespace: backup
+  path: kubernetes/generated/platform/backup-store
+- name: velero                 # volume backups (kopia), values from kubernetes/deploy/<env>.yaml backup
+  wave: -1
+  namespace: velero
+  repo: https://vmware-tanzu.github.io/helm-charts
+  chart: velero
+  version: VELERO_CHART_VERSION
+  values_from: velero
+- name: metrics-server         # usage for kubectl top / Headlamp, to size requests from real data
+  wave: -2
+  namespace: kube-system
+  repo: https://kubernetes-sigs.github.io/metrics-server/
+  chart: metrics-server
+  version: METRICS_SERVER_CHART_VERSION
+  values_object:
+    # kind's kubelets serve a self-signed certificate (metrics-server's
+    # README: "--kubelet-insecure-tls" for test clusters such as kind). On a
+    # cluster with signed kubelet serving certificates, drop this.
+    args: [--kubelet-insecure-tls]
+- name: ops-routes             # argocd.k8s.local, headlamp.k8s.local
+  wave: -1
+  ssa: false                  # plain HTTPRoutes: server-side apply makes Gateway API defaults show as drift
+  namespace: argocd
+  path: kubernetes/generated/platform/ops-routes/{env}

@@ -1,0 +1,40 @@
+# Observability on Kubernetes (docs/services/observability.md "On Kubernetes"):
+# the same Grafana, Loki, Prometheus and Alloy as Compose. What reads Docker
+# reads Kubernetes instead; read-only permissions for that live in
+# kubernetes/cluster/base/observability-rbac.yaml (platform, not this service).
+containers:
+  alloy:
+    mounts:
+      /etc/alloy/config.alloy:
+        file: services/observability/alloy/config.kubernetes.alloy
+      /var/run/docker.sock:
+        skip: true
+        reason: "Pod logs come from the Kubernetes API (loki.source.kubernetes), not the Docker socket."
+    pod:
+      serviceAccountName: alloy
+      automountServiceAccountToken: true
+  prometheus:
+    mounts:
+      /etc/prometheus/prometheus.yml:
+        file: services/observability/prometheus/prometheus.kubernetes.yml
+    pod:
+      serviceAccountName: prometheus
+      automountServiceAccountToken: true
+  cadvisor:
+    skip: true
+    reason: "Every kubelet has cAdvisor built in (/metrics/cadvisor); Prometheus scrapes it there."
+  node-exporter:
+    # Host metrics, one per node (as Beszel's agent): reads the node's /proc,
+    # /sys and root read-only, like Compose.
+    kind: DaemonSet
+    pod:
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+    mounts:
+      /host/proc: {hostPath: /proc}
+      /host/sys: {hostPath: /sys}
+      /host/root: {hostPath: /}
+  observability:   # Grafana (container_name observability)
+    mounts:
+      /etc/grafana/provisioning:
+        from: git   # 750 KB of dashboards: too big for a ConfigMap applied client-side

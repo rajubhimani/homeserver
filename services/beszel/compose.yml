@@ -56,10 +56,8 @@ services:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
     environment:
       LISTEN: /beszel_socket/beszel.sock
-      # Host-published port of the hub (see compose.dev.yml/compose.prod.yml) —
-      # reachable as localhost here because this container shares the host's
-      # network namespace. Update if the hub's port mapping ever changes.
-      HUB_URL: http://localhost:8106
+      # The hub's address from this host-network agent: .env (HUB_URL).
+      HUB_URL: ${HUB_URL}
       # Fill in after first hub login — see docs/10-new-services.md
       TOKEN: ${BESZEL_AGENT_TOKEN}
       KEY: ${BESZEL_AGENT_KEY}

@@ -106,6 +106,14 @@ Stops Jellyfin, applies the settings below (each documented with its own symptom
 
 Only raise `JELLYFIN_SCAN_CONCURRENCY` above 1-2 if `MEDIA_ROOT` is local/direct-attached storage — high concurrency is hard on network shares (SMB/NFS).
 
+## Real client IPs
+
+Jellyfin trusts `X-Forwarded-For` only from its *Known proxies* (`network.xml` `KnownProxies`; [Jellyfin docs](https://jellyfin.org/docs/general/post-install/networking/reverse-proxy/)). It was empty until 2026-10-04, so Jellyfin logged the proxy's address for every client, including failed logins. `apply-tuning.py` now sets it from `JELLYFIN_KNOWN_PROXIES` (`.env`, default `172.16.0.0/12,10.0.0.0/8`: Docker's bridge networks and the Kubernetes pod network). Jellyfin accepts subnets and walks the header from the right past them, so a faked `X-Forwarded-For` can't fool it. Run `uv run services/jellyfin/apply-tuning.py` (Docker), or add `--data-root <folder> --no-restart` for another copy (e.g. the Kubernetes volume, with the pod stopped). Verified on Kubernetes: a failed login logs the real IP.
+
+## On Kubernetes
+
+Generated from this compose file. The media library (`MEDIA_ROOT`) is mounted read-only from the host, as Compose mounts it. `METADATA_ROOT` becomes its own volume, copied in by `cluster.py import`. The probe is the image's own `HEALTHCHECK`. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Troubleshooting: `SQLite Error 5: 'database is locked'` during large library scans
 
 **Symptom:** `Microsoft.Data.Sqlite.SqliteException: SQLite Error 5: 'database is locked'`, sometimes with a DB command timing out at the full 30s `CommandTimeout`, repeating throughout a large scan.

@@ -1,0 +1,37 @@
+# What ArgoCD deploys for the 'test' environment (docs/17 "GitOps"). Edit,
+# run kubernetes/generate.py, commit and push: ArgoCD applies it. Or use
+# 'uv run kubernetes/k8s.py up|down <target> --env test', which edits this
+# file the same way homeserver.py up/down picks services.
+#
+# repo/revision: the git repo and branch ArgoCD follows.
+# running: targets that run, as homeserver.py takes them (min, core, daily,
+#   browser, office, automation-ai, all, group:<name>, or service names).
+#   Every other ported service is deployed stopped: its config, volumes and
+#   databases exist, nothing runs. Shared Postgres/MariaDB start when a
+#   running service needs them.
+# stopped: services taken out of a running target ('down jellyfin' while
+#   'core' runs).
+# auto_sync: ArgoCD applies every pushed change by itself (and undoes manual
+# headlamp_auth: how Headlamp (the Kubernetes web UI) is signed in to.
+#   token (default): paste a service-account token, Headlamp's own login.
+#   authentik: Authentik's forward-auth guards the page (sign in with your Authentik
+#     account) and Headlamp uses a read-only service account. Needs the Authentik
+#     proxy provider first (docs/17 "Headlamp behind Authentik"), or Headlamp is locked.
+headlamp_auth: token
+#   changes in the cluster); false = press Sync in the ArgoCD UI.
+repo: https://github.com/rajubhimani/homeserver.git
+revision: feature/k8s-generated
+running: []
+stopped: []
+auto_sync: false
+# backup: where backups go (docs/17 "Backups"). endpoint: any S3 API; the
+#   default is the cluster's own MinIO (namespace backup). Switching to AWS
+#   S3, GCS (S3 interop) or Azure (via an S3 gateway) = change endpoint and
+#   region, put that store's keys in kubernetes/.env. enabled: false turns
+#   off WAL archiving, base backups and dumps for this environment.
+backup:
+  enabled: false
+  endpoint: http://backup-store.backup.svc.cluster.local:9000
+  region: us-east-1
+  schedule: "30 3 * * *"   # nightly, cluster time (UTC)
+  retention_days: 30

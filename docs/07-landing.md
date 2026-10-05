@@ -128,6 +128,18 @@ membership. One entry drives both, so there's no second file to keep in sync.
 uv run homeserver.py dev up landing
 ```
 
+
+## Health checks: DNS resolver (Compose and Kubernetes)
+
+The service cards' status comes from `/health/<service>` routes in `nginx.conf`, which proxy through a variable (`set $upstream http://<container>:<port>`), so nginx needs an explicit `resolver`. Two `.env` settings make it work in both runtimes:
+
+- `NGINX_RESOLVER=auto` (default): the entrypoint takes the container's own nameserver from `/etc/resolv.conf`, which is Docker's embedded DNS (`127.0.0.11`) under Compose and kube-dns under Kubernetes. Until 2026-10-03 it was hardcoded to `127.0.0.11`, so on Kubernetes every check failed (`resolver: 127.0.0.11:53 ... Connection refused`) and the page showed 0 online.
+- `UPSTREAM_SUFFIX`: empty under Compose. Kubernetes sets `.apps.svc.cluster.local` (`kubernetes/overrides/landing.yaml`), because nginx's resolver doesn't apply the pod's search domains.
+
+Under Compose the rendered config is unchanged.
+
 ---
 
 [← Immich](06-immich.md) | [Home](../setup.md) | [Next: Maintenance →](08-maintenance.md)
+
+`WG_EASY_HOST` (`.env`): wg-easy runs on the host network, so its status check reaches it by address. Under Compose that's the `homeserver` bridge's gateway, `172.18.0.1`; Kubernetes sets the `wg-easy` Service in `kubernetes/overrides/landing.yaml`. It used to be hardcoded in `nginx.conf`.

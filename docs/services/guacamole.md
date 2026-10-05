@@ -94,6 +94,10 @@ Once a connection exists, everything below happens inside that connection's own 
 - **Sharing a connection with someone else** (if sharing is enabled on that connection): the menu's "Share" option generates a temporary link giving another person live access with no Guacamole account of their own — the link stops working as soon as you disconnect.
 - **On-screen keyboard:** menu → keyboard icon. Needed both for key combos the local OS would otherwise intercept (e.g. sending `Ctrl+Alt+Del` into a Windows session) and for typing from a touch device without its own physical keyboard.
 
+## On Kubernetes
+
+Generated from this compose file. `guacamole-db` becomes a CloudNativePG cluster. `guacd` gets a `tcpSocket` probe on 4822, the same check as its image's `nc -z 127.0.0.1 4822`, which Kubernetes ignores. Saved connections dial LAN addresses (e.g. `192.168.1.7:3389`), so they work unchanged from the cluster. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Troubleshooting
 
 **Get more detail out of `guacd`** than its default `INFO` log level shows — useful for any future connection failure:

@@ -1,0 +1,18 @@
+containers:
+  nextcloud:
+    mounts:
+      # 4 small hook scripts: a ConfigMap (exec bits from git), versioned with
+      # these manifests rather than cloned from a branch at start.
+      /docker-entrypoint-hooks.d/before-starting: {from: configmap}
+      # External storage Nextcloud writes to: a copy of USER_DATA_ROOT.
+      /mnt/seagate: {volume: user-data, size: 50Gi, class: bulk, copy_from: USER_DATA_ROOT}
+      # OS images from the host (cluster.py create mounts OS_ISO_ROOT). Writable
+      # here, read-only in nextcloud-cron: exactly Compose's mounts.
+      /mnt/os-iso: {hostPath: /var/k8s/host/nextcloud-os-iso, env: OS_ISO_ROOT}
+  nextcloud-cron:
+    mounts:
+      /mnt/os-iso: {hostPath: /var/k8s/host/nextcloud-os-iso, env: OS_ISO_ROOT}
+  nextcloud-redis:
+    ports: [6379]   # valkey's default port; Compose never publishes it
+storage:
+  nextcloud-data: {size: 20Gi, class: bulk}

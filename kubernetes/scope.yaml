@@ -1,0 +1,121 @@
+# Which services kubernetes/generate.py renders, grown phase by phase
+# (research/kubernetes-compose-parity-plan.md). A managed service is either
+# ported, skipped with a reason, or still pending; tests/test_k8s_sync.py
+# checks this list against services.json.
+
+# Phase 1 — MIN
+ported:
+  - beszel
+  - cloudflared
+  - docs
+  - landing
+
+  # Phase 2 — databases: the shared servers (operator-managed) + one pilot
+  # app on each
+  - shared-postgres
+  - shared-mariadb
+  - miniflux
+  - bookstack
+
+  # Phase 3 (pulled forward): authentik, needed for the forward-auth login
+  # in front of the Browser Hub and the other protected hostnames
+  - authentik
+  # nginx-plain: its routing is Traefik's Gateway + generated HTTPRoutes;
+  # only its self-served sites (Browser Hub) run (overrides/nginx-plain.yaml)
+  - nginx-plain
+
+  # Phase 3 — the rest of CORE
+  - ntfy
+  - uptime-kuma
+  - vaultwarden
+  - firefly
+  - immich
+  - clamav
+  - nextcloud
+  - onlyoffice
+  - whiteboard
+  - jellyfin
+  - forgejo
+  - atuin
+  - guacamole
+  - it-tools
+  - mailpit
+  - plausible
+
+  # Phase 3 — above CORE (generated, applied at 0 replicas; started on demand)
+  # daily
+  - excalidraw
+  - karakeep
+  - homebox
+  - silverbullet
+  - syncthing
+  - trilium
+  - wallabag
+  # browser
+  - brave
+  - chromium
+  - firefox
+  - mullvad-browser
+  - librewolf
+  - zen
+  - helium
+  - chrome
+  - edge
+  - vivaldi
+  # office
+  - stirling-pdf-lite
+  - stirling-pdf
+  - vikunja
+  - appflowy
+  - plane
+  - calcom
+  - listmonk
+  # automation-ai
+  - airflow
+  - temporal
+  - ollama
+  - open-webui
+  - n8n
+  # extra
+  - paperless
+  - audiobookshelf
+  - mealie
+  - supabase
+  - nocodb
+  - outline
+  - penpot
+  - documenso
+  - invoiceshelf
+  - erpnext
+  - ghostfolio
+  - openproject
+  - mattermost
+  - rocketchat
+  - zulip
+  - mail-archiver
+  - bichon
+  - orangehrm
+  # manual
+  - gitlab
+
+  # Phase 4 — observability: Alloy and Prometheus read Kubernetes instead
+  # of Docker (overrides/observability.yaml)
+  - observability
+  # automation-ai: Dagster from its official Helm chart (overrides/dagster.yaml)
+  - dagster
+
+# Rendered only for the prod environment. The test cluster must never run
+# the Compose stack's Cloudflare tunnel token a second time: Cloudflare would
+# split live traffic between Docker and the test cluster.
+prod_only:
+  - cloudflared
+
+# Not run on Kubernetes, each with the replacement.
+skipped:
+  adguard-home: "Stays on Docker (decided 2026-10-05, like wg-easy): it is the LAN's DNS, so it must answer when the cluster is down or being rebuilt, and its port 53 has to bind the host's LAN IP (DNS_BIND_IP), which kind only maps at cluster creation. Compose stays the way to run it."
+  wg-easy: "Stays on Docker (decided 2026-10-04): the VPN is how this machine is reached when something breaks, so it runs independently of the cluster (common homelab practice; wg-easy documents only Docker, Podman and dockerless installs). Prepared in overrides/wg-easy.yaml should that change."
+  coolify: "Docker PaaS: deploys apps as Docker containers through the socket. On Kubernetes, ArgoCD and the generated manifests do that job."
+  dockge: "Docker Compose stack manager (needs the socket). Kubernetes UIs are the ArgoCD UI and Headlamp."
+  dozzle: "Docker log viewer (needs the socket). On Kubernetes, Grafana + Loki (observability) and Headlamp show pod logs."
+  portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
+
