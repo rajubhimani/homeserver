@@ -2,7 +2,7 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots|reset> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots|reset> <min|core|daily|browser|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--no-wg] [--fresh] [--snapshot <ts>] [--yes]
 
   Any command targeting a tier keyword (min/core/daily/browser/office/automation-ai/all/running),
   'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
@@ -1851,6 +1851,19 @@ def wg_tunnel_up() -> bool:
         return True
 
 
+# Set by --no-wg: this invocation never starts wg-easy as a side effect.
+NO_WG_START = False
+
+
+def nonlocal_bind_enabled() -> bool:
+    """net.ipv4.ip_nonlocal_bind=1 (docker/host-boot-safety.sh): a service can
+    bind 10.8.0.1 before wg0 exists. Unreadable (non-Linux) counts as fine."""
+    try:
+        return Path("/proc/sys/net/ipv4/ip_nonlocal_bind").read_text().strip() == "1"
+    except OSError:
+        return True
+
+
 def ensure_wg_tunnel_ready(service: str, env: str) -> None:
     """Every other prod service binds a second port to wg-easy's 10.8.0.1
     tunnel address, which only exists once wg-easy has brought up wg0. On a
@@ -1859,6 +1872,15 @@ def ensure_wg_tunnel_ready(service: str, env: str) -> None:
     to bind at all. services.json's list order only protects bulk 'up
     <tier>' calls, not a single-service 'up' — so check directly instead."""
     if env != "prod" or service == "wg-easy" or wg_tunnel_up():
+        return
+    if NO_WG_START:
+        # --no-wg: wg-easy stays as it is (e.g. stopped on purpose). Binding
+        # 10.8.0.1 then only works with ip_nonlocal_bind=1.
+        if nonlocal_bind_enabled():
+            info("--no-wg: not starting wg-easy; 10.8.0.1 isn't up, binds to it rely on net.ipv4.ip_nonlocal_bind=1")
+        else:
+            warn("--no-wg: not starting wg-easy, but net.ipv4.ip_nonlocal_bind is 0, so the 10.8.0.1 port binds "
+                 "will fail: run docker/host-boot-safety.sh (docs/08-maintenance.md 'Boot safety') or start wg-easy")
         return
     info("wg-easy's tunnel address (10.8.0.1) isn't up yet — starting wg-easy first...")
     do_up("wg-easy", env, None)
@@ -3054,6 +3076,7 @@ def show_help() -> None:
     print("    python homeserver.py dev reset mealie                snapshot, wipe and start blank (restore undoes it)")
     print("    python homeserver.py archive /run/media/<you>/Drive   everything git doesn't hold, in one verified tar.gz")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
+    print("    python homeserver.py prod up adguard-home --no-wg    don't start wg-easy first (it stays as it is)")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
     print("    python homeserver.py dev precreate all gitlab stirling-pdf")
@@ -3179,6 +3202,7 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
 
 
 def main() -> int:
+    global NO_WG_START
     argv = sys.argv[1:]
 
     # Standalone verb, not part of the <env> <action> <target> pattern below —
@@ -3262,6 +3286,8 @@ def main() -> int:
             no_backup = True
         elif tok == "--no-ml":
             no_ml = True
+        elif tok == "--no-wg":
+            NO_WG_START = True
         elif tok == "--fresh":
             fresh = True
         elif tok == "--update":

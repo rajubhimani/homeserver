@@ -238,3 +238,41 @@ def test_restore_from_a_renamed_snapshot_folder_uses_the_real_volume_names(fake,
     (kept / f"{svc}_data_20261002-112217.tar.gz").write_bytes(b"tar")
     cli("prod", "restore", svc, "--snapshot", kept.name)
     assert ("untar_volume", f"{svc}_data") in fake.events
+
+
+# conftest stubs ensure_wg_tunnel_ready for every test; keep the real one from import time.
+_REAL_ENSURE_WG = hs.ensure_wg_tunnel_ready
+
+
+def test_no_wg_never_starts_wg_easy(monkeypatch):
+    """prod up starts wg-easy whenever 10.8.0.1 is missing, even if it was
+    stopped on purpose (2026-10-05: AdGuard's start kept bringing it back).
+    --no-wg leaves it alone, and warns when the 10.8.0.1 binds can't work."""
+    started: list[str] = []
+    monkeypatch.setattr(hs, "wg_tunnel_up", lambda: False)
+    monkeypatch.setattr(hs, "do_up", lambda service, env, profile, *a, **k: started.append(service) or True)
+    monkeypatch.setattr(hs.time, "sleep", lambda s: None)
+    warnings: list[str] = []
+    monkeypatch.setattr(hs, "warn", warnings.append)
+
+    monkeypatch.setattr(hs, "NO_WG_START", False)
+    _REAL_ENSURE_WG("adguard-home", "prod")
+    assert started == ["wg-easy"]  # the default: starts it first
+
+    started.clear()
+    warnings.clear()  # the default path warns that wg0 never came up (the stub doesn't start it)
+    monkeypatch.setattr(hs, "NO_WG_START", True)
+    monkeypatch.setattr(hs, "nonlocal_bind_enabled", lambda: True)
+    _REAL_ENSURE_WG("adguard-home", "prod")
+    assert started == [] and not warnings
+
+    monkeypatch.setattr(hs, "nonlocal_bind_enabled", lambda: False)
+    _REAL_ENSURE_WG("adguard-home", "prod")
+    assert started == [] and any("ip_nonlocal_bind" in w for w in warnings)
+
+
+def test_no_wg_flag_is_parsed(monkeypatch):
+    monkeypatch.setattr(hs, "NO_WG_START", False)
+    monkeypatch.setattr(hs.sys, "argv", ["homeserver.py", "prod", "up", "--no-wg"])
+    hs.main()  # no service named: prints the usage/error, but the flag is parsed first
+    assert hs.NO_WG_START is True
