@@ -908,7 +908,9 @@ def test_restore_plan_orders_the_steps_and_never_deletes_a_database_volume():
         < acts.index("wait_restore") < acts.index("unpause") < acts.index("wait_ready")
     deleted = [s.args for s in steps if s.action == "kubectl"]
     assert ("-n", "apps", "delete", "pvc", "beszel-data", "--wait=true") in deleted
-    assert all("beszel-db" not in " ".join(a) and "-1" not in " ".join(a) for a in deleted)  # only the listed volumes
+    # Only the listed volume is deleted: one claim, one volume, plus the workloads. Never a database volume.
+    assert {a[4] for a in deleted if "pvc" in a} == {"beszel-data"}
+    assert {a[2] for a in deleted if a[:2] == ("delete", "pv")} == {"pvc-1"}
     mv = next(s for s in steps if s.action == "node_mv")
     assert mv.args == ("/var/k8s/fast/apps/beszel-data", "/var/k8s/fast/restore-aside/beszel-data.T")  # moved, not removed
     assert not any("rm " in " ".join(map(str, s.args)) for s in steps)
