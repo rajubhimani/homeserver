@@ -421,9 +421,11 @@ echo '127.0.0.1 argocd.k8s.local headlamp.k8s.local grafana.k8s.local backup.k8s
 | Grafana | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `services/observability/.env` | `grep -E '^GRAFANA_ADMIN_(USER\|PASSWORD)=' services/observability/.env` |
 | Backup store | `BACKUP_STORE_ROOT_USER` / `BACKUP_STORE_ROOT_PASSWORD` from `kubernetes/.env` | `grep -E '^BACKUP_STORE_ROOT_(USER\|PASSWORD)=' kubernetes/.env` |
 
+**One ArgoCD password for good.** ArgoCD's own password is generated fresh with every cluster. To keep a password you choose, run `uv run kubernetes/cluster.py argocd-password` once. It asks for the password (twice), hashes it with `htpasswd` (`dnf install httpd-tools` on Fedora), saves **only the bcrypt hash** as `ARGOCD_ADMIN_PASSWORD_HASH` in `kubernetes/.env` (mode 600, never in git), and applies it to the running cluster. `cluster.py bootstrap` applies it again after every rebuild and removes the one-time `argocd-initial-admin-secret`, so the password never changes. This is ArgoCD's documented method: a bcrypt hash in `argocd-secret` (`admin.password`, `admin.passwordMtime`). Without the hash set, bootstrap prints the one-time-password command as before.
+
 Notes:
 - Use the root login for the MinIO console. The other `BACKUP_*_ACCESS_KEY`/`SECRET_KEY` pairs are per-bucket S3 keys for Postgres, Velero and the dumps; they can't sign in to the console.
-- ArgoCD's initial password is only for the first sign-in. Change it in the UI (User Info), then delete the `argocd-initial-admin-secret` Secret.
+- ArgoCD's generated password is for the first sign-in only; use `argocd-password` (above) to keep one.
 - Headlamp's token belongs to a cluster-admin service account (the chart's default), so treat it like the cluster's root password. A read-only role is a listed follow-up (`HANDOVER.md`).
 - `Lost connection to the cluster ... Internal Server Error` in Headlamp right after a rebuild or a big start is usually the API server answering slowly while the disk is busy with image pulls. Reload once the pods have settled.
 

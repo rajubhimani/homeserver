@@ -12,6 +12,7 @@
     uv run kubernetes/cluster.py smoke   <svc...> [--keep]  # start with empty data on test hostnames, check, remove
     uv run kubernetes/cluster.py rmi     <svc...>  # remove a stopped service's images from the kind node (frees disk)
     uv run kubernetes/cluster.py validate [svc...]   # server-side dry run: the API server checks every manifest, nothing is created
+    uv run kubernetes/cluster.py argocd-password   # set ArgoCD's admin password for good (a bcrypt hash in kubernetes/.env, applied by bootstrap)
     uv run kubernetes/cluster.py status
     uv run kubernetes/cluster.py delete            # remove the kind cluster (host data folders are kept)
 
@@ -31,6 +32,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import string
 import subprocess
 import sys
@@ -202,10 +204,70 @@ def cmd_bootstrap(a) -> None:
     kubectl("-n", ARGOCD_NS, "rollout", "status", "statefulset/argocd-application-controller", "--timeout=10m")
     cmd_secrets(argparse.Namespace(services=[], env=a.env))
     kubectl("apply", "-k", str(K8S / "generated/gitops" / a.env))
+    own = apply_argocd_password()
     print(f"\nArgoCD now deploys kubernetes/generated/gitops/{a.env} from git.\n"
-          f"UI: http://argocd.k8s.local:{cfg()['K8S_HTTP_PORT']} (once Traefik is up), user admin, password:\n"
-          f"  kubectl --context kind-{cfg()['K8S_CLUSTER_NAME']} -n {ARGOCD_NS} get secret argocd-initial-admin-secret"
-          " -o jsonpath='{.data.password}' | base64 -d")
+          f"UI: http://argocd.k8s.local:{cfg()['K8S_HTTP_PORT']} (once Traefik is up), user admin, password: "
+          + (f"the one you set ({ARGOCD_HASH_KEY} in kubernetes/.env)." if own else
+             "not set yet. The one-time password:\n"
+             f"  kubectl --context kind-{cfg()['K8S_CLUSTER_NAME']} -n {ARGOCD_NS} get secret argocd-initial-admin-secret"
+             " -o jsonpath='{.data.password}' | base64 -d\n"
+             "To keep one password across rebuilds: uv run kubernetes/cluster.py argocd-password"))
+
+
+ARGOCD_HASH_KEY = "ARGOCD_ADMIN_PASSWORD_HASH"
+
+
+def apply_argocd_password() -> bool:
+    """Set ArgoCD's admin password from kubernetes/.env, the way ArgoCD documents
+    (argo-cd.readthedocs.io, FAQ "I forgot the admin password"): a bcrypt hash in
+    argocd-secret's admin.password plus admin.passwordMtime. The one-time
+    argocd-initial-admin-secret is then redundant and removed. Only the hash is
+    stored, never the password. -> whether a password was applied."""
+    h = cfg().get(ARGOCD_HASH_KEY, "")
+    if not h:
+        return False
+    if not re.match(r"^\$2[aby]\$\d\d\$.{53}$", h):
+        sys.exit(f"{ARGOCD_HASH_KEY} in kubernetes/.env isn't a bcrypt hash: run `cluster.py argocd-password`")
+    mtime = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    # run() echoes only the first 8 words of a command, so the hash (the 10th) stays out of the log.
+    kubectl("-n", ARGOCD_NS, "patch", "secret", "argocd-secret", "-p",
+            json.dumps({"stringData": {"admin.password": h, "admin.passwordMtime": mtime}}))
+    kubectl("-n", ARGOCD_NS, "delete", "secret", "argocd-initial-admin-secret", "--ignore-not-found")
+    return True
+
+
+def cmd_argocd_password(_a) -> None:
+    """Ask for a password, keep its bcrypt hash in kubernetes/.env as
+    ARGOCD_ADMIN_PASSWORD_HASH (bootstrap applies it on every rebuild), and
+    apply it to the running cluster now. The password itself is never saved."""
+    import getpass
+    pw = getpass.getpass("New ArgoCD admin password: ")
+    if len(pw) < 8:
+        sys.exit("use at least 8 characters")
+    if pw != getpass.getpass("Again: "):
+        sys.exit("the two entries differ")
+    if not shutil.which("htpasswd"):
+        sys.exit("htpasswd not found: dnf install httpd-tools (Fedora) or apt install apache2-utils (Ubuntu)")
+    # -i reads the password from stdin (it never shows in `ps`); -B bcrypt; ArgoCD's docs use the $2a$ prefix.
+    out = subprocess.run(["htpasswd", "-niBC", "10", ""], input=pw, capture_output=True, text=True, check=True).stdout
+    h = out.strip().lstrip(":").replace("$2y$", "$2a$", 1)
+    env = K8S / ".env"
+    lines = env.read_text().splitlines() if env.is_file() else []
+    line = f"{ARGOCD_HASH_KEY}='{h}'"  # quoted: the hash holds $ signs; load_env keeps them literally
+    if any(ln.startswith(f"{ARGOCD_HASH_KEY}=") for ln in lines):
+        lines = [line if ln.startswith(f"{ARGOCD_HASH_KEY}=") else ln for ln in lines]
+    else:
+        lines += ["", "# ArgoCD admin password (bcrypt hash only), applied by cluster.py bootstrap", line]
+    env.write_text("\n".join(lines) + "\n")
+    env.chmod(0o600)
+    print(f"Saved the hash as {ARGOCD_HASH_KEY} in kubernetes/.env (the password isn't stored).")
+    probe = subprocess.run(["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}", "-n", ARGOCD_NS, "get", "secret",
+                            "argocd-secret"], capture_output=True)
+    if probe.returncode == 0:
+        apply_argocd_password()
+        print("Applied to the running cluster: sign in as admin with the new password.")
+    else:
+        print("No cluster running: `cluster.py bootstrap` applies it.")
 
 
 def env_hash(data: dict[str, str]) -> str:
@@ -933,7 +995,7 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete"])
+    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete", "argocd-password"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
@@ -944,7 +1006,7 @@ def main() -> int:
     ap.add_argument("--from-export", help="import: a folder written by export (K8S_EXPORT_PATH/<timestamp>)")
     a = ap.parse_args()
     {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "export": cmd_export, "archive": cmd_archive, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
-     "status": cmd_status, "delete": cmd_delete}[a.action](a)
+     "status": cmd_status, "delete": cmd_delete, "argocd-password": cmd_argocd_password}[a.action](a)
     return 0
 
 

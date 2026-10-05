@@ -770,3 +770,29 @@ def test_uptime_kuma_k8s_plan_replaces_docker_monitors():
     assert by_name["shared-mariadb (tcp)"]["port"] == 3306
     assert by_name["nextcloud-redis (tcp)"]["port"] == 6379
     assert not by_name["authentik.prajnatech.in"]["active"]  # not in `run`: created disabled
+
+
+def test_argocd_admin_password_is_applied_from_a_hash_and_never_logged(monkeypatch, capsys):
+    """bootstrap sets argocd-secret's admin.password from the bcrypt hash in
+    kubernetes/.env (ArgoCD's documented method), so the password survives a
+    rebuild; the hash must not appear in the command echo, and a value that
+    isn't a bcrypt hash is refused rather than locking the owner out."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec = importlib.util.spec_from_file_location("k8s_cluster_pw", K8S / "cluster.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    h = "$2a$10$" + "a" * 53
+    calls = []
+    monkeypatch.setattr(mod, "cfg", lambda: {"K8S_CLUSTER_NAME": "x", mod.ARGOCD_HASH_KEY: h})
+    monkeypatch.setattr(mod, "run", lambda cmd, input=None, check=True: calls.append(cmd))
+    assert mod.apply_argocd_password() is True
+    patch = next(c for c in calls if "patch" in c)
+    assert patch[patch.index("secret") + 1] == "argocd-secret"
+    assert json.loads(patch[patch.index("-p") + 1])["stringData"]["admin.password"] == h
+    assert any("argocd-initial-admin-secret" in c for c in calls)
+    monkeypatch.setattr(mod, "cfg", lambda: {"K8S_CLUSTER_NAME": "x", mod.ARGOCD_HASH_KEY: "hunter2"})
+    with pytest.raises(SystemExit):
+        mod.apply_argocd_password()
+    monkeypatch.setattr(mod, "cfg", lambda: {"K8S_CLUSTER_NAME": "x"})
+    assert mod.apply_argocd_password() is False
