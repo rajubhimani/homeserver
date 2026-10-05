@@ -73,6 +73,7 @@
   repo: https://kubernetes-sigs.github.io/headlamp/
   chart: headlamp
   version: HEADLAMP_CHART_VERSION
+  values_from: headlamp         # kubernetes/deploy/<env>.yaml headlamp_auth: token | authentik
 - name: cert-manager           # certificates; required by the Barman Cloud plugin
   wave: -3
   namespace: cert-manager
@@ -113,4 +114,4 @@
   wave: -1
   ssa: false                  # plain HTTPRoutes: server-side apply makes Gateway API defaults show as drift
   namespace: argocd
-  path: kubernetes/generated/platform/ops-routes
+  path: kubernetes/generated/platform/ops-routes/{env}

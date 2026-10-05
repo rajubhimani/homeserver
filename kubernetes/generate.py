@@ -2019,7 +2019,8 @@ def gitops(env: str) -> dict[str, list[dict]]:
                         "helm": {"releaseName": a.get("release", a["name"]),
                                  **({"valueFiles": [f"$values/{a['values']}"]} if a.get("values") else {}),
                                  **({"valuesObject": a["values_object"]} if a.get("values_object") else {}),
-                                 **({"valuesObject": velero_values(env)} if a.get("values_from") == "velero" else {})}}]
+                                 **({"valuesObject": velero_values(env)} if a.get("values_from") == "velero" else {}),
+                                 **({"valuesObject": headlamp_values(env)} if a.get("values_from") == "headlamp" and headlamp_values(env) else {})}}]
             if a.get("values"):
                 sources.append({"repoURL": repo, "targetRevision": rev, "ref": "values"})
             src = {"sources": sources}
@@ -2086,16 +2087,85 @@ return hs
 """
 
 
+HEADLAMP_RO_ROLE = "homeserver-headlamp-readonly"
+HEADLAMP_AUTH_MODES = ("token", "authentik")
+
+
+def headlamp_auth(env: str) -> str:
+    """kubernetes/deploy/<env>.yaml `headlamp_auth`: `token` (default: sign in with a
+    service-account token, Headlamp's own login) or `authentik` (Authentik's
+    forward-auth guards the page and Headlamp uses a read-only service account)."""
+    mode = load_deploy(env).get("headlamp_auth", "token")
+    if mode not in HEADLAMP_AUTH_MODES:
+        raise GenError(f"kubernetes/deploy/{env}.yaml: headlamp_auth must be one of {HEADLAMP_AUTH_MODES}, not {mode!r}")
+    return mode
+
+
+def headlamp_values(env: str) -> dict:
+    """Helm values for Headlamp. In authentik mode the chart's documented
+    auth-proxy setup: `unsafeUseServiceAccountToken` ("only safe behind an auth
+    proxy"), with a read-only role in place of the chart's cluster-admin default.
+    Real OIDC would need the kube-apiserver itself to trust Authentik, which on
+    kind means a control-plane change."""
+    if headlamp_auth(env) != "authentik":
+        return {}
+    return {"config": {"unsafeUseServiceAccountToken": True}, "clusterRoleBinding": {"clusterRoleName": HEADLAMP_RO_ROLE}}
+
+
+def headlamp_readonly_rbac() -> list[dict]:
+    """Read-only cluster role for Headlamp: Kubernetes' own `view` (no Secrets) plus
+    the cluster-wide reads its overview needs (nodes, namespaces, volumes, CRDs, metrics)."""
+    labels = {"app.kubernetes.io/part-of": "homeserver"}
+    return [
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+         "metadata": {"name": HEADLAMP_RO_ROLE, "labels": labels},
+         "aggregationRule": {"clusterRoleSelectors": [
+             {"matchLabels": {"rbac.authorization.k8s.io/aggregate-to-view": "true"}},
+             {"matchLabels": {"homeserver/aggregate-to-headlamp-readonly": "true"}}]},
+         "rules": []},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+         "metadata": {"name": f"{HEADLAMP_RO_ROLE}-cluster", "labels": {**labels, "homeserver/aggregate-to-headlamp-readonly": "true"}},
+         "rules": [
+             {"apiGroups": [""], "resources": ["nodes", "namespaces", "persistentvolumes", "events"], "verbs": ["get", "list", "watch"]},
+             {"apiGroups": ["storage.k8s.io"], "resources": ["storageclasses"], "verbs": ["get", "list", "watch"]},
+             {"apiGroups": ["apiextensions.k8s.io"], "resources": ["customresourcedefinitions"], "verbs": ["get", "list", "watch"]},
+             {"apiGroups": ["metrics.k8s.io"], "resources": ["nodes", "pods"], "verbs": ["get", "list"]}]},
+    ]
+
+
+def ops_routes_files(env: str) -> dict[str, list[dict] | dict]:
+    """The always-local hostnames of the ops UIs (<host>.k8s.local, never the public
+    domain). In headlamp_auth=authentik mode the Headlamp route goes through
+    Authentik's forward-auth, exactly like the hosts nginx-plain protects
+    (Traefik ForwardAuth middleware, authentik's Traefik guide), plus a
+    ReferenceGrant so a route in Headlamp's namespace may reach authentik's outpost."""
+    objs: list[dict] = []
+    guarded = headlamp_auth(env) == "authentik"
+    labels = {"app.kubernetes.io/part-of": "homeserver"}
+    for host, (svc, ns, port) in OPS_HOSTS.items():
+        rules = [{"backendRefs": [{"name": svc, "port": port}]}]
+        if host == "headlamp" and guarded:
+            rules = [
+                {"matches": [{"path": {"type": "PathPrefix", "value": "/outpost.goauthentik.io/"}}],
+                 "backendRefs": [{**AUTHENTIK, "namespace": NAMESPACE}]},
+                {"filters": [{"type": "ExtensionRef", "extensionRef": {"group": "traefik.io", "kind": "Middleware", "name": AUTH_MIDDLEWARE}}],
+                 "backendRefs": [{"name": svc, "port": port}]}]
+            objs += [{**authentik_middleware(), "metadata": {**authentik_middleware()["metadata"], "namespace": ns}},
+                     {"apiVersion": "gateway.networking.k8s.io/v1", "kind": "ReferenceGrant",
+                      "metadata": {"name": "headlamp-to-authentik", "namespace": NAMESPACE, "labels": labels},
+                      "spec": {"from": [{"group": "gateway.networking.k8s.io", "kind": "HTTPRoute", "namespace": ns}],
+                               "to": [{"group": "", "kind": "Service", "name": AUTHENTIK["name"]}]}},
+                     *headlamp_readonly_rbac()]
+        objs.append({"apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
+                     "metadata": {"name": host, "namespace": ns, "labels": labels},
+                     "spec": {"parentRefs": [GATEWAY], "hostnames": [f"{host}.{TEST_DOMAIN}"], "rules": rules}})
+    return {"routes.yaml": objs, "kustomization.yaml": {
+        "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["routes.yaml"]}}
+
+
 def platform_files() -> dict[str, dict[str, list[dict] | str]]:
     """Kustomize folders for add-ons installed from a pinned upstream manifest."""
     v = VERSIONS
-    routes = []
-    for host, (svc, ns, port) in OPS_HOSTS.items():
-        routes.append({"apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
-                       "metadata": {"name": host, "namespace": ns, "labels": {"app.kubernetes.io/part-of": "homeserver"}},
-                       # Ops UIs only on this machine's test hostname, never on the public domain.
-                       "spec": {"parentRefs": [GATEWAY], "hostnames": [f"{host}.{TEST_DOMAIN}"],
-                                "rules": [{"backendRefs": [{"name": svc, "port": port}]}]}})
     return {
         "argocd": {"kustomization.yaml": {
             "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "namespace": ARGOCD_NS,
@@ -2112,9 +2182,6 @@ def platform_files() -> dict[str, dict[str, list[dict] | str]]:
         "gateway-api": {"kustomization.yaml": {
             "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
             "resources": [f"https://github.com/kubernetes-sigs/gateway-api/releases/download/{v['GATEWAY_API_VERSION']}/standard-install.yaml"]}},
-        "ops-routes": {"routes.yaml": routes,
-                       "kustomization.yaml": {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
-                                              "resources": ["routes.yaml"]}},
     }
 
 
@@ -2546,6 +2613,8 @@ def render(out: Path) -> list[str]:
     pf = platform_files()
     pf["backup-store"] = {**backup_store(), "kustomization.yaml": {
         "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["store.yaml"]}}
+    for env in ENVS:
+        pf[f"ops-routes/{env}"] = ops_routes_files(env)
     for name, fs in pf.items():
         d = out / "platform" / name
         d.mkdir(parents=True, exist_ok=True)

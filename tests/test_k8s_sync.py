@@ -536,7 +536,9 @@ def test_gitops_projects_and_addons():
             if a.get("values"):
                 assert (REPO / a["values"]).is_file(), a["name"]
         else:
-            assert (REPO / a["path"]).is_dir(), f"{a['name']}: {a['path']} missing"
+            for env in gen.ENVS:  # a path may carry {env}, as the generator substitutes it
+                path = a["path"].replace("{env}", env)
+                assert (REPO / path).is_dir(), f"{a['name']}: {path} missing"
     for env in gen.ENVS:
         docs = {d["metadata"]["name"]: d for f in (GENERATED / "gitops" / env).glob("*.yaml")
                 if f.name != "kustomization.yaml" for d in yaml.safe_load_all(f.read_text()) if d}
@@ -930,3 +932,59 @@ def test_restore_command_is_registered_and_refuses_more_than_one_service():
     assert callable(mod.cmd_restore) and callable(mod.cmd_verify) and callable(mod.cmd_argocd_password)
     with pytest.raises(SystemExit):
         mod.cmd_restore(type("A", (), {"services": ["beszel", "docs"], "backup": None, "yes": False, "env": "prod"})())
+
+
+def _generate_module():
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import generate
+    return generate
+
+
+def test_headlamp_default_is_unchanged_token_login():
+    gen = _generate_module()
+    assert gen.headlamp_auth("prod") == "token" and gen.headlamp_values("prod") == {}
+    routes = gen.ops_routes_files("prod")["routes.yaml"]
+    assert {o["kind"] for o in routes} == {"HTTPRoute"}  # no middleware, no extra roles
+    headlamp = next(o for o in routes if o["metadata"]["name"] == "headlamp")
+    assert headlamp["spec"]["rules"] == [{"backendRefs": [{"name": "headlamp", "port": 80}]}]
+
+
+def test_headlamp_behind_authentik_never_uses_the_service_account_unguarded(monkeypatch):
+    """The chart's `unsafeUseServiceAccountToken` is "only safe behind an auth proxy".
+    In authentik mode it is on, so the route MUST carry Authentik's forward-auth
+    (and the outpost path), the role must be read-only, not the chart's cluster-admin,
+    and the route's namespace must be allowed to reach authentik's outpost."""
+    gen = _generate_module()
+    real = gen.load_deploy
+    monkeypatch.setattr(gen, "load_deploy", lambda env: {**real(env), "headlamp_auth": "authentik"})
+    values = gen.headlamp_values("prod")
+    assert values["config"]["unsafeUseServiceAccountToken"] is True
+    assert values["clusterRoleBinding"]["clusterRoleName"] == gen.HEADLAMP_RO_ROLE != "cluster-admin"
+    objs = gen.ops_routes_files("prod")["routes.yaml"]
+    route = next(o for o in objs if o["kind"] == "HTTPRoute" and o["metadata"]["name"] == "headlamp")
+    guarded = [r for r in route["spec"]["rules"]
+               if any(f.get("extensionRef", {}).get("name") == gen.AUTH_MIDDLEWARE for f in r.get("filters", []))]
+    assert guarded and guarded[0]["backendRefs"] == [{"name": "headlamp", "port": 80}]  # Headlamp only behind the middleware
+    outpost = next(r for r in route["spec"]["rules"] if r.get("matches"))
+    assert outpost["matches"][0]["path"]["value"] == "/outpost.goauthentik.io/"
+    assert outpost["backendRefs"][0]["name"] == "authentik-server" and outpost["backendRefs"][0]["namespace"] == "apps"
+    mw = next(o for o in objs if o["kind"] == "Middleware")
+    assert mw["metadata"]["namespace"] == "headlamp" and mw["metadata"]["name"] == gen.AUTH_MIDDLEWARE
+    grant = next(o for o in objs if o["kind"] == "ReferenceGrant")
+    assert grant["metadata"]["namespace"] == "apps" and grant["spec"]["from"][0]["namespace"] == "headlamp"
+    assert grant["spec"]["to"] == [{"group": "", "kind": "Service", "name": "authentik-server"}]
+    roles = [o for o in objs if o["kind"] == "ClusterRole"]
+    verbs = {v for r in roles for rule in r["rules"] for v in rule["verbs"]}
+    assert verbs <= {"get", "list", "watch"}  # read-only; no Secrets either
+    assert not any("secrets" in rule["resources"] for r in roles for rule in r["rules"])
+    # the other ops UIs stay as they were
+    assert {o["metadata"]["name"] for o in objs if o["kind"] == "HTTPRoute"} == {"argocd", "headlamp", "grafana", "backup"}
+
+
+def test_headlamp_auth_rejects_an_unknown_mode(monkeypatch):
+    gen = _generate_module()
+    real = gen.load_deploy
+    monkeypatch.setattr(gen, "load_deploy", lambda env: {**real(env), "headlamp_auth": "oidc"})
+    with pytest.raises(gen.GenError):
+        gen.headlamp_auth("prod")

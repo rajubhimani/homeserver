@@ -12,6 +12,12 @@
 # stopped: services taken out of a running target ('down jellyfin' while
 #   'core' runs).
 # auto_sync: ArgoCD applies every pushed change by itself (and undoes manual
+# headlamp_auth: how Headlamp (the Kubernetes web UI) is signed in to.
+#   token (default): paste a service-account token, Headlamp's own login.
+#   authentik: Authentik's forward-auth guards the page (sign in with your Authentik
+#     account) and Headlamp uses a read-only service account. Needs the Authentik
+#     proxy provider first (docs/17 "Headlamp behind Authentik"), or Headlamp is locked.
+headlamp_auth: token
 #   changes in the cluster); false = press Sync in the ArgoCD UI.
 repo: https://github.com/rajubhimani/homeserver.git
 revision: feature/k8s-generated

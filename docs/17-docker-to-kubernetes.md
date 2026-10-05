@@ -417,11 +417,20 @@ echo '127.0.0.1 argocd.k8s.local headlamp.k8s.local grafana.k8s.local backup.k8s
 | UI | Login | Command that shows it |
 |---|---|---|
 | ArgoCD | user `admin` | `kubectl --context kind-homeserver-test -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' \| base64 -d; echo` |
-| Headlamp | a token (paste it on the sign-in page) | `kubectl --context kind-homeserver-test -n headlamp create token headlamp` (valid 1 hour; run it again for a new one) |
+| Headlamp | a token (paste it on the sign-in page), or your Authentik login if `headlamp_auth: authentik` is set (below) | `kubectl --context kind-homeserver-test -n headlamp create token headlamp` (valid 1 hour; run it again for a new one) |
 | Grafana | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `services/observability/.env` | `grep -E '^GRAFANA_ADMIN_(USER\|PASSWORD)=' services/observability/.env` |
 | Backup store | `BACKUP_STORE_ROOT_USER` / `BACKUP_STORE_ROOT_PASSWORD` from `kubernetes/.env` | `grep -E '^BACKUP_STORE_ROOT_(USER\|PASSWORD)=' kubernetes/.env` |
 
 **One ArgoCD password for good.** ArgoCD's own password is generated fresh with every cluster. To keep a password you choose, run `uv run kubernetes/cluster.py argocd-password` once. It asks for the password (twice), hashes it with `htpasswd` (`dnf install httpd-tools` on Fedora), saves **only the bcrypt hash** as `ARGOCD_ADMIN_PASSWORD_HASH` in `kubernetes/.env` (mode 600, never in git), and applies it to the running cluster. `cluster.py bootstrap` applies it again after every rebuild and removes the one-time `argocd-initial-admin-secret`, so the password never changes. This is ArgoCD's documented method: a bcrypt hash in `argocd-secret` (`admin.password`, `admin.passwordMtime`). Without the hash set, bootstrap prints the one-time-password command as before.
+
+**Headlamp behind Authentik (optional; default is the token login).** With `headlamp_auth: authentik` in `kubernetes/deploy/prod.yaml`, signing in to Headlamp is an Authentik login (your account, with 2FA if you add it), the same every time and surviving rebuilds. It is the chart's documented auth-proxy setup, not real OIDC: Headlamp's `unsafeUseServiceAccountToken` ("only safe behind an auth proxy") plus Authentik's forward-auth on the page, using the Traefik middleware this repo already uses for protected hosts. Real OIDC was rejected because Headlamp forwards your token to the Kubernetes API, so the API server itself would have to trust Authentik (`--oidc-*` flags), a control-plane change on kind. What Headlamp can do is capped by its service account, a **read-only** role (`homeserver-headlamp-readonly`: Kubernetes' `view`, no Secrets, plus nodes, namespaces, volumes, CRDs and metrics), not the chart's cluster-admin. Changes go through ArgoCD, which is the point.
+
+Set it up once, in this order (Headlamp is locked until step 3 is done, because the page demands a login that Authentik doesn't yet know about; set `headlamp_auth: token` again to undo):
+1. **Authentik admin -> Applications -> Providers -> Create -> Proxy Provider.** Name `Headlamp`; authorization flow as for your other protected apps; mode **Forward auth (single application)**; external host `http://headlamp.k8s.local:18080`.
+2. **Applications -> Applications -> Create.** Name `Headlamp`, slug `headlamp`, provider `Headlamp`. Optionally bind a group or policy so only you can open it.
+3. **Applications -> Outposts -> authentik Embedded Outpost -> Edit,** add `Headlamp` to the selected applications.
+4. In `kubernetes/deploy/prod.yaml` set `headlamp_auth: authentik`, run `uv run kubernetes/generate.py`, commit and push; ArgoCD applies it.
+5. Open `http://headlamp.k8s.local:18080`: Authentik asks you to sign in, then Headlamp opens without a token prompt.
 
 Notes:
 - Use the root login for the MinIO console. The other `BACKUP_*_ACCESS_KEY`/`SECRET_KEY` pairs are per-bucket S3 keys for Postgres, Velero and the dumps; they can't sign in to the console.
