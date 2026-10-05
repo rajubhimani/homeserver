@@ -186,7 +186,12 @@ def http_status(url: str, headers: dict | None = None, timeout: float = 15) -> i
 UA = "homeserver-watchdog/1.0 (self-hosted uptime check of our own site)"
 
 
-def vantage_probe(url: str, max_nodes: int = 6, wait: float = 30) -> tuple[int, int]:
+# Nodes in countries that filter traffic fail for reasons that say nothing about our tunnel
+# (seen 2026-10-05: two Iranian nodes "Broken pipe" while 14 other countries answered).
+FILTERED = {"ir", "cn", "ru", "by", "kp", "cu", "sy", "tm"}
+
+
+def vantage_probe(url: str, max_nodes: int = 12, wait: float = 30) -> tuple[int, int]:
     """(answered, usable) from check-host.net's public API (check-host.net/about/api): the URL
     fetched from nodes in many countries. A result is good when the page answers with < 500
     (a redirect or 401 is fine); Cloudflare's tunnel error is 530."""
@@ -194,7 +199,8 @@ def vantage_probe(url: str, max_nodes: int = 6, wait: float = 30) -> tuple[int, 
         start = urllib.request.Request(f"https://check-host.net/check-http?host={urllib.parse.quote(url, safe='')}&max_nodes={max_nodes}",
                                        headers={"Accept": "application/json", "User-Agent": UA})
         with urllib.request.urlopen(start, timeout=20) as r:
-            rid = json.load(r)["request_id"]
+            started = json.load(r)
+        rid, info = started["request_id"], started.get("nodes") or {}
         deadline, res = time.time() + wait, {}
         while time.time() < deadline:
             time.sleep(5)
@@ -204,7 +210,9 @@ def vantage_probe(url: str, max_nodes: int = 6, wait: float = 30) -> tuple[int, 
             if res and all(v is not None for v in res.values()):
                 break
         ok = total = 0
-        for v in res.values():
+        for node, v in res.items():
+            if str((info.get(node) or [""])[0]).lower() in FILTERED:
+                continue
             attempt = v[0] if v else None
             if isinstance(attempt, list) and attempt and attempt[0] in (0, 1):
                 total += 1

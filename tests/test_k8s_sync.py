@@ -1148,11 +1148,13 @@ def test_watchdog_vantage_probe_parses_check_host_results_and_identifies_itself(
         "in1": [[1, 0.4, "Moved Permanently", "301", "1.1.1.3"]],  # a redirect is an answer
         "br1": [[0, 5.0, "Connection timed out", None, None]],
         "jp1": None,                                          # still pending when we stop waiting
+        "ir1": [[0, 15.0, "Broken pipe", None, None]],        # a filtered country: says nothing about our tunnel
     }
 
     def fake_urlopen(req, timeout=0):
         seen.append(req.get_header("User-agent"))
-        body = {"ok": 1, "request_id": "abc"} if "check-http" in req.full_url else results
+        body = ({"ok": 1, "request_id": "abc", "nodes": {"ir1": ["ir", "Iran", "Tehran", "1.1.1.9", "AS1"]}}
+                if "check-http" in req.full_url else results)
         return io.BytesIO(__import__("json").dumps(body).encode())
 
     monkeypatch.setattr(w.urllib.request, "urlopen", fake_urlopen)
@@ -1160,7 +1162,7 @@ def test_watchdog_vantage_probe_parses_check_host_results_and_identifies_itself(
     clock = iter(range(0, 1000, 20))
     monkeypatch.setattr(w.time, "time", lambda: next(clock))
     ok, total = w.vantage_probe("https://example.test/", wait=30)
-    assert (ok, total) == (2, 4)  # 200 and 301 answered; 530 and the timeout failed; the pending node isn't counted
+    assert (ok, total) == (2, 4)  # 200 and 301 answered; 530 and the timeout failed; the pending and the Iranian nodes aren't counted
     assert seen and all(ua and "homeserver-watchdog" in ua for ua in seen)
     monkeypatch.setattr(w.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("unreachable")))
     assert w.vantage_probe("https://example.test/") == (0, 0)  # an unreachable checker is "no information", never "down"
