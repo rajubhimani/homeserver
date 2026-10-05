@@ -13,6 +13,7 @@ there and returned `530 / error code: 1033` everywhere else for ~20 minutes
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -119,6 +120,13 @@ def host_checks(root: Path = Path("/")) -> dict[str, tuple[bool, str]]:
             if any((p.parent / "device").glob("target*"))}
     if pols:
         out["SATA link power = max_performance"] = (pols == {"max_performance"}, ", ".join(sorted(pols)))
+    # A masked target is a symlink to /dev/null. Without it the desktop's idle
+    # setting can suspend the host (2026-10-05: asleep 10:19-16:07, sites 530).
+    suspend = root / "etc/systemd/system/suspend.target"
+    out["sleep is impossible (suspend.target masked)"] = (
+        suspend.is_symlink() and os.readlink(suspend) == "/dev/null",
+        "masked" if suspend.is_symlink() and os.readlink(suspend) == "/dev/null"
+        else "NOT masked: run docker/host-boot-safety.sh (the machine can suspend and take every site down)")
     psi = root / "proc/pressure/io"
     if psi.is_file():
         full = dict(kv.split("=") for kv in psi.read_text().splitlines()[1].split()[1:])

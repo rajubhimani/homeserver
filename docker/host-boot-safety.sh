@@ -40,6 +40,12 @@
 #    froze (2026-10-02). SMART was clean. A tuned child profile keeps tuned
 #    from re-enabling it; a udev rule covers hosts without tuned. See
 #    docs/08-maintenance.md "System freezes / SSD drops off the bus".
+# 6. The host never sleeps. GNOME's default suspends an idle desktop after 15
+#    minutes, even on mains power: on 2026-10-05 the machine slept (S3) from
+#    10:19 to 16:07, every container froze, the Cloudflare tunnel's connections
+#    were dead on wake-up and every public site answered 530. Masking the sleep
+#    targets makes suspend/hibernate impossible for every user and the login
+#    screen. See docs/08-maintenance.md "The host went to sleep".
 set -euo pipefail
 
 REQUIRED_MOUNTS="/mnt/mydata"
@@ -69,6 +75,7 @@ if [ "${1:-}" = "--remove" ]; then
   systemctl disable --now homeserver-mount-watch.timer 2>/dev/null || true
   if [ -x "$FWD_BIN" ]; then "$FWD_BIN" undo || true; fi
   systemctl disable homeserver-docker-forward.service 2>/dev/null || true
+  systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
   rm -f "$DROPIN" "$SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT" "$ALPM_RULE"
   sysctl -w net.ipv4.ip_nonlocal_bind=0 >/dev/null
   if command -v tuned-adm >/dev/null; then
@@ -254,9 +261,14 @@ EOF
     echo "⚠ tuned's active profile is '$active', not $TUNED_PROFILE -- if it sets alpm= (balanced/powersave do), switch: tuned-adm profile $TUNED_PROFILE"
   fi
 fi
+# ── 6. Never suspend ──
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null
+echo "✔ sleep, suspend, hibernate and hybrid-sleep targets masked (the host stays up)"
+
 echo
 echo "Done. Docker's mount ordering applies from the next boot; check with:"
 echo "  systemctl show docker -p RequiresMountsFor -p After | tr ' ' '\\n' | grep mnt"
 echo "  journalctl -u homeserver-mount-watch -n 5"
 echo "  sudo iptables -S DOCKER-USER     # VM/VPN forwarding rules (item 4)"
 echo "  grep . /sys/class/scsi_host/host*/link_power_management_policy   # item 5: max_performance"
+echo "  systemctl is-enabled suspend.target      # item 6: masked"

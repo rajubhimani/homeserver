@@ -1021,3 +1021,17 @@ def test_every_public_hostname_has_a_route_except_the_docker_only_ones():
     assert {h.split(".")[0] for h in want - have} == docker_only, sorted(want - have)
     svc = {d["metadata"]["name"]: d for d in yaml.safe_load_all((GENERATED / "apps/supabase/services.yaml").read_text()) if d}
     assert svc["supabase-kong"]["spec"]["selector"] == {"app.kubernetes.io/name": "supabase-envoy"}  # the alias is a Service
+
+
+def test_verify_flags_a_host_that_can_still_suspend(tmp_path):
+    """2026-10-05: GNOME suspended the idle desktop for six hours and every site
+    returned 530. verify must say so unless suspend.target is masked."""
+    import os
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import verify
+    unit = tmp_path / "etc/systemd/system"
+    unit.mkdir(parents=True)
+    assert not verify.host_checks(tmp_path)["sleep is impossible (suspend.target masked)"][0]
+    os.symlink("/dev/null", unit / "suspend.target")
+    assert verify.host_checks(tmp_path)["sleep is impossible (suspend.target masked)"][0]

@@ -550,6 +550,24 @@ uv run homeserver.py prod up immich nextcloud jellyfin
 real=$(mountpoint -d /mnt/mydata); for c in $(docker ps -q); do n=$(docker inspect $c --format '{{.Name}}'); for s in $(docker inspect $c --format '{{range .Mounts}}{{if eq .Type "bind"}}{{.Destination}}|{{.Source}} {{end}}{{end}}'); do dst=${s%%|*}; src=${s#*|}; case $src in /mnt/mydata/*) d=$(docker exec $c sh -c "grep -F ' $dst ' /proc/self/mountinfo | head -1 | cut -d' ' -f3" 2>/dev/null); [ -n "$d" ] && [ "$d" != "$real" ] && echo "BAD $n $dst dev=$d";; esac; done; done
 ```
 
+### The host went to sleep: every site down for hours
+
+**Symptom:** all public sites answer `530` (or are unreachable) and the cluster looks fine when you look, or the sites come back by themselves after you touch the machine. The `cloudflared` log is silent for hours.
+
+**Cause (2026-10-05):** the desktop **suspended itself**. GNOME's default is "automatic suspend after 15 minutes of inactivity" (`org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'suspend'`, timeout 900), even on mains power. The journal shows it exactly:
+
+```text
+10:19:37 systemd-logind: The system will suspend now!
+10:19:38 NetworkManager: manager: NetworkManager state is now DISABLED (ASLEEP)
+16:07:31 kernel: ACPI: PM: Waking up from system sleep state S3
+```
+
+While suspended nothing runs (Docker, the kind node, the tunnel). On waking, `cloudflared` still reported `readyConnections: 4`, but Cloudflare's edge had dropped its connections and returned `530 / error code: 1033`; restarting the pod (`kubectl -n apps rollout restart deploy/cloudflared`) re-registered it.
+
+**Check:** `journalctl --since today | grep -E "will suspend|Waking up from system sleep"`, and `systemctl is-enabled suspend.target` (should say `masked`).
+
+**Fix (permanent):** `sudo bash docker/host-boot-safety.sh` (item 6) masks `sleep`, `suspend`, `hibernate` and `hybrid-sleep`, so nothing (the desktop, the login screen, a key press) can suspend the host. Also switch off the desktop's own setting: `gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'`. `cluster.py verify` flags a host that can still sleep.
+
 ### System freezes / SSD drops off the bus (SATA link power)
 
 **Symptom:** the whole machine freezes and the screen goes dark. Only a forced reboot helps, and the previous boot's journal just stops, with no error at the end, because the disk it would log to is gone. Before that, the same boot's kernel log has repeated link errors on one SATA port:

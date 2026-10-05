@@ -101,7 +101,10 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 - Headlamp behind Authentik is built and off by default (`headlamp_auth` in `kubernetes/deploy/<env>.yaml`, docs/17 "Headlamp behind Authentik"): forward-auth plus a read-only service account, not real OIDC (that needs kube-apiserver flags, i.e. a control-plane change on kind).
 - `homeserver.py --no-wg`, one ArgoCD password (`argocd-password`), AdGuard on Docker, boot-safety script (earlier today).
 
+**2026-10-05 16:00, sites down again: the computer had suspended itself** (GNOME idle suspend after 15 min, even on mains: asleep 10:19-16:07; the tunnel re-registered after `kubectl -n apps rollout restart deploy/cloudflared`). Idle suspend was switched off for the owner's session with `gsettings`; **the permanent fix needs `sudo bash docker/host-boot-safety.sh`** (item 6 masks the sleep targets), and `cluster.py verify` fails until it's done. docs/08 "The host went to sleep". The earlier 530 at ~09:00 (tunnel connected locally, 1033 elsewhere, cleared by the same restart) was not a suspend; its cause is unproven.
+
 **Waiting for the owner (nothing is blocked on Claude):**
+0. **`sudo bash docker/host-boot-safety.sh`** (the host must never sleep; verify fails until then).
 1. **Restore round trip, in place, on beszel** (deletes its workloads, volume claim and volume, moves the old data aside, restores from Velero): `uv run kubernetes/cluster.py restore beszel` prints the plan; add `--yes` to run it. Claude was not allowed to run it unattended (deleting a live service's volume); do it with the owner present, after `cluster.py export --env prod beszel`.
 2. **Authentik steps for Headlamp** (docs/17), then `headlamp_auth: authentik`.
 3. **Uptime Kuma:** `uv run services/uptime-kuma/setup-monitors.py --k8s --prune` (asks for the owner's Kuma login): the 187 Docker-socket monitors all report down.
