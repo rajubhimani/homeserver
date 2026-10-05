@@ -267,7 +267,7 @@ spec:
             mode: 493
           - key: services-supabase-volumes-db-jwt-sql
             path: services-supabase-volumes-db-jwt-sql
-            mode: 493
+            mode: 420
           - key: services-supabase-volumes-db-logs-sql
             path: services-supabase-volumes-db-logs-sql
             mode: 493
@@ -282,7 +282,7 @@ spec:
             mode: 493
           - key: services-supabase-volumes-db-webhooks-sql
             path: services-supabase-volumes-db-webhooks-sql
-            mode: 493
+            mode: 420
   strategy:
     type: Recreate
 ---

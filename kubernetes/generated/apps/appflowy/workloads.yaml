@@ -531,7 +531,7 @@ spec:
           items:
           - key: services-appflowy-nginx-conf
             path: services-appflowy-nginx-conf
-            mode: 493
+            mode: 420
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -1205,3 +1205,50 @@ def test_the_kind_node_must_restart_after_a_reboot():
     assert not verify.restart_check("")["cluster node restarts after a reboot"][0]
     src = (K8S / "cluster.py").read_text()
     assert '"docker", "update", "--restart", "unless-stopped"' in src and src.index('"kind", "create"') < src.index('"docker", "update"')
+
+
+def _to_docker():
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import to_docker
+    return to_docker
+
+
+def test_to_docker_maps_the_clusters_export_onto_dockers_snapshot_format():
+    """The export's names -> homeserver.py's snapshot names, so its tested restore does the loading:
+    <svc>-data is the data folder, <svc>-<key> is Docker volume <svc>_<key>, a shared-DB app's dump is
+    <svc>_shareddb_<db>_<ts>, an own-DB app's dump is loaded separately, and a claim with no Docker
+    volume (a host folder there) is skipped with a note that says whether it held anything."""
+    td = _to_docker()
+    assert td.docker_volume("nextcloud", "nextcloud-nextcloud-config") == "nextcloud_nextcloud-config"
+    assert td.docker_volume("immich", "immich-immich-model-cache") == "immich_immich-model-cache"
+    assert td.docker_volume("vaultwarden", "vaultwarden-data") is None and td.docker_volume("x", "y-data") is None
+    entry = {"volumes": [{"pvc": "temporal-data", "file": "vol-temporal-data.tar.gz"}],
+             "dbs": [{"engine": "postgres", "cluster": "shared-postgres", "db": "temporal", "file": "db-a.dump"},
+                     {"engine": "postgres", "cluster": "shared-postgres", "db": "temporal_visibility", "file": "db-b.dump"}]}
+    p = td.snapshot_plan("temporal", entry, "T", True, set())
+    assert p["files"] == [("vol-temporal-data.tar.gz", "service_data_T.tar.gz"), ("db-a.dump", "temporal_shareddb_temporal_T.dump"),
+                          ("db-b.dump", "temporal_shareddb_temporal_visibility_T.dump")] and not p["own_dbs"]
+    nc = {"volumes": [{"pvc": "nextcloud-nextcloud-data", "file": "d.tgz"}, {"pvc": "nextcloud-user-data", "file": "u.tgz"}],
+          "dbs": [{"engine": "postgres", "cluster": "nextcloud-db", "db": "nextcloud", "file": "n.dump"}]}
+    p = td.snapshot_plan("nextcloud", nc, "T", False, {"nextcloud-data"}, {"u.tgz": 86})
+    assert ("d.tgz", "nextcloud_nextcloud-data_T.tar.gz") in p["files"] and len(p["files"]) == 1
+    assert p["own_dbs"] == nc["dbs"] and "empty" in p["notes"][0] and "NOT EMPTY" not in p["notes"][0]
+    notes = td.snapshot_plan("nextcloud", nc, "T", False, set(), {"u.tgz": 5_000_000})["notes"]
+    assert any(n.startswith("nextcloud-user-data") and "NOT EMPTY" in n for n in notes)
+    md = {"engine": "mariadb", "db": "bookstack", "file": "b.sql"}
+    assert td.snapshot_plan("bookstack", {"dbs": [md]}, "T", True, set())["files"] == [("b.sql", "bookstack_shareddb_bookstack_T.sql")]
+
+
+def test_to_docker_picks_the_right_database_container_and_filters_extensions():
+    td = _to_docker()
+    dbs = [{"service": "plausible-db", "container": "plausible-db", "engine": "postgres", "user": "postgres", "db": "plausible"},
+           {"service": "x", "container": "x", "engine": "mariadb", "user": "root", "db": ""}]
+    assert td.pick_db_container(dbs, "postgres", "plausible")["container"] == "plausible-db"
+    assert td.pick_db_container(dbs, "postgres", "other")["container"] == "plausible-db"  # the only one of its engine
+    two = dbs[:1] + [{**dbs[0], "container": "second", "db": "b"}]
+    assert td.pick_db_container(two, "postgres", "b")["container"] == "second" and td.pick_db_container(two, "postgres", "zzz") is None
+    toc = ";\n4185; 3079 16384 EXTENSION - vchord\n4186; 0 0 COMMENT - EXTENSION vchord\n212; 1259 16401 TABLE public asset immich\n"
+    keep, exts = td.filter_toc(toc)
+    assert exts == ["vchord"] and "TABLE public asset" in keep and "EXTENSION" not in keep
+    assert not any("rm -rf" in s or "DROP TABLE" in s for s in (open(td.__file__).read().split("def load_postgres_dump")[0],))  # nothing deletes service data here
