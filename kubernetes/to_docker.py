@@ -164,6 +164,26 @@ def load_postgres_dump(hs, container: str, user: str, db: str, dump: Path) -> bo
     return tables > 0
 
 
+def preserve_existing(hs, svc: str, ts: str) -> Path | None:
+    """The restore replaces a service's data folder and volumes with the cluster's. Whatever is
+    there now (normally Docker's own state from before the move) is first kept as a snapshot
+    folder `pre-k8s-<ts>`, so nothing is replaced without a copy."""
+    folder = hs.SERVICE_DATA_ROOT / svc
+    vols = [v for v in hs.BACKEND.volumes_for_project(svc)]
+    has_dir = folder.is_dir() and any(folder.iterdir())
+    if not has_dir and not vols:
+        return None
+    dest = hs.BACKUP_ROOT / svc / f"pre-k8s-{ts}"
+    dest.mkdir(parents=True, exist_ok=True)
+    if has_dir and not hs.BACKEND.tar_dir_to(folder, dest, f"service_data_{ts}.tar.gz"):
+        sys.exit(f"{svc}: could not preserve {folder}: nothing was replaced")
+    for v in vols:
+        if not hs.BACKEND.tar_volume_to(v, dest, f"{v}_{ts}.tar.gz"):
+            sys.exit(f"{svc}: could not preserve volume {v}: nothing was replaced")
+    print(f"    kept what was there as {dest}")
+    return dest
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("action", choices=["plan", "build", "load"])
@@ -218,6 +238,7 @@ def main() -> int:
         if shared and not hs.shared_db_ready(svc, a.env, provision=False):
             failed.append(svc)
             continue
+        preserve_existing(hs, svc, ts)
         if not hs.do_restore(svc, a.env, None, snapshot=snap.name):
             failed.append(svc)
             continue
