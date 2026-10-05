@@ -46,6 +46,11 @@
 #    were dead on wake-up and every public site answered 530. Masking the sleep
 #    targets makes suspend/hibernate impossible for every user and the login
 #    screen. See docs/08-maintenance.md "The host went to sleep".
+# 7. Nightly backup at 03:00: `homeserver.py prod backup running` stops each running service for a few
+#    seconds, snapshots it onto the HDD (service_data/backup, newest BACKUP_RETENTION kept) and starts it
+#    again, so after an SSD wipe or a bad day at most yesterday's data is lost (after the 2026-10-05
+#    reinstall Docker's volumes were gone and only the three-day-old snapshots remained). Persistent: a
+#    night the machine was off runs at the next boot. A failure alerts through the same ntfy path as item 3.
 set -euo pipefail
 
 REQUIRED_MOUNTS="/mnt/mydata"
@@ -58,6 +63,8 @@ SYSCTL=/etc/sysctl.d/90-homeserver-nonlocal-bind.conf
 WATCH_BIN=/usr/local/bin/homeserver-mount-watch
 WATCH_ENV=/etc/homeserver-mount-watch.env
 WATCH_UNIT=/etc/systemd/system/homeserver-mount-watch
+BACKUP_BIN=/usr/local/bin/homeserver-nightly-backup
+BACKUP_UNIT=/etc/systemd/system/homeserver-nightly-backup
 FWD_BIN=/usr/local/bin/homeserver-docker-forward
 FWD_UNIT=/etc/systemd/system/homeserver-docker-forward.service
 # Non-Docker interfaces that must keep forwarding through Docker's DROP policy.
@@ -73,6 +80,8 @@ if [ -d /etc/tuned/profiles ]; then TUNED_DIR=/etc/tuned/profiles/$TUNED_PROFILE
 
 if [ "${1:-}" = "--remove" ]; then
   systemctl disable --now homeserver-mount-watch.timer 2>/dev/null || true
+  systemctl disable --now homeserver-nightly-backup.timer 2>/dev/null || true
+  rm -f "$BACKUP_BIN" "$BACKUP_UNIT.service" "$BACKUP_UNIT.timer"
   if [ -x "$FWD_BIN" ]; then "$FWD_BIN" undo || true; fi
   systemctl disable homeserver-docker-forward.service 2>/dev/null || true
   systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
@@ -265,6 +274,47 @@ fi
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null
 echo "✔ sleep, suspend, hibernate and hybrid-sleep targets masked (the host stays up)"
 
+# ── 7. Nightly backup ──
+OWNER="${SUDO_USER:-$(stat -c %U "$REPO_ROOT")}"
+cat >"$BACKUP_BIN" <<EOF
+#!/usr/bin/env bash
+# Nightly snapshot of every running service (docker/host-boot-safety.sh, item 7). Runs as root so it can
+# read the ntfy settings; the backup itself runs as $OWNER, who owns the repo and the snapshots.
+. /etc/homeserver-mount-watch.env
+out=\$(runuser -u $OWNER -- bash -lc 'cd "$REPO_ROOT" && uv run homeserver.py prod backup running --no-wg' 2>&1); rc=\$?
+printf '%s\n' "\$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -25
+if [ \$rc -ne 0 ] || printf '%s' "\$out" | grep -q -E 'FAILED|✖'; then
+  msg="Nightly backup had failures (exit \$rc). Read: journalctl -u homeserver-nightly-backup"
+  [ -n "\$NTFY_TOKEN" ] && curl -fsS -m 10 -H "Authorization: Bearer \$NTFY_TOKEN" -H "Title: Homeserver nightly backup failed" \\
+    -H "Priority: high" -H "Tags: warning,floppy_disk" -d "\$msg" "\$NTFY_URL" >/dev/null
+  exit 1
+fi
+EOF
+chmod 755 "$BACKUP_BIN"
+cat >"$BACKUP_UNIT.service" <<EOF
+[Unit]
+Description=Homeserver nightly backup (snapshot every running service onto the HDD)
+After=docker.service
+Requires=docker.service
+RequiresMountsFor=$REQUIRED_MOUNTS
+[Service]
+Type=oneshot
+ExecStart=$BACKUP_BIN
+TimeoutStartSec=3h
+EOF
+cat >"$BACKUP_UNIT.timer" <<EOF
+[Unit]
+Description=Homeserver nightly backup at 03:00
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now homeserver-nightly-backup.timer >/dev/null
+echo "✔ homeserver-nightly-backup.timer enabled (03:00 daily, runs as $OWNER)"
+
 echo
 echo "Done. Docker's mount ordering applies from the next boot; check with:"
 echo "  systemctl show docker -p RequiresMountsFor -p After | tr ' ' '\\n' | grep mnt"
@@ -272,3 +322,4 @@ echo "  journalctl -u homeserver-mount-watch -n 5"
 echo "  sudo iptables -S DOCKER-USER     # VM/VPN forwarding rules (item 4)"
 echo "  grep . /sys/class/scsi_host/host*/link_power_management_policy   # item 5: max_performance"
 echo "  systemctl is-enabled suspend.target      # item 6: masked"
+echo "  systemctl list-timers homeserver-nightly-backup   # item 7: next 03:00 run"

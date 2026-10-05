@@ -437,7 +437,7 @@ Set it up once, in this order (Headlamp is locked until step 3 is done, because 
 Notes:
 - Use the root login for the MinIO console. The other `BACKUP_*_ACCESS_KEY`/`SECRET_KEY` pairs are per-bucket S3 keys for Postgres, Velero and the dumps; they can't sign in to the console.
 - ArgoCD's generated password is for the first sign-in only; use `argocd-password` (above) to keep one.
-- Headlamp's token belongs to a cluster-admin service account (the chart's default), so treat it like the cluster's root password. A read-only role is a listed follow-up (`HANDOVER.md`).
+- Headlamp's token belongs to a cluster-admin service account (the chart's default), so treat it like the cluster's root password. The `headlamp_auth: authentik` mode (below) replaces it with a read-only role.
 - `Lost connection to the cluster ... Internal Server Error` in Headlamp right after a rebuild or a big start is usually the API server answering slowly while the disk is busy with image pulls. Reload once the pods have settled.
 
 **Logs (Grafana + Loki)** come with the observability port (`docs/services/observability.md`, "On Kubernetes"). CrowdSec was removed from the stack on 2026-10-04, from Docker and Kubernetes alike.

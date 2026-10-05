@@ -510,6 +510,17 @@ After reimporting, open Docker Desktop → **Settings → Resources → Advanced
 
 ---
 
+## Nightly backup
+
+`sudo bash docker/host-boot-safety.sh` (item 7) installs `homeserver-nightly-backup.timer`: **every night at 03:00** it runs `homeserver.py prod backup running --no-wg`, which stops each running service for a few seconds, snapshots it into `service_data/backup/<service>/<timestamp>/` on the HDD (the newest `BACKUP_RETENTION`, 5, are kept) and starts it again. A full run is a couple of GB. A night the machine was off runs at the next boot (`Persistent=true`). A failure sends an ntfy alert (same path as the mount watch) and is in the journal.
+
+Why: after an SSD wipe Docker's volumes are gone (they live in `/var/lib/docker` on the SSD), and the snapshots are what you restore from. On 2026-10-05 the newest were three days old.
+
+- **Next run and history:** `systemctl list-timers homeserver-nightly-backup`, `journalctl -u homeserver-nightly-backup`.
+- **Run it now:** `uv run homeserver.py prod backup running --no-wg` (`--no-wg` keeps it from starting wg-easy as a side effect).
+- **`backup running` silently did nothing** until 2026-10-06: the parser accepted the word and no branch handled it, so it reported success after backing up nothing. It now backs up what is running, and a backup with nothing to do is an error (tests pin both).
+- **Restore:** `uv run homeserver.py prod restore <service>` (newest snapshot) or `--snapshot <timestamp>`.
+
 ## Boot safety
 
 On a reboot, `dockerd` restarts every `restart: unless-stopped` container itself, in parallel, with no `depends_on` ordering and without going through `homeserver.py`. On this Fedora host that produced two failure modes (both hit on 2026-09-25):

@@ -3720,8 +3720,23 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Min services")
+        elif run_running:
+            header("Backing up running services...")
+            lst = get_running_services() + services_to_run
+            if not lst:
+                error("backup running: no running services detected, nothing to back up")
+                return 1
+            info(f"Detected running services: {' '.join(lst)}")
+            if not confirm_expansion(lst, assume_yes):
+                return 1
+            run_list(do_backup, lst, env, profile, "Running services")
         else:
             header("Backing up services...")
+            if not services_to_run:
+                # `backup running` once matched nothing here and reported success: a backup that did
+                # nothing must never look like one that worked.
+                error("backup: no service named and no tier or target given, nothing to back up")
+                return 1
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_backup, services_to_run, env, profile, "Services")

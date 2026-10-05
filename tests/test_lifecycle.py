@@ -175,6 +175,24 @@ def test_backup_of_stopped_service_leaves_it_stopped(fake, cli):
     assert svc not in fake.running
 
 
+def test_backup_running_snapshots_every_running_service(fake, cli):
+    """`backup running` was accepted by the parser but handled by no branch: it reported success after
+    backing up nothing, which a nightly timer would have repeated every night (2026-10-06)."""
+    a, b = hs.SERVICES_DAILY[0], hs.SERVICES_DAILY[1]
+    for svc in (a, b):
+        fake.volumes.add(f"{svc}_data")
+        fake.running.add(svc)
+    assert cli("prod", "backup", "running") == 0
+    assert hs.list_snapshots(a) and hs.list_snapshots(b)
+    assert a in fake.running and b in fake.running  # each is started again after its snapshot
+
+
+def test_backup_with_nothing_to_back_up_is_an_error_not_a_success(fake, cli):
+    assert cli("prod", "backup", "running") == 1   # nothing is running
+    assert cli("prod", "backup") == 1              # nothing named
+    assert not fake.events
+
+
 def test_unknown_env_is_rejected(fake, cli):
     assert cli("staging", "up", "core") == 1
     assert not fake.events
