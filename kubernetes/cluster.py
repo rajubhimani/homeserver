@@ -349,6 +349,12 @@ def argo_pause(svc: str, paused: bool) -> None:
     subprocess.run(ctx + ["annotate", "application", svc, "--overwrite",
                           "argocd.argoproj.io/skip-reconcile=true" if paused else "argocd.argoproj.io/skip-reconcile-"],
                    capture_output=True, check=True)
+    if not paused:
+        # Back to what git says, now: ArgoCD can take minutes to notice that a
+        # script scaled the service to 0 (a stopped service stayed down after
+        # `export` on 2026-10-05 until a manual refresh).
+        subprocess.run(ctx + ["annotate", "application", svc, "--overwrite", "argocd.argoproj.io/refresh=hard"],
+                       capture_output=True)
 
 
 def release_secrets(svc: str) -> None:

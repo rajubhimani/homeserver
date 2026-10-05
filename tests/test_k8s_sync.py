@@ -874,3 +874,21 @@ def test_verify_host_checks_ignore_sata_ports_without_a_disk(tmp_path):
     assert ok and detail == "max_performance"
     (tmp_path / "sys/class/scsi_host/host0/link_power_management_policy").write_text("med_power_with_dipm\n")
     assert not verify.host_checks(tmp_path)["SATA link power = max_performance"][0]
+
+
+def test_unpausing_a_service_refreshes_its_argocd_app_at_once(monkeypatch):
+    """After export/import scaled a service to 0, ArgoCD took minutes to notice
+    and bring it back (2026-10-05). Unpausing now asks for a hard refresh."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec = importlib.util.spec_from_file_location("k8s_cluster_unpause", K8S / "cluster.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, "cfg", lambda: {"K8S_CLUSTER_NAME": "x"})
+    calls = []
+    monkeypatch.setattr(mod.subprocess, "run", lambda cmd, **k: calls.append(cmd) or type("R", (), {"returncode": 0})())
+    mod.argo_pause("beszel", True)
+    assert not any("argocd.argoproj.io/refresh=hard" in c for c in calls)
+    calls.clear()
+    mod.argo_pause("beszel", False)
+    assert any("argocd.argoproj.io/refresh=hard" in c for c in calls)
