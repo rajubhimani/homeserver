@@ -1252,3 +1252,14 @@ def test_to_docker_picks_the_right_database_container_and_filters_extensions():
     keep, exts = td.filter_toc(toc)
     assert exts == ["vchord"] and "TABLE public asset" in keep and "EXTENSION" not in keep
     assert not any("rm -rf" in s or "DROP TABLE" in s for s in (open(td.__file__).read().split("def load_postgres_dump")[0],))  # nothing deletes service data here
+
+
+def test_archive_runs_mc_through_sh_without_awk_and_never_puts_the_password_on_a_command_line():
+    """`cluster.py archive` had never been run: the mc image's entrypoint is `mc` (so `sh -c` needs
+    --entrypoint sh), it has no awk, and the MinIO password was in the command line, so a failure's
+    traceback printed it (2026-10-05)."""
+    src = (K8S / "cluster.py").read_text()
+    body = src[src.index("def cmd_archive"):src.index("def cmd_validate")]
+    assert '"--entrypoint", "sh"' in body and "awk" not in body.replace("no awk", "")
+    assert '"-e", "U", "-e", "P"' in body and "BACKUP_STORE_ROOT_PASSWORD'] }" not in body
+    assert 'f"P=' not in body and 'f"U=' not in body  # no key=value in the command

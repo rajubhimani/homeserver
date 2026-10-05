@@ -783,11 +783,15 @@ def cmd_archive(a) -> None:
                            "svc/backup-store", "19000:9000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(3)
+        # The mc image's entrypoint is `mc` (so --entrypoint sh) and it has no awk (read the listing with the
+        # shell: "[date time tz] size name/"). The keys go in by variable NAME, never as values, so a
+        # failure's traceback can't print the password.
         mirror = ('mc alias set src http://127.0.0.1:19000 "$U" "$P" >/dev/null && '
-                  'for b in $(mc ls src | awk \'{print $NF}\'); do mc mirror --overwrite --preserve "src/$b" "/out/$b"; done')
-        run(["docker", "run", "--rm", "--network", "host", "-e", "MC_CONFIG_DIR=/tmp/.mc",
-             "-e", f"U={keys['BACKUP_STORE_ROOT_USER']}", "-e", f"P={keys['BACKUP_STORE_ROOT_PASSWORD']}",
-             "--user", f"{os.getuid()}:{os.getgid()}", "-v", f"{out}:/out", VERSIONS["MC_IMAGE"], "sh", "-c", mirror])
+                  'mc ls src | while read -r d t z size name; do mc mirror --overwrite --preserve "src/${name%/}" "/out/${name%/}" || exit 1; done')
+        print("+ docker run --rm --network host ... mc mirror of every bucket", flush=True)
+        subprocess.run(["docker", "run", "--rm", "--network", "host", "-e", "MC_CONFIG_DIR=/tmp/.mc", "-e", "U", "-e", "P",
+                        "--user", f"{os.getuid()}:{os.getgid()}", "-v", f"{out}:/out", "--entrypoint", "sh", VERSIONS["MC_IMAGE"], "-c", mirror],
+                       env={**os.environ, "U": keys["BACKUP_STORE_ROOT_USER"], "P": keys["BACKUP_STORE_ROOT_PASSWORD"]}, check=True)
     finally:
         pf.terminate()
     envcopy = out / "kubernetes.env"
