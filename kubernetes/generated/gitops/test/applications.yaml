@@ -555,6 +555,35 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  name: cluster-watchdog
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: homeserver
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/rajubhimani/homeserver.git
+    targetRevision: feature/k8s-generated
+    path: kubernetes/generated/platform/cluster-watchdog/test
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps
+  syncPolicy:
+    retry:
+      limit: -1
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
   name: dagster-chart
   namespace: argocd
   labels:

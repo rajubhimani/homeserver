@@ -2175,6 +2175,93 @@ def ops_routes_files(env: str) -> dict[str, list[dict] | dict]:
         "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["routes.yaml"]}}
 
 
+WATCHDOG_MODES = ("on", "dry-run")
+
+
+def watchdog_mode(env: str) -> str:
+    """kubernetes/deploy/<env>.yaml `watchdog`: `on` (default) acts; `dry-run` only logs what it
+    would restart or send, for validating a change against the real world first."""
+    mode = load_deploy(env).get("watchdog", "on")
+    if mode not in WATCHDOG_MODES:
+        raise GenError(f"kubernetes/deploy/{env}.yaml: watchdog must be one of {WATCHDOG_MODES}, not {mode!r}")
+    return mode
+
+
+def cluster_watchdog_files(env: str, domain: str) -> dict:
+    """The in-cluster watchdog (kubernetes/watchdog/watchdog.py): restarts cloudflared when
+    Cloudflare's edge has silently dropped the tunnel, and sends ntfy alerts for failing
+    cluster checks. Read-only on the cluster except one verb: patch of the cloudflared
+    Deployment. The pod carries `homeserver/service: cloudflared`, as Compose's
+    cloudflared-watchdog belonged to that service, which is exactly what nginx-plain's
+    ingress policy admits. Scaled to 0 in an env that doesn't run the tunnel."""
+    labels = {"app.kubernetes.io/part-of": "homeserver", "app.kubernetes.io/name": "cluster-watchdog"}
+    pod_labels = {**labels, "homeserver/service": "cloudflared"}
+    on = "cloudflared" in running_services(env)
+    objs = [
+        {"apiVersion": "v1", "kind": "ServiceAccount", "metadata": {"name": "cluster-watchdog", "namespace": NAMESPACE, "labels": labels}},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+         "metadata": {"name": "cluster-watchdog", "namespace": NAMESPACE, "labels": labels},
+         "rules": [{"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["get", "list"]},
+                   # the one write: `kubectl rollout restart` on cloudflared, nothing else
+                   {"apiGroups": ["apps"], "resources": ["deployments"], "resourceNames": ["cloudflared"], "verbs": ["patch"]}]},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+         "metadata": {"name": "cluster-watchdog", "namespace": NAMESPACE, "labels": labels},
+         "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "cluster-watchdog"},
+         "subjects": [{"kind": "ServiceAccount", "name": "cluster-watchdog", "namespace": NAMESPACE}]},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+         "metadata": {"name": "homeserver-cluster-watchdog", "labels": labels},
+         "rules": [{"apiGroups": [""], "resources": ["nodes", "pods"], "verbs": ["get", "list"]},
+                   {"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": ["get", "list"]},
+                   {"apiGroups": ["postgresql.cnpg.io"], "resources": ["clusters", "backups"], "verbs": ["get", "list"]},
+                   {"apiGroups": ["k8s.mariadb.com"], "resources": ["mariadbs"], "verbs": ["get", "list"]},
+                   {"apiGroups": ["velero.io"], "resources": ["backups", "backupstoragelocations"], "verbs": ["get", "list"]}]},
+        {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+         "metadata": {"name": "homeserver-cluster-watchdog", "labels": labels},
+         "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "homeserver-cluster-watchdog"},
+         "subjects": [{"kind": "ServiceAccount", "name": "cluster-watchdog", "namespace": NAMESPACE}]},
+        {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "cluster-watchdog", "namespace": NAMESPACE, "labels": labels},
+         "spec": {"replicas": 1 if on else 0, "strategy": {"type": "Recreate"}, "revisionHistoryLimit": 2,
+                  "selector": {"matchLabels": {"app.kubernetes.io/name": "cluster-watchdog"}},
+                  "template": {"metadata": {"labels": pod_labels}, "spec": {
+                      "serviceAccountName": "cluster-watchdog", "automountServiceAccountToken": True, "enableServiceLinks": False,
+                      "securityContext": {"runAsNonRoot": True, "runAsUser": 65534, "runAsGroup": 65534,
+                                          "seccompProfile": {"type": "RuntimeDefault"}},
+                      "containers": [{
+                          "name": "watchdog", "image": VERSIONS["WATCHDOG_IMAGE"], "command": ["python", "/app/watchdog.py"],
+                          "env": [{"name": "WATCHDOG_CONFIG", "value": "/app/watchdog.json"},
+                                  {"name": "PYTHONDONTWRITEBYTECODE", "value": "1"}, {"name": "PYTHONUNBUFFERED", "value": "1"},
+                                  {"name": "WATCHDOG_DRY_RUN", "value": "1" if watchdog_mode(env) == "dry-run" else "0"},
+                                  {"name": "NTFY_URL", "value": "http://ntfy/homeserver-alerts"},
+                                  {"name": "NTFY_TOKEN", "valueFrom": {"secretKeyRef": {"name": "ntfy-env", "key": "NTFY_ALERT_TOKEN", "optional": True}}}],
+                          "resources": {"requests": {"cpu": "5m", "memory": "32Mi"}, "limits": {"memory": "96Mi"}},
+                          "securityContext": {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
+                                              "capabilities": {"drop": ["ALL"]}},
+                          # Alive = the loop wrote its heartbeat within 10 minutes (a round takes at most ~2 minutes).
+                          "livenessProbe": {"exec": {"command": ["python", "-c",
+                              "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/heartbeat')<600 else 1)"]},
+                              "initialDelaySeconds": 300, "periodSeconds": 60, "failureThreshold": 3, "timeoutSeconds": 10},
+                          "volumeMounts": [{"name": "code", "mountPath": "/app", "readOnly": True},
+                                           {"name": "tmp", "mountPath": "/tmp"}]}],
+                      "volumes": [{"name": "code", "configMap": {"name": "cluster-watchdog-code"}},
+                                  {"name": "tmp", "emptyDir": {"sizeLimit": "1Mi"}}]}}}},
+    ]
+    ported = load_scope().get("ported") or []
+    conf = {"domain": domain, "namespace": NAMESPACE, "deployment": "cloudflared",
+            "run": sorted(running_services(env)), "ported": sorted(ported)}
+    return {
+        "watchdog.yaml": objs,
+        "watchdog.py": (K8S_DIR / "watchdog/watchdog.py").read_text(),
+        "verify.py": (K8S_DIR / "verify.py").read_text(),
+        "watchdog.json": json.dumps(conf, indent=1) + "\n",
+        "kustomization.yaml": {
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            "resources": ["watchdog.yaml"],
+            # Code and config in one generated ConfigMap: a change renames it, so the pod restarts by itself.
+            "configMapGenerator": [{"name": "cluster-watchdog-code", "namespace": NAMESPACE,
+                                    "files": ["watchdog.py", "verify.py", "watchdog.json"]}]},
+    }
+
+
 def platform_files() -> dict[str, dict[str, list[dict] | str]]:
     """Kustomize folders for add-ons installed from a pinned upstream manifest."""
     v = VERSIONS
@@ -2625,6 +2712,8 @@ def render(out: Path) -> list[str]:
     pf = platform_files()
     pf["backup-store"] = {**backup_store(), "kustomization.yaml": {
         "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["store.yaml"]}}
+    for env, dom in (("test", TEST_DOMAIN), ("prod", domain)):
+        pf[f"cluster-watchdog/{env}"] = cluster_watchdog_files(env, dom)
     for env in ENVS:
         pf[f"ops-routes/{env}"] = ops_routes_files(env)
     for name, fs in pf.items():
@@ -2632,6 +2721,7 @@ def render(out: Path) -> list[str]:
         d.mkdir(parents=True, exist_ok=True)
         for fname, content in fs.items():
             (d / fname).write_text(dump(content, name) if isinstance(content, list)
+                                   else content if isinstance(content, str)  # a copied source file, verbatim
                                    else "# GENERATED by kubernetes/generate.py — do not edit.\n"
                                    + yaml.safe_dump(content, sort_keys=False))
     (out / "host-ports.yaml").write_text(

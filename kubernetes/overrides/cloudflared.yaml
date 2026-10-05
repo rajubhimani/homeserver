@@ -1,4 +1,4 @@
 containers:
   cloudflared-watchdog:
     skip: true
-    reason: "Restarts cloudflared through the Docker socket; on Kubernetes the cloudflared liveness probe restarts it."
+    reason: "Restarts cloudflared through the Docker socket. NOT replaced by the liveness probe (it only counts local connections, the blind spot this watchdog exists for): the cluster-watchdog add-on (kubernetes/watchdog/watchdog.py) does it, probing from outside and restarting through the Kubernetes API."

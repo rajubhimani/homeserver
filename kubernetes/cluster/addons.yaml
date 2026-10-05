@@ -115,3 +115,7 @@
   ssa: false                  # plain HTTPRoutes: server-side apply makes Gateway API defaults show as drift
   namespace: argocd
   path: kubernetes/generated/platform/ops-routes/{env}
+- name: cluster-watchdog        # tunnel self-heal + cluster alerts via ntfy (docs/17 "Watchdog")
+  wave: 1
+  namespace: apps
+  path: kubernetes/generated/platform/cluster-watchdog/{env}

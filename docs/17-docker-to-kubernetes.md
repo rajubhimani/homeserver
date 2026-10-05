@@ -456,6 +456,31 @@ Decided 2026-10-04 (option A of three): each piece is its own project's document
 
 **Velero's encryption key is our own.** By default Velero encrypts every install's backups with the same static key ("anyone who has access to your backup storage can decrypt your backup data", Velero's docs). `cluster.py` generates a random repository password into `kubernetes/.env` and creates Velero's `velero-repo-credentials` before Velero is installed, which is the only time it can be set: changing it later makes older backups unreadable.
 
+## Watchdog: the tunnel heals itself, and you hear about trouble
+
+The `cluster-watchdog` add-on (`kubernetes/watchdog/watchdog.py`, standard library only, one pod in `apps`) does two jobs so nobody has to ask.
+
+**1. It restarts the tunnel when Cloudflare has silently dropped it.** cloudflared's own readiness counts only its *local* connections; twice on 2026-10-05 the edge had dropped them while it still reported `readyConnections: 4`, and visitors got `530 / error code: 1033`. Docker had a watchdog for exactly that (`services/cloudflared/watchdog.sh`); the Kubernetes port skipped it on the wrong belief that the liveness probe covers it (`overrides/cloudflared.yaml` now says so). The new one probes the public URL **from inside and from up to 6 places around the world** (check-host.net's free public API), because a single vantage can pass through one Cloudflare edge while the others fail (that is what happened). Every 90 seconds it decides:
+
+| Situation | What it does |
+|---|---|
+| Outside probes mostly fail (half or more, with at least 3 usable results), or the public URL fails from inside, **3 rounds in a row**, and `nginx-plain` answers | restarts `cloudflared` (what `kubectl rollout restart` does) and tells you on ntfy |
+| The origin (`nginx-plain`) is down too | does **not** restart: not a tunnel problem; one ntfy message saying so |
+| Restarted less than 10 minutes ago, or 3 restarts already this hour | waits; at the limit it says once that it needs a human (Cloudflare incident?) |
+| The checker (check-host.net) gives too little data or can't be reached | no conclusion from it: never "down" on missing data |
+| `cloudflared` is stopped on purpose (0 replicas, e.g. during a rebuild) | never touches it |
+| Back to normal after a restart | one ntfy "recovered" |
+
+**2. It alerts on cluster trouble.** Every ~7 minutes it runs the same checks as `cluster.py verify` (nodes, pods, ArgoCD apps, Postgres and MariaDB, the backup store, recent Velero and Postgres backups) over the Kubernetes API, and sends an ntfy message when a check has failed two rounds in a row (a rollout doesn't page you) and again when it recovers. This replaces Uptime Kuma's Docker-container monitors, which fed ntfy on Docker and are dead on Kubernetes (no Docker socket): without it an unhealthy pod was restarted silently and nobody was told.
+
+**Where the messages go:** the `homeserver-alerts` ntfy topic (subscribe on your phone as described in `docs/services/ntfy.md`).
+
+**Permissions:** read-only on nodes, pods, ArgoCD applications, CloudNativePG and MariaDB resources and Velero backups, plus exactly one write, `patch` of the `cloudflared` Deployment. No Secrets. Tests pin that.
+
+**Switch:** `watchdog: on | dry-run` in `kubernetes/deploy/<env>.yaml`. `dry-run` logs what it would restart or send (`kubectl -n apps logs deploy/cluster-watchdog`) and does nothing; use it to validate a change against the real world first. `cluster.py verify` fails if the watchdog isn't running.
+
+**What it can't see:** a Cloudflare-wide outage (restarting does nothing then: after 3 tries it asks for a human), and anything while the host itself is off or asleep (`docs/08` "The host went to sleep").
+
 **Restoring a service's volumes (`cluster.py restore`).** `uv run kubernetes/cluster.py restore <svc> [--backup NAME]` prints the plan and changes nothing; add `--yes` to run it. It uses the newest completed Velero backup unless you name one. Velero restores pod data through *pods* (it injects a `restore-wait` init container) and skips anything that still exists, "even scaled to 0" (Velero's file-system-backup docs), so the plan is: pause ArgoCD for the service, **delete** its workloads and its volume claim and volume, **move the old data folder aside** (`~/k8s-data/fast/restore-aside/`, never deleted), let Velero restore the objects and the volume data, resume ArgoCD, wait until the service is ready. Databases are not touched: Postgres has Barman and shared-database apps their nightly dumps. Take a fresh `cluster.py export` of the service first; if the restore stops, the command says where the old data is. The first real run is the round trip on a small service (beszel), done with the owner present.
 
 **Restore procedures, each proven on 2026-10-05 without touching live data.** Every kind of backup was restored into something new and compared with the live original:

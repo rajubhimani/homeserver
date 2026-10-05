@@ -831,7 +831,8 @@ def _fake_cluster(over=None):
         ("backups.velero.io", "-n", "velero"): [{"metadata": {"name": "b"}, "status": {"phase": "Completed", "completionTimestamp": now}}],
         ("backups.postgresql.cnpg.io", "-A"): [{"metadata": {"name": "x"}, "spec": {"cluster": {"name": "db"}},
                                                 "status": {"phase": "completed", "stoppedAt": now}}],
-        ("deployments", "-n", "apps"): [{"metadata": {"name": "cloudflared"}, "status": {"readyReplicas": 1}}],
+        ("deployments", "-n", "apps"): [{"metadata": {"name": "cloudflared"}, "status": {"readyReplicas": 1}},
+                                        {"metadata": {"name": "cluster-watchdog"}, "status": {"readyReplicas": 1}}],
     }
     data.update(over or {})
     return lambda *args: data.get(args, [])
@@ -857,6 +858,8 @@ def test_verify_passes_a_healthy_cluster_and_catches_real_failures():
     assert not check(_fake_cluster({("backups.velero.io", "-n", "velero"): [stale]}))["Velero backup recent and clean"][0]
     assert not check(_fake_cluster({("backups.postgresql.cnpg.io", "-A"): []}))["Postgres base backups recent"][0]
     assert not check(_fake_cluster(), tunnel=lambda: False)["tunnel connected to Cloudflare"][0]
+    no_wd = {("deployments", "-n", "apps"): [{"metadata": {"name": "cloudflared"}, "status": {"readyReplicas": 1}}]}
+    assert not check(_fake_cluster(no_wd))["watchdog running"][0]  # nobody is watching the tunnel
     assert not check(_fake_cluster(), http=lambda u: 530)["public hostnames answer (from this machine)"][0]
     sick = {"metadata": {"name": "docs"}, "status": {"sync": {"status": "OutOfSync"}, "health": {"status": "Healthy"}}}
     assert not check(_fake_cluster({("applications.argoproj.io", "-n", "argocd"): [sick]}))["ArgoCD apps synced and healthy"][0]
@@ -1035,3 +1038,88 @@ def test_verify_flags_a_host_that_can_still_suspend(tmp_path):
     assert not verify.host_checks(tmp_path)["sleep is impossible (suspend.target masked)"][0]
     os.symlink("/dev/null", unit / "suspend.target")
     assert verify.host_checks(tmp_path)["sleep is impossible (suspend.target masked)"][0]
+
+
+def _watchdog():
+    import sys as _sys
+    _sys.path.insert(0, str(K8S / "watchdog"))
+    _sys.path.insert(0, str(K8S))
+    import watchdog
+    return watchdog
+
+
+def test_watchdog_restarts_the_tunnel_only_when_it_is_stale_and_the_origin_is_fine():
+    """The two 2026-10-05 incidents: cloudflared reported 4 ready connections while
+    Cloudflare's edge returned 530/1033 elsewhere. Restart on a sustained outside failure with
+    a healthy origin; never when the origin is down, the tunnel is stopped on purpose, or the
+    checker gave too little data; never more than the hourly limit."""
+    w = _watchdog()
+    obs = lambda **k: w.Observation(**{"replicas": 1, "origin_ok": True, "local_ok": True, "vantage_ok": 6, "vantage_total": 6, **k})  # noqa: E731
+    now = 10_000.0
+
+    st = w.TunnelState()  # healthy: nothing
+    assert w.tunnel_decision(st, obs(), now) == []
+
+    st = w.TunnelState()  # 1033 from most places while it looks fine from here (the real incident)
+    down = obs(vantage_ok=1, vantage_total=6)
+    assert w.tunnel_decision(st, down, now) == [] and w.tunnel_decision(st, down, now + 90) == []  # not on the first rounds
+    acts = w.tunnel_decision(st, down, now + 180)
+    assert [a[0] for a in acts] == ["restart", "notify"] and "5/6 outside probes failed" in acts[0][1]
+    assert w.tunnel_decision(st, down, now + 270) == []  # cooldown: one restart, then wait
+    assert w.tunnel_decision(st, obs(), now + 900) == [("notify", "Tunnel recovered: public sites answer again.")]
+
+    st = w.TunnelState()  # origin down too: not a tunnel problem, never restart, say so once
+    both = obs(origin_ok=False, local_ok=False, vantage_ok=0, vantage_total=6)
+    texts = [a for r in range(5) for a in w.tunnel_decision(st, both, now + r * 90)]
+    assert [a[0] for a in texts] == ["notify"] and "origin (nginx-plain) is down too" in texts[0][1]
+
+    st = w.TunnelState()  # too few outside answers: no conclusion from them (only the local probe counts)
+    assert all(w.tunnel_decision(st, obs(vantage_ok=0, vantage_total=2), now + r * 90) == [] for r in range(6))
+    st = w.TunnelState()  # ...but the public URL failing from inside is enough on its own
+    local = obs(local_ok=False, vantage_ok=0, vantage_total=0)
+    assert [a[0] for r in range(3) for a in w.tunnel_decision(st, local, now + r * 90)] == ["restart", "notify"]
+
+    st = w.TunnelState()  # stopped on purpose (a rebuild): never touched
+    assert all(w.tunnel_decision(st, obs(replicas=0, vantage_ok=0, vantage_total=6), now + r * 90) == [] for r in range(6))
+
+    st = w.TunnelState()  # at most 3 restarts an hour, then it asks for a human, once
+    seen = []
+    for r in range(35):  # 35 rounds of 90 s: inside one hour
+        seen += [a[0] + ":" + a[1][:20] for a in w.tunnel_decision(st, down, now + r * 90)]
+    assert sum(s.startswith("restart") for s in seen) == 3
+    assert sum(s.startswith("notify:Public sites still") for s in seen) == 1  # asks for a human exactly once
+
+
+def test_watchdog_cluster_alerts_need_two_rounds_and_announce_recovery():
+    w = _watchdog()
+    st = w.ClusterState()
+    bad = [("pods running and ready", False, "apps/x (Pending)"), ("nodes ready", True, "")]
+    assert w.cluster_decision(st, bad) == []  # one round: a rollout shouldn't page anyone
+    msgs = w.cluster_decision(st, bad)
+    assert len(msgs) == 1 and "pods running and ready: apps/x (Pending)" in msgs[0]
+    assert w.cluster_decision(st, bad) == []  # already announced: no repeats
+    assert w.cluster_decision(st, [("pods running and ready", True, ""), ("nodes ready", True, "")]) == ["Recovered: pods running and ready"]
+
+
+def test_watchdog_manifests_are_least_privilege_and_match_the_sources():
+    gen = _generate_module()
+    for env, replicas in (("prod", 1), ("test", 0)):
+        files = gen.cluster_watchdog_files(env, "example.test")
+        objs = files["watchdog.yaml"]
+        dep = next(o for o in objs if o["kind"] == "Deployment")
+        assert dep["spec"]["replicas"] == replicas  # the tunnel is prod-only
+        pod = dep["spec"]["template"]
+        assert pod["metadata"]["labels"]["homeserver/service"] == "cloudflared"  # what nginx-plain's policy admits
+        c = pod["spec"]["containers"][0]
+        assert c["image"] == gen.VERSIONS["WATCHDOG_IMAGE"] and not c["image"].endswith(("latest", "alpine"))
+        assert c["securityContext"]["readOnlyRootFilesystem"] and c["securityContext"]["capabilities"] == {"drop": ["ALL"]}
+        assert pod["spec"]["securityContext"]["runAsNonRoot"]
+        # permissions: reads, plus exactly one write: patching the cloudflared Deployment
+        rules = [r for o in objs if o["kind"] in ("Role", "ClusterRole") for r in o["rules"]]
+        writes = [r for r in rules if set(r["verbs"]) - {"get", "list", "watch"}]
+        assert writes == [{"apiGroups": ["apps"], "resources": ["deployments"], "resourceNames": ["cloudflared"], "verbs": ["patch"]}]
+        assert not any("secrets" in r["resources"] or "*" in r["resources"] or "*" in r["verbs"] for r in rules)
+        assert files["watchdog.py"] == (K8S / "watchdog/watchdog.py").read_text()  # the ConfigMap ships the real code
+        assert files["verify.py"] == (K8S / "verify.py").read_text()
+    conf = json.loads(gen.cluster_watchdog_files("prod", "example.test")["watchdog.json"])
+    assert "cloudflared" in conf["run"] and conf["domain"] == "example.test"

@@ -62,3 +62,7 @@ Reset to an empty install, came up healthy, then restored from its `reset-backup
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## On Kubernetes
+
+**Watchdog on Kubernetes.** Compose's `cloudflared-watchdog` (a curl loop on the Docker socket) is replaced by the `cluster-watchdog` add-on, not by the liveness probe: the probe only counts local connections, and on 2026-10-05 the edge dropped them silently twice. See docs/17 "Watchdog".

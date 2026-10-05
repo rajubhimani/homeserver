@@ -18,6 +18,10 @@
 #     account) and Headlamp uses a read-only service account. Needs the Authentik
 #     proxy provider first (docs/17 "Headlamp behind Authentik"), or Headlamp is locked.
 headlamp_auth: token
+# watchdog: the in-cluster watchdog (docs/17 "Watchdog"): restarts cloudflared when Cloudflare's
+#   edge has silently dropped the tunnel, and sends ntfy alerts for failing cluster checks.
+#   on (default): acts. dry-run: only logs what it would do (to validate a change first).
+watchdog: dry-run
 #   changes in the cluster); false = press Sync in the ArgoCD UI.
 repo: https://github.com/rajubhimani/homeserver.git
 revision: feature/k8s-generated
