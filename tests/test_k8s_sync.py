@@ -1176,3 +1176,19 @@ def test_deploy_switches_are_strings_yaml_does_not_turn_into_booleans():
         d = gen.load_deploy(env)
         assert gen.watchdog_mode(env) in gen.WATCHDOG_MODES and isinstance(d.get("watchdog", "active"), str), env
         assert gen.headlamp_auth(env) in gen.HEADLAMP_AUTH_MODES and isinstance(d.get("headlamp_auth", "token"), str), env
+
+
+def test_argocd_treats_a_claim_waiting_for_its_first_consumer_as_healthy():
+    """The storage classes wait for the first consumer, so a stopped service's claim stays Pending
+    by design; ArgoCD's built-in rule called all 42 stopped services Progressing (2026-10-05).
+    The custom rule (validated with `argocd admin settings resource-overrides health`) must exist,
+    keep Lost as Degraded, and keep a claim that is being provisioned Progressing."""
+    gen = _generate_module()
+    lua = gen.PVC_HEALTH
+    assert 'volume.kubernetes.io/selected-node' in lua           # provisioning: a node was chosen
+    assert lua.index('"Lost"') < lua.index("selected-node")      # Lost / Bound are decided first
+    assert 'hs.status = "Degraded"' in lua and lua.count('"Progressing"') == 2
+    patches = [yaml.safe_load(p["patch"]) for f in (GENERATED / "platform/argocd").glob("*.yaml")
+               for d in yaml.safe_load_all(f.read_text()) if d and d.get("kind") == "Kustomization" for p in d.get("patches", [])]
+    cm = next(p for p in patches if isinstance(p, dict) and p.get("metadata", {}).get("name") == "argocd-cm")
+    assert cm["data"]["resource.customizations.health.PersistentVolumeClaim"] == lua

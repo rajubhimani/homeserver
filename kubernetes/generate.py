@@ -2084,6 +2084,38 @@ def gitops(env: str) -> dict[str, list[dict]]:
     return {"projects.yaml": projects, "applications.yaml": apps, "services.yaml": [appset]}
 
 
+# ArgoCD's built-in rule calls every Pending claim "Progressing". The storage classes here wait for
+# the first consumer, so a service stopped on purpose (no pod) keeps its claim Pending by design, and
+# all 42 stopped services showed Progressing (2026-10-05). The scheduler records the chosen node on the
+# claim (annotation below) once a pod is placed: Pending without it = nobody uses it yet = fine; Pending
+# with it = a volume is being provisioned = still Progressing.
+PVC_HEALTH = """local hs = {}
+if obj.status == nil or obj.status.phase == nil then
+  hs.status = "Progressing"
+  hs.message = "Waiting for the claim's status"
+  return hs
+end
+if obj.status.phase == "Bound" then
+  hs.status = "Healthy"
+  hs.message = "Bound"
+  return hs
+end
+if obj.status.phase == "Lost" then
+  hs.status = "Degraded"
+  hs.message = "Lost"
+  return hs
+end
+local annotations = obj.metadata.annotations
+if annotations ~= nil and annotations["volume.kubernetes.io/selected-node"] ~= nil then
+  hs.status = "Progressing"
+  hs.message = "Pending: provisioning on " .. annotations["volume.kubernetes.io/selected-node"]
+  return hs
+end
+hs.status = "Healthy"
+hs.message = "Pending until a pod uses it (the storage class waits for the first consumer)"
+return hs
+"""
+
 APP_HEALTH = """hs = {}
 hs.status = "Progressing"
 hs.message = ""
@@ -2278,7 +2310,8 @@ def platform_files() -> dict[str, dict[str, list[dict] | str]]:
                         # "Argo CD App"): the documented app-of-apps setting.
                         {"patch": yaml.safe_dump({"apiVersion": "v1", "kind": "ConfigMap",
                                                   "metadata": {"name": "argocd-cm"},
-                                                  "data": {"resource.customizations.health.argoproj.io_Application": APP_HEALTH}})}]}},
+                                                  "data": {"resource.customizations.health.argoproj.io_Application": APP_HEALTH,
+                                                           "resource.customizations.health.PersistentVolumeClaim": PVC_HEALTH}})}]}},
         "gateway-api": {"kustomization.yaml": {
             "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
             "resources": [f"https://github.com/kubernetes-sigs/gateway-api/releases/download/{v['GATEWAY_API_VERSION']}/standard-install.yaml"]}},

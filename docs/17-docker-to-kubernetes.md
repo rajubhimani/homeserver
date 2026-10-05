@@ -394,6 +394,8 @@ From then on ArgoCD installs and updates everything from git, itself included. V
 
 ArgoCD needs its documented app-of-apps health check for Applications to make the waits work; it's set in `argocd-cm`. Without waves, the first start on 2026-10-04 pulled every image at once and drove disk pressure to 60%. The databases then waited on a Barman plugin whose own certificate couldn't be issued until cert-manager's image arrived.
 
+**Stopped services show Healthy, not Progressing.** The storage classes wait for the first consumer, so a service stopped on purpose (no pod) keeps its volume claim `Pending` by design, and ArgoCD's built-in rule calls every Pending claim "Progressing": all 42 stopped services showed Progressing (2026-10-05; their Deployments were already Healthy at zero replicas). `argocd-cm` now carries a custom rule for `PersistentVolumeClaim`: Pending with no node selected means nobody uses it yet (Healthy); Pending with `volume.kubernetes.io/selected-node` set means a volume is being provisioned (still Progressing); Lost is Degraded. It was validated with ArgoCD's own `argocd admin settings resource-overrides health`.
+
 **Safety built in:**
 - **Two ArgoCD projects.** Services (`homeserver`) may deploy only to `apps`, `local-access` and the secret store's namespace, plus three cluster-wide kinds (Namespace, PersistentVolume, ClusterSecretStore). The project is fixed in the ApplicationSet, never templated (ArgoCD's ApplicationSet security note). Add-ons use `platform`.
 - **Data is never deleted by ArgoCD.** Volumes, PersistentVolumes and database objects carry `Prune=false,Delete=false`. Deleting the ApplicationSet keeps every service's objects (`preserveResourcesOnDeletion`).
