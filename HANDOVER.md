@@ -106,7 +106,7 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 5. **Router/devices:** point their DNS at 192.168.1.7 for AdGuard's dashboard to fill.
 6. **Owner checks:** Cloudflare Connectors list shows only this cluster's 4 connections; a phone on mobile data reaches the sites; app logins; `argocd-password`.
 
-**Still open (engineering):** Supabase's public route (network alias, §5); the 15 deferred apps; restore for databases (Postgres via Barman, shared-DB apps via their dumps: the plan is in §3); a second SSD for the cluster (the real fix for the disk limit); Headlamp token is cluster-admin until `headlamp_auth: authentik`.
+**Still open (engineering):** the 15 deferred apps (Supabase's route is fixed: aliases get Services, §5); restore for databases (Postgres via Barman, shared-DB apps via their dumps: the plan is in §3); a second SSD for the cluster (the real fix for the disk limit); Headlamp token is cluster-admin until `headlamp_auth: authentik`.
 
 ## 4. How things work (short)
 
@@ -130,7 +130,7 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 
 - **The one SSD is now the shared bottleneck** (done 2026-10-05: image store, databases and etcd all on it, replacing the HDD bottleneck). A whole-cluster start or a heavy first start (Nextcloud's rsync of its source tree) drives I/O pressure to ~50-70%, stalls the desktop and makes the API server miss leases (CNPG operator, scheduler and controller-manager restart). Options if it matters: `ionice` for etcd, a `docker update --device-write-bps` cap on the kind node, or a second SSD. Host power: `tuned-adm profile throughput-performance`, EPP `performance` and SATA `max_performance` (commands in the session notes; make them stick with `/etc/tmpfiles.d/99-maxperf.conf`).
 - **Egress network policies**, Beszel's agent in its own privileged namespace (then enforce Baseline on `apps`), image scanning, Cloudflare Access/WAF, Authentik two-factor, a Docker socket proxy, and etcd `ionice`.
-- **Compose network aliases aren't generated as Services.** Found 2026-10-05 with Grafana (fixed for the service-key case) and still open for Supabase: nginx-plain's `supabase.${DOMAIN}` points at `supabase-kong`, an alias on another container, so no route or Service exists for it. Do it with the broad pass: a Service per alias, and routes matched by alias. Audit command: compare the template's `server_name`s with `kubernetes/generated/envs/prod/*/routes.yaml` (only coolify, dockge, dozzle, portainer, wg-admin are missing on purpose: Docker-only).
+- ~~Compose network aliases aren't generated as Services.~~ Fixed 2026-10-05 (Supabase's `supabase-kong`); only what stays on Docker has no public route.
 - **Headlamp's token is cluster-admin** (the chart's default): add a read-only role, or put it behind Authentik.
 - **mariadb-operator can't scale to 0** (upstream #356): a MariaDB server runs once created.
 - **Pending Docker-side check:** Dagster's code is now built into the image on Compose too (`DAGSTER_EXECUTOR=docker`). Rebuild and test it when Docker is used again.

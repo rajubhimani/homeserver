@@ -1001,3 +1001,23 @@ def test_dump_jobs_keep_mc_state_out_of_the_uploaded_folder():
                     for e in c.get("env", []):
                         if e["name"] == "MC_CONFIG_DIR":
                             assert not e["value"].startswith("/work"), (f.parent.name, e["value"])
+
+
+def test_every_public_hostname_has_a_route_except_the_docker_only_ones():
+    """nginx-plain's template publishes 73 hostnames; Grafana (service key) and Supabase
+    (a network alias, `supabase-kong`) had none on the cluster until the generator learned
+    to match them (2026-10-05). Only tools that need the Docker socket, and wg-easy, stay out."""
+    import re as _re
+    tmpl = (REPO / "services/nginx-plain/templates/default.conf.template").read_text()
+    want = {h.replace("${DOMAIN}", "prajnatech.in") for m in _re.finditer(r"server_name\s+([^;]+);", tmpl)
+            for h in m.group(1).split() if h.endswith("${DOMAIN}") and not h.startswith("*")}
+    have = set()
+    for f in (GENERATED / "envs/prod").glob("*/routes.yaml"):
+        for d in yaml.safe_load_all(f.read_text()):
+            if d and d["kind"] == "HTTPRoute":
+                have |= set(d["spec"]["hostnames"])
+    # Docker socket tools, wg-easy, and AdGuard (LAN DNS stays on Docker since 2026-10-05).
+    docker_only = {"coolify", "dockge", "dozzle", "portainer", "wg-admin", "adguard-home"}
+    assert {h.split(".")[0] for h in want - have} == docker_only, sorted(want - have)
+    svc = {d["metadata"]["name"]: d for d in yaml.safe_load_all((GENERATED / "apps/supabase/services.yaml").read_text()) if d}
+    assert svc["supabase-kong"]["spec"]["selector"] == {"app.kubernetes.io/name": "supabase-envoy"}  # the alias is a Service

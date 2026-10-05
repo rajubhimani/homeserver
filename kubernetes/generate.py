@@ -843,10 +843,10 @@ def convert(svc: str) -> dict[str, list[dict]]:
             obj["spec"] = spec
         files.setdefault("workloads.yaml", []).append(obj)
 
-        for sname in ([c] + ([n] if n != c and re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", n) else [])) \
+        for sname in list(dict.fromkeys([c] + ([n] if n != c and DNS_LABEL.fullmatch(n) else []) + network_aliases(s))) \
                 if (listen[n] or udp.get(n)) and kind != "Job" and (not pod.get("hostNetwork") or co.get("service")) else []:
-            # Docker's DNS answers to the container name and the Compose
-            # service name; some .env values use the latter (Immich's DB_URL).
+            # Docker's DNS answers to the container name, the Compose service
+            # name (some .env values use it: Immich's DB_URL) and any network alias.
             files.setdefault("services.yaml", []).append({
                 "apiVersion": "v1", "kind": "Service",
                 "metadata": {"name": sname, "labels": labels_svc},
@@ -933,6 +933,18 @@ def authentik_middleware() -> dict:
     }
 
 
+DNS_LABEL = re.compile(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?")
+
+
+def network_aliases(s: dict) -> list[str]:
+    """Extra names Docker's DNS answers to for this container: the `aliases` on its
+    homeserver network (Supabase's envoy is also `supabase-kong`, which nginx-plain
+    and landing still proxy to). Valid Service names only."""
+    nets = s.get("networks")
+    conf = (nets.get("homeserver") if isinstance(nets, dict) else None) or {}
+    return [a for a in conf.get("aliases") or [] if DNS_LABEL.fullmatch(a)]
+
+
 def route_objects(svc: str, domain: str) -> list[dict]:
     """HTTPRoutes for every container of the service that nginx-plain routes."""
     compose = load_compose(svc)
@@ -945,7 +957,7 @@ def route_objects(svc: str, domain: str) -> list[dict]:
         # name, or the Compose service key when they differ (Grafana's
         # container is "observability", its upstream "grafana"). Either way
         # that name is a Service here.
-        up = c if c in routes else n if n in routes else None
+        up = next((x for x in (c, n, *network_aliases(s)) if x in routes), None)
         if (ov_c.get(c) or {}).get("skip") or up is None:
             continue
         out += http_route(c, svc, sorted({h for h, _ in routes[up]}), {"name": up, "port": routes[up][0][1]}, domain)
