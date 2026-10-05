@@ -21,7 +21,7 @@ headlamp_auth: token
 # watchdog: the in-cluster watchdog (docs/17 "Watchdog"): restarts cloudflared when Cloudflare's
 #   edge has silently dropped the tunnel, and sends ntfy alerts for failing cluster checks.
 #   on (default): acts. dry-run: only logs what it would do (to validate a change first).
-watchdog: dry-run
+watchdog: on
 #   changes in the cluster); false = press Sync in the ArgoCD UI.
 repo: https://github.com/rajubhimani/homeserver.git
 revision: feature/k8s-generated
