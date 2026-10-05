@@ -892,3 +892,39 @@ def test_unpausing_a_service_refreshes_its_argocd_app_at_once(monkeypatch):
     calls.clear()
     mod.argo_pause("beszel", False)
     assert any("argocd.argoproj.io/refresh=hard" in c for c in calls)
+
+
+def test_restore_plan_orders_the_steps_and_never_deletes_a_database_volume():
+    """cluster.py restore: Velero skips what still exists, so workloads and the
+    claim are deleted first; the old folder is moved aside, never deleted; ArgoCD
+    is paused for the duration and resumed after; no --yes means a dry run."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import restore
+    vols = [{"pvc": "beszel-data", "pv": "pvc-1", "node_path": "/var/k8s/fast/apps/beszel-data"}]
+    steps = restore.plan("beszel", "velero-apps-nightly-X", vols, "T")
+    acts = [s.action for s in steps]
+    assert acts.index("pause") < acts.index("kubectl") < acts.index("node_mv") < acts.index("velero_restore") \
+        < acts.index("wait_restore") < acts.index("unpause") < acts.index("wait_ready")
+    deleted = [s.args for s in steps if s.action == "kubectl"]
+    assert ("-n", "apps", "delete", "pvc", "beszel-data", "--wait=true") in deleted
+    assert all("beszel-db" not in " ".join(a) and "-1" not in " ".join(a) for a in deleted)  # only the listed volumes
+    mv = next(s for s in steps if s.action == "node_mv")
+    assert mv.args == ("/var/k8s/fast/apps/beszel-data", "/var/k8s/fast/restore-aside/beszel-data.T")  # moved, not removed
+    assert not any("rm " in " ".join(map(str, s.args)) for s in steps)
+    man = restore.restore_manifest("beszel", "velero-apps-nightly-X", "T")
+    assert man["spec"]["labelSelector"] == {"matchLabels": {"homeserver/service": "beszel"}}
+    assert man["spec"]["backupName"] == "velero-apps-nightly-X" and man["metadata"]["name"] == "restore-beszel-T"
+    assert "Dry run: nothing was changed" in restore.render("beszel", "b", steps, yes=False)
+    assert "Dry run" not in restore.render("beszel", "b", steps, yes=True)
+
+
+def test_restore_command_is_registered_and_refuses_more_than_one_service():
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    spec = importlib.util.spec_from_file_location("k8s_cluster_restore", K8S / "cluster.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert callable(mod.cmd_restore) and callable(mod.cmd_verify) and callable(mod.cmd_argocd_password)
+    with pytest.raises(SystemExit):
+        mod.cmd_restore(type("A", (), {"services": ["beszel", "docs"], "backup": None, "yes": False, "env": "prod"})())

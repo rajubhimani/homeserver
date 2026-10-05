@@ -14,6 +14,7 @@
     uv run kubernetes/cluster.py validate [svc...]   # server-side dry run: the API server checks every manifest, nothing is created
     uv run kubernetes/cluster.py argocd-password   # set ArgoCD's admin password for good (a bcrypt hash in kubernetes/.env, applied by bootstrap)
     uv run kubernetes/cluster.py verify --env prod   # health check: nodes, pods, ArgoCD, databases, backups, tunnel, public hostnames, host disk
+    uv run kubernetes/cluster.py restore <svc> [--backup NAME] [--yes]  # a service's volumes back from a Velero backup (dry run without --yes)
     uv run kubernetes/cluster.py status
     uv run kubernetes/cluster.py delete            # remove the kind cluster (host data folders are kept)
 
@@ -991,6 +992,80 @@ def cmd_rmi(a) -> None:
         print("still in use by running pods: " + ", ".join(kept))
 
 
+def cmd_restore(a) -> None:
+    """Put one service's data volumes back from a Velero backup (kubernetes/restore.py
+    has the plan and why). Prints the plan and changes nothing without --yes."""
+    import restore
+    if len(a.services) != 1:
+        sys.exit("name exactly one service: cluster.py restore <svc> [--backup NAME] [--yes]")
+    svc = services(a.services)[0]
+    ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}"]
+
+    def out(*args: str) -> str:
+        return subprocess.run(ctx + list(args), capture_output=True, text=True).stdout.strip()
+
+    backup = a.backup
+    if not backup:
+        done = json.loads(out("-n", "velero", "get", "backups.velero.io", "-o", "json") or "{}").get("items", [])
+        done = [b for b in done if (b.get("status") or {}).get("phase") == "Completed"]
+        if not done:
+            sys.exit("no completed Velero backup found (kubectl -n velero get backups.velero.io)")
+        backup = max(done, key=lambda b: b["status"]["completionTimestamp"])["metadata"]["name"]
+    volumes = []
+    for v in service_volumes(svc):
+        pv = out("-n", NAMESPACE, "get", "pvc", v, "-o", "jsonpath={.spec.volumeName}")
+        if pv:
+            volumes.append({"pvc": v, "pv": pv,
+                            "node_path": out("get", "pv", pv, "-o", "jsonpath={.spec.local.path}{.spec.hostPath.path}")})
+    if not volumes:
+        sys.exit(f"{svc} has no data volumes to restore (databases have their own restore: Barman for Postgres, the dumps)")
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    steps = restore.plan(svc, backup, volumes, ts)
+    print(restore.render(svc, backup, steps, a.yes))
+    if not a.yes:
+        return
+    node = f"{cfg()['K8S_CLUSTER_NAME']}-control-plane"
+    try:
+        for i, s in enumerate(steps, 1):
+            print(f"\n[{i}/{len(steps)}] {s.text}", flush=True)
+            if s.action == "pause":
+                argo_pause(svc, True)
+            elif s.action == "kubectl":
+                kubectl(*s.args)
+            elif s.action == "wait_pods_gone":
+                kubectl("-n", NAMESPACE, "wait", "--for=delete", "pod", "-l", s.args[0], "--timeout=180s", check=False)
+            elif s.action == "node_mv":
+                subprocess.run(["docker", "exec", node, "sh", "-c",
+                                f"mkdir -p {restore.ASIDE} && mv '{s.args[0]}' '{s.args[1]}'"], check=True)
+            elif s.action == "velero_restore":
+                kubectl("apply", "-f", "-", input=yaml.safe_dump(restore.restore_manifest(*s.args)))
+            elif s.action == "wait_restore":
+                name, phase = s.args[0], ""
+                for _ in range(180):  # up to 15 min
+                    phase = out("-n", "velero", "get", "restores.velero.io", name, "-o", "jsonpath={.status.phase}")
+                    if phase in ("Completed", "PartiallyFailed", "Failed", "FailedValidation"):
+                        break
+                    time.sleep(5)
+                pvr = json.loads(out("-n", "velero", "get", "podvolumerestores.velero.io", "-l",
+                                     f"velero.io/restore-name={name}", "-o", "json") or "{}").get("items", [])
+                bad = [x["metadata"]["name"] for x in pvr if (x.get("status") or {}).get("phase") != "Completed"]
+                print(f"restore {phase or 'timed out'}; {len(pvr)} volume restore(s), {len(bad)} not completed")
+                if phase != "Completed" or bad or not pvr:
+                    raise RuntimeError(f"restore {name} did not complete cleanly (phase {phase!r}, {len(pvr)} PodVolumeRestores, "
+                                       f"not completed: {bad})")
+            elif s.action == "unpause":
+                argo_pause(svc, False)
+            elif s.action == "wait_ready":
+                kubectl("-n", NAMESPACE, "wait", "--for=condition=Available", "deployment", "-l", s.args[0],
+                        "--timeout=300s", check=False)
+    except Exception as e:  # noqa: BLE001 - tell the owner exactly how to recover, then fail
+        argo_pause(svc, False)
+        sys.exit(f"\nrestore stopped: {e}\nOld data is under {restore.ASIDE}/ on the node "
+                 f"(~/k8s-data/fast/restore-aside/ on the host); a `cluster.py export` taken before can be re-imported "
+                 f"with `cluster.py import --env prod --from-export <dir> {svc}`.")
+    print(f"\nrestored {svc} from {backup}. Old data kept in ~/k8s-data/fast/restore-aside/.")
+
+
 def cmd_verify(a) -> None:
     """Read-only health check of the whole stack (kubernetes/verify.py). Exit 1
     when anything fails, so it can gate a rebuild or run from cron."""
@@ -1033,7 +1108,7 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete", "argocd-password", "verify"])
+    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete", "argocd-password", "verify", "restore"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
@@ -1041,10 +1116,12 @@ def main() -> int:
     ap.add_argument("--drop-host-copy", action="store_true", help="images: remove Docker's copy after loading it into kind")
     ap.add_argument("--timeout", type=int, default=900, help="smoke: seconds to wait for readiness")
     ap.add_argument("--live-db", action="store_true", help="import: own Postgres from the running Compose container (pg_dump)")
+    ap.add_argument("--backup", help="restore: a Velero backup name (default: the newest completed)")
+    ap.add_argument("--yes", action="store_true", help="restore: actually do it (without it the plan is only printed)")
     ap.add_argument("--from-export", help="import: a folder written by export (K8S_EXPORT_PATH/<timestamp>)")
     a = ap.parse_args()
     {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "export": cmd_export, "archive": cmd_archive, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
-     "status": cmd_status, "delete": cmd_delete, "argocd-password": cmd_argocd_password, "verify": cmd_verify}[a.action](a)
+     "status": cmd_status, "delete": cmd_delete, "argocd-password": cmd_argocd_password, "verify": cmd_verify, "restore": cmd_restore}[a.action](a)
     return 0
 
 
