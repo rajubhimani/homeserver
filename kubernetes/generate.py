@@ -1984,7 +1984,10 @@ def gitops(env: str) -> dict[str, list[dict]]:
     repo, rev = d["repo"], d["revision"]
     addons = yaml.safe_load((K8S_DIR / "cluster/addons.yaml").read_text())
     sync_auto = {"automated": {"prune": True, "selfHeal": True}} if d.get("auto_sync") else {}
-    retry = {"limit": 10, "backoff": {"duration": "30s", "factor": 2, "maxDuration": "5m"}}
+    # limit < 0 = unlimited attempts (ArgoCD docs, "Automated sync policy" retry).
+    # With 10, apps that raced a late CRD (CloudNativePG on a fresh cluster)
+    # gave up for good and needed a manual refresh (2026-10-05).
+    retry = {"limit": -1, "backoff": {"duration": "30s", "factor": 2, "maxDuration": "5m"}}
     meta = lambda name: {"name": name, "namespace": ARGOCD_NS, "labels": {"app.kubernetes.io/part-of": "homeserver"}}  # noqa: E731
     gen = "kubernetes/generated"
     projects = [
@@ -2028,7 +2031,11 @@ def gitops(env: str) -> dict[str, list[dict]]:
                      "spec": {"project": "platform", **src,
                               "destination": {"server": IN_CLUSTER, "namespace": a["namespace"]},
                               "syncPolicy": {**sync_auto, "retry": retry,
-                                             "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}})
+                                             # ServerSideApply for what needs it (big CRDs, operators); not
+                                             # for plain objects: with it the Gateway API defaults the server
+                                             # fills in (group, kind, weight, matches) show as permanent drift.
+                                             "syncOptions": ["CreateNamespace=true"]
+                                             + (["ServerSideApply=true"] if a.get("ssa", True) else [])}}})
     for svc in load_scope().get("ported") or []:
         if (h := helm_service(svc)):
             values = dagster_values(svc in running_services(env)) if svc == "dagster" else {}

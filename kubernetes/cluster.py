@@ -13,6 +13,7 @@
     uv run kubernetes/cluster.py rmi     <svc...>  # remove a stopped service's images from the kind node (frees disk)
     uv run kubernetes/cluster.py validate [svc...]   # server-side dry run: the API server checks every manifest, nothing is created
     uv run kubernetes/cluster.py argocd-password   # set ArgoCD's admin password for good (a bcrypt hash in kubernetes/.env, applied by bootstrap)
+    uv run kubernetes/cluster.py verify --env prod   # health check: nodes, pods, ArgoCD, databases, backups, tunnel, public hostnames, host disk
     uv run kubernetes/cluster.py status
     uv run kubernetes/cluster.py delete            # remove the kind cluster (host data folders are kept)
 
@@ -984,6 +985,37 @@ def cmd_rmi(a) -> None:
         print("still in use by running pods: " + ", ".join(kept))
 
 
+def cmd_verify(a) -> None:
+    """Read-only health check of the whole stack (kubernetes/verify.py). Exit 1
+    when anything fails, so it can gate a rebuild or run from cron."""
+    import verify
+    from generate import running_services
+    sys.path.insert(0, str(REPO / "services" / "uptime-kuma"))
+    import k8s_monitors
+    ctx = ["kubectl", "--context", f"kind-{cfg()['K8S_CLUSTER_NAME']}"]
+
+    def kg(*args: str) -> list[dict]:
+        p = subprocess.run(ctx + ["get", *args, "-o", "json"], capture_output=True, text=True)
+        return json.loads(p.stdout).get("items", []) if p.returncode == 0 else []
+
+    def http(url: str) -> int:
+        p = subprocess.run(["curl", "-s", "-o", "/dev/null", "-m", "25", "-w", "%{http_code}", url], capture_output=True, text=True)
+        return int(p.stdout or 0)
+
+    def tunnel_ready() -> bool:
+        return subprocess.run(ctx + ["-n", NAMESPACE, "exec", "deploy/cloudflared", "--", "cloudflared", "tunnel",
+                                     "--metrics", "localhost:9002", "ready"], capture_output=True).returncode == 0
+
+    run_set = running_services(a.env)
+    # Public hostnames only where they're real (prod); the test env uses *.k8s.local.
+    urls = [m["url"] for m in k8s_monitors.plan(a.env, run=run_set) if m["kind"] == "http" and m["active"]] if a.env == "prod" else []
+    results = verify.verify_checks(run_set, set(load_scope().get("ported") or []), kg, http, tunnel_ready, urls,
+                                   host=verify.host_checks())
+    print(verify.render(results))
+    if not all(ok for _, ok, _ in results):
+        sys.exit(1)
+
+
 def cmd_status(_a) -> None:
     kubectl("get", "pods,svc,pvc,httproute", "-n", NAMESPACE, "-o", "wide", check=False)
 
@@ -995,7 +1027,7 @@ def cmd_delete(_a) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete", "argocd-password"])
+    ap.add_argument("action", choices=["create", "bootstrap", "secrets", "import", "export", "archive", "images", "smoke", "rmi", "validate", "status", "delete", "argocd-password", "verify"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--env", default="test", choices=["test", "prod"])
     ap.add_argument("--snapshot", help="import: a snapshot folder name (default: the newest)")
@@ -1006,7 +1038,7 @@ def main() -> int:
     ap.add_argument("--from-export", help="import: a folder written by export (K8S_EXPORT_PATH/<timestamp>)")
     a = ap.parse_args()
     {"create": cmd_create, "bootstrap": cmd_bootstrap, "secrets": cmd_secrets, "import": cmd_import, "export": cmd_export, "archive": cmd_archive, "validate": cmd_validate, "images": cmd_images, "smoke": cmd_smoke, "rmi": cmd_rmi,
-     "status": cmd_status, "delete": cmd_delete, "argocd-password": cmd_argocd_password}[a.action](a)
+     "status": cmd_status, "delete": cmd_delete, "argocd-password": cmd_argocd_password, "verify": cmd_verify}[a.action](a)
     return 0
 
 

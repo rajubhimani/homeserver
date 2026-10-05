@@ -796,3 +796,81 @@ def test_argocd_admin_password_is_applied_from_a_hash_and_never_logged(monkeypat
         mod.apply_argocd_password()
     monkeypatch.setattr(mod, "cfg", lambda: {"K8S_CLUSTER_NAME": "x"})
     assert mod.apply_argocd_password() is False
+
+
+def test_argocd_apps_retry_forever_and_plain_routes_skip_server_side_apply():
+    """With `retry.limit: 10`, apps that raced a late CRD gave up for good on a
+    fresh cluster (2026-10-05). `limit < 0` is ArgoCD's unlimited. ops-routes is
+    plain HTTPRoutes: under ServerSideApply the defaults the API server adds show
+    as permanent drift, so it applies client-side."""
+    docs = [d for d in yaml.safe_load_all((K8S / "generated/gitops/prod/applications.yaml").read_text()) if d]
+    apps = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Application"}
+    for name, app in apps.items():
+        retry = (app["spec"].get("syncPolicy") or {}).get("retry")
+        assert retry is None or retry["limit"] < 0, name
+    assert "ServerSideApply=true" not in apps["ops-routes"]["spec"]["syncPolicy"]["syncOptions"]
+    assert "ServerSideApply=true" in apps["cloudnative-pg"]["spec"]["syncPolicy"]["syncOptions"]
+
+
+def _fake_cluster(over=None):
+    """A healthy minimal cluster, for cluster.py verify."""
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ready = {"conditions": [{"type": "Ready", "status": "True"}]}
+    data = {
+        ("nodes",): [{"metadata": {"name": "n"}, "status": ready}],
+        ("pods", "-A"): [{"metadata": {"namespace": "apps", "name": "p"}, "status": {"phase": "Running", **ready}}],
+        ("applications.argoproj.io", "-n", "argocd"): [
+            {"metadata": {"name": "docs"}, "status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}}},
+            {"metadata": {"name": "mealie"}, "status": {"sync": {"status": "OutOfSync"}, "health": {"status": "Missing"}}}],
+        ("clusters.postgresql.cnpg.io", "-A"): [{"metadata": {"name": "db"}, "spec": {"instances": 1},
+                                                 "status": {"phase": "Cluster in healthy state", "readyInstances": 1}}],
+        ("mariadbs.k8s.mariadb.com", "-A"): [{"metadata": {"name": "m"}, "status": ready}],
+        ("backupstoragelocations.velero.io", "-n", "velero"): [{"metadata": {"name": "default"}, "status": {"phase": "Available"}}],
+        ("backups.velero.io", "-n", "velero"): [{"metadata": {"name": "b"}, "status": {"phase": "Completed", "completionTimestamp": now}}],
+        ("backups.postgresql.cnpg.io", "-A"): [{"metadata": {"name": "x"}, "spec": {"cluster": {"name": "db"}},
+                                                "status": {"phase": "completed", "stoppedAt": now}}],
+        ("deployments", "-n", "apps"): [{"metadata": {"name": "cloudflared"}, "status": {"readyReplicas": 1}}],
+    }
+    data.update(over or {})
+    return lambda *args: data.get(args, [])
+
+
+def test_verify_passes_a_healthy_cluster_and_catches_real_failures():
+    """cluster.py verify: the checks the 2026-10-04/05 rebuilds were done by hand."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import verify
+    run, ported = {"docs", "cloudflared"}, {"docs", "mealie", "cloudflared"}  # mealie is stopped on purpose
+    ok = lambda url: 200  # noqa: E731
+
+    def check(kg, http=ok, tunnel=lambda: True):
+        return {n: (good, d) for n, good, d in verify.verify_checks(run, ported, kg, http, tunnel, ["https://docs.x/"])}
+
+    healthy = check(_fake_cluster())
+    assert all(good for good, _ in healthy.values()), healthy  # a stopped service's OutOfSync app is not a failure
+
+    pod = {"metadata": {"namespace": "apps", "name": "bad"}, "status": {"phase": "Running", "conditions": []}}
+    assert not check(_fake_cluster({("pods", "-A"): [pod]}))["pods running and ready"][0]
+    stale = {"metadata": {"name": "old"}, "status": {"phase": "Completed", "completionTimestamp": "2020-01-01T00:00:00Z"}}
+    assert not check(_fake_cluster({("backups.velero.io", "-n", "velero"): [stale]}))["Velero backup recent and clean"][0]
+    assert not check(_fake_cluster({("backups.postgresql.cnpg.io", "-A"): []}))["Postgres base backups recent"][0]
+    assert not check(_fake_cluster(), tunnel=lambda: False)["tunnel connected to Cloudflare"][0]
+    assert not check(_fake_cluster(), http=lambda u: 530)["public hostnames answer (from this machine)"][0]
+    sick = {"metadata": {"name": "docs"}, "status": {"sync": {"status": "OutOfSync"}, "health": {"status": "Healthy"}}}
+    assert not check(_fake_cluster({("applications.argoproj.io", "-n", "argocd"): [sick]}))["ArgoCD apps synced and healthy"][0]
+
+
+def test_verify_host_checks_ignore_sata_ports_without_a_disk(tmp_path):
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import verify
+    for host, policy, disk in (("host0", "max_performance", True), ("host4", "keep_firmware_settings", False)):
+        d = tmp_path / "sys/class/scsi_host" / host
+        (d / "device").mkdir(parents=True)
+        (d / "link_power_management_policy").write_text(policy + "\n")
+        if disk:
+            (d / "device" / "target0:0:0").mkdir()
+    ok, detail = verify.host_checks(tmp_path)["SATA link power = max_performance"]
+    assert ok and detail == "max_performance"
+    (tmp_path / "sys/class/scsi_host/host0/link_power_management_policy").write_text("med_power_with_dipm\n")
+    assert not verify.host_checks(tmp_path)["SATA link power = max_performance"][0]

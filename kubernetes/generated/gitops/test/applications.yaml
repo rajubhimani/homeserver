@@ -18,7 +18,7 @@ spec:
     namespace: argocd
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -44,7 +44,7 @@ spec:
     namespace: argocd
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -73,7 +73,7 @@ spec:
     namespace: default
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -102,7 +102,7 @@ spec:
     namespace: default
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -138,7 +138,7 @@ spec:
     namespace: infra
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -169,7 +169,7 @@ spec:
     namespace: cnpg-system
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -200,7 +200,7 @@ spec:
     namespace: mariadb-operator
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -231,7 +231,7 @@ spec:
     namespace: mariadb-operator
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -262,7 +262,7 @@ spec:
     namespace: external-secrets
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -296,7 +296,7 @@ spec:
     namespace: reloader
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -327,7 +327,7 @@ spec:
     namespace: headlamp
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -361,7 +361,7 @@ spec:
     namespace: cert-manager
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -392,7 +392,7 @@ spec:
     namespace: cnpg-system
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -421,7 +421,7 @@ spec:
     namespace: backup
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -481,7 +481,7 @@ spec:
     namespace: velero
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -515,7 +515,7 @@ spec:
     namespace: kube-system
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
@@ -544,14 +544,13 @@ spec:
     namespace: argocd
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2
         maxDuration: 5m
     syncOptions:
     - CreateNamespace=true
-    - ServerSideApply=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -673,7 +672,7 @@ spec:
     namespace: apps
   syncPolicy:
     retry:
-      limit: 10
+      limit: -1
       backoff:
         duration: 30s
         factor: 2

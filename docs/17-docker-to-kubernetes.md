@@ -485,8 +485,11 @@ uv run kubernetes/cluster.py delete
 uv run kubernetes/cluster.py create
 uv run kubernetes/cluster.py bootstrap --env prod   # ArgoCD starts the running list with empty data
 uv run kubernetes/cluster.py import --env prod --from-export /mnt/mydata/k8s-data/export/<timestamp>
+uv run kubernetes/cluster.py verify --env prod       # every check green before the tunnel goes on
 uv run kubernetes/k8s.py up cloudflared --env prod && git commit -am "k8s: tunnel back on" && git push
 ```
+
+**`cluster.py verify --env prod`** is the health check for all of this (read-only, exit 1 on any failure, so it can gate a rebuild or run from cron): nodes, pods, ArgoCD apps (a service stopped on purpose doesn't count), Postgres and MariaDB, the backup store, a recent clean Velero backup and recent Postgres base backups, the tunnel pod and its connection to Cloudflare, every public hostname (fetched from this machine), and the host (SATA link power saving, disk I/O pressure, free space). Its one blind spot is the one that bit on 2026-10-05: it fetches the hostnames through the Cloudflare edge nearest this machine, so also test from another network.
 
 **The tunnel stays off until the data is back.** Between `bootstrap` and `import` the apps run empty, and a fresh app often lets its first visitor create the admin account (Authentik's initial setup, for one). Taking cloudflared out of the running list first keeps those pages unreachable from the internet. `import --from-export` starts again only the services in the running list (found 2026-10-05: it used to scale every exported service up, the stopped tunnel included, so the tunnel's pod was created while the apps were still empty).
 
