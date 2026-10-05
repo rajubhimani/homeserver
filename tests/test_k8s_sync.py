@@ -1123,3 +1123,13 @@ def test_watchdog_manifests_are_least_privilege_and_match_the_sources():
         assert files["verify.py"] == (K8S / "verify.py").read_text()
     conf = json.loads(gen.cluster_watchdog_files("prod", "example.test")["watchdog.json"])
     assert "cloudflared" in conf["run"] and conf["domain"] == "example.test"
+
+
+def test_no_generated_file_is_git_ignored():
+    """ArgoCD builds from a git checkout. A blanket `*.json` in .gitignore kept the watchdog's
+    generated watchdog.json out of the repo, so its kustomize build failed on ArgoCD
+    (2026-10-05) although everything passed locally. Any ignored file under generated/ is a bug."""
+    p = subprocess.run(["git", "ls-files", "--others", "--ignored", "--exclude-standard", "kubernetes/generated"],
+                       cwd=REPO, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    assert p.stdout.strip() == "", f"generated files that git ignores (add a .gitignore exception):\n{p.stdout}"
