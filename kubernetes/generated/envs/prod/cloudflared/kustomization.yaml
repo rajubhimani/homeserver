@@ -4,3 +4,8 @@ kind: Kustomization
 namespace: apps
 resources:
 - ../../../apps/cloudflared
+patches:
+- target:
+    kind: Deployment
+    name: cloudflared
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
