@@ -84,14 +84,21 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 6. **Broad pass:** smoke-test the 15 deferred apps (`cluster.py smoke …`, one at a time).
 7. Update the docs (guide Step 7 restore, Step 8 rebuild) and this file.
 
-### Open as of 2026-10-05 (end of session)
+### Where it stands (2026-10-05, 09:00)
 
-1. **Host boot-safety is not installed after the reinstall.** `sudo bash docker/host-boot-safety.sh` (idempotent) restores the SATA `max_performance` udev rule + `balanced-nolpm` tuned profile, `ip_nonlocal_bind`, docker waiting for the data mounts, the mount watch and the Docker FORWARD fix. **The SSD already logged SATA link errors on this boot** (`ata8` = `sda`: `hard resetting link` / `PHYRdyChg CommWake`, the 2026-10-02 freeze signature), so this is not optional. `tuned-adm` is on `throughput-performance` (set by hand) and the SATA links are still `med_power_with_dipm`. See docs/08 "System freezes / SSD drops off the bus".
-2. **wg-easy (Docker) is stopped on purpose (owner, 2026-10-05; snapshot `service_data/backup/wg-easy/20261005-011815`).** It was unhealthy: `wg-quick up wg0` fails on `ip6tables -t nat` because `ip6table_nat` isn't loaded. `sudo modprobe iptable_nat ip6table_nat` and persist in `/etc/modules-load.d/wg-easy.conf` (docs/services/wg-easy.md). To bring the VPN back: load the modules, then `uv run homeserver.py prod up wg-easy`. The VPN (10.8.0.1) is down until then.
-3. **AdGuard Home to Docker (decided):** skipped on Kubernetes (committed, pushed). Still to do: finish the cluster rebuild so kind frees 127.0.0.1:8123 (the owner chose "rebuild now": fresh `export`, tunnel off, `cluster.py delete`, `create`, `bootstrap`, `images dagster temporal`, `import --from-export <new> <services minus adguard-home>`, tunnel on), then `uv run homeserver.py prod up adguard-home`. The host is 192.168.1.7/24 (static on the Wi-Fi connection `Airtel_Roger`, fixed 2026-10-05 after a /0 mask cut IPv4 for ~1 h and the tunnel returned 530); `DNS_BIND_IP=192.168.1.7` matches. Docker's AdGuard data (`service_data/data/adguard-home`) is the pre-rebuild one.
-4. **Uptime Kuma:** run `uv run services/uptime-kuma/setup-monitors.py --k8s --prune` (needs the owner's Kuma login). It replaces the 187 Docker monitors (all down: no Docker socket in pods) with 66 public-URL and 19 TCP checks.
-5. **Beszel:** the owner reset the agent's fingerprint (works). Open question: its network monitors for services (`tcp localhost:<port>`, made for the Docker host agent) show Immich down although Immich runs and node `localhost:2283` accepts connections; check what the hub recorded (data under `/var/k8s/fast/apps/beszel-data/data/`) and decide whether to retarget or drop them (Uptime Kuma now covers availability).
-6. Supabase's public route (network alias, §5), the three owner checks (Cloudflare Connectors list shows only this cluster's 4 connections; app logins), and the 15 deferred apps remain.
+**Second rebuild done, tunnel on.** A fresh export (`/mnt/mydata/k8s-data/export/20261005-012033`, 28 services) was imported into a recreated cluster; every row count matches the first rebuild (Immich 21,246 assets, Firefly 113/793, Nextcloud 691 files, Authentik 4 users, Uptime Kuma 187 monitors…). 97 pods run, the public hostnames answer and `nginx-plain` logs real client IPs. The old data folders are aside: `~/k8s-data/{fast,bulk}.pre-rebuild-20261005` and `/mnt/mydata/k8s-data/backup.pre-rebuild-20261005` (the old WAL archive, kept out of the new store on purpose: CNPG refuses a non-empty archive for the same server name). The reason for the rebuild was AdGuard's port 8123 (kind maps ports only at creation).
+
+**Done today besides the rebuild:** AdGuard Home runs on Docker (`DNS_BIND_IP=192.168.1.7`, answers DNS over UDP and TCP; skipped in `kubernetes/scope.yaml`). `docker/host-boot-safety.sh` was run (SATA `max_performance`, `ip_nonlocal_bind=1`, mount ordering). `homeserver.py --no-wg` stops `prod up` from starting wg-easy as a side effect (docs/15). `cluster.py argocd-password` keeps one ArgoCD password across rebuilds (hash in `kubernetes/.env`, applied by bootstrap). The host's static IP is 192.168.1.7/24 on `Airtel_Roger` (a `/0` mask once cut IPv4 for an hour).
+
+**Open:**
+1. **wg-easy (Docker) is stopped on purpose.** It also fails to start because `ip6table_nat` isn't loaded: `sudo modprobe iptable_nat ip6table_nat`, persist in `/etc/modules-load.d/wg-easy.conf` (docs/services/wg-easy.md), then `uv run homeserver.py prod up wg-easy`. Any `prod up` without `--no-wg` starts it again.
+2. **Uptime Kuma:** run `uv run services/uptime-kuma/setup-monitors.py --k8s --prune` (needs the owner's Kuma login): the 187 monitors are Docker-socket ones and all report down.
+3. **Router/devices:** point their DNS at 192.168.1.7 for AdGuard's dashboard to fill.
+4. **Owner checks:** Cloudflare Connectors list shows only this cluster's 4 connections; app logins; set the ArgoCD password (`argocd-password`).
+5. **Headlamp login:** decision pending (non-expiring token vs Authentik OIDC, recommended).
+6. **Beszel:** the Immich "down" was the 00:50-01:15 IPv4 outage and the tunnel being off; re-check the monitors now.
+7. Supabase's public route (network alias, §5); the 15 deferred apps; `cluster.py restore`.
+8. **Nightly Velero backup** (03:30) hasn't run on the new cluster yet: check `kubectl -n velero get backups.velero.io` tomorrow.
 
 ## 4. How things work (short)
 
