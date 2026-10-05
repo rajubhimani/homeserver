@@ -2379,7 +2379,7 @@ def dump_cronjob(svc: str, spec: dict, b: dict, labels: dict) -> dict:
            "initContainers": [{"name": "dump", "image": image, "command": ["sh", "-c", dump], "env": env,
                                "securityContext": secure, "volumeMounts": [{"name": "work", "mountPath": "/work"}]}],
            "containers": [{"name": "upload", "image": VERSIONS["MC_IMAGE"], "command": ["sh", "-c", upload],
-                           "env": [{"name": "S3_ENDPOINT", "value": b["endpoint"]}, {"name": "MC_CONFIG_DIR", "value": "/work/.mc"}],
+                           "env": [{"name": "S3_ENDPOINT", "value": b["endpoint"]}, {"name": "MC_CONFIG_DIR", "value": "/tmp/.mc"}],  # not under /work: `mc cp /work/` uploaded its own state file
                            "envFrom": [{"secretRef": {"name": "backup-dumps-credentials"}}],
                            "securityContext": secure, "volumeMounts": [{"name": "work", "mountPath": "/work"}]}],
            "volumes": [{"name": "work", "emptyDir": {}}]}

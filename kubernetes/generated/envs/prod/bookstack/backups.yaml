@@ -64,7 +64,7 @@ spec:
             - name: S3_ENDPOINT
               value: http://backup-store.backup.svc.cluster.local:9000
             - name: MC_CONFIG_DIR
-              value: /work/.mc
+              value: /tmp/.mc
             envFrom:
             - secretRef:
                 name: backup-dumps-credentials

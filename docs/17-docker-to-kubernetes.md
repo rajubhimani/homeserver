@@ -458,6 +458,36 @@ Decided 2026-10-04 (option A of three): each piece is its own project's document
 
 **Restoring a service's volumes (`cluster.py restore`).** `uv run kubernetes/cluster.py restore <svc> [--backup NAME]` prints the plan and changes nothing; add `--yes` to run it. It uses the newest completed Velero backup unless you name one. Velero restores pod data through *pods* (it injects a `restore-wait` init container) and skips anything that still exists, "even scaled to 0" (Velero's file-system-backup docs), so the plan is: pause ArgoCD for the service, **delete** its workloads and its volume claim and volume, **move the old data folder aside** (`~/k8s-data/fast/restore-aside/`, never deleted), let Velero restore the objects and the volume data, resume ArgoCD, wait until the service is ready. Databases are not touched: Postgres has Barman and shared-database apps their nightly dumps. Take a fresh `cluster.py export` of the service first; if the restore stops, the command says where the old data is. The first real run is the round trip on a small service (beszel), done with the owner present.
 
+**Restore procedures, each proven on 2026-10-05 without touching live data.** Every kind of backup was restored into something new and compared with the live original:
+
+| Data | Proven by | Result |
+|---|---|---|
+| **Volumes** (Velero) | A `Restore` of `beszel`'s volume into a throwaway namespace (`namespaceMapping: {apps: restore-test}`, only the claim and workload objects) | 20 s; 4,342,715 bytes restored, the same files and `data.db` size as the live volume, and a marker written after the backup absent |
+| **A Postgres cluster** (Barman) | A new `Cluster` with `bootstrap.recovery` from the object store, next to the live one | healthy in 78 s; Guacamole's 23 tables, connections, users and permissions equal the live ones |
+| **One app on a shared database** (nightly dump) | A Job that fetched the newest `dumps/miniflux/<ts>/miniflux.dump` and `pg_restore`d it into a scratch database | row counts equal the live database; scratch database dropped |
+
+The Postgres recovery cluster, as run (the live cluster is `guacamole-db`; the new one has no `plugins:` of its own, so it can't write into the live archive):
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata: {name: guacamole-db-restore-test, namespace: apps}
+spec:
+  instances: 1
+  imageName: <the live cluster's image>
+  storage: {size: 2Gi, storageClass: fast}
+  bootstrap: {recovery: {source: origin}}
+  externalClusters:
+    - name: origin
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters: {barmanObjectName: backup-postgres, serverName: guacamole-db}
+```
+
+To make a recovered cluster the real one, give it its own WAL archive name: CloudNativePG refuses an archive path that isn't empty, so a recovered cluster that keeps the old cluster's name must set `serverName: <new name>` in its `plugins:` parameters. Point-in-time recovery adds `recoveryTarget: {targetTime: ...}` under `bootstrap.recovery`.
+
+**Not yet proven:** the *in-place* swap (delete the live workloads and volume, then restore under the original names), which is what `cluster.py restore` automates for volumes. It stays a dry run until it has been run once on a small service with the owner present.
+
 **A copy on the Passport:** `uv run kubernetes/cluster.py archive /run/media/<you>/Passport/homeserver` mirrors every bucket into `k8s-backup-store/` there (incremental: only new objects are copied) together with `kubernetes.env`. That file holds the store's keys and Velero's password, without which the copy can't be restored, so keep the drive private.
 
 **Settings:** `schedule` (nightly, `30 3 * * *` UTC) and `retention_days` (30): Barman's recovery window, Velero's TTL. `enabled: false` turns everything off for an environment. The test environment has it off until the next rebuild, because the current cluster has no Barman plugin yet and WAL archiving to a missing plugin would stall its databases.

@@ -988,3 +988,16 @@ def test_headlamp_auth_rejects_an_unknown_mode(monkeypatch):
     monkeypatch.setattr(gen, "load_deploy", lambda env: {**real(env), "headlamp_auth": "oidc"})
     with pytest.raises(gen.GenError):
         gen.headlamp_auth("prod")
+
+
+def test_dump_jobs_keep_mc_state_out_of_the_uploaded_folder():
+    """`mc cp --recursive /work/` uploaded mc's own state (.mc/share/uploads.json)
+    next to every dump when MC_CONFIG_DIR was under /work (found 2026-10-05)."""
+    for f in (GENERATED / "envs/prod").glob("*/backups.yaml"):
+        for d in yaml.safe_load_all(f.read_text()):
+            if d and d["kind"] == "CronJob":
+                spec = d["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+                for c in spec["initContainers"] + spec["containers"]:
+                    for e in c.get("env", []):
+                        if e["name"] == "MC_CONFIG_DIR":
+                            assert not e["value"].startswith("/work"), (f.parent.name, e["value"])
