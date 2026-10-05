@@ -12,6 +12,21 @@ design), branch `feature/k8s-generated`.
 
 ---
 
+## 0. START HERE: production is on Docker again (2026-10-05, 23:35)
+
+The stack moved from Kubernetes back to Docker the same night (docs/17 Step 9). **Docker serves everything**: 68 containers, the tunnel is Docker's `cloudflared` (with its `cloudflared-watchdog`), AdGuard on Docker (192.168.1.7), wg-easy deliberately down. **The kind cluster is stopped, not deleted** (`docker start homeserver-test-control-plane` to bring it back; never run both tunnels). Everything is on branch `develop`.
+
+Data came over with `kubernetes/to_docker.py` and matched the cluster's row counts. Backups taken first: Velero, a base backup of all 9 Postgres clusters, the cluster's backup store and a 26 GB archive of Docker's side on the Passport, and the final export `/mnt/mydata/k8s-data/export/20261005-223335`. Old Docker data was kept as `service_data/backup/<svc>/pre-k8s-<ts>`.
+
+**To do now**
+1. **Nightly backup on Docker.** `homeserver.py backup` stops each service briefly; decide whether a nightly timer (a few seconds of downtime per service at ~03:00) is wanted, so the HDD always holds yesterday's data.
+2. **Retire the cluster** when comfortable: `cluster.py delete`, then remove `~/k8s-data/` (SSD, ~35 GB containerd store plus volumes) by hand, and the `*.pre-rebuild-*` folders.
+3. Open items still valid: wg-easy's kernel module (`sudo modprobe iptable_nat ip6table_nat`, then `up wg-easy`), router DNS to 192.168.1.7, the owner's logins and a phone check from mobile data.
+4. Secrets printed into session logs by mistake (rotate if logs are shared): Immich's DB URL/secret/offline API key, and part of the backup store's MinIO root password (`BACKUP_STORE_ROOT_PASSWORD`, now irrelevant if the cluster is retired).
+
+Everything below describes the Kubernetes work (kept as the record and for the lab).
+
+
 ## 0. OS reinstall: DONE (2026-10-05)
 
 The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same paths. Rebuilt the same day:

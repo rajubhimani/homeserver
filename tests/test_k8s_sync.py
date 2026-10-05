@@ -1263,3 +1263,16 @@ def test_archive_runs_mc_through_sh_without_awk_and_never_puts_the_password_on_a
     assert '"--entrypoint", "sh"' in body and "awk" not in body.replace("no awk", "")
     assert '"-e", "U", "-e", "P"' in body and "BACKUP_STORE_ROOT_PASSWORD'] }" not in body
     assert 'f"P=' not in body and 'f"U=' not in body  # no key=value in the command
+
+
+def test_to_docker_starts_only_the_database_and_never_starts_wg_easy():
+    """Found during the 2026-10-05 cutover: do_up waits for EVERY container of the service, including the ones
+    deliberately left out, so each own-database load timed out after 180 s and was skipped; and do_up
+    started wg-easy as a side effect. The loader now starts the database container directly and waits for that
+    one, sets NO_WG_START, and has a `dbs` action to redo only the database step."""
+    src = (K8S / "to_docker.py").read_text()
+    body = src[src.index("def start_db_only"):src.index("def load_own_dbs")]
+    assert "do_up" not in body and "compose_up" in body and "wait_healthy(db_container)" in body
+    assert "hs.NO_WG_START = True" in src and '"dbs"' in src
+    main = src[src.index("def main"):]
+    assert "hs.do_up(" not in main.split("def time_stamp")[0].replace("start_db_only", "")  # no do_up with exclude in the flow

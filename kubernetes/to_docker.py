@@ -12,6 +12,8 @@ database.
     uv run kubernetes/to_docker.py build --from-export DIR [svc...]   # write the snapshot folders only
     uv run kubernetes/to_docker.py load  --from-export DIR [svc...] --yes
                                           # restore into Docker (the service must not be running)
+    uv run kubernetes/to_docker.py dbs   --from-export DIR [svc...] --yes
+                                          # only the own-database dumps (files already restored); apps of the service are stopped first
 
 What maps to what:
   vol-<svc>-data.tar.gz        -> service_data/data/<svc>/   (the cluster's one volume per service mirrors DATA_ROOT)
@@ -164,6 +166,57 @@ def load_postgres_dump(hs, container: str, user: str, db: str, dump: Path) -> bo
     return tables > 0
 
 
+def container_ids(svc: str) -> list[str]:
+    p = subprocess.run(["docker", "ps", "-a", "--filter", f"label=com.docker.compose.project={svc}", "--format", "{{.Names}}"],
+                       capture_output=True, text=True)
+    return p.stdout.split()
+
+
+def wait_healthy(container: str, seconds: int = 240) -> bool:
+    """The one container is running and (if it has a healthcheck) healthy. Not the whole service:
+    do_up waits for every container, including the ones deliberately left out here."""
+    import time
+    for _ in range(seconds // 3):
+        p = subprocess.run(["docker", "inspect", "-f", "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}", container],
+                           capture_output=True, text=True)
+        status = p.stdout.split()
+        if status and status[0] == "running" and (len(status) == 1 or status[1] == "healthy"):
+            return True
+        time.sleep(3)
+    return False
+
+
+def start_db_only(hs, svc: str, env: str, info: dict, db_container: str) -> bool:
+    """Create and start only the app's database container, wait for that one container, and stop any
+    other container of the service (an app that already started against an empty database would be
+    cut off mid-load and would otherwise keep writing its first-run state into it)."""
+    others = [s for s in info["services"] if s not in {x["service"] for x in info["dbs"]}]
+    ok, out = hs.BACKEND.compose_up(hs.compose_files(svc, env), hs.compose_env(svc), None, exclude=others)
+    if not ok:
+        print(f"    could not start the database container: {out.strip()[-200:]}")
+        return False
+    for c in container_ids(svc):
+        if c != db_container:
+            subprocess.run(["docker", "stop", c], capture_output=True)
+    return wait_healthy(db_container)
+
+
+def load_own_dbs(hs, svc: str, plan: dict, info: dict, src: Path, env: str) -> list[str]:
+    failed = []
+    for d in plan["own_dbs"]:
+        target = pick_db_container(info["dbs"], d["engine"], d["db"])
+        if not target or d["engine"] != "postgres":
+            print(f"    no matching {d['engine']} container for {d['db']}: load it by hand ({src / svc / d['file']})")
+            failed.append(f"{svc}/{d['db']}")
+            continue
+        if not start_db_only(hs, svc, env, info, target["container"]):
+            failed.append(f"{svc}/{d['db']}")
+            continue
+        if not load_postgres_dump(hs, target["container"], target["user"], d["db"], src / svc / d["file"]):
+            failed.append(f"{svc}/{d['db']}")
+    return failed
+
+
 def preserve_existing(hs, svc: str, ts: str) -> Path | None:
     """The restore replaces a service's data folder and volumes with the cluster's. Whatever is
     there now (normally Docker's own state from before the move) is first kept as a snapshot
@@ -186,7 +239,7 @@ def preserve_existing(hs, svc: str, ts: str) -> Path | None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["plan", "build", "load"])
+    ap.add_argument("action", choices=["plan", "build", "load", "dbs"])
     ap.add_argument("services", nargs="*")
     ap.add_argument("--from-export", required=True, help="a folder written by `cluster.py export`")
     ap.add_argument("--yes", action="store_true", help="load: actually restore into Docker")
@@ -197,6 +250,7 @@ def main() -> int:
     ts = time_stamp()
     sys.path.insert(0, str(REPO))
     import homeserver as hs
+    hs.NO_WG_START = True  # starting a service must not start wg-easy as a side effect (homeserver.py --no-wg)
 
     rows = []
     for svc in a.services or sorted(manifest):
@@ -233,6 +287,11 @@ def main() -> int:
             continue
         if not a.yes:
             sys.exit("load changes Docker's data: add --yes (run `plan` first)")
+        if a.action == "dbs":
+            if plan["own_dbs"]:
+                print(f"\n== {svc} (database only)")
+                failed += load_own_dbs(hs, svc, plan, info, src, a.env)
+            continue
         print(f"\n== {svc}")
         shared = bool(hs.shared_db_creds(svc))
         if shared and not hs.shared_db_ready(svc, a.env, provision=False):
@@ -242,18 +301,7 @@ def main() -> int:
         if not hs.do_restore(svc, a.env, None, snapshot=snap.name):
             failed.append(svc)
             continue
-        for d in plan["own_dbs"]:
-            target = pick_db_container(info["dbs"], d["engine"], d["db"])
-            if not target or d["engine"] != "postgres":
-                print(f"    no matching {d['engine']} container for {d['db']}: load it by hand ({src / svc / d['file']})")
-                failed.append(f"{svc}/{d['db']}")
-                continue
-            others = [s for s in info["services"] if s not in {x["service"] for x in info["dbs"]}]
-            if not hs.do_up(svc, a.env, None, exclude=others):
-                failed.append(svc)
-                continue
-            if not load_postgres_dump(hs, target["container"], target["user"], d["db"], src / svc / d["file"]):
-                failed.append(f"{svc}/{d['db']}")
+        failed += load_own_dbs(hs, svc, plan, info, src, a.env)
     if failed:
         print("\nNEEDS ATTENTION: " + ", ".join(failed))
         return 1

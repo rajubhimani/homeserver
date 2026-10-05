@@ -612,21 +612,44 @@ Things found during the window, all fixed in the generator or the services thems
 - Images' own `HEALTHCHECK`s are ignored by Kubernetes; they're now carried as probes.
 - Authentik's chart probes need their 3 s timeout.
 
-## Step 9 — Going back to Docker
+## Step 9 — Going back to Docker (done 2026-10-05)
 
-Changes made on the cluster don't flow back: Docker restarts from its own data, as it was when you stopped it.
+The stack moved from the cluster back to Docker the same day it was proven on kind, because a daily reboot, on-the-fly start and stop (Portainer) and the disk wear of an always-on cluster on a 240 GB SSD fit Docker better. **Changes made on the cluster don't flow back by themselves**: Docker only has its own snapshots. `kubernetes/to_docker.py` carries them back.
 
+**What it does.** It turns a `cluster.py export` into Docker's own snapshot format, so `homeserver.py`'s tested restore does the loading:
+
+| In the export | In Docker |
+|---|---|
+| `vol-<svc>-data.tar.gz` | `service_data/data/<svc>/` (the cluster's one volume per service mirrors DATA_ROOT) |
+| `vol-<svc>-<key>.tar.gz` | Docker volume `<svc>_<key>`; a claim with no such volume is a host folder in Docker (Nextcloud's `/mnt/seagate`, Jellyfin's metadata) and is skipped, with a note saying whether it held anything |
+| a shared-database app's dump | `<svc>_shareddb_<db>_<ts>.dump|.sql`, loaded by `homeserver.py restore` |
+| an own-database app's dump | loaded into a fresh database in that app's own Postgres container (extensions first, then the rest, ownership to the app's role) |
+
+Nothing is deleted: before a restore replaces a service's folder or volumes, they are kept as a `pre-k8s-<ts>` snapshot, the old Docker snapshots stay in `service_data/backup/`, and the cluster itself is only stopped.
+
+**The order that was run**
 ```bash
-uv run kubernetes/cluster.py delete       # frees the tunnel, the localhost ports and UDP 51820; host folders are kept
-uv run homeserver.py prod up core         # starts MIN + CORE again (cloudflared, wg-easy and Jellyfin included)
-uv run homeserver.py status
+# 1. backups first (Velero, a base backup of each Postgres cluster, the store archived to the Passport)
+uv run kubernetes/cluster.py archive "/run/media/<you>/My Passport/homeserver"
+uv run homeserver.py archive "/run/media/<you>/My Passport/homeserver"
+# 2. pull the images while the cluster still serves (Docker's images are gone after an OS reinstall)
+# 3. the tunnel off (pause ArgoCD for cloudflared and the watchdog, scale to 0): the outage starts here
+# 4. a final export, then stop the cluster (it is only stopped: the kind node has restart policy unless-stopped)
+uv run kubernetes/cluster.py export --env prod
+docker stop -t 60 homeserver-test-control-plane
+# 5. load the data into Docker, check the row counts, start the services, the tunnel last
+uv run kubernetes/to_docker.py plan --from-export DIR       # changes nothing
+uv run kubernetes/to_docker.py load --from-export DIR --yes
+uv run kubernetes/to_docker.py dbs  --from-export DIR <svc...> --yes   # only the database step, if it needs redoing
+uv run homeserver.py prod up <svc> --no-wg                  # --no-wg: don't start wg-easy as a side effect
 ```
+It ran in about an hour (22:34 to 23:35): export 25 minutes, load 30, start-up 5. Every database matched the cluster's row counts (Immich 21,246 assets, Firefly 113 accounts, Nextcloud 691 files, Authentik 4 users, Forgejo 3 repos, Atuin 2,882 records, Plausible 2 sites, Guacamole 3 connections), and the sites answered from 8 to 11 countries.
 
-- **Delete the whole cluster, not just its tunnel.** kind holds the same `127.0.0.1` ports (and WireGuard's UDP 51820) that Docker needs.
-- **Docker's databases and volumes were never touched.** `down` keeps them, and `up` starts from them, so no restore is needed.
-- **Immich:** the photo folder is shared. At most it has new thumbnails from the cluster, which Docker's Immich ignores or regenerates.
-- **Nextcloud:** from its next start under Docker it logs in with `.env`'s `POSTGRES_USER` (`config/db.config.php`) instead of `oc_admin`. That's intended; check `curl -s localhost:8081/status.php` after the start.
-- **Want the cluster's changes on Docker?** That's a migration in the other direction (dump from CloudNativePG, `homeserver.py restore`), not part of this test.
+**Skipped on purpose** (nothing worth carrying, or Docker's own copy is right): `cloudflared`, `docs`, `landing`, `nginx-plain`, `it-tools`, `whiteboard`, `mailpit`, `clamav` (freshclam refetches), `observability` (the cluster's metrics) and `uptime-kuma` (its Docker-container monitors work again on Docker).
+
+**Lessons from the run** (each has a test): `do_up` waits for every container of a service, including those deliberately left out, so the own-database load now starts the database container directly; a bare `do_up` starts wg-easy (hence `--no-wg`); `cluster.py archive` had never run (the `mc` image's entrypoint is `mc`, and it has no `awk`).
+
+**The cluster is stopped, not deleted.** Start it again with `docker start homeserver-test-control-plane` (the same data and ArgoCD apps come back; stop Docker's cloudflared first, never run the tunnel in both places). Delete it with `uv run kubernetes/cluster.py delete` when you are sure; its volume folders (`~/k8s-data/`) are kept either way.
 
 ## Real client IPs behind the Cloudflare tunnel (decision, 2026-10-04)
 
