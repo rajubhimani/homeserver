@@ -10,7 +10,8 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_DATABASE_NAME: ${DB_DATABASE_NAME}
       IMMICH_SECRET: ${IMMICH_SECRET}
-      REDIS_HOSTNAME: immich-redis
+      REDIS_HOSTNAME: ${CACHE_HOST}
+      REDIS_PORT: ${CACHE_PORT}
       # Windows Docker Desktop bind mounts have been observed failing Immich's
       # own create->read->overwrite mount-integrity check on `upload/` (a
       # write succeeds, the very next read of the same file returns ENOENT) —
@@ -58,6 +59,8 @@ services:
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -78,13 +81,9 @@ services:
     volumes:
       - immich-postgres:/var/lib/postgresql
     shm_size: 128mb
-    healthcheck:
-      test: >-
-        pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1
-      interval: 60s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # No healthcheck here on purpose: the image ships its own
+    # (/usr/local/bin/healthcheck.sh, 5s while starting, then every 300s), and
+    # upstream's compose only says 'disable: false' to keep it.
     networks:
       - homeserver
 

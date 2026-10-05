@@ -9,6 +9,12 @@
 # restart` alone did NOT reattach it; only an explicit network
 # disconnect+connect did. This watches for that specific state via the
 # Docker API and repairs it the same way.
+#
+# Every repair is also pushed to ntfy (NTFY_URL/NTFY_TOKEN), so it's never
+# silent. The suspected root cause is the reboot race fixed by
+# docker/host-boot-safety.sh on 2026-09-25 (a failed 10.8.0.1 port bind can
+# leave a container with no network endpoint). If no alert arrives for
+# several weeks after that fix, this watchdog can be retired with evidence.
 set -eu
 
 : "${CHECK_INTERVAL:=60}"
@@ -34,6 +40,13 @@ reattach() {
     -d '{"Container":"adguard-home"}' \
     "http://localhost/networks/homeserver/connect"
   echo "watchdog: reattached"
+  if [ -n "${NTFY_URL:-}" ] && [ -n "${NTFY_TOKEN:-}" ]; then
+    curl -fsS -m 10 -H "Authorization: Bearer $NTFY_TOKEN" \
+      -H "Title: AdGuard lost its network and was reattached" \
+      -H "Tags: warning,electric_plug" \
+      -d "adguard-watchdog found adguard-home with no network attachment and reconnected it. See docs/services/adguard-home.md." \
+      "$NTFY_URL" >/dev/null || echo "watchdog: ntfy alert failed"
+  fi
 }
 
 while true; do

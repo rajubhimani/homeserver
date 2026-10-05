@@ -114,8 +114,8 @@ services:
       PORT: "3000"
       DEPLOY_METHOD: docker
       DEPLOY_PLATFORM: compose
-      MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=${MONGODB_REPLICA_SET_NAME}
-      MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=${MONGODB_REPLICA_SET_NAME}
+      MONGO_URL: mongodb://${MONGO_HOST}:${MONGO_PORT}/rocketchat?replicaSet=${MONGODB_REPLICA_SET_NAME}
+      MONGO_OPLOG_URL: mongodb://${MONGO_HOST}:${MONGO_PORT}/local?replicaSet=${MONGODB_REPLICA_SET_NAME}
       TRANSPORTER: monolith+nats://nats:4222
       # Without this, an unhandled promise rejection from the missing mail
       # config trips Node's EXIT_UNHANDLEDPROMISEREJECTION policy and kills

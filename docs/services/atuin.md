@@ -18,7 +18,7 @@ uv run homeserver.py dev up atuin
 
 No manual pre-create/chown step needed — `atuin-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s `config/` (just `server.toml`; the actual synced history lives in the `atuin-db` named Postgres volume, unaffected either way) to `1000:1000` on every start. Verified live: fully wiped `service_data/data/atuin/config/`, restarted, confirmed `server.toml` regenerated with correct ownership and all history/users tables in Postgres untouched.
 
-Browsing to `https://atuin.<domain>/` (or the health check hitting `/`) returns something like:
+Browsing to `https://atuin.<domain>/` returns something like:
 
 ```json
 {"homage":"\"Through the fathomless deeps of space swims the star turtle Great A'Tuin, bearing on its back the four giant elephants who carry on their shoulders the mass of the Discworld.\" -- Sir Terry Pratchett","version":"18.19.0"}
@@ -137,7 +137,12 @@ Local unsynced history (`~/.local/share/atuin/history.db`) is unencrypted and un
 ## Notes
 
 - History itself is end-to-end encrypted client-side before syncing — the server only ever stores encrypted blobs, never plaintext commands.
-- No dedicated health endpoint documented upstream — the compose healthcheck and the landing-page health route both just check that `/` responds.
+- Healthcheck: the image's own `HEALTHCHECK` (`curl /healthz` on `ATUIN_PORT`, 30s interval), so `compose.yml` declares none.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: user account restored; start time cut from 70s to 13s by the database's `start_interval`. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

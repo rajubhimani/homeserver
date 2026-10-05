@@ -17,23 +17,29 @@ services:
       - nextcloud-postgres-alpine:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER}"]
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
   nextcloud-redis:
-    image: redis:8.10.2-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: nextcloud-redis
     restart: unless-stopped
-    command: redis-server --save "" --stop-writes-on-bgsave-error no
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -43,7 +49,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_HOST: nextcloud-db
+      POSTGRES_HOST: ${DB_HOST}:${DB_PORT}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -54,8 +60,8 @@ services:
       # Correct var name for v25+ is TRUSTED_PROXIES (no NEXTCLOUD_ prefix) —
       # reverse-proxy.config.php reads this directly via getenv('TRUSTED_PROXIES')
       TRUSTED_PROXIES: 127.0.0.1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
-      REDIS_HOST: nextcloud-redis
-      REDIS_HOST_PORT: 6379
+      REDIS_HOST: ${CACHE_HOST}
+      REDIS_HOST_PORT: ${CACHE_PORT}
     volumes:
       - nextcloud-html:/var/www/html
       - nextcloud-config:/var/www/html/config
@@ -84,7 +90,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_HOST: nextcloud-db
+      POSTGRES_HOST: ${DB_HOST}:${DB_PORT}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

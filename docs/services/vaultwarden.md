@@ -19,7 +19,7 @@ uv run homeserver.py dev up vaultwarden
 
 ## Health endpoint
 
-Confirmed live against the running container (`vaultwarden/server:1.37.2`, unchanged in 1.37.3): the image ships its own `/healthcheck.sh` baked into `CMD` (60s interval, 10s timeout) — this repo's `compose.yml`/`compose.dev.yml` do not define a separate `healthcheck:` block, `docker inspect` shows the image default is in effect. The script curls `http://localhost:80/alive` (reading `ROCKET_PORT`/`DOMAIN` from the container's own env/`config.json` to build the URL) and exits non-zero on anything but success.
+Confirmed live against the running container (`vaultwarden/server:1.37.2`, unchanged in 1.37.3): the image ships its own `/healthcheck.sh` baked into `CMD` (60s interval, 10s timeout). `compose.yml` keeps that command and only retunes its timing (no `test:`; `start_period: 30s`, `start_interval: 2s`). Without that, the first check came a full minute after start, so every start waited 60s (measured 2026-10-03, now 5s). The script curls `http://localhost:80/alive` (reading `ROCKET_PORT`/`DOMAIN` from the container's own env/`config.json` to build the URL) and exits non-zero on anything but success.
 
 `GET /alive` returns HTTP `200` with a bare JSON timestamp string, e.g. `"2026-08-21T22:37:44.046902Z"` — confirmed both with `docker exec vaultwarden curl http://localhost:80/alive` and with `curl http://localhost:8200/alive` from the host (dev port). `docker ps` / `docker inspect` reports the container as `healthy` accordingly.
 
@@ -51,6 +51,11 @@ Confirmed against Bitwarden's own current Help Center, not assumed from memory.
 - **Organizations (sharing with others):** in the web vault, **New organization** creates a shared space with its own **Admin Console** for managing members and items. Free/self-hosted plans cover the basics needed here — invite members from the Admin Console's Members page, then move or share vault items into the organization so members other than you can see them.
 - **Collections:** shared-folder equivalents inside an organization — create one under the org's Collections page, then assign members/groups to it with their own permission level (view vs. edit). An item can belong to several collections; a member only sees the collections they've been granted access to, so collections are the actual sharing/access-control unit, not the organization membership alone.
 - **Admin panel vs. vault login — these are separate accounts/purposes.** The `/admin` panel (gated by `ADMIN_TOKEN`, see above) is instance-level administration: user list, diagnostics, disabling accounts, server config overrides. It has no vault of its own and isn't where you store or view passwords — that's the normal login at `https://vaultwarden.${DOMAIN}` with a real user account, same as any Bitwarden client.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 2 users and 317 vault items restored; start time cut from 60s to 5s (timing-only healthcheck override). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

@@ -5,14 +5,16 @@ services:
   # Cache only (market-data lookups, job queue) — nothing here needs to
   # survive a restart, so no volume and persistence turned off.
   ghostfolio-redis:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: ghostfolio-redis
     restart: unless-stopped
     env_file: .env
     command: >-
-      sh -c 'redis-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
+      sh -c 'valkey-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
       interval: 60s
       timeout: 5s
       retries: 5
@@ -20,7 +22,7 @@ services:
       - homeserver
 
   ghostfolio:
-    image: ghostfolio/ghostfolio:3.76.0
+    image: ghostfolio/ghostfolio:3.77.0
     container_name: ghostfolio
     restart: unless-stopped
     init: true
@@ -30,8 +32,8 @@ services:
       - no-new-privileges:true
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}?connect_timeout=300
-      REDIS_HOST: ghostfolio-redis
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}?connect_timeout=300
+      REDIS_HOST: ${CACHE_HOST}
       REDIS_PORT: 6379
       ROOT_URL: https://ghostfolio.${DOMAIN}
       # Behind nginx-plain (and Cloudflare in front of that) — needed so

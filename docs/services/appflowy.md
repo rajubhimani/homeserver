@@ -47,7 +47,7 @@ All services below must stay in sync. `appflowy_web` uses its own versioning sch
 | Admin UI | `appflowyinc/admin_frontend` | `0.18.2` | Keep on the same `0.x` line as gotrue (patch numbers differ upstream) |
 | Web frontend | `appflowyinc/appflowy_web` | `0.18.5` | Own versioning scheme — nginx rewrite handles path differences |
 | Database | `pgvector/pgvector` | `pg16` | — |
-| Cache | `redis` | `8.10-alpine` | — |
+| Cache | `valkey/valkey` | `9.1.2-alpine` | Redis-protocol drop-in ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)) |
 
 > **WebSocket path difference:** `appflowy_web:0.15.5` sends WebSocket requests to `/ws/{workspace_id}/` but `appflowy_cloud:0.16.x` changed to `/ws/v2/{workspace_id}`. The internal nginx (`appflowy/nginx.conf`) rewrites the path automatically.
 

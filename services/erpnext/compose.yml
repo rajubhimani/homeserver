@@ -44,11 +44,13 @@ services:
       - homeserver
 
   erpnext-redis-cache:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: erpnext-redis-cache
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -56,13 +58,15 @@ services:
       - homeserver
 
   erpnext-redis-queue:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: erpnext-redis-queue
     restart: unless-stopped
     volumes:
-      - erpnext-redis-queue-data:/data
+      - erpnext-valkey-queue-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -84,11 +88,12 @@ services:
     command:
       - >
         ls -1 apps > sites/apps.txt;
-        bench set-config -g db_host erpnext-db;
+        bench set-config -g db_host ${DB_HOST};
+        bench set-config -gp db_port ${DB_PORT};
         bench set-config -gp db_port 3306;
-        bench set-config -g redis_cache "redis://erpnext-redis-cache:6379";
-        bench set-config -g redis_queue "redis://erpnext-redis-queue:6379";
-        bench set-config -g redis_socketio "redis://erpnext-redis-queue:6379";
+        bench set-config -g redis_cache "redis://${CACHE_HOST}:${CACHE_PORT}";
+        bench set-config -g redis_queue "redis://${QUEUE_HOST}:${QUEUE_PORT}";
+        bench set-config -g redis_socketio "redis://${QUEUE_HOST}:${QUEUE_PORT}";
         bench set-config -gp socketio_port 9000;
         bench set-config -g chromium_path /usr/bin/chromium-headless-shell;
     volumes:
@@ -162,9 +167,9 @@ services:
       - -c
     command:
       - >
-        wait-for-it -t 120 erpnext-db:3306;
-        wait-for-it -t 120 erpnext-redis-cache:6379;
-        wait-for-it -t 120 erpnext-redis-queue:6379;
+        wait-for-it -t 120 ${DB_HOST}:${DB_PORT};
+        wait-for-it -t 120 ${CACHE_HOST}:${CACHE_PORT};
+        wait-for-it -t 120 ${QUEUE_HOST}:${QUEUE_PORT};
         if [ -d "sites/erpnext.${DOMAIN}" ]; then
           echo "Site erpnext.${DOMAIN} already exists, skipping creation";
         else
@@ -223,7 +228,7 @@ services:
 volumes:
   erpnext-sites:
   erpnext-db-data:
-  erpnext-redis-queue-data:
+  erpnext-valkey-queue-data:
 
 networks:
   homeserver:

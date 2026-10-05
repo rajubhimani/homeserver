@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      ConnectionStrings__DefaultConnection: Host=shared-postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};
+      ConnectionStrings__DefaultConnection: Host=${DB_HOST};Port=${DB_PORT};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};
       # Admin account (created on first start)
       Authentication__Username: ${MAIL_ARCHIVER_ADMIN_USER}
       Authentication__Password: ${MAIL_ARCHIVER_ADMIN_PASSWORD}

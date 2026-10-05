@@ -32,6 +32,8 @@ services:
       CHECK_INTERVAL: ${WATCHDOG_CHECK_INTERVAL:-60}
       FAIL_THRESHOLD: ${WATCHDOG_FAIL_THRESHOLD:-2}
       RESTART_COOLDOWN: ${WATCHDOG_RESTART_COOLDOWN:-60}
+      NTFY_URL: ${NTFY_ALERT_URL:-}
+      NTFY_TOKEN: ${NTFY_ALERT_TOKEN:-}
     entrypoint: ["/bin/sh", "/watchdog.sh"]
     volumes:
       - ./watchdog.sh:/watchdog.sh:ro

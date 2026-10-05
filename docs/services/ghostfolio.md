@@ -10,7 +10,7 @@
 **Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/ghostfolio/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
 
 
-Upstream: [github.com/ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio). Pinned to `ghostfolio/ghostfolio:3.76.0`.
+Upstream: [github.com/ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio). Pinned to `ghostfolio/ghostfolio:3.77.0`.
 
 ## Setup
 
@@ -145,3 +145,7 @@ Everything is in Postgres (`ghostfolio-postgres` named volume). `homeserver.py d
 - **Signup is open by default.** Turn it off in Admin Control (Setup step 1). Until you do, anyone who can reach `ghostfolio.<domain>` can create an account. It's their own empty portfolio and doesn't expose yours, but it isn't what you want.
 - **Auth.** Bucket D (admin vs. user roles, see [auth posture](../13-auth-posture.md)), so it isn't behind Authentik forward-auth. Native OIDC (`ENABLE_FEATURE_AUTH_OIDC` + `OIDC_*` env vars, marked experimental upstream) works with Authentik if you want SSO later.
 - **Redis is cache only.** It runs with persistence off and no volume. Losing it on restart is expected and harmless.
+
+## Cache
+
+`ghostfolio-redis` runs `valkey/valkey:9.1.2-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged.

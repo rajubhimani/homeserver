@@ -8,8 +8,8 @@ Two variants, run independently:
 
 | Variant | Port | Image | Tier | Measured idle RAM |
 | --- | --- | --- | --- | --- |
-| Lite | `8090` → `8080` | `stirlingtools/stirling-pdf:3.0.0-ultra-lite` | `SERVICES_EXTRA`, always on | **274MB** |
-| Full | `8089` → `8080` | `stirlingtools/stirling-pdf:3.0.0` | manual-only | **505MB** |
+| Lite | `8090` → `8080` | `stirlingtools/stirling-pdf:3.0.2-ultra-lite` | `SERVICES_EXTRA`, always on | **274MB** |
+| Full | `8089` → `8080` | `stirlingtools/stirling-pdf:3.0.2` | manual-only | **505MB** |
 
 **Requires:** — | **Memory:** no hard limit set in compose.yml. Both variants are JVM (Spring Boot) apps with a large baseline heap — despite the "lite"/"ultra-lite" naming, idle RAM is much higher than the name suggests. This is a correction of a previous, unverified estimate in this doc (~200MB/~1.5GB) — the numbers above were independently measured via `docker stats` on a freshly-settled container.
 

@@ -88,6 +88,11 @@ No database — unlike most services in this stack, the Community Edition docume
 
 `services/nginx-plain/templates/default.conf.template`'s `onlyoffice.${DOMAIN}` block proxies WebSocket traffic (`proxy_http_version 1.1` + conditional `Connection: upgrade`, same pattern as Guacamole) since real-time co-editing runs over a WebSocket connection, plus a raised `client_max_body_size 100M` and `proxy_read_timeout 600s` for large document uploads/format conversions.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: restored and healthy. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

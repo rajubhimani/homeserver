@@ -96,7 +96,7 @@ docker exec immich-server curl -s http://localhost:2283/api/server/version
 # {"major":3,"minor":1,"patch":0,"prerelease":null}
 ```
 
-`immich-db` and `immich-redis` use plain compose-level healthchecks instead (`pg_isready` and `valkey-cli ping`, both visible directly in `compose.yml`). All five containers (`immich-server`, `immich-ml`, `immich-db`, `immich-redis`, `immich-offline-remover`) were observed `Up`/`(healthy)` via `docker ps --filter name=immich` at the time of this pass.
+`immich-db` also uses its image's own check (`/usr/local/bin/healthcheck.sh`: every 5s while starting, then every 300s). Upstream's compose only says `healthcheck: disable: false` to keep it, so `compose.yml` declares none (until 2026-10-03 it overrode it with a plain `pg_isready`). `immich-redis` has a compose check, `valkey-cli ping`, the valkey form of upstream's `redis-cli ping`. All five containers (`immich-server`, `immich-ml`, `immich-db`, `immich-redis`, `immich-offline-remover`) were observed `Up`/`(healthy)` via `docker ps --filter name=immich` at the time of this pass.
 
 ## Notes
 
@@ -142,6 +142,11 @@ docker exec immich-server curl -s http://localhost:2283/api/server/version
 **The empty `immich-server-data` volume is harmless clutter, not a defect** — it's declared but never mounted to anything Immich reads/writes, so it costs nothing to leave in place. Removing it is a legitimate cleanup, but only as a mount-untouched change (drop the volume declaration and the `/data` mount line together, leave `/usr/src/app/upload` exactly as-is).
 
 **Later consolidated into `service_data/media/immich/`** (a same-volume rename, so instant despite the ~145GB size) so the top-level `service_data/` layout is just `backup/`, `cache/`, `data/`, `media/` — one folder per concern, service-named subfolders inside each — rather than a one-off `uploads/` directory existing only for this service. `UPLOAD_LOCATION` updated to match; no other change needed since it's still a sibling of `service_data/data/immich/`.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 21,246 assets and 2 users restored; `immich-db` on its image's own check. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

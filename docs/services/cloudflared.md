@@ -54,6 +54,11 @@ The watchdog needs read-write access to the Docker socket (same pattern as dozzl
 - No ports to configure — cloudflared connects outbound only, so `compose.dev.yml`/`compose.prod.yml` are empty stubs kept for structural consistency with the three-file pattern.
 - `docker logs cloudflared` is the source of truth for tunnel-level issues (registered/dropped connections, DNS resolver errors for `*.argotunnel.com`); `docker logs cloudflared-watchdog` shows the public-path check history.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless, nothing to restore. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

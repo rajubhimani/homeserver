@@ -9,7 +9,7 @@ services:
     env_file: .env
     environment:
       LISTMONK_app__address: 0.0.0.0:9000
-      LISTMONK_db__host: shared-postgres
+      LISTMONK_db__host: ${DB_HOST}
       LISTMONK_db__port: 5432
       LISTMONK_db__user: ${POSTGRES_USER}
       LISTMONK_db__password: ${POSTGRES_PASSWORD}

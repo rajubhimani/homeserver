@@ -15,16 +15,17 @@ services:
     volumes:
       - plausible-postgres-alpine:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
   plausible-events-db:
-    image: clickhouse/clickhouse-server:26.8.2-alpine
+    image: clickhouse/clickhouse-server:26.8.15.10-alpine
     container_name: plausible-events-db
     restart: unless-stopped
     env_file: .env
@@ -49,6 +50,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -60,8 +62,8 @@ services:
     env_file: .env
     environment:
       BASE_URL: https://plausible.${DOMAIN}
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@plausible-db:5432/plausible
-      CLICKHOUSE_DATABASE_URL: http://plausible:${CLICKHOUSE_PASSWORD}@plausible-events-db:8123/plausible_events_db
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/plausible
+      CLICKHOUSE_DATABASE_URL: http://plausible:${CLICKHOUSE_PASSWORD}@${EVENTS_DB_HOST}:${EVENTS_DB_PORT}/plausible_events_db
     ulimits:
       nofile:
         soft: 65535
@@ -69,7 +71,8 @@ services:
     volumes:
       - plausible-data:/var/lib/plausible
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/api/health"]
+      # Readiness endpoint from Plausible's router (/api/health is deprecated).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/api/system/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3

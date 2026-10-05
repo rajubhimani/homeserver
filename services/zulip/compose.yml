@@ -3,7 +3,9 @@ services:
   # default) — bakes in extensions/config Zulip specifically requires, same
   # reasoning as immich's custom Postgres image (see homeserver-postgres skill).
   zulip-db:
-    image: zulip/zulip-postgresql:14
+    # Zulip's Dockerfile-postgresql rebuilt on PostgreSQL 18 (see postgresql/Dockerfile).
+    build: ./postgresql
+    image: homeserver/zulip-postgresql:18-pgroonga4.0.9
     container_name: zulip-db
     restart: unless-stopped
     secrets:
@@ -13,7 +15,7 @@ services:
       POSTGRES_USER: zulip
       POSTGRES_PASSWORD_FILE: /run/secrets/zulip__postgres_password
     volumes:
-      - zulip-postgres:/var/lib/postgresql/data
+      - zulip-postgres-18:/var/lib/postgresql
     deploy:
       resources:
         limits:
@@ -58,7 +60,7 @@ services:
       - homeserver
 
   zulip-rabbitmq:
-    image: rabbitmq:4.2
+    image: rabbitmq:4.3.6
     container_name: zulip-rabbitmq
     restart: unless-stopped
     secrets:
@@ -90,7 +92,9 @@ services:
       - homeserver
 
   zulip-redis:
-    image: redis:8.10.2-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: zulip-redis
     restart: unless-stopped
     secrets:
@@ -102,13 +106,13 @@ services:
       - -euc
       - /usr/local/bin/docker-entrypoint.sh --requirepass "$$(cat $$REDIS_PASSWORD_FILE)"
     volumes:
-      - zulip-redis:/data
+      - zulip-valkey:/data
     deploy:
       resources:
         limits:
           memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(cat $$REDIS_PASSWORD_FILE)\" --no-auth-warning ping | grep -q PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$(cat $$REDIS_PASSWORD_FILE)\" --no-auth-warning ping | grep -q PONG"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -121,10 +125,17 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      SETTING_REMOTE_POSTGRES_HOST: zulip-db
-      SETTING_MEMCACHED_LOCATION: zulip-memcached:11211
-      SETTING_RABBITMQ_HOST: zulip-rabbitmq
-      SETTING_REDIS_HOST: zulip-redis
+      # env_file passes .env's DB_HOST (the stack-wide convention) into this
+      # container too, and Zulip 12's entrypoint refuses to start while its
+      # legacy DB_HOST is non-empty (renamed to SETTING_REMOTE_POSTGRES_HOST).
+      # Blank it here; the host reaches Zulip through the setting above.
+      DB_HOST: ""
+      SETTING_REMOTE_POSTGRES_HOST: ${DB_HOST}
+      SETTING_REMOTE_POSTGRES_PORT: ${DB_PORT}
+      SETTING_MEMCACHED_LOCATION: ${MEMCACHED_HOST}:${MEMCACHED_PORT}
+      SETTING_RABBITMQ_HOST: ${MQ_HOST}
+      SETTING_REDIS_HOST: ${CACHE_HOST}
+      SETTING_REDIS_PORT: ${CACHE_PORT}
       SETTING_EXTERNAL_HOST: zulip.${DOMAIN}
       SETTING_ZULIP_ADMINISTRATOR: ${ZULIP_ADMIN_EMAIL}
       # Off by default upstream — anyone who can reach zulip.${DOMAIN} could
@@ -205,9 +216,9 @@ secrets:
     environment: "ZULIP__EMAIL_PASSWORD"
 
 volumes:
-  zulip-postgres:
+  zulip-postgres-18:
   zulip-rabbitmq:
-  zulip-redis:
+  zulip-valkey:
   zulip-data:
 
 networks:

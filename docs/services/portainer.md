@@ -39,6 +39,11 @@ Everything happens in the Portainer web UI, confirmed against Portainer CE's own
 - **Stacks:** Portainer's own compose-deployment feature (web editor, file upload, or a Git repo). This repo's services aren't managed as Portainer stacks — `homeserver.py` is the entrypoint for those — but Stacks is there for one-off compose experiments independent of this repo's tooling.
 - In short: the fastest way to answer "what's actually running and how much RAM is it using right now" without `docker ps`/`docker stats` on the host itself.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: data restored (no healthcheck by design). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

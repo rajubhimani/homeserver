@@ -17,10 +17,12 @@ services:
       - forgejo-postgres-alpine:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER}"]
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -33,7 +35,7 @@ services:
       USER_UID: 1000
       USER_GID: 1000
       FORGEJO__database__DB_TYPE: postgres
-      FORGEJO__database__HOST: forgejo-db:5432
+      FORGEJO__database__HOST: ${DB_HOST}:${DB_PORT}
       FORGEJO__database__NAME: ${POSTGRES_DB}
       FORGEJO__database__USER: ${POSTGRES_USER}
       FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}

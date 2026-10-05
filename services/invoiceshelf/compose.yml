@@ -10,7 +10,7 @@ services:
     user: "0:0"
     environment:
       DB_CONNECTION: mysql
-      DB_HOST: shared-mariadb
+      DB_HOST: ${DB_HOST}
       DB_PORT: 3306
       DB_DATABASE: ${MYSQL_DATABASE}
       DB_USERNAME: ${MYSQL_USER}

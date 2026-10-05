@@ -129,6 +129,10 @@ Only `airflow-scheduler` has the socket — with `LocalExecutor`, that's the one
 - **A custom Trigger class defined inside a DAG file needs `airflow-triggerer` to have that DAG file's directory on `PYTHONPATH`** — unlike the scheduler/dag-processor, the triggerer never parses DAG files itself, it just `import_string`s the trigger's classpath directly, so nothing puts `/opt/airflow/dags` on its `sys.path` otherwise. `compose.yml` sets `PYTHONPATH: /opt/airflow/dags` on `airflow-triggerer` for exactly this reason (bit `example_deferrable_sensor.py` during development — `ModuleNotFoundError` from inside the triggerer, not the scheduler, which is what made it non-obvious).
 - **Listeners (plugin-based lifecycle hooks, e.g. every TaskInstance state change cluster-wide) are not demoed here** — worth knowing they exist, not something this repo's examples currently show. Genuinely distinct from a task's own `on_success_callback`/`on_failure_callback` (cross-DAG, not per-task), but registering one needs an actual Airflow **plugin** — a heavier setup than every other example here, which are all plain DAG files needing nothing beyond dropping them in `dags-examples/`.
 
+## Managed-cloud parity
+
+`AIRFLOW_VERSION=3.3.1-python3.12`, the newest version that **AWS MWAA, Google Cloud Composer 3 and Astronomer all run** (MWAA added 3.3.1 on 2026-09-01, on Python 3.12). It was moved down from 3.3.2 on 2026-10-03, which none of them offered yet, so DAGs move to any of them unchanged ([10 — New Services](../../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). Move up only after MWAA supports the newer version ([MWAA versions](https://docs.aws.amazon.com/mwaa/latest/userguide/airflow-versions.html)). Keep DAGs free of this stack's hostnames: use Airflow connections, variables and env vars.
+
 ---
 
 [← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)

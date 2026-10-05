@@ -48,6 +48,7 @@ def render(svc: str) -> dict:
         base = dict(env) if (files == ".env" or ".env" in files) else {}
         base.update({k: "" if v is None else str(v) for k, v in e.items()})
         sdef["environment"] = base
+        sdef["_explicit"] = set(e)  # keys the service sets itself, not just via env_file
     return merged
 
 
@@ -93,14 +94,18 @@ def test_app_connects_to_its_own_provisioned_database(entry):
             for url in re.findall(r"(?:postgres(?:ql)?(?:\+\w+)?|pg|mysql|mariadb)://\S+", value):
                 connections += 1
                 problems += [f"{name}.{key}: {p}" for p in check_url(url, c)]
-            m = re.search(r"Host=([^;]+);Database=([^;]+);Username=([^;]+);Password=([^;]+)", value)
+            m = re.search(r"Host=([^;]+);(?:Port=[^;]+;)?Database=([^;]+);Username=([^;]+);Password=([^;]+)", value)
             if m:
                 connections += 1
                 got = dict(zip(("host", "db", "user", "password"), m.groups()))
                 problems += [f"{name}.{key}: {k} {got[k]!r} mismatch" for k in got if got[k] != c[k]]
         # Separate host/database/user/password variables: match by role, so a
         # database and user that share a name can't satisfy each other.
-        host_keys = [k for k, v in env.items() if v == c["host"]]
+        # DB_HOST is the stack's own convention variable (every shared_db app's
+        # .env; see test_external_db.py). Arriving only via env_file it's not
+        # an app setting, so it's skipped unless the service sets it itself
+        # (bookstack/invoiceshelf, whose apps read DB_HOST natively).
+        host_keys = [k for k, v in env.items() if v == c["host"] and (k != "DB_HOST" or k in sdef["_explicit"])]
         if host_keys:
             connections += 1
             # Variables that belong to this connection share the host
@@ -126,7 +131,9 @@ def test_app_connects_to_its_own_provisioned_database(entry):
             if env.get("VISIBILITY_DBNAME") not in c["extra"]:
                 problems.append(f"temporal.VISIBILITY_DBNAME {env.get('VISIBILITY_DBNAME')!r} not in extra_dbs {c['extra']}")
     if svc in CONNECTION_ELSEWHERE:
-        assert c["host"] in (REPO / CONNECTION_ELSEWHERE[svc]).read_text()
+        # The host itself comes from DB_HOST in .env (default: the shared server).
+        where = (REPO / CONNECTION_ELSEWHERE[svc]).read_text()
+        assert c["host"] in where or "env: DB_HOST" in where
     else:
         assert connections, f"no container in {svc} points at {c['host']}"
     assert not problems, "\n".join(problems)
@@ -147,9 +154,10 @@ def test_dagster_yaml_storage_uses_shared_postgres_and_spec_keys():
     blocks = [v["config"]["postgres_db"] for k, v in cfg.items() if isinstance(v, dict) and "postgres_db" in (v.get("config") or {})]
     assert len(blocks) == 3, "run, event log and schedule storage should all be Postgres"
     for b in blocks:
-        assert b["hostname"] == "shared-postgres"
+        assert b["hostname"] == {"env": "DB_HOST"} and b["port"] == {"env": "DB_PORT"}
         assert (b["db_name"]["env"], b["username"]["env"], b["password"]["env"]) == (spec["db"], spec["user"], spec["password"])
-    assert set(cfg["run_launcher"]["config"]["env_vars"]) >= {spec["db"], spec["user"], spec["password"]}
+    assert set(cfg["run_launcher"]["config"]["env_vars"]) >= {spec["db"], spec["user"], spec["password"], "DB_HOST", "DB_PORT"}
+    assert "DB_HOST=shared-postgres" in (REPO / "services/dagster/.env.example").read_text()
 
 
 # ── credential isolation ──────────────────────────────────────────

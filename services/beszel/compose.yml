@@ -1,6 +1,6 @@
 services:
   beszel:
-    image: henrygd/beszel:0.20.0
+    image: henrygd/beszel:0.21.0
     container_name: beszel
     restart: unless-stopped
     environment:
@@ -33,7 +33,7 @@ services:
   beszel-agent:
     # :alpine variant (not the bare scratch image) because it ships smartctl,
     # needed for the S.M.A.R.T. panel — see docs/services/beszel.md
-    image: henrygd/beszel-agent:0.20.0-alpine
+    image: henrygd/beszel-agent:0.21.0-alpine
     container_name: beszel-agent
     restart: unless-stopped
     network_mode: host

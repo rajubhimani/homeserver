@@ -35,7 +35,7 @@ services:
     environment:
       TZ: UTC
       MM_SQLSETTINGS_DRIVERNAME: postgres
-      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
       MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
       MM_SERVICESETTINGS_SITEURL: https://mattermost.${DOMAIN}
       MM_SERVICESETTINGS_ENABLELOCALMODE: "true"

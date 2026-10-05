@@ -26,10 +26,10 @@ services:
       - |
         set -eu
         for db in ${POSTGRES_DB} temporal_visibility; do
-          temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db "$$db" setup-schema -v 0.0
+          temporal-sql-tool --plugin postgres12 --ep ${DB_HOST} -u ${POSTGRES_USER} -p ${DB_PORT} --db "$$db" setup-schema -v 0.0
         done
-        temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db ${POSTGRES_DB} update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
-        temporal-sql-tool --plugin postgres12 --ep shared-postgres -u ${POSTGRES_USER} -p 5432 --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+        temporal-sql-tool --plugin postgres12 --ep ${DB_HOST} -u ${POSTGRES_USER} -p ${DB_PORT} --db ${POSTGRES_DB} update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
+        temporal-sql-tool --plugin postgres12 --ep ${DB_HOST} -u ${POSTGRES_USER} -p ${DB_PORT} --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
     networks:
       - homeserver
 
@@ -51,7 +51,7 @@ services:
       DB_PORT: "5432"
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PWD: ${POSTGRES_PASSWORD}
-      POSTGRES_SEEDS: shared-postgres
+      POSTGRES_SEEDS: ${DB_HOST}
       # Explicit, not left to temporalio/server's built-in defaults ("temporal"/
       # "temporal_visibility" in its embedded config template): must name the
       # same two databases homeserver.py provisions on shared-postgres
@@ -178,19 +178,29 @@ services:
   # their own resource-limited containers.
   temporal-worker:
     build: ./worker
-    image: homeserver/temporal-worker:1.34.0
+    image: homeserver/temporal-worker:1.34.0-envconfig
     container_name: temporal-worker
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 256M
+    environment:
+      # Temporal's standard client env config; for Temporal Cloud set these
+      # (plus TEMPORAL_API_KEY) in .env, nothing in the code changes.
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACES: ${TEMPORAL_NAMESPACES:-default,staging,production}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:-}
     volumes:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/worker:/app
     depends_on:
       temporal:
         condition: service_healthy
+      # The worker serves default/staging/production, so it waits until they're
+      # registered. worker.py also retries while they propagate.
+      temporal-create-namespace:
+        condition: service_completed_successfully
     networks:
       - homeserver
 

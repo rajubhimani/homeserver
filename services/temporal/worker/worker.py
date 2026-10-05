@@ -6,8 +6,12 @@ one from temporal-admin-tools.
 """
 
 import asyncio
+import logging
+import os
 
 from temporalio.client import Client
+from temporalio.api.workflowservice.v1 import DescribeNamespaceRequest
+from temporalio.envconfig import ClientConfig
 from temporalio.worker import Worker
 
 from activities import (
@@ -54,7 +58,9 @@ TASK_QUEUE = "homeserver"
 # history. "staging"/"production" here are a real, common reason to reach
 # for multiple Namespaces on one cluster: environment isolation without
 # standing up a second Temporal deployment.
-NAMESPACES = ["default", "staging", "production"]
+# Namespaces to serve, from TEMPORAL_NAMESPACES (comma-separated). On Temporal
+# Cloud they look like "<name>.<account-id>".
+NAMESPACES = [n.strip() for n in os.environ.get("TEMPORAL_NAMESPACES", "default,staging,production").split(",") if n.strip()]
 
 WORKFLOWS = [
     RunContainerWorkflow,
@@ -91,8 +97,24 @@ ACTIVITIES = [
 ]
 
 
-async def run_worker(namespace: str) -> None:
-    client = await Client.connect("temporal:7233", namespace=namespace)
+async def run_worker_once(namespace: str) -> None:
+    # Connection from Temporal's standard environment configuration
+    # (temporalio.envconfig): TEMPORAL_ADDRESS, TEMPORAL_API_KEY, TEMPORAL_TLS*,
+    # TEMPORAL_CLIENT_CERT_PATH/KEY_PATH, TEMPORAL_PROFILE. The same worker runs
+    # against Temporal Cloud by changing env only (docs.temporal.io/develop/environment-configuration).
+    connect_config = ClientConfig.load_client_connect_config()
+    # Compose always passes TEMPORAL_API_KEY, empty when self-hosted. The SDK
+    # treats any non-None api_key as set and turns TLS on, which fails against
+    # the plain-text local server (InvalidContentType). An empty key means none.
+    if not connect_config.get("api_key"):
+        connect_config.pop("api_key", None)
+        if connect_config.get("tls") is True and "TEMPORAL_TLS" not in os.environ:
+            connect_config.pop("tls")
+    connect_config["namespace"] = namespace
+    client = await Client.connect(**connect_config)
+    # Fail fast (and retry, see run_worker) while the namespace isn't visible
+    # yet, instead of starting pollers that hit NotFound.
+    await client.workflow_service.describe_namespace(DescribeNamespaceRequest(namespace=namespace))
     # Worker(...)'s own options, real defaults — process-wide, so they apply
     # to every workflow/activity above, not to any one of them. Captured via
     # inspect.signature() against this repo's pinned temporalio version (see
@@ -130,7 +152,24 @@ async def run_worker(namespace: str) -> None:
     await worker.run()
 
 
+async def run_worker(namespace: str) -> None:
+    # Supervises one namespace's worker. On a fresh install the worker can
+    # start while temporal-create-namespace's namespaces are still propagating
+    # through the server's namespace cache ("Namespace default is not found").
+    # Before this loop, that error escaped asyncio.gather and the process hung
+    # in shutdown with no pollers, and Docker never restarted it. Now a failing
+    # namespace retries on its own and never takes the others down.
+    while True:
+        try:
+            await run_worker_once(namespace)
+            return
+        except Exception as err:  # noqa: BLE001 -- supervisor: log, back off, retry
+            logging.warning("worker for namespace %s stopped (%s); retrying in 5s", namespace, err)
+            await asyncio.sleep(5)
+
+
 async def main() -> None:
+    logging.basicConfig(level=logging.INFO)
     await asyncio.gather(*(run_worker(ns) for ns in NAMESPACES))
 
 

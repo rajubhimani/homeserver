@@ -53,6 +53,36 @@ Provisioning (`provision_shared_db`) is idempotent: it creates the role (or rese
 
 Above CORE, apps are opt-in, mostly low-traffic, and nearly all happy on "a current Postgres", which is where one shared server's savings (one set of buffers and background workers instead of ~20) are worth it.
 
+## Moving one app's database to a managed service
+
+Every app on this server reads its database host and port from **`DB_HOST`/`DB_PORT` in its own `services/<app>/.env`** (default `shared-postgres`/`5432`). Its compose file never names the server directly; `tests/test_external_db.py` enforces that. To move one app's database to AWS RDS, Azure Database for PostgreSQL Flexible Server or GCP Cloud SQL (all run PostgreSQL 18.6, see [managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)):
+
+```bash
+uv run homeserver.py prod dump <app>          # logical dump -> service_data/db_dump/<app>/<ts>/
+# create the database and login on the managed server (same names as POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD in .env),
+# then load the dump there, e.g.:
+pg_restore -h <endpoint> -U <user> -d <db> --no-owner --role <user> service_data/db_dump/<app>/<ts>/<app>_shareddb_<db>_<ts>.dump
+# point the app at it: set DB_HOST=<endpoint> (and DB_PORT if not 5432) in services/<app>/.env
+uv run homeserver.py prod restart <app>
+```
+
+Once `DB_HOST` names anything other than `shared-postgres`, `homeserver.py` treats the database as **outside the stack**:
+- It never starts, provisions, counts, dumps, restores or drops anything on the shared server for that app.
+- `up` says so.
+- `backup`/`down` snapshots warn that the database isn't included; use the provider's backups.
+- `reset` warns that the outside database isn't wiped.
+- `dump` refuses and names the provider's tools instead.
+
+Setting `DB_HOST` back to `shared-postgres` reverses all of this.
+
+Managed databases often require TLS. Add the app's own SSL option where its connection string has one (`sslmode=require` in Postgres URLs, for example). A few apps set it to `disable` for the local server today.
+
+## Healthcheck
+
+`pg_isready -h 127.0.0.1 -U postgres`, over TCP rather than the Unix socket. On a fresh volume, the postgres image's entrypoint first runs a temporary server that listens only on the socket, to run initdb and the init scripts, then stops it and starts the real one. A socket probe reports "ready" during that window, so an app waiting on `service_healthy` starts and gets `connection refused` once the temporary server stops ([postgresql.org BUG #15222](https://postgresql.org/message-id/152778474106.26722.11024944991637906220%40wrigleys.postgresql.org), [healthcheck guide](https://www.ssdnodes.com/learn/docker-compose-postgres-healthcheck)). A TCP probe only answers once the real server listens.
+
+Every MIN/CORE `<service>-db` uses the same `-h 127.0.0.1` form, plus `start_interval: 2s` so the first check comes within seconds instead of after a full `interval`. `tests/test_healthchecks.py` (`test_pg_isready_probes_tcp_not_the_socket`) enforces it. Above-CORE apps that keep their own database copy upstream's compose verbatim and keep upstream's form.
+
 ## Users
 
 [wallabag](wallabag.md), [vikunja](vikunja.md), [plane](plane.md), [calcom](calcom.md), [listmonk](listmonk.md), [miniflux](miniflux.md), [airflow](airflow/airflow.md), [dagster](dagster/dagster.md), [temporal](temporal/temporal.md), [n8n](n8n.md), [paperless](paperless.md), [mealie](mealie.md), [nocodb](nocodb.md), [outline](outline.md), [penpot](penpot.md), [documenso](documenso.md), [ghostfolio](ghostfolio.md), [mattermost](mattermost.md), [mail-archiver](mail-archiver.md) (19 services, all above CORE). Special cases:

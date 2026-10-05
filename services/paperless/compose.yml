@@ -22,8 +22,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      PAPERLESS_REDIS: redis://paperless-redis:6379
-      PAPERLESS_DBHOST: shared-postgres
+      PAPERLESS_REDIS: redis://${CACHE_HOST}:${CACHE_PORT}
+      PAPERLESS_DBHOST: ${DB_HOST}
       PAPERLESS_DBNAME: ${POSTGRES_DB}
       PAPERLESS_DBUSER: ${POSTGRES_USER}
       PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}

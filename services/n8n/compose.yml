@@ -19,13 +19,13 @@ services:
     command: sh -c "mkdir -p /n8n-data && chown -R 1000:1000 /n8n-data"
 
   n8n:
-    image: n8nio/n8n:2.41.4
+    image: n8nio/n8n:2.41.6
     container_name: n8n
     restart: unless-stopped
     env_file: .env
     environment:
       DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: shared-postgres
+      DB_POSTGRESDB_HOST: ${DB_HOST}
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
       DB_POSTGRESDB_USER: ${POSTGRES_USER}

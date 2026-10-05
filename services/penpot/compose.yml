@@ -32,15 +32,15 @@ services:
     command: sh -c "mkdir -p /penpot-assets && chown -R 1001:1001 /penpot-assets"
 
   penpot-backend:
-    image: penpotapp/backend:2.18.0
+    image: penpotapp/backend:2.18.1
     container_name: penpot-backend
     restart: unless-stopped
     env_file: .env
     environment:
-      PENPOT_DATABASE_URI: postgresql://shared-postgres/penpot
+      PENPOT_DATABASE_URI: postgresql://${DB_HOST}:${DB_PORT}/penpot
       PENPOT_DATABASE_USERNAME: penpot
       PENPOT_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
-      PENPOT_REDIS_URI: redis://penpot-redis/0
+      PENPOT_REDIS_URI: redis://${CACHE_HOST}:${CACHE_PORT}/0
       PENPOT_PUBLIC_URI: https://penpot.${DOMAIN}
       PENPOT_ASSETS_STORAGE_BACKEND: assets-fs
       PENPOT_STORAGE_ASSETS_FS_DIRECTORY: /opt/data/assets
@@ -68,13 +68,13 @@ services:
       - homeserver
 
   penpot-exporter:
-    image: penpotapp/exporter:2.18.0
+    image: penpotapp/exporter:2.18.1
     container_name: penpot-exporter
     restart: unless-stopped
     env_file: .env
     environment:
       PENPOT_PUBLIC_URI: http://penpot-frontend:8080
-      PENPOT_REDIS_URI: redis://penpot-redis/0
+      PENPOT_REDIS_URI: redis://${CACHE_HOST}:${CACHE_PORT}/0
       PENPOT_SECRET_KEY: ${PENPOT_SECRET_KEY}
     depends_on:
       penpot-redis:
@@ -83,7 +83,7 @@ services:
       - homeserver
 
   penpot-frontend:
-    image: penpotapp/frontend:2.18.0
+    image: penpotapp/frontend:2.18.1
     container_name: penpot-frontend
     restart: unless-stopped
     environment:

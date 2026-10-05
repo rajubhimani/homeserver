@@ -6,7 +6,7 @@
 
 **Purpose:** File storage + sharing, replaces Google Drive.
 **Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres-alpine` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
-**Pinned versions (as of this pass):** `nextcloud:34.0.4` (app + cron), `postgres:18.6-alpine` (db), `redis:8.10.2-alpine` (cache/locking). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
+**Pinned versions (as of this pass):** `nextcloud:34.0.4` (app + cron), `postgres:18.6-alpine` (db), `valkey/valkey:9.1.2-alpine` (cache/locking; Valkey, the Redis-protocol drop-in that AWS and GCP run, since 2026-10-03, [managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
 
 ## Setup
 
@@ -279,6 +279,11 @@ Via `uv run homeserver.py dev dump nextcloud` + `dev migrate nextcloud` — see 
 **Nextcloud-specific gotcha hit here:** `config.php`'s `dbuser` was `oc_admin`, a role Nextcloud's own installer created ad-hoc at some point — separate from `.env`'s `POSTGRES_USER=nextcloud`, which is what actually connects during setup/backup operations. A per-database `pg_dump` never captures roles (they're cluster-wide), so after the first restore attempt `oc_admin` didn't exist in the fresh cluster and Nextcloud crash-looped on `SQLSTATE[08006]: password authentication failed for user "oc_admin"`. This is exactly why `dump` also runs `pg_dumpall --roles-only` and `migrate` applies it before the main restore — confirm your own `config.php`'s `dbuser` matches what you expect before assuming a migration here is done, since the container can come up "healthy" on the DB-ping healthcheck while still crash-looping on this.
 
 **Second round, same incident:** the first fix (creating `oc_admin` via the roles dump) was necessary but not sufficient on its own — the restore also ran with `--no-privileges`, which skips the dump's captured `GRANT` statements entirely. That meant `oc_admin` could log in but had zero table privileges (`SQLSTATE[42501]: permission denied for table oc_appconfig`), since `pg_restore` connects and creates everything as `POSTGRES_USER` (`nextcloud`), not `oc_admin`. `--no-privileges` was the wrong fix for the original error — the actual fix was sequencing (apply roles *before* the restore, which was already correct), so once that ordering is right the dump's own `GRANT ... TO oc_admin` statements succeed naturally and `--no-privileges` isn't needed at all. Removed it; `pg_restore` now runs with `--no-owner --clean --if-exists` only. Re-verified end-to-end from a fresh plain-Postgres baseline afterward with zero manual steps needed.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: installed state, users, the `/OS-ISOs` external storage and the OnlyOffice connection restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

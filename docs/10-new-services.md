@@ -105,6 +105,73 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 
 [← Firewall](09-firewall.md) | [Home](../setup.md) | [Next: Services Reference →](11-services-reference.md)
 
+## Which version to run: LTS, always
+
+**Every component runs its project's LTS line**: apps, databases, proxies, scanners and monitoring alike. LTS here means whatever the project calls its long-supported track: LTS, ESR, a "stable" branch next to "mainline", or a yearly major next to short rapid releases. This holds for new services, updates and audits.
+
+- **Pin the LTS line, then take every patch inside it.** LTS doesn't mean frozen.
+  | Project | LTS line in use |
+  | --- | --- |
+  | MariaDB | 11.8, 12.3 |
+  | ClickHouse | the `.3`/`.8` lines (26.8) |
+  | MongoDB | the yearly major (8.0), never rapid releases like 8.1/8.2/8.3 |
+  | ClamAV | 1.4 |
+  | Prometheus | 3.13 |
+  | Mattermost | the ESR (11.7) |
+  | Forgejo | the LTS (15) |
+  | nginx | the stable branch (1.30), not mainline |
+- **No LTS track at all** (Postgres, where every major gets 5 years; Redis, Valkey and RabbitMQ community; Immich, Nextcloud community, Authentik and most apps): run the newest release the project still supports for the community. RabbitMQ, for example, patches only its latest minor series.
+- **Never downgrade across data migrations.** A service already past its LTS (Forgejo 16 while the LTS is 15) stays on its supported stable line until the next LTS ships, then pins it. A service holding no data can be reset onto the LTS straight away.
+- **Combined with the next section:** pick the LTS line first, then the exact version inside it that upstream's compose/docs test.
+- Sources: the vendors' own policies ([ClamAV](https://docs.clamav.net/faq/faq-eol.html), [Prometheus](https://prometheus.io/docs/introduction/release-cycle/), [Mattermost](https://docs.mattermost.com/product-overview/release-policy.html), [Forgejo](https://endoflife.date/forgejo), [RabbitMQ](https://www.rabbitmq.com/docs/versions), [MongoDB](https://mongodb.com/support-policy/lifecycles), [MariaDB](https://mariadb.com/resources/blog/announcing-yearly-lts-releases-for-mariadb-community-server/)).
+
+### Configuration lives in `.env` (twelve-factor)
+
+Everything that can differ between deployments lives in the service's `.env`, following [twelve-factor "config in the environment"](https://12factor.net/config). That covers backing-service endpoints, ports, credentials, URLs and versions. Compose files keep only wiring that's the same everywhere. The same values map one-to-one onto Kubernetes ConfigMaps and Secrets.
+
+Backing-service endpoints use the same variable names in every service, defaulting to the local container:
+
+| Variable | What | Example default |
+| --- | --- | --- |
+| `DB_HOST` / `DB_PORT` | main database | `shared-postgres` / `5432`, `nextcloud-db` / `5432` |
+| `CACHE_HOST` / `CACHE_PORT` | Valkey cache | `nextcloud-redis` / `6379` |
+| `QUEUE_HOST` / `QUEUE_PORT` | a separate Valkey queue (ERPNext) | `erpnext-redis-queue` / `6379` |
+| `MQ_HOST` | RabbitMQ | `zulip-rabbitmq` |
+| `S3_ENDPOINT` | object storage (S3 API) | `http://plane-minio:9000` |
+| `MONGO_HOST` / `MONGO_PORT` | MongoDB | `mongodb` / `27017` |
+| `EVENTS_DB_HOST` / `EVENTS_DB_PORT` | ClickHouse (Plausible) | `plausible-events-db` / `8123` |
+| `MEMCACHED_HOST` / `MEMCACHED_PORT` | memcached (Zulip) | `zulip-memcached` / `11211` |
+
+- The app's own setting names (`REDIS_HOST`, `AUTHENTIK_POSTGRESQL__HOST`, `SETTING_REDIS_HOST`…) stay in compose and read these, so nothing inside the app is renamed.
+- `tests/test_external_db.py` fails if an app's environment or command names one of its project's backing containers directly.
+- Excluded on purpose: the backing containers themselves and their setup jobs (MinIO bucket init, MongoDB replica-set init), and Supabase, a tested upstream set whose managed equivalent is Supabase Cloud.
+- **Install-time-only settings:** a few apps copy the database host into their own config at first install, so changing `.env` alone doesn't move them. Nextcloud uses `config.php`'s `dbhost` (`occ config:system:set dbhost --value=…`). OrangeHRM's is set through its web installer. Each service doc's move section says so.
+
+### Managed-cloud parity (orchestrators and backing services)
+
+Airflow, Dagster and Temporal have managed cloud counterparts, and this stack keeps each one movable there without code changes. That takes precedence over "newest" (none of the three publishes an LTS line).
+
+- **Airflow:** pin the newest version that **all** of AWS MWAA, Google Cloud Composer 3 and Astronomer run, on MWAA's Python. Check [MWAA's supported versions](https://docs.aws.amazon.com/mwaa/latest/userguide/airflow-versions.html), the [Composer release notes](https://cloud.google.com/composer/docs/release-notes) and the [Astro Runtime notes](https://www.astronomer.io/docs/runtime/runtime-release-notes). On 2026-10-03 that was `3.3.1-python3.12`, not the newer 3.3.2. Move up only once MWAA has the new version. DAGs use only Airflow connections, variables and env vars, never this stack's hostnames.
+- **Dagster:** user code runs as its own code location (the `dagster-user-code` gRPC container), the same model Dagster+ Hybrid uses. Its image includes `dagster-cloud` pinned to the same version as `dagster`, which [Dagster+ requires](https://docs.dagster.io/deployment/dagster-plus/code-requirements). Instance settings (`dagster.yaml`: storage, run launcher) stay in the webserver/daemon image, never in user code.
+- **Temporal:** the server version doesn't matter, since [Temporal Cloud runs the same server and every SDK supports every server](https://docs.temporal.io/cloud/overview.md). Workers connect through Temporal's [environment configuration](https://docs.temporal.io/develop/environment-configuration) (`TEMPORAL_ADDRESS`, `TEMPORAL_API_KEY`, `TEMPORAL_TLS*`, plus `TEMPORAL_NAMESPACES` here), never a hardcoded address. Moving to Temporal Cloud is then a `.env` change, and the [automated migration](https://docs.temporal.io/cloud/migrate/automated) moves running workflows.
+- **On every update** of these three, re-check the managed services first and record the result in the service doc.
+
+**The same holds for the backing services underneath every app, on any cloud**: AWS, Azure or GCP, or a cloud-neutral managed service. A database, cache, queue or object store version only moves where the managed equivalents already run it:
+
+| Component (here) | AWS | Azure | GCP | Checked 2026-10-03 |
+| --- | --- | --- | --- | --- |
+| **Postgres 18.6** | [RDS](https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-rds-postgresql-18-6-17-11-16-15-15-19-14-24/) | [Flexible Server](https://techcommunity.microsoft.com/blog/adforpostgresql/august-2026-recap-azure-database-for-postgresql/4556436) | [Cloud SQL](https://docs.cloud.google.com/sql/docs/postgres/db-versions) | ✅ all three run 18.6. **The most portable database: prefer it** |
+| **MariaDB 11.8 / 12.3** | [RDS](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-rds-mariadb-community-versions/) | ❌ [retired 2025](https://techcommunity.microsoft.com/blog/adformysql/azure-database-for-mariadb-is-being-retired-on-19-september-2025/3935681) | ❌ none | AWS only; [MariaDB Cloud](https://mariadb.com/products/cloud/) on all three. Only for apps that require MariaDB |
+| **Valkey 9.1** (every cache here) | [ElastiCache Valkey](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html) ≤9.1 | [Azure Managed Redis](https://learn.microsoft.com/en-us/azure/redis/migrate/migrate-basic-standard-premium-understand) (Redis 7.4) | [Memorystore Valkey](https://docs.cloud.google.com/memorystore/docs/valkey/supported-versions) 7.2–9.1 | ✅ same engine on AWS/GCP; same core commands on Azure. Keep to the Redis 7.2 command set, and keep one cache per app on database 0 (clustered managed caches only have database 0) |
+| **RabbitMQ 4.3** | [Amazon MQ](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-mq-rabbitmq-43/) | — | — | ✅ AWS; [CloudAMQP](https://www.cloudamqp.com/) on all three |
+| **MongoDB 8.0** | Atlas | Atlas | Atlas | ✅ |
+| **Object storage (MinIO, S3 API)** | S3 | Blob (**no S3 API**) | GCS ([S3-interoperable, HMAC keys](https://docs.cloud.google.com/storage/docs/interoperability)) | ✅ AWS/GCP by endpoint and keys; Azure needs the app's native Blob support or a gateway |
+| **Orchestrators** | MWAA · Temporal Cloud · Dagster+ | Astronomer · Temporal Cloud · Dagster+ | Composer · Temporal Cloud · Dagster+ | ✅ (above) |
+| **Containers** | EKS | AKS | GKE | via the Kubernetes pilot (`kubernetes/`) |
+
+- Apps reach these only through env/config (host, port, credentials, S3 endpoint), never a hardcoded address, so switching is a `.env` change plus a data copy (`dump`/snapshot).
+- Apps that have their own hosted edition (n8n Cloud, GitLab.com, Mattermost Cloud, Rocket.Chat Cloud, Supabase Cloud, Plausible, Grafana Cloud…) need nothing extra. The hosted edition always runs the same or a newer version, and their export/import goes from older to newer.
+
 ## How fixes are chosen
 
 The same rule applies to adding a service, fixing an issue, adding a healthcheck, or bumping a version: **research first, then change once.**

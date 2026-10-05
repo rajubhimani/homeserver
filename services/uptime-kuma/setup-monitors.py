@@ -38,7 +38,7 @@ from uptime_kuma_api import DockerType, MonitorType, NotificationType, UptimeKum
 
 SERVICE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SERVICE_DIR.parent.parent
-CLAMAV_ENV = REPO_ROOT / "services" / "clamav" / ".env"
+NTFY_ENV = REPO_ROOT / "services" / "ntfy" / ".env"
 SERVICES_JSON = REPO_ROOT / "services.json"
 
 DOCKER_HOST_NAME = "homeserver"
@@ -70,9 +70,9 @@ _FIELD = re.compile(r"^    (container_name|restart):\s*[\"']?([^\"'\s#]+)")
 
 
 def load_ntfy_token() -> str | None:
-    if not CLAMAV_ENV.exists():
+    if not NTFY_ENV.exists():
         return None
-    for line in CLAMAV_ENV.read_text().splitlines():
+    for line in NTFY_ENV.read_text().splitlines():
         if line.startswith("NTFY_ALERT_TOKEN="):
             return line.split("=", 1)[1].strip()
     return None
@@ -189,7 +189,7 @@ def main() -> None:
 
     token = load_ntfy_token()
     if not token:
-        print(f"Warning: could not read NTFY_ALERT_TOKEN from {CLAMAV_ENV} -- notification provider will be skipped.")
+        print(f"Warning: could not read NTFY_ALERT_TOKEN from {NTFY_ENV} -- notification provider will be skipped.")
 
     username = input("Uptime Kuma username: ").strip()
     password = getpass.getpass("Uptime Kuma password: ")

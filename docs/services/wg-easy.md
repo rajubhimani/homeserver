@@ -16,7 +16,7 @@ This service was built after extensive investigation ruled out every zero-port-f
 
 ## Architecture
 
-- **`wg-easy`** — single container, `network_mode: host`, binds WireGuard's UDP port (default `51820`) and the admin web UI (`51821`) directly to the host's real network interfaces.
+- **`wg-easy`** — single container, `network_mode: host`, binds WireGuard's UDP port (default `51820`) and the admin web UI (`51821`) directly to the host's real network interfaces. Healthcheck: the image's own (`wg show | grep -q interface`, every 60s), which checks the VPN interface is actually up, not just the web UI. `compose.yml` only retunes its timing (no `test:`; `start_interval: 2s` during a 30s start period). Otherwise the first check would come a full minute after start, and every `prod` start that needs `10.8.0.1` waits for wg-easy.
 - **VPN tunnel traffic (UDP 51820)**: reached via a plain DNS-only (grey-clouded, non-proxied) `AAAA` record pointing at the homeserver's real IPv6 address — e.g. `wg.yourdomain.com`. This is safe to host on Cloudflare's DNS because it's DNS-only: no traffic is proxied through Cloudflare's network, it's just a name-to-address lookup, same as any other DNS provider. **This record must never be proxied (orange cloud)** — see the ToS note above.
 - **Admin web UI (port 51821)**: unlike the VPN tunnel itself, this is just a plain HTTP/REST web dashboard — no WireGuard/VPN protocol traffic involved. It's safe to expose normally through nginx-plain + Cloudflare (regular orange-cloud proxying), since Cloudflare's VPN-proxying ToS restriction is about actual VPN/tunnel traffic, not a web app that happens to manage one. This stack exposes it at a separate hostname (e.g. `wg-admin.yourdomain.com`) behind **Authentik forward-auth** (defense-in-depth on top of wg-easy's own login, matching the pattern used for other sensitive admin panels like Dozzle/Ollama in this stack — see `docs/services/authentik.md`).
   - Since wg-easy uses `network_mode: host`, it isn't on the same Docker network as nginx-plain — nginx-plain reaches it via the `homeserver` Docker network's own bridge gateway IP (`172.18.0.1` in this deployment; check `docker network inspect homeserver --format '{{.IPAM.Config}}'` if rebuilding, this can differ), which is just another host interface wg-easy's host networking already binds to.
@@ -305,3 +305,7 @@ wg-easy's database has *two* similarly-named fields per client: `allowed_ips` (w
 
 - [wg-easy official docs](https://wg-easy.github.io/wg-easy/latest/)
 - [WireGuard official site](https://www.wireguard.com/) (client app downloads)
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: both WireGuard peers restored with the original server keys; start time cut from 60s to 5s. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).

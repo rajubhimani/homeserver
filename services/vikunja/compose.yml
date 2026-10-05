@@ -19,13 +19,13 @@ services:
     command: sh -c "mkdir -p /vikunja-files && chown -R 1000:0 /vikunja-files"
 
   vikunja:
-    image: vikunja/vikunja:2.6.0
+    image: vikunja/vikunja:2.7.0
     container_name: vikunja
     restart: unless-stopped
     env_file: .env
     environment:
       VIKUNJA_DATABASE_TYPE: postgres
-      VIKUNJA_DATABASE_HOST: shared-postgres
+      VIKUNJA_DATABASE_HOST: ${DB_HOST}
       VIKUNJA_DATABASE_USER: ${POSTGRES_USER}
       VIKUNJA_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
       VIKUNJA_DATABASE_DATABASE: ${POSTGRES_DB}

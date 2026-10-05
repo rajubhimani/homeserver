@@ -25,7 +25,7 @@ Open `https://docs.<domain>/` (or `http://<host>:8144` in dev).
 
 ## Architecture
 
-One container: `nginx:1.31.6-alpine` with a custom `entrypoint.sh` (same `DOMAIN_PLACEHOLDER`-style templating pattern as [landing](../07-landing.md), here just templating `SITE_TITLE` into `index.html`) serving:
+One container: `nginx:1.30.5-alpine` with a custom `entrypoint.sh` (same `DOMAIN_PLACEHOLDER`-style templating pattern as [landing](../07-landing.md), here just templating `SITE_TITLE` into `index.html`) serving:
 
 - `setup.md`, `docs/`, `docker/`, `kubernetes/`, and `_sidebar.md` — bind-mounted **read-only** straight from the repo root, at the exact same relative paths they already live at (`../../setup.md` → `/usr/share/nginx/html/setup.md`, `../../docs` → `/usr/share/nginx/html/docs`, `../../docker` → `/usr/share/nginx/html/docker`, `../../kubernetes` → `/usr/share/nginx/html/kubernetes`, `../../_sidebar.md` → `/usr/share/nginx/html/_sidebar.md`). Every existing relative link in this doc set (`[Home](../../setup.md)`, `[← Services Reference](../11-services-reference.md)`, `docker/README.md`'s link back to `docs/08-maintenance.md`, etc.) resolves correctly with zero rewriting, because the served directory structure mirrors the repo's own. `docker/` and `kubernetes/` are mounted whole (not just their `.md` files) purely so those relative links keep working — their non-doc contents (`docker-limits.py`, `apply-secrets.py`, k8s manifests) are along for the ride, read-only, same as any other file this container serves.
 - `vendor/` — Docsify core, the search/copy-code/sidebar-collapse plugins, Mermaid + the `docsify-mermaid` plugin (renders ` ```mermaid ` fences as diagrams instead of plain code blocks — see any of this repo's own docs for examples, e.g. `setup.md`'s traffic-flow diagram), and Prism (with `bash`/`yaml`/`json`/`python`/`nginx`/`docker` language components) — all vendored into `services/docs/vendor/` and checked into git, rather than loaded from a CDN at runtime. Keeps the page fully self-hosted and working even with no outbound internet access from the container.
@@ -43,6 +43,11 @@ One container: `nginx:1.31.6-alpine` with a custom `entrypoint.sh` (same `DOMAIN
 - **No persistent data** — this service holds no state of its own; everything it serves already lives elsewhere in the repo (bind-mounted read-only, so a container compromise can't modify source). `.env` holds `SITE_TITLE`, plus `DOMAIN`/`PLAUSIBLE_SCRIPT` for the Plausible analytics embed (same `DOMAIN_PLACEHOLDER`-style templating, see [07-landing.md](../07-landing.md)'s "Dynamic configuration" section).
 - **`CLAUDE.md` and `TODO.md` are deliberately not served** — `CLAUDE.md` is AI-agent instructions, not user-facing reference material; `TODO.md` is a private working list, not linked from `setup.md`'s own doc tree. Both now live outside the repo tree entirely (symlinked in from `/mnt/mydata/homeserver-local/`, gitignored — see `CLAUDE.md`'s own "Data directory convention" section), so they're structurally unreachable from this container's bind mount, not just unlinked.
 - If a doc you expect to find isn't reachable from the homepage or search, check whether it's actually linked from `setup.md` and `_sidebar.md` — an unlinked doc is still reachable directly by URL, just not discoverable via browsing. (`docs/00-services-overview.md` was exactly this case — stale and unlinked — and was deleted rather than fixed, since `setup.md`'s "What's in the stack" section already covered the same ground accurately.)
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless, nothing to restore. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

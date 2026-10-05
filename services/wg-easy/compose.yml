@@ -40,8 +40,12 @@ services:
     # commands and how to persist them across reboots.
 
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:51821',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
-      interval: 30s
-      timeout: 10s
+      # Timing only, no 'test': the image's own probe ('wg show | grep -q
+      # interface', the VPN interface itself, not just the web UI) is kept.
+      # Its first run would otherwise come a full 60s interval after start,
+      # and every prod start that needs 10.8.0.1 waits for wg-easy.
+      interval: 60s
+      timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 30s
+      start_interval: 2s

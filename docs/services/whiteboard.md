@@ -66,11 +66,16 @@ Runs with `STORAGE_STRATEGY=lru` (the image's own default) — in-memory session
 
 ## Health endpoint
 
-No documented health endpoint upstream — found by testing the running container directly: `/status` returns `200`. `compose.yml`'s healthcheck (`wget --spider`, since the image has no `curl`) and `services/landing/nginx.conf`'s `/health/whiteboard` route both use this path.
+The container uses the image's own `HEALTHCHECK` (a `node` GET of `http://localhost:3002`, every 30s), so `compose.yml` declares none. `/status` also returns `200` (found by testing the running container); `services/landing/nginx.conf`'s `/health/whiteboard` route uses it.
 
 ## Reverse proxy notes
 
 `services/nginx-plain/templates/default.conf.template`'s `whiteboard.${DOMAIN}` block proxies WebSocket traffic (`proxy_http_version 1.1` + conditional `Connection: upgrade`, same pattern as Guacamole/ONLYOFFICE) since real-time collaboration runs over `socket.io`, plus a long `proxy_read_timeout 3600s` so idle-but-open collaboration sessions aren't cut off.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless; on its image's own check. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

@@ -6,7 +6,7 @@
 
 **Purpose:** Antivirus scanning daemon backing [Nextcloud](nextcloud.md)'s `files_antivirus` app. No UI of its own — a pure backend `clamd` daemon reached only over the internal Docker network, never through the reverse proxy.
 **Port:** `8152` (host, dev-only debugging) → `3310` (container, `clamd`'s TCP protocol) — no public route, nothing here should ever be reachable from outside this host. | **Data:** `service_data/cache/clamav/db/` — the virus-signature database only, fully regenerable via `freshclam` re-download, so it lives under `cache/` rather than `data/` (see the `homeserver-add-service` skill's data-bucket rules) — nothing here needs backing up. | **Requires:** nothing | **Memory:** measured idle with signatures loaded: **~950MB** — this is the heaviest service added to this stack so far by a wide margin, driven entirely by ClamAV's own signature database living in RAM (upstream's own docs: "Preferred: 4 GiB", loading signatures alone needs "upwards of 1.2 GiB"). `compose.yml` caps it at 3GB via `deploy.resources.limits`.
-**Pinned version:** `clamav/clamav:1.5.4_base` — the `_base` variant ships without a bundled signature database (downloaded fresh via `freshclam` into the persistent `CACHE_ROOT` volume instead), which upstream's own docs recommend specifically to avoid re-pulling the full database as part of every image pull once it's already persisted.
+**Pinned version:** `clamav/clamav:1.4.6_base`, ClamAV's current **LTS** feature release (3 years of patches plus a 4th year of signatures, [EOL policy](https://docs.clamav.net/faq/faq-eol.html)), per the stack's LTS-always rule. It moved from the non-LTS 1.5.4 on 2026-10-03. The `_base` variant: the `_base` variant ships without a bundled signature database (downloaded fresh via `freshclam` into the persistent `CACHE_ROOT` volume instead), which upstream's own docs recommend specifically to avoid re-pulling the full database as part of every image pull once it's already persisted.
 
 ## Setup
 
@@ -78,13 +78,16 @@ With `av_infected_action=only_log`, an infected file stays in place but the dete
 
 **3 days, not 1**, gives freshclam (which checks once daily via `FRESHCLAM_CHECKS`) room for a one-off blip without alerting — the check only fires after at least two consecutive missed days.
 
-## Proactive alerting — `clamav-watchdog`
+## Proactive alerting — Uptime Kuma
 
-Still no landing-page card (this service has none, see "Purpose" above), but the healthcheck status no longer requires manually running `docker ps`/`docker inspect` to notice — `clamav-watchdog` (`compose.yml`, `watchdog.sh`, same pattern as `services/adguard-home/`'s watchdog) polls the Docker API every `WATCHDOG_CHECK_INTERVAL` seconds (default 300) for whether `clamav` is actually reporting `healthy`, and pushes a real push notification via [ntfy](ntfy.md) after `WATCHDOG_FAIL_THRESHOLD` consecutive misses (default 2 — at least 10 minutes of real unhealthiness, not a one-off blip), with a `WATCHDOG_ALERT_COOLDOWN` (default 6h) so it doesn't re-alert every single check interval while the problem persists.
+An unhealthy `clamav` (stale signatures included, via the check above) is alerted by [Uptime Kuma](uptime-kuma.md). Its Docker Container monitor for `clamav` marks an `unhealthy` container **DOWN** (upstream `server/model/monitor.js`) and notifies through the ntfy `homeserver-alerts` channel. Check that this monitor exists after a rebuild; `services/uptime-kuma/setup-monitors.py` creates one for every running container.
 
-Publishes to ntfy's `homeserver-alerts` topic over the internal Docker network (`NTFY_ALERT_URL=http://ntfy/homeserver-alerts` — no reason to round-trip through Cloudflare for a container-to-container call), authenticated with a dedicated access token (`NTFY_ALERT_TOKEN`, `ntfy token add --label=homeserver-alerts <user>` — never the real account password; see [ntfy.md](ntfy.md) for the current account). Verified working end-to-end with the actual production credentials, not just each piece in isolation: the watchdog's Docker-socket health query, and a real alert publish using the exact token/URL loaded inside the running `clamav-watchdog` container, both confirmed live before this shipped.
+Until 2026-10-03 a separate `clamav-watchdog` container (a curl loop on the Docker socket) sent the same alert. It was removed as redundant with Uptime Kuma. The ntfy alert credentials it used now live in `services/ntfy/.env` (`NTFY_ALERT_URL`/`NTFY_ALERT_TOKEN`).
 
-**This alert is silent until you actually subscribe to it** — see [ntfy.md](ntfy.md)'s `homeserver-alerts` section for the one-time phone/browser subscription step; nothing plays that step for you.
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless (signatures re-downloaded); stale-signature alerting moved to Uptime Kuma. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

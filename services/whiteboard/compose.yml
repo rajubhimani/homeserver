@@ -16,12 +16,8 @@ services:
       # ONLYOFFICE's "Advanced server settings" internal address.
       NEXTCLOUD_URL: http://nextcloud
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3002/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 15s
+    # No healthcheck here on purpose: the image ships its own (node GET :3002, 30s interval), and
+    # upstream's compose defines none, so a compose one would only replace it.
     networks:
       - homeserver
 

@@ -22,6 +22,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+      start_interval: 2s
     networks:
       - homeserver
 
@@ -33,20 +34,16 @@ services:
     environment:
       TZ: ${TZ:-Asia/Kolkata}
       UPTIME_KUMA_DB_TYPE: mariadb
-      UPTIME_KUMA_DB_HOSTNAME: uptime-kuma-db
-      UPTIME_KUMA_DB_PORT: 3306
+      UPTIME_KUMA_DB_HOSTNAME: ${DB_HOST}
+      UPTIME_KUMA_DB_PORT: ${DB_PORT}
       UPTIME_KUMA_DB_NAME: ${MYSQL_DATABASE}
       UPTIME_KUMA_DB_USERNAME: ${MYSQL_USER}
       UPTIME_KUMA_DB_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ${DATA_ROOT}/data:/app/data
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3001/ || exit 1"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # No healthcheck here on purpose: the image ships its own (extra/healthcheck, 60s interval, 180s start period), and
+    # upstream's compose defines none, so a compose one would only replace it.
     depends_on:
       uptime-kuma-db:
         condition: service_healthy

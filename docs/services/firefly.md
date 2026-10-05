@@ -45,6 +45,7 @@ Confirmed against Firefly III's own current documentation, not assumed from memo
 - `APP_KEY` and `STATIC_CRON_TOKEN` must each be **exactly 32 characters**
 - `APP_URL` must be `https://firefly.${DOMAIN}` and `TRUSTED_PROXIES` must be `"**"` — both required by Firefly III's own docs for it to generate `https://` links instead of `http://` (a mismatched scheme gets blocked by the browser's CSP `connect-src`, e.g. on the transaction-delete API call)
 - Includes an alpine `firefly-cron` container that triggers recurring transactions daily at 03:00
+- Healthchecks: `firefly` and `firefly-importer` use their images' own `HEALTHCHECK` (curl `$HEALTHCHECK_PATH`, `/healthcheck` for the core app, with a 300s start period for first-boot migrations). Upstream's compose defines none, so `compose.yml` doesn't either.
 
 ## Data Importer
 
@@ -99,6 +100,11 @@ docker volume rm firefly-recovery-test
 ```
 
 Verify row counts (accounts/transactions/users) after bringing `firefly-db` back up match what you expect before trusting it.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 1,576 transactions restored; `firefly` and `firefly-importer` on their images' own checks. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 
