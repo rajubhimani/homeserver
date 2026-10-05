@@ -1192,3 +1192,16 @@ def test_argocd_treats_a_claim_waiting_for_its_first_consumer_as_healthy():
                for d in yaml.safe_load_all(f.read_text()) if d and d.get("kind") == "Kustomization" for p in d.get("patches", [])]
     cm = next(p for p in patches if isinstance(p, dict) and p.get("metadata", {}).get("name") == "argocd-cm")
     assert cm["data"]["resource.customizations.health.PersistentVolumeClaim"] == lua
+
+
+def test_the_kind_node_must_restart_after_a_reboot():
+    """kind's node has restart policy on-failure:1, which does not bring the cluster back after a host
+    reboot or power cut (2026-10-05): create sets unless-stopped and verify checks it."""
+    import sys as _sys
+    _sys.path.insert(0, str(K8S))
+    import verify
+    assert verify.restart_check("unless-stopped")["cluster node restarts after a reboot"][0]
+    assert not verify.restart_check("on-failure")["cluster node restarts after a reboot"][0]
+    assert not verify.restart_check("")["cluster node restarts after a reboot"][0]
+    src = (K8S / "cluster.py").read_text()
+    assert '"docker", "update", "--restart", "unless-stopped"' in src and src.index('"kind", "create"') < src.index('"docker", "update"')

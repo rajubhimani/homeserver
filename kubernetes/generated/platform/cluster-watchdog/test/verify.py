@@ -146,6 +146,14 @@ def host_checks(root: Path = Path("/")) -> dict[str, tuple[bool, str]]:
     return out
 
 
+def restart_check(policy: str) -> dict[str, tuple[bool, str]]:
+    """kind creates its node with `on-failure:1`, which does not start it after a host reboot or
+    a power cut: the whole cluster stays down until someone runs `docker start`."""
+    return {"cluster node restarts after a reboot": (policy == "unless-stopped",
+            policy or "unknown" if policy == "unless-stopped" else
+            f"restart policy is {policy or 'unknown'}: run `docker update --restart unless-stopped <cluster>-control-plane`")}
+
+
 def render(results: list[tuple[str, bool, str]]) -> str:
     width = max(len(n) for n, _, _ in results)
     lines = [f"  {'OK ' if ok else 'FAIL'}  {name.ljust(width)}  {detail}" for name, ok, detail in results]

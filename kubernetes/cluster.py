@@ -141,6 +141,9 @@ def cmd_create(_a) -> None:
         run(["kind", "create", "cluster", "--config", f.name, "--wait", "300s"])
     finally:
         os.unlink(f.name)
+    # kind creates the node with restart policy on-failure:1, which does not start it after a host
+    # reboot or power cut: the whole cluster stayed down until someone ran `docker start`.
+    run(["docker", "update", "--restart", "unless-stopped", f"{cfg()['K8S_CLUSTER_NAME']}-control-plane"])
 
 
 def host_mounts() -> list[tuple[str, str, bool]]:
@@ -1090,8 +1093,11 @@ def cmd_verify(a) -> None:
     run_set = running_services(a.env)
     # Public hostnames only where they're real (prod); the test env uses *.k8s.local.
     urls = [m["url"] for m in k8s_monitors.plan(a.env, run=run_set) if m["kind"] == "http" and m["active"]] if a.env == "prod" else []
+    policy = subprocess.run(["docker", "inspect", f"{cfg()['K8S_CLUSTER_NAME']}-control-plane", "--format",
+                             "{{.HostConfig.RestartPolicy.Name}}"], capture_output=True, text=True).stdout.strip()
+    host = {**verify.host_checks(), **verify.restart_check(policy)}
     results = verify.verify_checks(run_set, set(load_scope().get("ported") or []), kg, http, tunnel_ready, urls,
-                                   host=verify.host_checks())
+                                   host=host)
     print(verify.render(results))
     if not all(ok for _, ok, _ in results):
         sys.exit(1)
