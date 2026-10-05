@@ -90,15 +90,23 @@ The SSD was wiped and Fedora reinstalled; the data disks are mounted at the same
 
 **Done today besides the rebuild:** AdGuard Home runs on Docker (`DNS_BIND_IP=192.168.1.7`, answers DNS over UDP and TCP; skipped in `kubernetes/scope.yaml`). `docker/host-boot-safety.sh` was run (SATA `max_performance`, `ip_nonlocal_bind=1`, mount ordering). `homeserver.py --no-wg` stops `prod up` from starting wg-easy as a side effect (docs/15). `cluster.py argocd-password` keeps one ArgoCD password across rebuilds (hash in `kubernetes/.env`, applied by bootstrap). The host's static IP is 192.168.1.7/24 on `Airtel_Roger` (a `/0` mask once cut IPv4 for an hour).
 
-**Open:**
-1. **wg-easy (Docker) is stopped on purpose.** It also fails to start because `ip6table_nat` isn't loaded: `sudo modprobe iptable_nat ip6table_nat`, persist in `/etc/modules-load.d/wg-easy.conf` (docs/services/wg-easy.md), then `uv run homeserver.py prod up wg-easy`. Any `prod up` without `--no-wg` starts it again.
-2. **Uptime Kuma:** run `uv run services/uptime-kuma/setup-monitors.py --k8s --prune` (needs the owner's Kuma login): the 187 monitors are Docker-socket ones and all report down.
-3. **Router/devices:** point their DNS at 192.168.1.7 for AdGuard's dashboard to fill.
-4. **Owner checks:** Cloudflare Connectors list shows only this cluster's 4 connections; app logins; set the ArgoCD password (`argocd-password`).
-5. **Headlamp login:** decision pending (non-expiring token vs Authentik OIDC, recommended).
-6. **Beszel:** the Immich "down" was the 00:50-01:15 IPv4 outage and the tunnel being off; re-check the monitors now.
-7. Supabase's public route (network alias, §5); the 15 deferred apps; `cluster.py restore`.
-8. **Nightly Velero backup** (03:30) hasn't run on the new cluster yet: check `kubectl -n velero get backups.velero.io` tomorrow.
+**Done while the owner was away (2026-10-05, 09:00-14:30):**
+- `cluster.py verify --env prod`: one read-only health check (nodes, pods, ArgoCD, databases, backups, tunnel, public hostnames, host SATA/IO/disk). 15/15 pass. Its blind spot is the Cloudflare edge: also test from another network.
+- **Backups proven:** the nightly Velero backup and all 9 CloudNativePG base backups ran on the new cluster and completed. **A Velero restore into a throwaway namespace worked end to end** (restored `beszel-data` matched the live files byte for byte; a marker written after the backup was absent). That namespace was deleted; a Released test volume `restore-test/beszel-data` (4 MB) remains under `~/k8s-data/fast/restore-test/` for the owner to remove.
+- `cluster.py restore <svc>` (volumes, from Velero) is built and tested but **only as a dry run so far**; the in-place round trip needs the owner's OK (below).
+- ArgoCD: apps now retry forever (they used to give up after 10 tries when a CRD arrived late); `ops-routes` no longer shows permanent drift (no server-side apply for plain routes); unpausing a service refreshes its app at once (`export` used to leave it stopped for minutes).
+- Headlamp behind Authentik is built and off by default (`headlamp_auth` in `kubernetes/deploy/<env>.yaml`, docs/17 "Headlamp behind Authentik"): forward-auth plus a read-only service account, not real OIDC (that needs kube-apiserver flags, i.e. a control-plane change on kind).
+- `homeserver.py --no-wg`, one ArgoCD password (`argocd-password`), AdGuard on Docker, boot-safety script (earlier today).
+
+**Waiting for the owner (nothing is blocked on Claude):**
+1. **Restore round trip, in place, on beszel** (deletes its workloads, volume claim and volume, moves the old data aside, restores from Velero): `uv run kubernetes/cluster.py restore beszel` prints the plan; add `--yes` to run it. Claude was not allowed to run it unattended (deleting a live service's volume); do it with the owner present, after `cluster.py export --env prod beszel`.
+2. **Authentik steps for Headlamp** (docs/17), then `headlamp_auth: authentik`.
+3. **Uptime Kuma:** `uv run services/uptime-kuma/setup-monitors.py --k8s --prune` (asks for the owner's Kuma login): the 187 Docker-socket monitors all report down.
+4. **`sudo` steps:** wg-easy is stopped on purpose; to bring it back `sudo modprobe iptable_nat ip6table_nat`, persist in `/etc/modules-load.d/wg-easy.conf` (docs/services/wg-easy.md), then `uv run homeserver.py prod up wg-easy`. Any `prod up` without `--no-wg` starts it again.
+5. **Router/devices:** point their DNS at 192.168.1.7 for AdGuard's dashboard to fill.
+6. **Owner checks:** Cloudflare Connectors list shows only this cluster's 4 connections; a phone on mobile data reaches the sites; app logins; `argocd-password`.
+
+**Still open (engineering):** Supabase's public route (network alias, §5); the 15 deferred apps; restore for databases (Postgres via Barman, shared-DB apps via their dumps: the plan is in §3); a second SSD for the cluster (the real fix for the disk limit); Headlamp token is cluster-admin until `headlamp_auth: authentik`.
 
 ## 4. How things work (short)
 
