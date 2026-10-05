@@ -1133,3 +1133,34 @@ def test_no_generated_file_is_git_ignored():
                        cwd=REPO, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr
     assert p.stdout.strip() == "", f"generated files that git ignores (add a .gitignore exception):\n{p.stdout}"
+
+
+def test_watchdog_vantage_probe_parses_check_host_results_and_identifies_itself(monkeypatch):
+    """check-host.net's documented shapes: each node answers [[ok, secs, message, code, ip]] or null while
+    pending. A 530 (Cloudflare's tunnel error) or a network failure is a failed probe, a pending node is
+    not counted, and the requests carry a User-Agent (the default Python one is refused with 403)."""
+    import io
+    w = _watchdog()
+    seen = []
+    results = {
+        "us1": [[1, 0.2, "OK", "200", "1.1.1.1"]],
+        "fr1": [[0, 0.3, "Unknown", "530", "1.1.1.2"]],      # Cloudflare 1033 reaches the checker as 530
+        "in1": [[1, 0.4, "Moved Permanently", "301", "1.1.1.3"]],  # a redirect is an answer
+        "br1": [[0, 5.0, "Connection timed out", None, None]],
+        "jp1": None,                                          # still pending when we stop waiting
+    }
+
+    def fake_urlopen(req, timeout=0):
+        seen.append(req.get_header("User-agent"))
+        body = {"ok": 1, "request_id": "abc"} if "check-http" in req.full_url else results
+        return io.BytesIO(__import__("json").dumps(body).encode())
+
+    monkeypatch.setattr(w.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(w.time, "sleep", lambda s: None)
+    clock = iter(range(0, 1000, 20))
+    monkeypatch.setattr(w.time, "time", lambda: next(clock))
+    ok, total = w.vantage_probe("https://example.test/", wait=30)
+    assert (ok, total) == (2, 4)  # 200 and 301 answered; 530 and the timeout failed; the pending node isn't counted
+    assert seen and all(ua and "homeserver-watchdog" in ua for ua in seen)
+    monkeypatch.setattr(w.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("unreachable")))
+    assert w.vantage_probe("https://example.test/") == (0, 0)  # an unreachable checker is "no information", never "down"

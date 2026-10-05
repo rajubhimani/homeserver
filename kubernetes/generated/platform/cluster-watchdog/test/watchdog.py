@@ -182,20 +182,24 @@ def http_status(url: str, headers: dict | None = None, timeout: float = 15) -> i
         return 0
 
 
+# check-host.net answers 403 to Python's default User-Agent; say who we are.
+UA = "homeserver-watchdog/1.0 (self-hosted uptime check of our own site)"
+
+
 def vantage_probe(url: str, max_nodes: int = 6, wait: float = 30) -> tuple[int, int]:
     """(answered, usable) from check-host.net's public API (check-host.net/about/api): the URL
     fetched from nodes in many countries. A result is good when the page answers with < 500
     (a redirect or 401 is fine); Cloudflare's tunnel error is 530."""
     try:
         start = urllib.request.Request(f"https://check-host.net/check-http?host={urllib.parse.quote(url, safe='')}&max_nodes={max_nodes}",
-                                       headers={"Accept": "application/json"})
+                                       headers={"Accept": "application/json", "User-Agent": UA})
         with urllib.request.urlopen(start, timeout=20) as r:
             rid = json.load(r)["request_id"]
         deadline, res = time.time() + wait, {}
         while time.time() < deadline:
             time.sleep(5)
             with urllib.request.urlopen(urllib.request.Request(f"https://check-host.net/check-result/{rid}",
-                                                              headers={"Accept": "application/json"}), timeout=20) as r:
+                                                              headers={"Accept": "application/json", "User-Agent": UA}), timeout=20) as r:
                 res = json.load(r)
             if res and all(v is not None for v in res.values()):
                 break
