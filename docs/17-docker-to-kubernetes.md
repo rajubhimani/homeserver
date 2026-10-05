@@ -477,7 +477,7 @@ The `cluster-watchdog` add-on (`kubernetes/watchdog/watchdog.py`, standard libra
 
 **Permissions:** read-only on nodes, pods, ArgoCD applications, CloudNativePG and MariaDB resources and Velero backups, plus exactly one write, `patch` of the `cloudflared` Deployment. No Secrets. Tests pin that.
 
-**Switch:** `watchdog: on | dry-run` in `kubernetes/deploy/<env>.yaml`. `dry-run` logs what it would restart or send (`kubectl -n apps logs deploy/cluster-watchdog`) and does nothing; use it to validate a change against the real world first. `cluster.py verify` fails if the watchdog isn't running.
+**Switch:** `watchdog: active | dry-run` in `kubernetes/deploy/<env>.yaml`. `dry-run` logs what it would restart or send (`kubectl -n apps logs deploy/cluster-watchdog`) and does nothing; use it to validate a change against the real world first. `cluster.py verify` fails if the watchdog isn't running.
 
 **What it can't see:** a Cloudflare-wide outage (restarting does nothing then: after 3 tries it asks for a human), and anything while the host itself is off or asleep (`docs/08` "The host went to sleep").
 

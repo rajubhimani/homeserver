@@ -2175,13 +2175,14 @@ def ops_routes_files(env: str) -> dict[str, list[dict] | dict]:
         "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization", "resources": ["routes.yaml"]}}
 
 
-WATCHDOG_MODES = ("on", "dry-run")
+# not "on": YAML reads a bare `on` as the boolean true
+WATCHDOG_MODES = ("active", "dry-run")
 
 
 def watchdog_mode(env: str) -> str:
-    """kubernetes/deploy/<env>.yaml `watchdog`: `on` (default) acts; `dry-run` only logs what it
+    """kubernetes/deploy/<env>.yaml `watchdog`: `active` (default) acts; `dry-run` only logs what it
     would restart or send, for validating a change against the real world first."""
-    mode = load_deploy(env).get("watchdog", "on")
+    mode = load_deploy(env).get("watchdog", "active")
     if mode not in WATCHDOG_MODES:
         raise GenError(f"kubernetes/deploy/{env}.yaml: watchdog must be one of {WATCHDOG_MODES}, not {mode!r}")
     return mode

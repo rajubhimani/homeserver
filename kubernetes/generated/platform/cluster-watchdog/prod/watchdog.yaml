@@ -160,7 +160,7 @@ spec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: WATCHDOG_DRY_RUN
-          value: '1'
+          value: '0'
         - name: NTFY_URL
           value: http://ntfy/homeserver-alerts
         - name: NTFY_TOKEN

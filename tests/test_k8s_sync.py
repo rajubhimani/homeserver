@@ -1166,3 +1166,13 @@ def test_watchdog_vantage_probe_parses_check_host_results_and_identifies_itself(
     assert seen and all(ua and "homeserver-watchdog" in ua for ua in seen)
     monkeypatch.setattr(w.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("unreachable")))
     assert w.vantage_probe("https://example.test/") == (0, 0)  # an unreachable checker is "no information", never "down"
+
+
+def test_deploy_switches_are_strings_yaml_does_not_turn_into_booleans():
+    """YAML 1.1 reads a bare `on`/`off`/`yes`/`no` as a boolean: `watchdog: on` once became True
+    (2026-10-05). Every switch in kubernetes/deploy/<env>.yaml must load as one of its allowed words."""
+    gen = _generate_module()
+    for env in gen.ENVS:
+        d = gen.load_deploy(env)
+        assert gen.watchdog_mode(env) in gen.WATCHDOG_MODES and isinstance(d.get("watchdog", "active"), str), env
+        assert gen.headlamp_auth(env) in gen.HEADLAMP_AUTH_MODES and isinstance(d.get("headlamp_auth", "token"), str), env
