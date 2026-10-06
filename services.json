@@ -252,17 +252,6 @@
       "replaces": "Mailtrap"
     },
     {
-      "slug": "plausible",
-      "tier": "core",
-      "name": "Plausible",
-      "category": "dev",
-      "subcategory": "automation",
-      "icon": "green",
-      "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
-      "desc": "See how many people visit your websites and what they click on, without tracking cookies - a privacy-friendly alternative to Google Analytics.",
-      "replaces": "Google Analytics"
-    },
-    {
       "slug": "brave",
       "tier": "browser",
       "bundle": "browser",
@@ -705,6 +694,17 @@
         "user": "POSTGRES_USER",
         "password": "POSTGRES_PASSWORD"
       }
+    },
+    {
+      "slug": "plausible",
+      "tier": "automation-ai",
+      "name": "Plausible",
+      "category": "dev",
+      "subcategory": "automation",
+      "icon": "green",
+      "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
+      "desc": "See how many people visit your websites and what they click on, without tracking cookies - a privacy-friendly alternative to Google Analytics.",
+      "replaces": "Google Analytics"
     },
     {
       "slug": "observability",

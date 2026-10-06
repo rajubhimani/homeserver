@@ -15,7 +15,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
-| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, guacamole, it-tools, mailpit, plausible |
+| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, guacamole, it-tools, mailpit |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `browser` | `uv run homeserver.py dev up browser` | min + core + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + browser + every office service below — **opt-in, never implied by `up browser`** |
@@ -44,7 +44,7 @@ wallabag.
 stirling-pdf-lite, stirling-pdf, vikunja, appflowy, plane, calcom, listmonk, miniflux.
 
 **Automation & AI services** (workflow/automation/AI apps — started with `up automation-ai`/`up all` or individually):
-airflow, dagster, temporal, ollama, open-webui, n8n.
+airflow, dagster, temporal, ollama, open-webui, n8n, plausible.
 
 **Browser services** (the Browser Hub's remote browsers — started with `up browser`/`up all` or individually; `group:browser` acts on just these without the lower-tier cascade):
 brave, chromium, firefox, mullvad-browser, librewolf, zen, helium, chrome, edge,
@@ -91,7 +91,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Observability (Grafana) | `grafana` | 8134 | 3000 | core |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
 | Uptime Kuma | `uptime-kuma` | 3001 | 3001 | core |
-| Plausible | `plausible` | 8130 | 8000 | core |
+| Plausible | `plausible` | 8130 | 8000 | automation-ai |
 | Coolify | `coolify` | 8132 | 8080 | daily |
 | Excalidraw | `excalidraw` | 8116 | 80 | daily |
 | Karakeep | `karakeep` | 8117 | 3000 | daily |
@@ -199,7 +199,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `it-tools.yourdomain.com` | `it-tools` | `80` | core |
 | `mailpit.yourdomain.com` | `mailpit` | `8025` | core |
 | `atuin.yourdomain.com` | `atuin` | `8888` | daily |
-| `plausible.yourdomain.com` | `plausible` | `8000` | core |
+| `plausible.yourdomain.com` | `plausible` | `8000` | automation-ai |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | core |
 | `status.yourdomain.com` | `uptime-kuma` | `3001` | core |
 | `grafana.yourdomain.com` | `grafana` | `3000` | core |
