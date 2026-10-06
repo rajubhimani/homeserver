@@ -130,8 +130,11 @@ class FakeBackend(hs.DockerBackend):
     def network_exists(self, name):
         return True
 
-    def network_create(self, name):
-        return None
+    def network_create(self, name, subnet=None):
+        self.events.append(("network_create", name, subnet))
+
+    def network_subnets(self, name):
+        return [hs.HOMESERVER_SUBNET] if hasattr(hs, "HOMESERVER_SUBNET") else []
 
     # ── tar ──
     def tar_volume_to(self, volume, dest_dir, archive_name):

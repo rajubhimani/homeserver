@@ -26,7 +26,7 @@ Ten separate remote-browser containers ([firefox](firefox.md), [chromium](chromi
 | Edge | `/edge/` | [edge.md](edge.md) |
 | Vivaldi | `/vivaldi/` | [vivaldi.md](vivaldi.md) |
 
-**Removed 2026-09-26:** Ungoogled Chromium (`/ungoogled-chromium/`) was dropped from the hub when LibreWolf and Zen were added — see "Browser safety" below for why. Its last snapshot is in `service_data/backup/ungoogled-chromium/20260926-165229/` and its `service_data/data/ungoogled-chromium/` profile was left on disk; the service directory and doc are recoverable from git history. Static IP `172.18.255.242` is now unused. The k8s pilot's `kubernetes/apps/ungoogled-chromium/` manifests were not touched (separate branch/cluster).
+**Removed 2026-09-26:** Ungoogled Chromium (`/ungoogled-chromium/`) was dropped from the hub when LibreWolf and Zen were added — see "Browser safety" below for why. Its last snapshot is in `service_data/backup/ungoogled-chromium/20260926-165229/` and its `service_data/data/ungoogled-chromium/` profile was left on disk; the service directory and doc are recoverable from git history. Static IP `172.19.255.242` is now unused. The k8s pilot's `kubernetes/apps/ungoogled-chromium/` manifests were not touched (separate branch/cluster).
 
 ## Browser safety — what's in the hub and what's deliberately not
 
@@ -108,7 +108,7 @@ The design was intentionally SSO-migration-friendly from the start — auth cent
 
 ## LAN isolation
 
-These 10 containers run real browsers reachable by anyone who can log in (via Authentik) or, per the dev-port gotcha below, anyone on the LAN at all — so they're isolated from this host's own LAN at the network level, independent of and in addition to the auth layer above. Each browser is pinned to a static IP on the `homeserver` Docker network (`172.18.255.240`/`.241`/`.243`/`.244`/`.245`/`.246`/`.247`/`.248`/`.249`/`.250` for firefox/chromium/brave/mullvad-browser/librewolf/zen/helium/chrome/edge/vivaldi respectively — `.242` was ungoogled-chromium, now removed, set via `networks.homeserver.ipv4_address` in each `compose.yml`) so firewall rules can target them by fixed address regardless of recreation. Internet access is untouched — only reaching this host's own LAN is blocked.
+These 10 containers run real browsers reachable by anyone who can log in (via Authentik) or, per the dev-port gotcha below, anyone on the LAN at all — so they're isolated from this host's own LAN at the network level, independent of and in addition to the auth layer above. Each browser is pinned to a static IP on the `homeserver` Docker network (`172.19.255.240`/`.241`/`.243`/`.244`/`.245`/`.246`/`.247`/`.248`/`.249`/`.250` for firefox/chromium/brave/mullvad-browser/librewolf/zen/helium/chrome/edge/vivaldi respectively — `.242` was ungoogled-chromium, now removed, set via `networks.homeserver.ipv4_address` in each `compose.yml`) so firewall rules can target them by fixed address regardless of recreation. Internet access is untouched — only reaching this host's own LAN is blocked.
 
 Two independent mechanisms are needed (confirmed live, both required — neither alone covers all traffic paths):
 

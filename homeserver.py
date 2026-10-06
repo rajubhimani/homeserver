@@ -510,7 +510,11 @@ class DockerBackend(ABC):
     def network_exists(self, name: str) -> bool: ...
 
     @abstractmethod
-    def network_create(self, name: str) -> None: ...
+    def network_create(self, name: str, subnet: str | None = None) -> None: ...
+
+    @abstractmethod
+    def network_subnets(self, name: str) -> list[str]:
+        """The subnets of an existing network ([] if it has none or doesn't exist)."""
 
     @abstractmethod
     def tar_volume_to(self, volume: str, dest_dir: Path, archive_name: str) -> bool:
@@ -745,8 +749,12 @@ class SubprocessBackend(DockerBackend):
     def network_exists(self, name: str) -> bool:
         return self._run(["network", "inspect", name]).returncode == 0
 
-    def network_create(self, name: str) -> None:
-        self._run(["network", "create", name])
+    def network_create(self, name: str, subnet: str | None = None) -> None:
+        self._run(["network", "create"] + (["--subnet", subnet] if subnet else []) + [name])
+
+    def network_subnets(self, name: str) -> list[str]:
+        r = self._run(["network", "inspect", name, "--format", "{{range .IPAM.Config}}{{.Subnet}} {{end}}"])
+        return r.stdout.split() if r.returncode == 0 else []
 
     def tar_volume_to(self, volume: str, dest_dir: Path, archive_name: str) -> bool:
         args = [
@@ -1024,8 +1032,14 @@ class PythonOnWhalesBackend(DockerBackend):
     def network_exists(self, name: str) -> bool:
         return self._docker.network.exists(name)
 
-    def network_create(self, name: str) -> None:
-        self._docker.network.create(name)
+    def network_create(self, name: str, subnet: str | None = None) -> None:
+        self._docker.network.create(name, **({"subnet": [subnet]} if subnet else {}))
+
+    def network_subnets(self, name: str) -> list[str]:
+        try:
+            return [c["Subnet"] for c in (self._docker.network.inspect(name).ipam.config or []) if c.get("Subnet")]
+        except Exception:
+            return []
 
     def tar_volume_to(self, volume: str, dest_dir: Path, archive_name: str) -> bool:
         try:
@@ -3167,11 +3181,25 @@ def show_help() -> None:
 # ── Execute ──────────────────────────────────────────────────────────
 
 
+# The 'homeserver' network's subnet is pinned, never left to Docker. The browser containers have fixed IPs
+# inside it (ipv4_address in services/<browser>/compose.yml, and the LAN-isolation rules in
+# services/nginx-plain/browser-lan-block.sh); when the network was recreated without a subnet on 2026-10-05,
+# Docker picked 172.19.0.0/16 instead of 172.18.0.0/16 and every browser failed to create with "no configured
+# subnet contains IP address". tests/test_repo_invariants.py checks those IPs are inside this subnet.
+HOMESERVER_SUBNET = "172.19.0.0/16"
+
+
 def ensure_network() -> None:
     if not BACKEND.network_exists("homeserver"):
         warn("Network 'homeserver' not found — creating...")
-        BACKEND.network_create("homeserver")
-        success("Network 'homeserver' created")
+        BACKEND.network_create("homeserver", HOMESERVER_SUBNET)
+        success(f"Network 'homeserver' created ({HOMESERVER_SUBNET})")
+    else:
+        have = BACKEND.network_subnets("homeserver")
+        if have and HOMESERVER_SUBNET not in have:
+            warn(f"Network 'homeserver' is on {', '.join(have)}, not {HOMESERVER_SUBNET}: containers with a fixed IP "
+                 f"(the Browser Hub) will fail to create. Recreate the network on that subnet, or change HOMESERVER_SUBNET "
+                 f"and the browsers' IPs together (docs/02-docker-network.md).")
 
 
 def confirm_expansion(services: list[str], assume_yes: bool) -> bool:

@@ -353,3 +353,22 @@ def test_images_are_pinned():
             if (name.split(":", 1)[1] if ":" in name else "") in MOVING_TAGS:
                 bad.append(f"{s['slug']}/{c.get('container_name') or n}: {img}")
     assert not bad, f"images on a moving tag (pin a version, or a digest): {bad}"
+
+
+def test_fixed_container_ips_are_inside_the_pinned_homeserver_subnet():
+    """Browsers carry a static ipv4_address (and nginx-plain's LAN-isolation rules name the same IPs). The
+    'homeserver' network's subnet is pinned in homeserver.py; an IP outside it makes `compose create` fail
+    with 'no configured subnet contains IP address' (hit 2026-10-06 after the network was recreated)."""
+    import ipaddress
+    net = ipaddress.ip_network(hs.HOMESERVER_SUBNET)
+    pat = re.compile(r"^\s*ipv4_address:\s*(\S+)", re.M)
+    ips = {}
+    for f in sorted((REPO / "services").glob("*/compose*.yml")):
+        for m in pat.finditer(f.read_text()):
+            ips[f"{f.parent.name}/{f.name}"] = m.group(1)
+    assert ips, "expected the browsers' static IPs"
+    outside = {k: v for k, v in ips.items() if ipaddress.ip_address(v) not in net}
+    assert not outside, f"outside {net}: {outside}"
+    script = (REPO / "services/nginx-plain/browser-lan-block.sh").read_text()
+    listed = set(re.findall(r"^\s+(\d+\.\d+\.\d+\.\d+)\s+#", script, re.M))
+    assert listed == set(ips.values()), "browser-lan-block.sh must list exactly the browsers' static IPs"

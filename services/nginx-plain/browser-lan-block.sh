@@ -55,16 +55,16 @@ HOST_LAN_IP="192.168.1.7"
 FIREWALLD_ZONE="docker"
 
 BROWSER_IPS=(
-    172.18.255.240 # firefox
-    172.18.255.241 # chromium
-    172.18.255.243 # brave
-    172.18.255.244 # mullvad-browser
-    172.18.255.245 # librewolf
-    172.18.255.246 # zen
-    172.18.255.247 # helium
-    172.18.255.248 # chrome
-    172.18.255.249 # edge
-    172.18.255.250 # vivaldi
+    172.19.255.240 # firefox
+    172.19.255.241 # chromium
+    172.19.255.243 # brave
+    172.19.255.244 # mullvad-browser
+    172.19.255.245 # librewolf
+    172.19.255.246 # zen
+    172.19.255.247 # helium
+    172.19.255.248 # chrome
+    172.19.255.249 # edge
+    172.19.255.250 # vivaldi
 )
 
 apply() {

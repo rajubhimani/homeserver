@@ -48,7 +48,7 @@ services:
         # addresses specifically, and a rule pinned to a dynamic IP would
         # silently stop matching (or start matching some other container)
         # after any recreation.
-        ipv4_address: 172.18.255.244
+        ipv4_address: 172.19.255.244
 
 networks:
   homeserver:
