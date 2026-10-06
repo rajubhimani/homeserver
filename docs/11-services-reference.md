@@ -20,9 +20,10 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | `browser` | `uv run homeserver.py dev up browser` | min + core + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + browser + every office service below — **opt-in, never implied by `up browser`** |
 | `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + browser + office + every automation/AI service below — **opt-in, never implied by `up office`** |
+| `extra` | `uv run homeserver.py dev up extra` | min + core + daily + browser + office + automation-ai + every extra service below — **opt-in, never implied by `up automation-ai`** |
 | `all` | `uv run homeserver.py dev up all` | core + daily + browser + office + automation-ai + every extra service (manual-only services excluded) |
 
-**`up core`/`up daily`/`up office`/`up automation-ai` bootstrap, they don't
+**`up core`/`up daily`/`up office`/`up automation-ai`/`up extra` bootstrap, they don't
 restart**: each checks which of its lower tier(s) are already running and
 only starts what's missing — an already-running lower tier is left
 untouched, not force-recreated.
@@ -31,7 +32,7 @@ untouched, not force-recreated.
 stays up), `down daily` stops only daily (`min`/`core` stay up), `down
 office` stops only office (`min`/`core`/`daily` stay up), `down
 automation-ai` stops only automation-ai (`min`/`core`/`daily`/`office` stay
-up). Every `down` command stops every optional Compose-profile container for
+up); `down extra` stops only extra. Every `down` command stops every optional Compose-profile container for
 the selected service(s), too (such as GitLab's CI runner). `down all` is the
 one command that stops the entire stack, in reverse order — no list to
 maintain.
@@ -50,7 +51,7 @@ airflow, dagster, temporal, ollama, open-webui, n8n, plausible.
 brave, chromium, firefox, mullvad-browser, librewolf, zen, helium, chrome, edge,
 vivaldi, browser (the hub's virtual card).
 
-**Extra services** (started with `up all` or individually):
+**Extra services** (started with `up extra`/`up all` or individually):
 dockge, dozzle,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,

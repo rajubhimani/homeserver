@@ -8,14 +8,14 @@ uv run homeserver.py <dev|prod> <action> <target> [flags]
 
 - **`dev`** publishes ports on all interfaces.
 - **`prod`** binds them to `127.0.0.1` and wg-easy's tunnel address `10.8.0.1` only (see [09 — Firewall](09-firewall.md)).
-- **Targets** can be one or more service names, a tier keyword (`min`, `core`, `daily`, `browser`, `office`, `automation-ai`, `all`), `group:<category-or-subcategory>`, or a bundle name such as `browser`.
+- **Targets** can be one or more service names, a tier keyword (`min`, `core`, `daily`, `browser`, `office`, `automation-ai`, `extra`, `all`), `group:<category-or-subcategory>`, or a bundle name such as `browser`.
 
 ## Commands that start services
 
 | Command | What it does |
 |---|---|
 | `up <service> [<service>...]` | Starts the named services. Already-running ones are left alone (plain `compose up -d`, no recreate). Waits until each is healthy, for as long as that container's own healthcheck allows (`start_period + retries × (interval + timeout)`, never less than 180s), so slow first boots such as Grafana's 5-minute migrations aren't reported as failures. |
-| `up <tier>` (`core`, `daily`, `browser`, `office`, `automation-ai`) | Starts that tier, first starting any **lower** tiers that aren't running. It never pulls in **higher** tiers: `up core` never starts `daily`. |
+| `up <tier>` (`core`, `daily`, `browser`, `office`, `automation-ai`, `extra`) | Starts that tier, first starting any **lower** tiers that aren't running. It never pulls in **higher** tiers: `up core` never starts `daily`. |
 | `up min` / `up all` | Starts the full list every time. `all` covers MIN through EXTRA, never MANUAL (GitLab). |
 | `up group:<name>` | Starts every service sharing that category or subcategory, e.g. `group:notes`. Bundle groups also start what they `requires` (Browser Hub starts `nginx-plain`). |
 | `up <bundle>` (e.g. `browser`) | The bundle's members plus whatever they `requires`. |

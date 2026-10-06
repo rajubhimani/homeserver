@@ -58,6 +58,30 @@ def test_up_office_bootstraps_only_missing_lower_tiers(fake, cli):
     assert not started & set(hs.SERVICES_MIN + hs.SERVICES_CORE)
 
 
+def test_every_tier_listed_by_status_is_a_command_keyword(fake, cli):
+    # 'ps' prints each tier; whatever it shows must also work as a target.
+    for tier, lst in (("automation-ai", hs.SERVICES_AUTOMATION_AI), ("extra", hs.SERVICES_EXTRA)):
+        fake.events.clear()
+        fake.running.clear()
+        assert cli("prod", "up", tier) == 0, tier
+        assert set(lst) <= set(ups(fake)), tier
+
+
+def test_up_extra_bootstraps_every_lower_tier_but_not_manual(fake, cli):
+    fake.running |= set(hs.SERVICES_MIN + hs.SERVICES_CORE)
+    cli("prod", "up", "extra")
+    started = set(ups(fake))
+    assert set(hs.SERVICES_DAILY + hs.SERVICES_BROWSER + hs.SERVICES_OFFICE
+               + hs.SERVICES_AUTOMATION_AI + hs.SERVICES_EXTRA) <= started
+    assert not started & set(hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MANUAL)
+
+
+def test_down_extra_stops_only_extra(fake, cli):
+    fake.running |= set(ALL_TIERS)
+    cli("prod", "down", "extra", "--no-backup")
+    assert set(downs(fake)) == set(hs.SERVICES_EXTRA)
+
+
 def test_up_all_never_starts_manual_services(fake, cli):
     cli("prod", "up", "all")
     assert set(ALL_TIERS) <= set(ups(fake))
