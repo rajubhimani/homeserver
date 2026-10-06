@@ -67,6 +67,14 @@
 # 10. wg-easy host prerequisites (docs/services/wg-easy.md, "Prerequisites" 2-3): the iptable_nat/ip6table_nat
 #    modules (without them wg-quick fails: "can't initialize iptables table 'nat'") and IPv6 forwarding. wg-easy
 #    runs network_mode: host, so none of this can be set from the container. Both persist across reboots.
+# 11. Public DNS servers next to the router's. The host resolves only through the router (192.168.1.1) and
+#    two ISP IPv6 servers; on 2026-10-06 those timed out (cloudflared: "lookup region1.v2.argotunnel.com: i/o
+#    timeout" at 10:30/11:00/12:26 IST, the watchdog's "Could not resolve host" later) and the public sites
+#    degraded for hours. systemd-resolved's DNS= adds global servers that are tried together with the per-link
+#    ones and fail over on timeout (man resolved.conf). NOT FallbackDNS=: that is only used when no other
+#    server is known, so it never helps against a flaky one. Docker containers inherit it through
+#    /run/systemd/resolve/resolv.conf when they are (re)created. Trade-off: some lookups leave via
+#    Cloudflare/Quad9 instead of the ISP resolver.
 set -euo pipefail
 
 REQUIRED_MOUNTS="/mnt/mydata"
@@ -76,6 +84,8 @@ WATCH_MOUNTS="$REQUIRED_MOUNTS $MEDIA_MOUNTS"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DROPIN=/etc/systemd/system/docker.service.d/wait-for-data-mounts.conf
 SYSCTL=/etc/sysctl.d/90-homeserver-nonlocal-bind.conf
+DNS_DROPIN=/etc/systemd/resolved.conf.d/90-homeserver-dns.conf
+PUBLIC_DNS="1.1.1.1 9.9.9.9"
 WG_MODULES=/etc/modules-load.d/wg-easy.conf
 WG_SYSCTL=/etc/sysctl.d/99-wg-easy.conf
 WATCH_BIN=/usr/local/bin/homeserver-mount-watch
@@ -104,7 +114,7 @@ if [ "${1:-}" = "--remove" ]; then
   if [ -x "$FWD_BIN" ]; then "$FWD_BIN" undo || true; fi
   systemctl disable homeserver-docker-forward.service 2>/dev/null || true
   systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
-  rm -f "$DROPIN" "$SYSCTL" "$WG_MODULES" "$WG_SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT" "$ALPM_RULE"
+  rm -f "$DROPIN" "$SYSCTL" "$WG_MODULES" "$WG_SYSCTL" "$DNS_DROPIN" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT" "$ALPM_RULE"
   sysctl -w net.ipv4.ip_nonlocal_bind=0 >/dev/null
   # (item 9, the firewall lockdown, is intentionally left in place: undoing it would reopen 1025-65535 to the internet.)
   if command -v setsebool >/dev/null && getsebool virt_use_fusefs >/dev/null 2>&1; then setsebool -P virt_use_fusefs off; fi
@@ -118,6 +128,7 @@ if [ "${1:-}" = "--remove" ]; then
     systemctl try-restart tuned-ppd tuned 2>/dev/null || true
   fi
   systemctl daemon-reload
+  systemctl try-restart systemd-resolved 2>/dev/null || true
   echo "Removed. (docker.service ordering takes effect on next boot; SATA link power is back to the tuned/kernel default.)"
   exit 0
 fi
@@ -369,6 +380,16 @@ printf 'net.ipv6.conf.all.forwarding=1\nnet.ipv6.conf.default.forwarding=1\n' >"
 sysctl -q -p "$WG_SYSCTL"
 echo "✔ $WG_MODULES + $WG_SYSCTL (ip6table_nat loaded: $(lsmod | grep -c '^ip6table_nat'), ipv6 forwarding=$(sysctl -n net.ipv6.conf.all.forwarding))"
 
+# ── 11. Public DNS next to the router's ──
+if systemctl is-active --quiet systemd-resolved; then
+  mkdir -p "$(dirname "$DNS_DROPIN")"
+  printf '# Installed by homeserver docker/host-boot-safety.sh -- see item 11 there.\n[Resolve]\nDNS=%s\n' "$PUBLIC_DNS" >"$DNS_DROPIN"
+  systemctl restart systemd-resolved
+  echo "✔ $DNS_DROPIN (global DNS: $(resolvectl status | awk '/^Global/{g=1} g&&/DNS Servers/{sub(/.*DNS Servers: /,""); print; exit}'))"
+else
+  echo "- systemd-resolved not active: public DNS step skipped"
+fi
+
 echo
 echo "Done. Docker's mount ordering applies from the next boot; check with:"
 echo "  systemctl show docker -p RequiresMountsFor -p After | tr ' ' '\\n' | grep mnt"
@@ -378,5 +399,6 @@ echo "  grep . /sys/class/scsi_host/host*/link_power_management_policy   # item 
 echo "  systemctl is-enabled suspend.target      # item 6: masked"
 echo "  systemctl list-timers homeserver-nightly-backup   # item 7: next 03:00 run"
 echo "  getsebool virt_use_fusefs                # item 8: on"
+echo "  resolvectl status | sed -n 1,8p          # item 11: Global DNS Servers: $PUBLIC_DNS"
 echo "  lsmod | grep -E 'iptable_nat|ip6table_nat'   # item 10: both loaded (wg-easy)"
 echo "  firewall-cmd --list-all                  # item 9: ports = $WG_PORT/udp only, masquerade: yes"
