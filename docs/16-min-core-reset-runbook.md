@@ -199,7 +199,7 @@ dig +short @$(e adguard-home DNS_BIND_IP) example.com
 # forgejo / guacamole / plausible
 docker exec forgejo-db psql -h 127.0.0.1 -U $(e forgejo POSTGRES_USER) -d $(e forgejo POSTGRES_DB) -tAc 'select count(*) from repository'
 docker exec guacamole-db psql -h 127.0.0.1 -U $(e guacamole POSTGRES_USER) -d $(e guacamole POSTGRES_DB) -tAc 'select count(*) from guacamole_connection'
-docker exec plausible-db psql -U postgres -d plausible -tAc 'select count(*) from sites'
+docker exec shared-postgres psql -U postgres -d plausible -tAc 'select count(*) from sites'   # Plausible's Postgres is on shared-postgres since 2026-10-06 (was plausible-db)
 docker exec plausible-events-db clickhouse-client -q 'select count() from plausible_events_db.events_v2'
 # vaultwarden (SQLite, read through a throwaway container)
 docker run --rm -v "$(readlink -f service_data)/data/vaultwarden/data:/d:ro" alpine:3.24.2 \

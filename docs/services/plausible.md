@@ -5,13 +5,13 @@
 ---
 
 **Purpose:** Self-hosted, privacy-friendly web analytics (Google Analytics alternative, no cookies/tracking-consent banner needed).
-**Port:** `8130` (host) → `8000` (container) | **Data:** named volumes only (see Notes) | **Requires:** Postgres, ClickHouse | **Memory:** plausible-db capped 384M in compose.yml; app and events-db (ClickHouse): no hard limit set; measured idle ~258MB total across all 3 containers (app 81 + events-db 137 + db 40)
+**Port:** `8130` (host) → `8000` (container) | **Data:** named volumes only (see Notes) | **Requires:** shared Postgres (`shared-postgres`, started on demand), ClickHouse | **Memory:** app and events-db (ClickHouse): no hard limit set; measured idle ~218MB across the 2 containers (app 81 + events-db 137), plus its share of the shared Postgres server
 
 ## Setup
 
 ```bash
 cp services/plausible/.env.example services/plausible/.env
-# set POSTGRES_PASSWORD, SECRET_KEY_BASE (openssl rand -base64 64), TOTP_VAULT_KEY (openssl rand -base64 32)
+# set POSTGRES_PASSWORD (POSTGRES_DB/POSTGRES_USER are the database and login homeserver.py creates on shared-postgres), SECRET_KEY_BASE (openssl rand -base64 64), TOTP_VAULT_KEY (openssl rand -base64 32)
 uv run homeserver.py dev up plausible
 ```
 
@@ -41,8 +41,8 @@ Confirmed against Plausible's own current docs.
 
 ## Notes
 
-- Three containers: `plausible-db` (Postgres, app metadata), `plausible-events-db` (ClickHouse, the actual analytics event store), `plausible` (the app itself, auto-migrates both databases on every start via `command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"` — this is the officially documented startup sequence, safe to repeat).
-- All persistent data lives in named Docker volumes (`plausible-postgres-alpine`, `plausible-clickhouse-data-alpine`, `plausible-clickhouse-logs-alpine`, `plausible-data`) rather than `service_data/data/` bind mounts — matches this stack's DB-data convention (see the `homeserver-postgres` skill) and upstream's own default. The `-alpine` suffix marks which volumes belong to an Alpine-tagged image (`postgres:18.6-alpine`, `clickhouse-server:26.8.2-alpine`) — a repo-wide naming convention, not Plausible-specific, so switching either image's variant later can't silently orphan the old volume the way `firefly`'s did once.
+- Two containers, plus the shared Postgres server: Postgres (app metadata) is database `plausible` with login `plausible` on `shared-postgres` (`"shared_db"` in `services.json`; `DB_HOST`/`DB_PORT` in `.env`; see [shared-postgres](shared-postgres.md)); `plausible-events-db` (ClickHouse, the actual analytics event store), `plausible` (the app itself, auto-migrates both databases on every start via `command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"` — this is the officially documented startup sequence, safe to repeat).
+- Persistent data lives in named Docker volumes (`plausible-clickhouse-data-alpine`, `plausible-clickhouse-logs-alpine`, `plausible-data`) rather than `service_data/data/` bind mounts — matches this stack's DB-data convention (see the `homeserver-postgres` skill) and upstream's own default. The `-alpine` suffix marks which volumes belong to an Alpine-tagged image (`postgres:18.6-alpine`, `clickhouse-server:26.8.2-alpine`) — a repo-wide naming convention, not Plausible-specific, so switching either image's variant later can't silently orphan the old volume the way `firefly`'s did once.
 - `plausible/clickhouse/*.xml` are ClickHouse config overrides taken directly from the upstream `plausible/community-edition` repo: `logs.xml` (quiets ClickHouse's own verbose logging), `ipv4-only.xml` (binds to `0.0.0.0` to avoid an IPv6-listen warning under Docker), `low-resources.xml` + `default-profile-low-resources-overrides.xml` (tuned for <16GB RAM hosts — single-threaded query execution, smaller mark cache).
 - Health endpoint: `/api/system/health/ready` (readiness: Postgres and ClickHouse reachable), with `/api/system/health/live` for liveness. The compose healthcheck uses `ready`. The older `/api/health` still answers, but Plausible's router marks it for removal ("Remove this once all external checks are migration to new /system/health/* checks").
 - `CLICKHOUSE_USER`/`CLICKHOUSE_PASSWORD` are set explicitly on `plausible-events-db` — the official ClickHouse image **disables network access entirely for the default user** if neither is set (only local/unix-socket access remains), which otherwise surfaces as a confusing `Authentication failed` error from the Plausible app on every connection attempt despite the credentials "looking" unset rather than wrong.
@@ -55,7 +55,20 @@ Plausible reads `CF-Connecting-IP` directly (`lib/plausible_web/remote_ip.ex`, c
 
 ## On Kubernetes
 
-Generated from this compose file. `plausible-db` becomes a CloudNativePG cluster with superuser access, because Plausible logs in as `postgres` (Compose sets no `POSTGRES_USER`) and creates its own database; the password comes from `.env`. ClickHouse (`plausible-events-db`) is a regular workload with its volumes, unpacked with their original owner on import. Its ports (8123, 9000) are declared in `kubernetes/overrides/plausible.yaml`, because Compose never publishes them. Guide: [docs/17](../17-docker-to-kubernetes.md).
+Generated from this compose file. Postgres is the shared CloudNativePG cluster like every other `shared_db` app (database and role `plausible`); the password comes from `.env`. ClickHouse (`plausible-events-db`) is a regular workload with its volumes, unpacked with their original owner on import. Its ports (8123, 9000) are declared in `kubernetes/overrides/plausible.yaml`, because Compose never publishes them. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
+## Moved onto the shared Postgres server (2026-10-06)
+
+Plausible left the CORE tier for `automation-ai`, and above CORE a Postgres app uses `shared-postgres` instead of its own container. Only Postgres moved; ClickHouse has no shared server and stays `plausible-events-db`. What was done, in this order, so it can be repeated:
+
+1. `homeserver.py prod backup plausible`, a full snapshot of all four volumes.
+2. Dumped the old `plausible-db` (`pg_dump -F c`) to `service_data/db_dump/plausible/pre-shared-migration/`: 1 user, 2 sites, 50 tables, 222 migrations, only the `citext` extension (a trusted extension, so a database owner, not a superuser, can create it; checked in the pinned image's migrations).
+3. Rewired `compose.yml`/`.env`/`.env.example`/`services.json` (`POSTGRES_DB`/`POSTGRES_USER=plausible`, `DB_HOST=shared-postgres`, `DATABASE_URL` built from them instead of the `postgres` superuser).
+4. Provisioned the empty database with `shared_db_ready()` **before the app ever started**. Starting Plausible first would run its startup migrations on the empty database and leave a schema the dump then collides with.
+5. `pg_restore --no-owner --role plausible` into it: same counts, all 50 tables owned by `plausible`.
+6. `up plausible`: healthy, 11 connections on `shared-postgres`, none on the old container, all 795 ClickHouse events intact.
+
+The old `plausible-postgres-alpine` volume is orphaned but kept until the owner deletes it (`homeserver.py orphaned-volumes plausible --yes`).
 
 ## Fresh-install verification (2026-10-03)
 

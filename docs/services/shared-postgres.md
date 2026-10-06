@@ -48,7 +48,7 @@ Provisioning (`provision_shared_db`) is idempotent: it creates the role (or rese
 ## Why only above CORE
 
 - CORE holds the always-on, can't-lose data (Vaultwarden, Nextcloud, Immich, Firefly, Forgejo), and Authentik is everyone's login. A shared-server outage must never take those down with it.
-- Several CORE databases have hard constraints (Immich's VectorChord image, Plausible's ClickHouse, Authentik's 14–18 range). Separate servers let each upgrade on its own schedule.
+- Several CORE databases have hard constraints (Immich's VectorChord image, Authentik's 14–18 range). Separate servers let each upgrade on its own schedule.
 - The savings would be small (CORE DBs are already tuned to ~128MB `shared_buffers`), and the per-service backup/restore/migrate tooling already fits them.
 
 Above CORE, apps are opt-in, mostly low-traffic, and nearly all happy on "a current Postgres", which is where one shared server's savings (one set of buffers and background workers instead of ~20) are worth it.
@@ -89,7 +89,7 @@ Every MIN/CORE `<service>-db` uses the same `-h 127.0.0.1` form, plus `start_int
 
 ## Users
 
-[wallabag](wallabag.md), [vikunja](vikunja.md), [plane](plane.md), [calcom](calcom.md), [listmonk](listmonk.md), [miniflux](miniflux.md), [airflow](airflow/airflow.md), [dagster](dagster/dagster.md), [temporal](temporal/temporal.md), [n8n](n8n.md), [paperless](paperless.md), [mealie](mealie.md), [nocodb](nocodb.md), [outline](outline.md), [penpot](penpot.md), [documenso](documenso.md), [ghostfolio](ghostfolio.md), [mattermost](mattermost.md), [mail-archiver](mail-archiver.md) (19 services, all above CORE). Special cases:
+[wallabag](wallabag.md), [vikunja](vikunja.md), [plane](plane.md), [calcom](calcom.md), [listmonk](listmonk.md), [miniflux](miniflux.md), [airflow](airflow/airflow.md), [dagster](dagster/dagster.md), [temporal](temporal/temporal.md), [n8n](n8n.md), [plausible](plausible.md), [paperless](paperless.md), [mealie](mealie.md), [nocodb](nocodb.md), [outline](outline.md), [penpot](penpot.md), [documenso](documenso.md), [ghostfolio](ghostfolio.md), [mattermost](mattermost.md), [mail-archiver](mail-archiver.md) (20 services, all above CORE). Special cases:
 
 - **temporal** has two databases (`extra_dbs: ["temporal_visibility"]`).
 - **penpot** hard-codes its database and user as `penpot` (`"=penpot"`).

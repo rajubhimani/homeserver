@@ -1,29 +1,8 @@
+# Postgres lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md. ClickHouse (events) stays its own
+# container: there is no shared ClickHouse server.
 services:
-  plausible-db:
-    image: postgres:18.6-alpine
-    container_name: plausible-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: plausible
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - plausible-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-      start_interval: 2s
-    networks:
-      - homeserver
-
   plausible-events-db:
     image: clickhouse/clickhouse-server:26.8.15.10-alpine
     container_name: plausible-events-db
@@ -62,7 +41,7 @@ services:
     env_file: .env
     environment:
       BASE_URL: https://plausible.${DOMAIN}
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/plausible
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
       CLICKHOUSE_DATABASE_URL: http://plausible:${CLICKHOUSE_PASSWORD}@${EVENTS_DB_HOST}:${EVENTS_DB_PORT}/plausible_events_db
     ulimits:
       nofile:
@@ -78,15 +57,12 @@ services:
       retries: 3
       start_period: 60s
     depends_on:
-      plausible-db:
-        condition: service_healthy
       plausible-events-db:
         condition: service_healthy
     networks:
       - homeserver
 
 volumes:
-  plausible-postgres-alpine:
   plausible-clickhouse-data-alpine:
   plausible-clickhouse-logs-alpine:
   plausible-data:

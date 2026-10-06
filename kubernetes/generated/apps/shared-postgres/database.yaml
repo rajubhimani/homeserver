@@ -40,10 +40,11 @@ spec:
     - host paperless paperless all scram-sha-256
     - host penpot penpot all scram-sha-256
     - host plane plane all scram-sha-256
+    - host plausible plausible all scram-sha-256
     - host temporal,temporal_visibility temporal all scram-sha-256
     - host vikunja vikunja all scram-sha-256
     - host wallabag wallabag all scram-sha-256
-    - host all airflow,calcom,dagster,documenso,ghostfolio,listmonk,mailarchiver,mattermost,mealie,miniflux,n8n,nocodb,outline,paperless,penpot,plane,temporal,vikunja,wallabag
+    - host all airflow,calcom,dagster,documenso,ghostfolio,listmonk,mailarchiver,mattermost,mealie,miniflux,n8n,nocodb,outline,paperless,penpot,plane,plausible,temporal,vikunja,wallabag
       all reject
   storage:
     size: 5Gi

@@ -29,12 +29,15 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-      - name: wait-plausible-db
+      - name: wait-db
         image: alpine:3.24.2
+        envFrom:
+        - secretRef:
+            name: plausible-env
         command:
         - sh
         - -c
-        - until nc -z -w 2 plausible-db 5432; do echo waiting for plausible-db:5432; sleep 2; done
+        - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plausible-events-db
@@ -63,7 +66,7 @@ spec:
         - name: CLICKHOUSE_DATABASE_URL
           value: http://plausible:$(CLICKHOUSE_PASSWORD)@$(EVENTS_DB_HOST):$(EVENTS_DB_PORT)/plausible_events_db
         - name: DATABASE_URL
-          value: postgres://postgres:$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/plausible
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(POSTGRES_DB)
         ports:
         - containerPort: 8000
         readinessProbe:
@@ -141,6 +144,18 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+      - name: wait-db
+        image: alpine:3.24.2
+        envFrom:
+        - secretRef:
+            name: plausible-env
+        command:
+        - sh
+        - -c
+        - until nc -z -w 2 "$DB_HOST" "$DB_PORT"; do echo "waiting for $DB_HOST:$DB_PORT"; sleep 2; done
+        securityContext:
+          allowPrivilegeEscalation: false
       containers:
       - name: plausible-events-db
         image: clickhouse/clickhouse-server:26.8.15.10-alpine
