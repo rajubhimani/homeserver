@@ -54,7 +54,7 @@ net.ipv6.conf.default.forwarding=1
 The container needs `iptable_nat` and `ip6table_nat` kernel modules loaded on the host — without them, `wg-quick up` fails with `can't initialize iptables table 'nat': Table does not exist`.
 
 ```bash
-sudo modprobe iptable_nat ip6table_nat
+sudo modprobe -a iptable_nat ip6table_nat   # -a: load both (without it the 2nd name is read as a parameter of the 1st)
 ```
 
 **To persist across reboots**, add both module names (one per line) to `/etc/modules-load.d/wg-easy.conf`.
@@ -110,6 +110,8 @@ wg-easy has no Kubernetes guide upstream; its docs cover Docker, Podman, dockerl
 On kind, `wg0` and `10.8.0.1` live inside the node, not on the host. VPN clients reach the LAN and the internet through it as before, but this machine's own `10.8.0.1:<port>` mirrors only exist on a cluster that runs on the host itself.
 
 ## Exact Commands Run On This Host (Copy-Paste Reference)
+
+> **Scripted:** `sudo bash docker/host-boot-safety.sh` applies steps 1–3 below (items 10 and 9: NAT modules + IPv6 forwarding, both persisted, and the firewalld lockdown + masquerade), plus the Docker FORWARD fix (4b). Use the commands below only to understand or redo one step by hand.
 
 Every host-level command actually executed to get this working, in order. The Prerequisites section above explains *why* each is needed — this is the condensed "just run these" version for rebuilding this exact host. Adjust the zone name (`FedoraWorkstation`) and interface name (`wlp13s0`) if your host differs — check with `firewall-cmd --get-active-zones` and `ip route show default` respectively.
 

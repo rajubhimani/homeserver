@@ -11,9 +11,10 @@
 #    directory *under* the mountpoint on the root disk.
 #    - REQUIRED_MOUNTS (repo + service_data): hard requirement -- Docker does
 #      not start at all if it's missing. Better than writing to the wrong disk.
-#    - ORDERED_MOUNTS (media drive): ordering only -- Docker waits for the
-#      mount attempt, but a dead media disk doesn't take the whole stack down.
-#      homeserver.py's own mount check blocks the services that need it.
+#    - MEDIA_MOUNTS (media drive): also a hard requirement for Docker, since
+#      Jellyfin/Nextcloud/Immich bind paths on it and dockerd's own autostart
+#      bypasses homeserver.py's mount check. Trade-off: a dead media disk
+#      keeps the whole stack down until it is fixed or the drop-in removed.
 # 2. net.ipv4.ip_nonlocal_bind=1 -- every prod service also publishes on
 #    10.8.0.1, which only exists once the wg-easy *container* has brought up
 #    wg0. Without this, anything Docker autostarts before wg-easy fails with
@@ -51,15 +52,32 @@
 #    again, so after an SSD wipe or a bad day at most yesterday's data is lost (after the 2026-10-05
 #    reinstall Docker's volumes were gone and only the three-day-old snapshots remained). Persistent: a
 #    night the machine was off runs at the next boot. A failure alerts through the same ntfy path as item 3.
+# 8. SELinux boolean virt_use_fusefs=on. /mnt/media is NTFS via ntfs-3g (fuseblk), which SELinux labels
+#    fusefs_t; without the boolean QEMU/libvirt VMs get "Permission denied" opening an ISO there even though
+#    the file is rwxrwxrwx (hit 2026-10-06, virt-manager Win11 install). FUSE can't be relabelled, so the
+#    boolean is the fix. No-op on hosts without SELinux.
+# 9. Host firewall default-deny inbound (firewalld). The zone on the default-route interface must not
+#    allow a broad port range: with a real public IPv6 address (this host has one) every allowed port is
+#    internet-reachable, and GNOME Remote Desktop's RDP (3389) + dev-mode Docker ports were exposed that way
+#    (2026-09-04, docs/09-firewall.md). The fix was done by hand and lost in the 2026-10-04 reinstall, so it
+#    lives here now: remove the 1025-65535 tcp/udp allows, keep only WireGuard's port, and enable
+#    masquerade (wg-easy full-tunnel clients need it). Guacamole is unaffected: guacd reaches the host over
+#    the Docker bridges, which are in firewalld's 'docker' zone (target ACCEPT). --remove deliberately does
+#    NOT reopen the range. No-op on hosts without firewalld.
+# 10. wg-easy host prerequisites (docs/services/wg-easy.md, "Prerequisites" 2-3): the iptable_nat/ip6table_nat
+#    modules (without them wg-quick fails: "can't initialize iptables table 'nat'") and IPv6 forwarding. wg-easy
+#    runs network_mode: host, so none of this can be set from the container. Both persist across reboots.
 set -euo pipefail
 
 REQUIRED_MOUNTS="/mnt/mydata"
-ORDERED_MOUNTS="/mnt/media"
-WATCH_MOUNTS="$REQUIRED_MOUNTS $ORDERED_MOUNTS"
+MEDIA_MOUNTS="/mnt/media"
+WATCH_MOUNTS="$REQUIRED_MOUNTS $MEDIA_MOUNTS"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DROPIN=/etc/systemd/system/docker.service.d/wait-for-data-mounts.conf
 SYSCTL=/etc/sysctl.d/90-homeserver-nonlocal-bind.conf
+WG_MODULES=/etc/modules-load.d/wg-easy.conf
+WG_SYSCTL=/etc/sysctl.d/99-wg-easy.conf
 WATCH_BIN=/usr/local/bin/homeserver-mount-watch
 WATCH_ENV=/etc/homeserver-mount-watch.env
 WATCH_UNIT=/etc/systemd/system/homeserver-mount-watch
@@ -70,6 +88,7 @@ FWD_UNIT=/etc/systemd/system/homeserver-docker-forward.service
 # Non-Docker interfaces that must keep forwarding through Docker's DROP policy.
 # Missing interfaces are fine (rules match by name, no error) -- e.g. no VMs yet.
 FORWARD_ALLOW_IFACES="virbr0 wg0"
+WG_PORT=51820   # wg-easy's WireGuard UDP port (set in wg-easy's admin UI, default 51820)
 ALPM_RULE=/etc/udev/rules.d/90-homeserver-sata-alpm.rules
 TUNED_PROFILE=balanced-nolpm
 PPD_CONF=/etc/tuned/ppd.conf
@@ -85,8 +104,10 @@ if [ "${1:-}" = "--remove" ]; then
   if [ -x "$FWD_BIN" ]; then "$FWD_BIN" undo || true; fi
   systemctl disable homeserver-docker-forward.service 2>/dev/null || true
   systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
-  rm -f "$DROPIN" "$SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT" "$ALPM_RULE"
+  rm -f "$DROPIN" "$SYSCTL" "$WG_MODULES" "$WG_SYSCTL" "$WATCH_BIN" "$WATCH_ENV" "$WATCH_UNIT.service" "$WATCH_UNIT.timer" "$FWD_BIN" "$FWD_UNIT" "$ALPM_RULE"
   sysctl -w net.ipv4.ip_nonlocal_bind=0 >/dev/null
+  # (item 9, the firewall lockdown, is intentionally left in place: undoing it would reopen 1025-65535 to the internet.)
+  if command -v setsebool >/dev/null && getsebool virt_use_fusefs >/dev/null 2>&1; then setsebool -P virt_use_fusefs off; fi
   if command -v tuned-adm >/dev/null; then
     if [ -f "$PPD_CONF" ] && grep -q "^balanced=$TUNED_PROFILE$" "$PPD_CONF"; then
       sed -i "s/^balanced=$TUNED_PROFILE$/balanced=balanced/" "$PPD_CONF"
@@ -102,16 +123,11 @@ if [ "${1:-}" = "--remove" ]; then
 fi
 
 # ── 1. Docker waits for data mounts ──
-unit_for() { systemd-escape -p --suffix=mount "$1"; }
-ordered_units=""
-for m in $ORDERED_MOUNTS; do ordered_units="${ordered_units:+$ordered_units }$(unit_for "$m")"; done
 mkdir -p "$(dirname "$DROPIN")"
 cat >"$DROPIN" <<EOF
 # Installed by homeserver docker/host-boot-safety.sh -- see that script.
 [Unit]
-RequiresMountsFor=$REQUIRED_MOUNTS
-Wants=$ordered_units
-After=$ordered_units
+RequiresMountsFor=$REQUIRED_MOUNTS $MEDIA_MOUNTS
 EOF
 echo "✔ $DROPIN"
 
@@ -315,6 +331,44 @@ systemctl daemon-reload
 systemctl enable --now homeserver-nightly-backup.timer >/dev/null
 echo "✔ homeserver-nightly-backup.timer enabled (03:00 daily, runs as $OWNER)"
 
+# ── 8. SELinux: let VMs read the NTFS (FUSE) media drive ──
+if command -v setsebool >/dev/null && getsebool virt_use_fusefs >/dev/null 2>&1; then
+  setsebool -P virt_use_fusefs on
+  echo "✔ SELinux virt_use_fusefs=$(getsebool virt_use_fusefs | awk '{print $3}') (VMs can open ISOs on /mnt/media)"
+else
+  echo "- SELinux virt_use_fusefs: not applicable on this host (skipped)"
+fi
+
+# ── 9. Host firewall: default-deny inbound, only WireGuard open ──
+if command -v firewall-cmd >/dev/null && systemctl is-active --quiet firewalld; then
+  wan_if=$(ip route show default | awk '/^default/ {print $5; exit}')
+  zone=$(firewall-cmd --get-zone-of-interface="$wan_if" 2>/dev/null || true)
+  [ -n "$zone" ] || zone=$(firewall-cmd --get-default-zone)
+  changed=0
+  for proto in tcp udp; do
+    if firewall-cmd --permanent --zone="$zone" --query-port="1025-65535/$proto" >/dev/null 2>&1; then
+      firewall-cmd --permanent --zone="$zone" --remove-port="1025-65535/$proto" >/dev/null; changed=1
+    fi
+  done
+  if ! firewall-cmd --permanent --zone="$zone" --query-port="$WG_PORT/udp" >/dev/null 2>&1; then
+    firewall-cmd --permanent --zone="$zone" --add-port="$WG_PORT/udp" >/dev/null; changed=1
+  fi
+  if ! firewall-cmd --permanent --zone="$zone" --query-masquerade >/dev/null 2>&1; then
+    firewall-cmd --permanent --zone="$zone" --add-masquerade >/dev/null; changed=1
+  fi
+  [ "$changed" = 0 ] || firewall-cmd --reload >/dev/null
+  echo "✔ firewalld zone '$zone' ($wan_if): ports=$(firewall-cmd --zone="$zone" --list-ports) masquerade=$(firewall-cmd --zone="$zone" --query-masquerade)"
+else
+  echo "- firewalld not active: host firewall step skipped"
+fi
+
+# ── 10. wg-easy host prerequisites: NAT modules + IPv6 forwarding ──
+printf 'iptable_nat\nip6table_nat\n' >"$WG_MODULES"
+modprobe -a iptable_nat ip6table_nat
+printf 'net.ipv6.conf.all.forwarding=1\nnet.ipv6.conf.default.forwarding=1\n' >"$WG_SYSCTL"
+sysctl -q -p "$WG_SYSCTL"
+echo "✔ $WG_MODULES + $WG_SYSCTL (ip6table_nat loaded: $(lsmod | grep -c '^ip6table_nat'), ipv6 forwarding=$(sysctl -n net.ipv6.conf.all.forwarding))"
+
 echo
 echo "Done. Docker's mount ordering applies from the next boot; check with:"
 echo "  systemctl show docker -p RequiresMountsFor -p After | tr ' ' '\\n' | grep mnt"
@@ -323,3 +377,6 @@ echo "  sudo iptables -S DOCKER-USER     # VM/VPN forwarding rules (item 4)"
 echo "  grep . /sys/class/scsi_host/host*/link_power_management_policy   # item 5: max_performance"
 echo "  systemctl is-enabled suspend.target      # item 6: masked"
 echo "  systemctl list-timers homeserver-nightly-backup   # item 7: next 03:00 run"
+echo "  getsebool virt_use_fusefs                # item 8: on"
+echo "  lsmod | grep -E 'iptable_nat|ip6table_nat'   # item 10: both loaded (wg-easy)"
+echo "  firewall-cmd --list-all                  # item 9: ports = $WG_PORT/udp only, masquerade: yes"

@@ -145,6 +145,8 @@ FedoraWorkstation (default)
 ```
 This tells you which zone actually governs your real interface — `<your-zone>` in every command below is `FedoraWorkstation` on this host; yours may be named `public`, `home`, `FedoraServer`, etc.
 
+> **Scripted:** `sudo bash docker/host-boot-safety.sh` (item 9) applies all of this — zone auto-detected, idempotent, also enables masquerade for wg-easy. It exists because the hand-applied fix was lost in the 2026-10-04 reinstall. The commands below are what it runs.
+
 ```bash
 # Remove the overly wide range (same shape as the case study's bug)
 sudo firewall-cmd --zone=FedoraWorkstation --remove-port=1025-65535/udp --permanent
