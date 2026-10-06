@@ -221,7 +221,7 @@ data:
         },
         {
           "slug": "atuin",
-          "tier": "core",
+          "tier": "daily",
           "name": "Atuin",
           "category": "dev",
           "subcategory": "tools",
@@ -267,7 +267,7 @@ data:
           "tier": "core",
           "name": "Plausible",
           "category": "dev",
-          "subcategory": "tools",
+          "subcategory": "automation",
           "icon": "green",
           "svg": "<path d=\"M3 13 L7 8 L10 10.5 L15 4\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/> <path d=\"M3 3 L3 15 L15 15\" stroke=\"#2E7D32\" stroke-width=\"1.4\" stroke-linecap=\"round\"/>",
           "desc": "See how many people visit your websites and what they click on, without tracking cookies - a privacy-friendly alternative to Google Analytics.",

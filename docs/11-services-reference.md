@@ -15,7 +15,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
-| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, atuin, guacamole, it-tools, mailpit, plausible |
+| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, guacamole, it-tools, mailpit, plausible |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `browser` | `uv run homeserver.py dev up browser` | min + core + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |
 | `office` | `uv run homeserver.py dev up office` | min + core + daily + browser + every office service below — **opt-in, never implied by `up browser`** |
@@ -84,7 +84,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Jellyfin | `jellyfin` | 8096 | 8096 | core |
 | Forgejo | `forgejo` | 3002 / 2223 (SSH) | 3000 / 22 | core |
 | wg-easy | `wg-easy` | 51820/UDP, 51821 (admin) | same — `network_mode: host`, no port remapping | core |
-| Atuin | `atuin` | 8122 | 8888 | core |
+| Atuin | `atuin` | 8122 | 8888 | daily |
 | Guacamole | `guacamole` | 8107 | 8080 | core |
 | IT-Tools | `it-tools` | 8119 | 80 | core |
 | Mailpit | `mailpit` | 8140 | 8025 | core |
@@ -198,7 +198,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `authentik.yourdomain.com` | `authentik-server` | `9000` | core |
 | `it-tools.yourdomain.com` | `it-tools` | `80` | core |
 | `mailpit.yourdomain.com` | `mailpit` | `8025` | core |
-| `atuin.yourdomain.com` | `atuin` | `8888` | core |
+| `atuin.yourdomain.com` | `atuin` | `8888` | daily |
 | `plausible.yourdomain.com` | `plausible` | `8000` | core |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | core |
 | `status.yourdomain.com` | `uptime-kuma` | `3001` | core |
