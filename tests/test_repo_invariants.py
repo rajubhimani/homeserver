@@ -19,7 +19,7 @@ SERVICES = json.loads((REPO / "services.json").read_text())["services"]
 BY_SLUG = {s["slug"]: s for s in SERVICES}
 KNOWN_TIERS = {"min", "core", "daily", "browser", "office", "automation-ai", "extra", "manual", "shared"}
 ABOVE_CORE = {"daily", "browser", "office", "automation-ai", "extra", "manual"}
-INJECTED_VARS = {"DOMAIN", "DATA_ROOT", "DOCKER_SOCKET"}  # set by homeserver.py's compose_env / root .env
+INJECTED_VARS = {"DOMAIN", "DATA_ROOT", "DOCKER_SOCKET", "HOMESERVER_SUBNET", "BROWSER_NET"}  # set by homeserver.py's compose_env / root .env
 
 
 def service_dirs() -> list[str]:
@@ -355,20 +355,40 @@ def test_images_are_pinned():
     assert not bad, f"images on a moving tag (pin a version, or a digest): {bad}"
 
 
-def test_fixed_container_ips_are_inside_the_pinned_homeserver_subnet():
-    """Browsers carry a static ipv4_address (and nginx-plain's LAN-isolation rules name the same IPs). The
-    'homeserver' network's subnet is pinned in homeserver.py; an IP outside it makes `compose create` fail
-    with 'no configured subnet contains IP address' (hit 2026-10-06 after the network was recreated)."""
+def test_fixed_container_ips_come_from_the_pinned_homeserver_subnet():
+    """Browsers carry a static ipv4_address. It must be ${BROWSER_NET}.<n> (never a literal), BROWSER_NET is
+    derived from HOMESERVER_SUBNET and injected by homeserver.py, and nginx-plain's LAN-isolation script lists
+    exactly the same host numbers. A literal IP outside the network's subnet makes `compose create` fail with
+    'no configured subnet contains IP address' (hit 2026-10-06 after the network was recreated)."""
     import ipaddress
     net = ipaddress.ip_network(hs.HOMESERVER_SUBNET)
+    prefix = hs.browser_net()
+    assert ipaddress.ip_address(prefix + ".240") in net, f"{prefix}.x is outside {net}"
+    assert hs.compose_env("firefox")["BROWSER_NET"] == prefix
+    assert hs.compose_env("firefox")["HOMESERVER_SUBNET"] == hs.HOMESERVER_SUBNET
     pat = re.compile(r"^\s*ipv4_address:\s*(\S+)", re.M)
-    ips = {}
+    hosts, literal = {}, {}
     for f in sorted((REPO / "services").glob("*/compose*.yml")):
         for m in pat.finditer(f.read_text()):
-            ips[f"{f.parent.name}/{f.name}"] = m.group(1)
-    assert ips, "expected the browsers' static IPs"
-    outside = {k: v for k, v in ips.items() if ipaddress.ip_address(v) not in net}
-    assert not outside, f"outside {net}: {outside}"
+            v = m.group(1)
+            k = f"{f.parent.name}/{f.name}"
+            hm = re.fullmatch(r"\$\{BROWSER_NET\}\.(\d+)", v)
+            if hm:
+                hosts[k] = hm.group(1)
+            else:
+                literal[k] = v
+    assert hosts, "expected the browsers' static IPs"
+    assert not literal, f"fixed IPs must be ${{BROWSER_NET}}.<n>, not literals: {literal}"
+    assert len(set(hosts.values())) == len(hosts), "two containers share a fixed IP"
     script = (REPO / "services/nginx-plain/browser-lan-block.sh").read_text()
-    listed = set(re.findall(r"^\s+(\d+\.\d+\.\d+\.\d+)\s+#", script, re.M))
-    assert listed == set(ips.values()), "browser-lan-block.sh must list exactly the browsers' static IPs"
+    listed = set(re.findall(r'^\s+"\$BROWSER_NET\.(\d+)"\s+#', script, re.M))
+    assert listed == set(hosts.values()), "browser-lan-block.sh must list exactly the browsers' host numbers"
+
+
+def test_browser_net_is_derived_from_the_subnet_and_validated():
+    assert hs.browser_net("172.19.0.0/16") == "172.19.255"
+    assert hs.browser_net("10.50.0.0/16") == "10.50.255"
+    import pytest
+    for bad in ("192.168.1.0/24", "fd00::/64"):
+        with pytest.raises(SystemExit):
+            hs.browser_net(bad)

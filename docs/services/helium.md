@@ -25,7 +25,7 @@ Safety rating and the reasoning behind it: see [browser-hub.md](browser-hub.md#b
 
 Tracks `:latest`, same deliberate exception to this repo's pinned-version convention as the other browsers here — see [firefox.md](firefox.md#image-tag--deliberate-exception-to-this-repos-pinned-version-convention) for the full reasoning. Pick up new releases with `uv run homeserver.py prod update helium`.
 
-Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). Login, `SUBFOLDER=/helium/` subpath routing, `HARDEN_DESKTOP=true`, and `RESTART_APP=true` all follow the same shared model documented there. Static IP `172.19.255.247` on the `homeserver` network (for the LAN-isolation firewall rules — see browser-hub.md's "LAN isolation" section).
+Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)'s Setup section (`uv run homeserver.py dev up browser`). Login, `SUBFOLDER=/helium/` subpath routing, `HARDEN_DESKTOP=true`, and `RESTART_APP=true` all follow the same shared model documented there. Static IP `${BROWSER_NET}.247` (`<subnet>.255.247`) on the `homeserver` network (for the LAN-isolation firewall rules — see browser-hub.md's "LAN isolation" section).
 
 ## Gotchas
 

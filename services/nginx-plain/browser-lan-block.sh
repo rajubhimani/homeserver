@@ -54,17 +54,25 @@ LAN_SUBNET="192.168.1.0/24"
 HOST_LAN_IP="192.168.1.7"
 FIREWALLD_ZONE="docker"
 
+# The browsers' fixed IPs are <a>.<b>.255.<n> inside the 'homeserver' network (compose: ipv4_address
+# ${BROWSER_NET}.<n>, with BROWSER_NET derived by homeserver.py from HOMESERVER_SUBNET). Read the prefix from the
+# live network so this can never drift from it; override with BROWSER_NET=a.b.255 if the network is down.
+if [ -z "${BROWSER_NET:-}" ]; then
+    SUBNET=$(docker network inspect homeserver --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)
+    [ -n "$SUBNET" ] || { echo "Network 'homeserver' not found; start the stack first or set BROWSER_NET=a.b.255" >&2; exit 1; }
+    BROWSER_NET=$(echo "$SUBNET" | awk -F'[./]' '{print $1"."$2".255"}')
+fi
 BROWSER_IPS=(
-    172.19.255.240 # firefox
-    172.19.255.241 # chromium
-    172.19.255.243 # brave
-    172.19.255.244 # mullvad-browser
-    172.19.255.245 # librewolf
-    172.19.255.246 # zen
-    172.19.255.247 # helium
-    172.19.255.248 # chrome
-    172.19.255.249 # edge
-    172.19.255.250 # vivaldi
+    "$BROWSER_NET.240" # firefox
+    "$BROWSER_NET.241" # chromium
+    "$BROWSER_NET.243" # brave
+    "$BROWSER_NET.244" # mullvad-browser
+    "$BROWSER_NET.245" # librewolf
+    "$BROWSER_NET.246" # zen
+    "$BROWSER_NET.247" # helium
+    "$BROWSER_NET.248" # chrome
+    "$BROWSER_NET.249" # edge
+    "$BROWSER_NET.250" # vivaldi
 )
 
 apply() {

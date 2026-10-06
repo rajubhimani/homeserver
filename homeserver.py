@@ -169,6 +169,24 @@ _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
 RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
+# The 'homeserver' network's subnet is pinned, never left to Docker. The browser containers have fixed IPs
+# inside it (compose: ipv4_address ${BROWSER_NET}.<n>, derived from this subnet below; the LAN-isolation rules
+# in services/nginx-plain/browser-lan-block.sh read the live network). When the network was recreated without a
+# subnet on 2026-10-05, Docker picked 172.19.0.0/16 instead of the old 172.18.0.0/16 and every browser failed to
+# create ("no configured subnet contains IP address"). Set HOMESERVER_SUBNET in the root .env to change it.
+HOMESERVER_SUBNET = _ROOT_ENV.get("HOMESERVER_SUBNET", "172.19.0.0/16")
+
+
+def browser_net(subnet: str = HOMESERVER_SUBNET) -> str:
+    """First three octets of the browsers' fixed-IP block: <a>.<b>.255, the top /24 of the pinned /16
+    (a.b.255.240-250). compose_env injects it as BROWSER_NET."""
+    import ipaddress
+    net = ipaddress.ip_network(subnet)
+    if net.version != 4 or net.prefixlen > 16:
+        print(f"HOMESERVER_SUBNET={subnet}: needs an IPv4 subnet of /16 or larger (the browsers use its x.y.255.* block)", file=sys.stderr)
+        sys.exit(1)
+    a, b = net.network_address.packed[:2]
+    return f"{a}.{b}.255"
 # Snapshots to keep per service before auto-pruning the oldest; -1 = unlimited
 BACKUP_RETENTION = int(_ROOT_ENV.get("BACKUP_RETENTION", "5"))
 # reset-backup-<ts> folders (each reset's verified pre-wipe snapshot) to keep
@@ -1239,6 +1257,8 @@ def compose_env(service: str) -> dict[str, str]:
     env = dict(os.environ)
     env["DATA_ROOT"] = str(SERVICE_DATA_ROOT / service)
     env["DOMAIN"] = DOMAIN
+    env["HOMESERVER_SUBNET"] = HOMESERVER_SUBNET
+    env["BROWSER_NET"] = browser_net()
     return env
 
 
@@ -3181,12 +3201,6 @@ def show_help() -> None:
 # ── Execute ──────────────────────────────────────────────────────────
 
 
-# The 'homeserver' network's subnet is pinned, never left to Docker. The browser containers have fixed IPs
-# inside it (ipv4_address in services/<browser>/compose.yml, and the LAN-isolation rules in
-# services/nginx-plain/browser-lan-block.sh); when the network was recreated without a subnet on 2026-10-05,
-# Docker picked 172.19.0.0/16 instead of 172.18.0.0/16 and every browser failed to create with "no configured
-# subnet contains IP address". tests/test_repo_invariants.py checks those IPs are inside this subnet.
-HOMESERVER_SUBNET = "172.19.0.0/16"
 
 
 def ensure_network() -> None:
