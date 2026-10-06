@@ -35,6 +35,11 @@ It's a [PEP 723](https://peps.python.org/pep-0723/) inline-metadata script — `
 uv run services/uptime-kuma/setup-monitors.py --all
 ```
 
+**Stale monitors are removed automatically (2026-10-06).** A Docker monitor for a container that no longer exists is permanently red, and Kuma's saved data (and any old snapshot restore) keeps it: `clamav-watchdog` was removed on 2026-10-03 and was still red three days later. Now:
+- `RETIRED_CONTAINERS` in `monitor_rules.py` lists containers removed on purpose (today: `clamav-watchdog`). They are **never monitored and deleted on every run**, with or without `--prune`.
+- `--all` **prunes by default**: every Docker monitor whose container is in no `compose.yml`, or is a one-shot that exits by design, is deleted. `--keep-stale` opts out. Hand-made monitors (HTTP, keyword, ...) and monitors on other docker hosts are never touched.
+- Add a container here when you remove it on purpose and want any old copy of its monitor gone for good; run the script once after a restore or an update.
+
 **`--prune` — remove monitors for services that no longer exist.** On its own the script only ever *adds*, so removing or renaming a service (e.g. `ungoogled-chromium`, dropped from the Browser Hub on 2026-09-26) leaves its old monitor behind, permanently "down". `--prune` (only valid with `--all` — without it the script only sees running containers, so every stopped service would look removed) deletes this script's own **Docker Container**-type monitors on the `homeserver` docker host whose name isn't a `container_name` in any `services/*/compose.yml` anymore. Hand-made monitors of any other type (HTTP(s), keyword, etc.) are never touched. **Run `--all --prune` after every service add, remove, or rename** — it's a step in the `homeserver-add-service` checklist:
 
 ```bash

@@ -1276,3 +1276,29 @@ def test_to_docker_starts_only_the_database_and_never_starts_wg_easy():
     assert "hs.NO_WG_START = True" in src and '"dbs"' in src
     main = src[src.index("def main"):]
     assert "hs.do_up(" not in main.split("def time_stamp")[0].replace("start_db_only", "")  # no do_up with exclude in the flow
+
+
+def test_uptime_kuma_never_keeps_a_monitor_for_a_removed_container():
+    """clamav-watchdog was removed on 2026-10-03 and was still red on 2026-10-06 (the Oct 3 snapshot restored
+    Kuma's monitor list). Retired containers are never created and always deleted; with prune, so is any monitor
+    whose container is in no compose.yml; hand-made monitors and other docker hosts are never touched."""
+    import sys as _sys
+    _sys.path.insert(0, str(REPO / "services" / "uptime-kuma"))
+    import monitor_rules as mr
+    D = "docker"
+    existing = [
+        {"id": 1, "name": "clamav", "type": D, "docker_host": 7},
+        {"id": 2, "name": "clamav-watchdog", "type": D, "docker_host": 7},   # retired
+        {"id": 3, "name": "gone-service", "type": D, "docker_host": 7},       # not in any compose.yml
+        {"id": 4, "name": "init-job", "type": D, "docker_host": 7},           # one-shot
+        {"id": 5, "name": "uptime-kuma", "type": D, "docker_host": 7},        # excluded (monitoring itself)
+        {"id": 6, "name": "my site", "type": "http", "docker_host": None},    # hand-made
+        {"id": 7, "name": "gone-service", "type": D, "docker_host": 99},      # another docker host
+    ]
+    known, excl = {"clamav"}, {"uptime-kuma"}
+    ids = lambda prune: sorted(m["id"] for m, _ in mr.monitors_to_delete(existing, known, excl, 7, D, prune, {"init-job"}))  # noqa: E731
+    assert ids(False) == [2]            # without prune only the retired one goes
+    assert ids(True) == [2, 3, 4]       # with prune: the removed one and the one-shot too, nothing else
+    why = dict((m["id"], w) for m, w in mr.monitors_to_delete(existing, known, excl, 7, D, True, {"init-job"}))
+    assert "one-shot" in why[4] and "retired" in why[2] and "no longer defined" in why[3]
+    assert not mr.should_create("clamav-watchdog") and mr.should_create("clamav")

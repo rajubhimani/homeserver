@@ -44,6 +44,9 @@ from pathlib import Path
 
 from uptime_kuma_api import DockerType, MonitorType, NotificationType, UptimeKumaApi
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from monitor_rules import monitors_to_delete, should_create  # noqa: E402
+
 SERVICE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SERVICE_DIR.parent.parent
 NTFY_ENV = REPO_ROOT / "services" / "ntfy" / ".env"
@@ -170,6 +173,12 @@ def main() -> None:
         action="store_true",
         help="With --all: delete Docker Container monitors on the homeserver docker host whose "
         "container no longer exists in any services/*/compose.yml (removed/renamed services).",
+    )
+    parser.add_argument(
+        "--keep-stale",
+        action="store_true",
+        help="With --all: don't delete monitors whose container no longer exists (by default --all prunes them: "
+        "the compose files are the source of truth, and a red monitor for a removed container teaches you to ignore red).",
     )
     parser.add_argument("--k8s", action="store_true",
                         help="Kubernetes mode: HTTP checks on the public hostnames and TCP checks on the "
@@ -300,6 +309,8 @@ def main() -> None:
         created = 0
         skipped = 0
         for name, tier in sorted(container_tiers.items()):
+            if not should_create(name):
+                continue
             if name in existing_names:
                 skipped += 1
                 continue
@@ -321,21 +332,15 @@ def main() -> None:
             created += 1
             print(f"  + {name}{'' if active else '  (disabled, tier=' + tier + ')'}")
 
+        # Retired containers are deleted on every run; with --all (unless --keep-stale) or --prune, so is every
+        # Docker monitor whose container no longer exists in any compose.yml (monitor_rules.py).
+        prune = (args.all and not args.keep_stale) or args.prune
         pruned = 0
-        if args.prune:
-            # Only this script's own kind of monitor (Docker Container type on
-            # the homeserver docker host) -- hand-made HTTP/keyword/etc.
-            # monitors are never touched, whatever their name.
-            for m in existing_monitors:
-                if m.get("type") != MonitorType.DOCKER or m.get("docker_host") != host_id:
-                    continue
-                name = m["name"]
-                if name in container_tiers or name in EXCLUDE_CONTAINERS:
-                    continue
-                api.delete_monitor(m["id"])
-                pruned += 1
-                why = "one-shot init container, exits by design" if name in one_shots else "no longer defined in any compose.yml"
-                print(f"  - {name}  (removed: {why})")
+        for m, why in monitors_to_delete(existing_monitors, set(container_tiers), EXCLUDE_CONTAINERS, host_id,
+                                         MonitorType.DOCKER, prune, one_shots):
+            api.delete_monitor(m["id"])
+            pruned += 1
+            print(f"  - {m['name']}  (removed: {why})")
 
         print(f"\nDone. Created {created} monitor(s), skipped {skipped} already-existing, pruned {pruned} stale.")
     finally:
