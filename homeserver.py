@@ -1941,6 +1941,32 @@ def check_data_mounts(service: str) -> bool:
     return not problems
 
 
+def restore_lost_state(service: str) -> None:
+    """The partial-loss case do_up's auto-restore does not cover: service_data/data/<service>/ survived (it
+    lives on the HDD) but the Docker volumes (on the SSD) are gone, e.g. after an SSD wipe. The auto-restore
+    only fires when the data folder, the volumes AND the database are all missing, so such a service started
+    against an empty database, and the next nightly snapshot then recorded that empty state and would
+    have pruned the good ones (Uptime Kuma, 2026-10-06). So: restore each named volume the newest snapshot
+    holds and Docker lacks, and a shared database that is gone. Present volumes are never touched."""
+    snaps = list_snapshots(service)
+    if not snaps:
+        return
+    latest = snaps[-1]
+    ts_suffix = re.compile(r"_\d{8}-\d{6}$")
+    for f in sorted(latest.glob("*.tar.gz")):
+        base = ts_suffix.sub("", f.name[: -len(".tar.gz")])
+        if base == "service_data" or BACKEND.volume_exists(base):
+            continue
+        info(f"{service}: volume {base} is missing but snapshot {latest.name} holds it — restoring it before starting (pass --fresh to start blank instead)...")
+        BACKEND.volume_create(base)
+        if not BACKEND.untar_into_volume(base, f):
+            error(f"  failed to restore volume {base}")
+    c = shared_db_creds(service)
+    if c and any(latest.glob(f"{service}_shareddb_*")) and not shared_db_exists(service):
+        info(f"{service}: its database on {c['container']} is missing but snapshot {latest.name} holds it — restoring it before starting...")
+        restore_shared_db(service, latest)
+
+
 def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None, fresh: bool = False) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
@@ -1977,6 +2003,8 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
             if snaps:
                 info(f"{service} has no live volumes or data on disk — restoring latest snapshot ({snaps[-1].name}) before starting (pass --fresh to start blank instead)...")
                 do_restore(service, env, profile)
+        else:
+            restore_lost_state(service)
 
     if not provision_shared_db(service):
         return False

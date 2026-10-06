@@ -520,6 +520,7 @@ Why: after an SSD wipe Docker's volumes are gone (they live in `/var/lib/docker`
 - **Run it now:** `uv run homeserver.py prod backup running --no-wg` (`--no-wg` keeps it from starting wg-easy as a side effect).
 - **`backup running` silently did nothing** until 2026-10-06: the parser accepted the word and no branch handled it, so it reported success after backing up nothing. It now backs up what is running, and a backup with nothing to do is an error (tests pin both).
 - **Restore:** `uv run homeserver.py prod restore <service>` (newest snapshot) or `--snapshot <timestamp>`.
+- **After an SSD wipe, `up` restores what is missing (2026-10-06).** Docker's volumes live on the SSD, `service_data/` on the HDD. `up` used to auto-restore only when the data folder, the volumes and the database were *all* missing, so a service whose folder survived started on an empty database (Uptime Kuma showed its first-run setup page), and the next nightly snapshot recorded that empty state and would have pruned the good ones within five nights. Now `up` restores, before starting, every named volume the newest snapshot holds that Docker lacks, and a shared database that is gone; volumes that exist are never touched, and `--fresh` still means blank. If a service already started empty, restore a good snapshot by hand before the retention prunes it: `uv run homeserver.py prod restore <service> --snapshot <timestamp>` (list them with `snapshots <service>`).
 
 ## Boot safety
 

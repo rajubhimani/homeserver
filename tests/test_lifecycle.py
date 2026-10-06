@@ -149,6 +149,42 @@ def test_up_fresh_skips_auto_restore(fake, cli):
     assert not [e for e in fake.events if e[0].startswith("untar")]
 
 
+def _snapshot_with_volume(svc: str) -> None:
+    snap = hs.BACKUP_ROOT / svc / "20260101-000000"
+    snap.mkdir(parents=True)
+    (snap / f"{svc}_data_20260101-000000.tar.gz").write_bytes(b"tar")
+    (snap / "service_data_20260101-000000.tar.gz").write_bytes(b"tar")
+
+
+def test_up_restores_a_lost_volume_when_the_data_folder_survived(fake, cli):
+    """After an SSD wipe service_data (on the HDD) survives but the Docker volumes are gone. The auto-restore
+    only fired when the folder, the volumes AND the database were all missing, so such a service started on
+    an empty database and the next nightly snapshot recorded that (Uptime Kuma, 2026-10-06). The missing
+    volume comes back from the newest snapshot; the surviving data folder is left alone."""
+    svc = hs.SERVICES_DAILY[0]
+    folder = hs.SERVICE_DATA_ROOT / svc
+    folder.mkdir(parents=True)
+    (folder / "keep.txt").write_text("live")
+    _snapshot_with_volume(svc)
+    cli("prod", "up", svc)
+    assert ("untar_volume", f"{svc}_data") in fake.events
+    assert not [e for e in fake.events if e[0] == "untar_dir"]  # the folder that survived is not replaced
+    assert (folder / "keep.txt").read_text() == "live"
+
+
+def test_up_does_not_touch_a_volume_that_exists_or_when_fresh(fake, cli):
+    svc = hs.SERVICES_DAILY[0]
+    folder = hs.SERVICE_DATA_ROOT / svc
+    folder.mkdir(parents=True)
+    _snapshot_with_volume(svc)
+    fake.volumes.add(f"{svc}_data")
+    cli("prod", "up", svc)
+    assert not [e for e in fake.events if e[0].startswith("untar")]  # present volumes are never overwritten
+    fake.volumes.discard(f"{svc}_data")
+    cli("prod", "up", svc, "--fresh")
+    assert not [e for e in fake.events if e[0].startswith("untar")]  # --fresh means blank
+
+
 def test_up_with_existing_volume_does_not_restore(fake, cli):
     svc = hs.SERVICES_DAILY[0]
     fake.volumes.add(f"{svc}_data")
