@@ -7,6 +7,7 @@ services:
         CODE_SERVER_VERSION: ${CODE_SERVER_VERSION}
         UV_VERSION: ${UV_VERSION}
         NODE_VERSION: ${NODE_VERSION}
+        GH_VERSION: ${GH_VERSION}
         DEV_PACKAGES: ${DEV_PACKAGES}
     image: homeserver/code-server:${CODE_SERVER_VERSION}-docker${DOCKER_VERSION}
     container_name: code-server

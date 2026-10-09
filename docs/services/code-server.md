@@ -44,7 +44,8 @@ Installed in the image, so a recreated or updated container has them again with 
 | uv / uvx | copied from `ghcr.io/astral-sh/uv` | `UV_VERSION` |
 | Node.js + npm + corepack | copied from the official `node` image (Active LTS line, 24) | `NODE_VERSION` |
 | Docker CLI, Compose, Buildx | see below | `DOCKER_VERSION` |
-| gcc/make (`build-essential`), `python3` + venv + pip, `pkg-config`, `jq`, `ripgrep`, `fd-find`, `unzip`, `zip`, `rsync`, `less`, `vim`, `htop`, `wget`, plus git, curl, ssh and nano from the base | apt | `DEV_PACKAGES` |
+| `gh` (GitHub CLI) | GitHub's own release tarball, checksum-verified (Debian's package is years behind) | `GH_VERSION` |
+| gcc/make (`build-essential`), `python3` + venv + pip, `pkg-config`, `jq`, `ripgrep`, `fd-find`, `unzip`, `zip`, `rsync`, `less`, `vim`, `htop`, `wget`, `cmake`, `tmux`, `git-lfs`, `sqlite3`, `postgresql-client` (17), `tree`, `bat`, plus git, curl, ssh and nano from the base. Debian names two commands `batcat` and `fdfind`; the image links them as `bat` and `fd` | apt | `DEV_PACKAGES` |
 
 To add a tool: put its Debian package name in `DEV_PACKAGES` (or a new `COPY --from` / `RUN` in the `Dockerfile` for something not in apt), then rebuild and recreate:
 
@@ -60,6 +61,7 @@ uv run homeserver.py dev up code-server     # recreates the container on the new
 **Git and SSH settings persist:**
 - `git config --global …` writes to `~/.config/git/config` (`GIT_CONFIG_GLOBAL`), which is the persisted `config/` volume. Set it once: `git config --global user.name "…"` and `user.email`.
 - `~/.ssh` is a persisted mount (`service_data/data/code-server/ssh/`, mode 700, fixed on every start by `persist.sh`). Generate a key there once (`ssh-keygen -t ed25519`) and add the public key to Forgejo. It is in the service's snapshots, so treat the snapshots as secret.
+- `gh auth login` is saved in `~/.config/gh` (the persisted `config/` volume), so you log in to GitHub once.
 - A startup script, `/entrypoint.d/10-persist.sh` (from `services/code-server/persist.sh`), recreates those directories on each start.
 
 Not persisted (regenerable): the package caches under `~/.cache` (uv, npm), re-downloaded on demand.
