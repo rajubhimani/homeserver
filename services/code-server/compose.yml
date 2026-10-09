@@ -5,6 +5,9 @@ services:
       args:
         DOCKER_VERSION: ${DOCKER_VERSION}
         CODE_SERVER_VERSION: ${CODE_SERVER_VERSION}
+        UV_VERSION: ${UV_VERSION}
+        NODE_VERSION: ${NODE_VERSION}
+        DEV_PACKAGES: ${DEV_PACKAGES}
     image: homeserver/code-server:${CODE_SERVER_VERSION}-docker${DOCKER_VERSION}
     container_name: code-server
     restart: unless-stopped
@@ -17,6 +20,8 @@ services:
       # Extensions, settings and state (small, backed up with the service)
       - ${DATA_ROOT}/local:/home/coder/.local
       - ${DATA_ROOT}/config:/home/coder/.config
+      # SSH keys and known_hosts for git over SSH
+      - ${DATA_ROOT}/ssh:/home/coder/.ssh
       # The code you edit: lives on this host, edits happen in place
       - ${WORKSPACE_ROOT}:/home/coder/project
     healthcheck:

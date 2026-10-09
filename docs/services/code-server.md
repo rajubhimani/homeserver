@@ -12,7 +12,8 @@
 ```bash
 cp services/code-server/.env.example services/code-server/.env
 # set PASSWORD (or HASHED_PASSWORD, leaving PASSWORD empty)
-mkdir -p service_data/data/code-server/{local,config} service_data/cache/code-server/docker
+mkdir -p service_data/data/code-server/{local,config,ssh} service_data/cache/code-server/docker
+chmod 700 service_data/data/code-server/ssh
 uv run homeserver.py dev up code-server   # first start builds the image (code-server + Docker CLI)
 ```
 
@@ -20,7 +21,7 @@ Open `https://code-server.<domain>/` (or `http://<host>:8163` in dev). You pass 
 
 ## Architecture
 
-- Two containers: `code-server` (the editor) and `code-server-docker` (an isolated Docker engine, see "Docker in the editor"). The editor image is built from `services/code-server/Dockerfile`: Coder's official `codercom/code-server` ( Docker Hub is the only registry the docs name) plus the Docker CLI, Compose and Buildx copied from Docker's official `docker:<version>-cli` image. It runs as uid 1000 (`coder`), which is the host user, so files written from the editor are owned by you.
+- Two containers: `code-server` (the editor) and `code-server-docker` (an isolated Docker engine, see "Docker in the editor"). The editor image is built from `services/code-server/Dockerfile`: Coder's official `codercom/code-server` ( Docker Hub is the only registry the docs name) plus the Docker CLI, Compose and Buildx copied from Docker's official `docker:<version>-cli` image, and the developer essentials below. It runs as uid 1000 (`coder`), which is the host user, so files written from the editor are owned by you.
 - **Versions:** neither code-server nor Docker Engine has an LTS track, so both run the newest stable release (`CODE_SERVER_VERSION=4.140.0`, released 2026-10-01; `DOCKER_VERSION=29.8.2`, one setting for the sidecar engine and the CLI so they always match) and take every update. After changing either, rebuild the editor image with `docker compose -f services/code-server/compose.yml --env-file services/code-server/.env build`.
 - `WORKSPACE_ROOT` is bind-mounted at `/home/coder/project`, which is the folder the editor opens. Edits change the real files on this host, so git, the terminal and the files are all the host's. It is a second path var like immich's `UPLOAD_LOCATION`, but it points at source code, not app data, so it is deliberately **not** under `service_data/` (a snapshot should never archive your repo).
 - Extensions and settings live in `service_data/data/code-server/local` and `config`, so they survive container recreation and are in the service's snapshots.
@@ -33,6 +34,35 @@ The integrated terminal is a **shell as uid 1000 on this host**, so whoever gets
 2. code-server's own `PASSWORD` / `HASHED_PASSWORD`. Prefer the hashed form (`echo -n 'pw' | npx argon2-cli -e`).
 
 The host's Docker socket is deliberately **not** mounted (that would make the editor root-equivalent on the host). `docker` in the terminal talks to the isolated sidecar instead, below.
+
+## Developer essentials (baked into the image)
+
+Installed in the image, so a recreated or updated container has them again with nothing to redo:
+
+| Tool | How | Version setting |
+| --- | --- | --- |
+| uv / uvx | copied from `ghcr.io/astral-sh/uv` | `UV_VERSION` |
+| Node.js + npm + corepack | copied from the official `node` image (Active LTS line, 24) | `NODE_VERSION` |
+| Docker CLI, Compose, Buildx | see below | `DOCKER_VERSION` |
+| gcc/make (`build-essential`), `python3` + venv + pip, `pkg-config`, `jq`, `ripgrep`, `fd-find`, `unzip`, `zip`, `rsync`, `less`, `vim`, `htop`, `wget`, plus git, curl, ssh and nano from the base | apt | `DEV_PACKAGES` |
+
+To add a tool: put its Debian package name in `DEV_PACKAGES` (or a new `COPY --from` / `RUN` in the `Dockerfile` for something not in apt), then rebuild and recreate:
+
+```bash
+docker compose -f services/code-server/compose.yml --env-file services/code-server/.env build
+uv run homeserver.py dev up code-server     # recreates the container on the new image
+```
+
+`restart` alone reuses the old image; `up` recreates it. Neither touches your data.
+
+**What you install yourself persists too**, because it goes into the persisted `~/.local` volume: `uv tool install …`, `uv python install 3.x` (`~/.local/share/uv`), and `npm install -g …` (`NPM_CONFIG_PREFIX=~/.local`) all survive recreation, and `~/.local/bin` is first on `PATH`. A copy of a tool there **shadows the baked one**, so avoid installing uv with its install script (it would pin an old copy in `~/.local/bin`); `uv self update` is not needed, bump `UV_VERSION` instead. Per-project `.venv` and `node_modules` live in the project folder under `WORKSPACE_ROOT`, so they persist too.
+
+**Git and SSH settings persist:**
+- `git config --global …` writes to `~/.config/git/config` (`GIT_CONFIG_GLOBAL`), which is the persisted `config/` volume. Set it once: `git config --global user.name "…"` and `user.email`.
+- `~/.ssh` is a persisted mount (`service_data/data/code-server/ssh/`, mode 700, fixed on every start by `persist.sh`). Generate a key there once (`ssh-keygen -t ed25519`) and add the public key to Forgejo. It is in the service's snapshots, so treat the snapshots as secret.
+- A startup script, `/entrypoint.d/10-persist.sh` (from `services/code-server/persist.sh`), recreates those directories on each start.
+
+Not persisted (regenerable): the package caches under `~/.cache` (uv, npm), re-downloaded on demand.
 
 ## Docker in the editor
 
