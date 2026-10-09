@@ -451,6 +451,17 @@
       "replaces": "Obsidian (self-hosted)"
     },
     {
+      "slug": "code-server",
+      "tier": "daily",
+      "name": "code-server",
+      "category": "dev",
+      "subcategory": "tools",
+      "icon": "blue",
+      "svg": "<path d=\"M6.5 5 L2.5 9 L6.5 13 M11.5 5 L15.5 9 L11.5 13\" stroke=\"#185FA5\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+      "desc": "Full VS Code in your browser, running on this server: edit, run and debug your projects from any device.",
+      "replaces": "GitHub Codespaces"
+    },
+    {
       "slug": "syncthing",
       "tier": "daily",
       "name": "Syncthing",

@@ -1019,8 +1019,8 @@ def test_every_public_hostname_has_a_route_except_the_docker_only_ones():
         for d in yaml.safe_load_all(f.read_text()):
             if d and d["kind"] == "HTTPRoute":
                 have |= set(d["spec"]["hostnames"])
-    # Docker socket tools, wg-easy, and AdGuard (LAN DNS stays on Docker since 2026-10-05).
-    docker_only = {"coolify", "dockge", "dozzle", "portainer", "wg-admin", "adguard-home"}
+    # Docker socket tools, wg-easy, AdGuard (LAN DNS stays on Docker since 2026-10-05), and code-server (edits host files).
+    docker_only = {"code-server", "coolify", "dockge", "dozzle", "portainer", "wg-admin", "adguard-home"}
     assert {h.split(".")[0] for h in want - have} == docker_only, sorted(want - have)
     svc = {d["metadata"]["name"]: d for d in yaml.safe_load_all((GENERATED / "apps/supabase/services.yaml").read_text()) if d}
     assert svc["supabase-kong"]["spec"]["selector"] == {"app.kubernetes.io/name": "supabase-envoy"}  # the alias is a Service

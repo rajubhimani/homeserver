@@ -64,6 +64,7 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Vikunja | [docs/services/vikunja.md](services/vikunja.md) |
 | Trilium Notes | [docs/services/trilium.md](services/trilium.md) |
 | SilverBullet | [docs/services/silverbullet.md](services/silverbullet.md) |
+| code-server | [docs/services/code-server.md](services/code-server.md) |
 | Excalidraw | [docs/services/excalidraw.md](services/excalidraw.md) |
 | Karakeep | [docs/services/karakeep.md](services/karakeep.md) |
 | n8n | [docs/services/n8n.md](services/n8n.md) |

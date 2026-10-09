@@ -117,5 +117,6 @@ skipped:
   coolify: "Docker PaaS: deploys apps as Docker containers through the socket. On Kubernetes, ArgoCD and the generated manifests do that job."
   dockge: "Docker Compose stack manager (needs the socket). Kubernetes UIs are the ArgoCD UI and Headlamp."
   dozzle: "Docker log viewer (needs the socket). On Kubernetes, Grafana + Loki (observability) and Headlamp show pod logs."
+  code-server: "Edits code that lives on this host (WORKSPACE_ROOT bind mount) and is a shell on it; a pod would edit nothing real. Kubernetes equivalent: Coder/Codespaces-style workspaces, not run here."
   portainer: "Needs the Docker socket; Kubernetes UIs are Headlamp and the ArgoCD UI."
 

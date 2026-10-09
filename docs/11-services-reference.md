@@ -38,7 +38,7 @@ one command that stops the entire stack, in reverse order — no list to
 maintain.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
-coolify, excalidraw, karakeep, homebox, silverbullet, syncthing, trilium,
+coolify, code-server, excalidraw, karakeep, homebox, silverbullet, syncthing, trilium,
 wallabag.
 
 **Office services** (firm/business apps — started with `up office`/`up all` or individually):
@@ -98,6 +98,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Karakeep | `karakeep` | 8117 | 3000 | daily |
 | HomeBox | `homebox` | 8136 | 7745 | daily |
 | SilverBullet | `silverbullet` | 8113 | 3000 | daily |
+| code-server | `code-server` | 8163 | 8080 | daily |
 | Syncthing | `syncthing` | 8087 | 8384 | daily |
 | Trilium Notes | `trilium` | 8112 | 8080 | daily |
 | Wallabag | `wallabag` | 8121 | 80 | daily |
@@ -217,6 +218,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `vikunja.yourdomain.com` | `vikunja` | `3456` | office |
 | `trilium.yourdomain.com` | `trilium` | `8080` | daily |
 | `silverbullet.yourdomain.com` | `silverbullet` | `3000` | daily |
+| `code-server.yourdomain.com` | `code-server` | `8080` | daily |
 | `excalidraw.yourdomain.com` | `excalidraw` | `80` | daily |
 | `karakeep.yourdomain.com` | `karakeep` | `3000` | daily |
 | `browser.yourdomain.com` | *(doesn't fit this table — subpath-routed to 10 different containers behind one shared login, not a single forward host)* | *(use NPM's Advanced tab with a custom nginx snippet — see [browser-hub.md](services/browser-hub.md))* | browser |

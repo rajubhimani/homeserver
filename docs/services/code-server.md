@@ -1,0 +1,69 @@
+# code-server
+
+[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+---
+
+**Purpose:** VS Code in the browser (a self-hosted GitHub Codespaces): open `https://code-server.<domain>/` from any device and edit, run and debug code that lives on this server.
+**Port:** `8163` (host) → `8080` (container) | **Data:** `service_data/data/code-server/` (`local/` = extensions + state, `config/`) | **Workspace:** `WORKSPACE_ROOT` (default: this repo) | **Docker cache:** `service_data/cache/code-server/docker/` | **Requires:** nothing | **Memory:** no hard limit set
+
+## Setup
+
+```bash
+cp services/code-server/.env.example services/code-server/.env
+# set PASSWORD (or HASHED_PASSWORD, leaving PASSWORD empty)
+mkdir -p service_data/data/code-server/{local,config} service_data/cache/code-server/docker
+uv run homeserver.py dev up code-server   # first start builds the image (code-server + Docker CLI)
+```
+
+Open `https://code-server.<domain>/` (or `http://<host>:8163` in dev). You pass Authentik first, then code-server's own password prompt.
+
+## Architecture
+
+- Two containers: `code-server` (the editor) and `code-server-docker` (an isolated Docker engine, see "Docker in the editor"). The editor image is built from `services/code-server/Dockerfile`: Coder's official `codercom/code-server` ( Docker Hub is the only registry the docs name) plus the Docker CLI, Compose and Buildx copied from Docker's official `docker:<version>-cli` image. It runs as uid 1000 (`coder`), which is the host user, so files written from the editor are owned by you.
+- **Versions:** neither code-server nor Docker Engine has an LTS track, so both run the newest stable release (`CODE_SERVER_VERSION=4.140.0`, released 2026-10-01; `DOCKER_VERSION=29.8.2`, one setting for the sidecar engine and the CLI so they always match) and take every update. After changing either, rebuild the editor image with `docker compose -f services/code-server/compose.yml --env-file services/code-server/.env build`.
+- `WORKSPACE_ROOT` is bind-mounted at `/home/coder/project`, which is the folder the editor opens. Edits change the real files on this host, so git, the terminal and the files are all the host's. It is a second path var like immich's `UPLOAD_LOCATION`, but it points at source code, not app data, so it is deliberately **not** under `service_data/` (a snapshot should never archive your repo).
+- Extensions and settings live in `service_data/data/code-server/local` and `config`, so they survive container recreation and are in the service's snapshots.
+
+## Security (read this)
+
+The integrated terminal is a **shell as uid 1000 on this host**, so whoever gets in can read and change anything that user can. Two layers guard it:
+
+1. **Authentik forward-auth** in `nginx-plain`, the same pattern as Excalidraw and the Browser Hub (`docs/services/authentik.md`). Any Authentik user can pass it, as on those apps, so only invite people you would give a shell to.
+2. code-server's own `PASSWORD` / `HASHED_PASSWORD`. Prefer the hashed form (`echo -n 'pw' | npx argon2-cli -e`).
+
+The host's Docker socket is deliberately **not** mounted (that would make the editor root-equivalent on the host). `docker` in the terminal talks to the isolated sidecar instead, below.
+
+## Docker in the editor
+
+`docker`, `docker compose` and `docker buildx` work in the terminal against **`code-server-docker`**, a separate Docker-in-Docker engine (`docker:<version>-dind`). It is a different engine from the host's: containers, images and networks you create there cannot see or touch the rest of the stack, and `docker ps` in the editor lists only your own. Same idea as Forgejo's CI sidecar. It cannot manage this stack; run `homeserver.py` from a host terminal.
+
+- **How it is wired:** the sidecar joins `code-server`'s network namespace (`network_mode: service:code-server`) and listens on `tcp://127.0.0.1:2375` only. `DOCKER_HOST` is set to that in the editor. Loopback means nothing else on the `homeserver` network can reach the engine (checked: a connection from another container to `code-server:2375` is refused). TLS is off for that reason.
+- **Published ports:** because the network namespace is shared, `docker run -p 3000:80 …` is on the editor's localhost, so it is reachable in the editor's browser tab at `https://code-server.<domain>/proxy/3000/` (and from the terminal at `localhost:3000`).
+- **Bind mounts:** `docker run -v` paths are resolved by the sidecar, so `WORKSPACE_ROOT` is mounted into it at the same path as in the editor (`/home/coder/project`). `-v $PWD:/app` from a project folder just works; paths outside the workspace do not exist in the sidecar.
+- **Privileged:** the sidecar runs `privileged: true`, which Docker-in-Docker requires. That is a wider kernel surface than a normal container, but it has no access to the host's Docker socket or the host's files other than the workspace and its own cache.
+- **Storage:** `DOCKER_ROOT` (`service_data/cache/code-server/docker/`, ext4 here so the default overlay driver works) holds pulled images, containers and build cache. It is regenerable and can grow large, so it sits in the `cache/` bucket and is never in a snapshot. Its contents are owned by root (the engine writes as root), so the host user cannot list it. Reclaim space with `docker system prune -a` in the editor terminal, not by deleting files.
+- **Restart together:** the sidecar is bound to the editor's network namespace, so if `code-server` is recreated, `code-server-docker` must be restarted too (`homeserver.py … restart code-server` handles both; starting only the sidecar will not).
+- **Limits:** no memory/CPU limits are set on what you run in the sidecar; a runaway container there competes with the stack. For a heavy job, cap it with `docker run --memory`.
+## Working from the browser
+
+- **Terminal:** `` Ctrl+` ``. It runs in the code-server container (git, curl and the Docker CLI are available; anything else, run in a container via the sidecar).
+- **Several projects:** this host sets `WORKSPACE_ROOT=/mnt/mydata/projects`, so every project is a subfolder of the folder the editor opens. Use File → Open Folder to jump into one (each gets its own window/tab and remembered state), or File → Add Folder to Workspace to keep several side by side in one window (File → Save Workspace As… keeps that set). Clone or create projects from the terminal (`git clone …`) and they appear on the host immediately.
+- **Open another root:** point `WORKSPACE_ROOT` at any host path readable by uid 1000 and `uv run homeserver.py dev restart code-server`.
+- **Previewing a dev server (port forwarding):** code-server's built-in proxy serves `/proxy/<port>/` on the same hostname, so a server on port 3000 (in the editor's terminal or published by a container from the sidecar) is at `https://code-server.<domain>/proxy/3000/`. It reaches only the editor's own localhost, not other containers on the `homeserver` network.
+- **Extensions:** it uses the Open VSX marketplace, not Microsoft's, so a few Microsoft-only extensions are unavailable. Set `EXTENSIONS_GALLERY` to change it.
+- **Install as an app (PWA):** Chrome/Edge address bar → Install, for a window without browser chrome.
+
+## Health endpoint
+
+`GET /healthz` on the editor returns `{"status":"alive|expired",...}` without authentication (from code-server's FAQ). The compose healthcheck and the landing page's `/health/code-server` route both use it. The sidecar's healthcheck is `docker info` (the image defines none; upstream's `docker:dind` docs give no healthcheck command, so this is a local choice).
+
+## Notes
+
+- Websockets are required (editor, terminal). `nginx-plain`'s block sets the upgrade headers and `proxy_read_timeout 86400s`.
+- `WORKSPACE_ROOT=../..` is relative to `services/code-server/`, i.e. the repo root. `service_data/` inside it is a symlink to `/mnt/mydata/service_data`, which does not exist inside the container, so it shows as a broken link there (harmless).
+- Not on Kubernetes: see the reason in `kubernetes/scope.yaml`.
+
+---
+
+[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

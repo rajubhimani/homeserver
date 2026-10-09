@@ -215,7 +215,7 @@ data:
 
     **Automation & Low-code** — [n8n](docs/services/n8n.md "Self-hosted workflow automation — connect apps and services together with a drag-and-drop builder, like Zapier or Make, without writing code.") · [Airflow](docs/services/airflow/airflow.md "Programmatically author, schedule, and monitor workflows as Python DAGs. The industry-standard workflow orchestrator.") · [Temporal](docs/services/temporal/temporal.md "Durable execution engine for reliable distributed workflows — automatic retries, state persistence, and long-running processes that survive crashes.") · [Dagster](docs/services/dagster/dagster.md "Data orchestrator built around software-defined assets — track lineage, materialize pipelines, observe data quality. Ships with an empty placeholder pipeline.") · [NocoDB](docs/services/nocodb.md "Turn a database into an easy-to-use spreadsheet — browse, filter, and edit data without writing SQL. A self-hosted alternative to Airtable.") · [Supabase](docs/services/supabase.md "Self-hosted backend for building apps — database, user logins, file storage, and live data updates in one place. A self-hosted alternative to Firebase.")
 
-    **Tools** — [IT-Tools](docs/services/it-tools.md "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester. Replaces: assorted sketchy websites.") · [Mailpit](docs/services/mailpit.md "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered. Replaces: Mailtrap.") · [Coolify](docs/services/coolify.md "Deploy your own apps and websites from a Git repo with one click — a self-hosted alternative to Vercel or Heroku.") · [Penpot](docs/services/penpot.md "Design app mockups, websites, and interfaces, then share them for feedback — a self-hosted alternative to Figma.") · [Plausible](docs/services/plausible.md "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.") · [Atuin](docs/services/atuin.md "Sync your command-line history across all your machines and search it with context (folder, exit code) — like browser history, but for your terminal. Replaces: plain bash/zsh history file.")
+    **Tools** — [IT-Tools](docs/services/it-tools.md "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester. Replaces: assorted sketchy websites.") · [Mailpit](docs/services/mailpit.md "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered. Replaces: Mailtrap.") · [code-server](docs/services/code-server.md "Full VS Code in your browser, running on this server: edit, run and debug your projects from any device. Replaces: GitHub Codespaces.") · [Coolify](docs/services/coolify.md "Deploy your own apps and websites from a Git repo with one click — a self-hosted alternative to Vercel or Heroku.") · [Penpot](docs/services/penpot.md "Design app mockups, websites, and interfaces, then share them for feedback — a self-hosted alternative to Figma.") · [Plausible](docs/services/plausible.md "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.") · [Atuin](docs/services/atuin.md "Sync your command-line history across all your machines and search it with context (folder, exit code) — like browser history, but for your terminal. Replaces: plain bash/zsh history file.")
 
     ### System
 
@@ -415,6 +415,7 @@ data:
         ├── vikunja/
         ├── trilium/
         ├── silverbullet/
+        ├── code-server/
         ├── outline/
         ├── bookstack/
         ├── excalidraw/
@@ -498,6 +499,7 @@ data:
     ├── vikunja/          (postgres/, files/)
     ├── trilium/          (trilium-data/)
     ├── silverbullet/     (space/)
+    ├── code-server/      (local/, config/) — the code it edits is the host directory in WORKSPACE_ROOT, not under service_data/
     ├── outline/          (postgres/, redis/, data/)
     ├── bookstack/        (mariadb/, config/)
     ├── excalidraw/       (empty — no persistent data, no DB)
@@ -632,6 +634,7 @@ data:
         - Tools
           - [IT-Tools](/docs/services/it-tools.md "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester. Replaces: assorted sketchy websites.")
           - [Mailpit](/docs/services/mailpit.md "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered. Replaces: Mailtrap.")
+          - [code-server](/docs/services/code-server.md "Full VS Code in your browser, running on this server: edit, run and debug your projects from any device. Replaces: GitHub Codespaces.")
           - [Coolify](/docs/services/coolify.md "Deploy your own apps and websites from a Git repo with one click — a self-hosted alternative to Vercel or Heroku.")
           - [Penpot](/docs/services/penpot.md "Design app mockups, websites, and interfaces, then share them for feedback — a self-hosted alternative to Figma.")
           - [Plausible](/docs/services/plausible.md "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.")

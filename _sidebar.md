@@ -89,6 +89,7 @@
     - Tools
       - [IT-Tools](/docs/services/it-tools.md "~80 browser-only dev utilities in one place: JWT decoder, cron parser, hash/UUID/base64, regex tester. Replaces: assorted sketchy websites.")
       - [Mailpit](/docs/services/mailpit.md "SMTP catcher for the whole stack — point any service at it and see the email it would have sent, nothing ever actually delivered. Replaces: Mailtrap.")
+      - [code-server](/docs/services/code-server.md "Full VS Code in your browser, running on this server: edit, run and debug your projects from any device. Replaces: GitHub Codespaces.")
       - [Coolify](/docs/services/coolify.md "Deploy your own apps and websites from a Git repo with one click — a self-hosted alternative to Vercel or Heroku.")
       - [Penpot](/docs/services/penpot.md "Design app mockups, websites, and interfaces, then share them for feedback — a self-hosted alternative to Figma.")
       - [Plausible](/docs/services/plausible.md "See how many people visit your websites and what they click on, without tracking cookies — a privacy-friendly alternative to Google Analytics.")
