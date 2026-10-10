@@ -60,7 +60,10 @@ USER 1000
 #   uv tool install / uv python install -> ~/.local/bin and ~/.local/share/uv
 #   npm install -g                       -> ~/.local (via NPM_CONFIG_PREFIX)
 #   git config --global                  -> ~/.config/git/config
+#   Claude Code login and settings       -> ~/.config/claude (CLAUDE_CONFIG_DIR)
+#   gh auth login                        -> ~/.config/gh (gh's default)
 ENV PATH=/home/coder/.local/bin:${PATH} \
     NPM_CONFIG_PREFIX=/home/coder/.local \
     GIT_CONFIG_GLOBAL=/home/coder/.config/git/config \
+    CLAUDE_CONFIG_DIR=/home/coder/.config/claude \
     UV_LINK_MODE=copy

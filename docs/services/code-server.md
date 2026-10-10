@@ -61,10 +61,11 @@ uv run homeserver.py dev up code-server     # recreates the container on the new
 **Git and SSH settings persist:**
 - `git config --global …` writes to `~/.config/git/config` (`GIT_CONFIG_GLOBAL`), which is the persisted `config/` volume. Set it once: `git config --global user.name "…"` and `user.email`.
 - `~/.ssh` is a persisted mount (`service_data/data/code-server/ssh/`, mode 700, fixed on every start by `persist.sh`). Generate a key there once (`ssh-keygen -t ed25519`) and add the public key to Forgejo. It is in the service's snapshots, so treat the snapshots as secret.
+- **Claude Code** (the VS Code extension or the CLI): its login and settings are redirected to `~/.config/claude` with `CLAUDE_CONFIG_DIR`, the persisted `config/` volume, so you sign in once. Without this they sit in `~/.claude` and `~/.claude.json` in the home directory, which is not a volume and is wiped whenever the container is recreated. That folder holds your login token, so it is in the service's snapshots; keep them private. Log in with the extension's sign-in prompt (or `claude` in the terminal) after the first start on this setup.
 - `gh auth login` is saved in `~/.config/gh` (the persisted `config/` volume), so you log in to GitHub once.
 - A startup script, `/entrypoint.d/10-persist.sh` (from `services/code-server/persist.sh`), recreates those directories on each start.
 
-Not persisted (regenerable): the package caches under `~/.cache` (uv, npm), re-downloaded on demand.
+Not persisted (regenerable): the package caches under `~/.cache` (uv, npm), re-downloaded on demand. Also not persisted: anything else an app writes straight into the home directory (`~/.copilot`, for example). If a tool's login keeps disappearing, find where it stores state and either point its config-dir variable into `~/.config/…` or add a mount.
 
 ## Docker in the editor
 
