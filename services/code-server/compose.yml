@@ -18,11 +18,11 @@ services:
       # is on localhost (bound to loopback only, never reachable from the network)
       DOCKER_HOST: tcp://127.0.0.1:2375
     volumes:
-      # Extensions, settings and state (small, backed up with the service)
-      - ${DATA_ROOT}/local:/home/coder/.local
-      - ${DATA_ROOT}/config:/home/coder/.config
-      # SSH keys and known_hosts for git over SSH
-      - ${DATA_ROOT}/ssh:/home/coder/.ssh
+      # The whole home directory: extensions, settings, logins (gh, git, ssh,
+      # Claude, ...), shell history and dotfiles all persist
+      - ${DATA_ROOT}/home:/home/coder
+      # Package caches (uv, npm, pip): regenerable, so outside the snapshots
+      - ${CACHE_ROOT}:/home/coder/.cache
       # The code you edit: lives on this host, edits happen in place
       - ${WORKSPACE_ROOT}:/home/coder/project
     healthcheck:

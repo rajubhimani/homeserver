@@ -52,18 +52,14 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
  && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
 
-# Startup script: makes the persisted dirs below exist with the right modes
+# Startup script: seeds the persisted home directory and fixes ssh modes
 COPY --chmod=755 persist.sh /entrypoint.d/10-persist.sh
 USER 1000
 
-# What you install as the user lives in ~/.local, which is a persisted volume:
-#   uv tool install / uv python install -> ~/.local/bin and ~/.local/share/uv
-#   npm install -g                       -> ~/.local (via NPM_CONFIG_PREFIX)
-#   git config --global                  -> ~/.config/git/config
-#   Claude Code login and settings       -> ~/.config/claude (CLAUDE_CONFIG_DIR)
-#   gh auth login                        -> ~/.config/gh (gh's default)
+# /home/coder is a persisted volume (see compose.yml), so everything a tool or
+# you write there survives recreation: uv tool/python installs, npm -g, gh and
+# git settings, ssh keys, Claude login, shell history. persist.sh seeds the
+# default dotfiles into it on first start.
 ENV PATH=/home/coder/.local/bin:${PATH} \
     NPM_CONFIG_PREFIX=/home/coder/.local \
-    GIT_CONFIG_GLOBAL=/home/coder/.config/git/config \
-    CLAUDE_CONFIG_DIR=/home/coder/.config/claude \
     UV_LINK_MODE=copy

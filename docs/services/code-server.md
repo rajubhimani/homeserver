@@ -5,14 +5,14 @@
 ---
 
 **Purpose:** VS Code in the browser (a self-hosted GitHub Codespaces): open `https://code-server.<domain>/` from any device and edit, run and debug code that lives on this server.
-**Port:** `8163` (host) → `8080` (container) | **Data:** `service_data/data/code-server/` (`local/` = extensions + state, `config/`) | **Workspace:** `WORKSPACE_ROOT` (default: this repo) | **Docker cache:** `service_data/cache/code-server/docker/` | **Requires:** nothing | **Memory:** no hard limit set
+**Port:** `8163` (host) → `8080` (container) | **Data:** `service_data/data/code-server/home/` (the whole `/home/coder`) | **Package cache:** `service_data/cache/code-server/home-cache/` | **Workspace:** `WORKSPACE_ROOT` (default: this repo) | **Docker cache:** `service_data/cache/code-server/docker/` | **Requires:** nothing | **Memory:** no hard limit set
 
 ## Setup
 
 ```bash
 cp services/code-server/.env.example services/code-server/.env
 # set PASSWORD (or HASHED_PASSWORD, leaving PASSWORD empty)
-mkdir -p service_data/data/code-server/{local,config,ssh} service_data/cache/code-server/docker
+mkdir -p service_data/data/code-server/home/{.cache,.ssh,project} service_data/cache/code-server/{docker,home-cache}
 chmod 700 service_data/data/code-server/ssh
 uv run homeserver.py dev up code-server   # first start builds the image (code-server + Docker CLI)
 ```
@@ -24,7 +24,7 @@ Open `https://code-server.<domain>/` (or `http://<host>:8163` in dev). You pass 
 - Two containers: `code-server` (the editor) and `code-server-docker` (an isolated Docker engine, see "Docker in the editor"). The editor image is built from `services/code-server/Dockerfile`: Coder's official `codercom/code-server` ( Docker Hub is the only registry the docs name) plus the Docker CLI, Compose and Buildx copied from Docker's official `docker:<version>-cli` image, and the developer essentials below. It runs as uid 1000 (`coder`), which is the host user, so files written from the editor are owned by you.
 - **Versions:** neither code-server nor Docker Engine has an LTS track, so both run the newest stable release (`CODE_SERVER_VERSION=4.140.0`, released 2026-10-01; `DOCKER_VERSION=29.8.2`, one setting for the sidecar engine and the CLI so they always match) and take every update. After changing either, rebuild the editor image with `docker compose -f services/code-server/compose.yml --env-file services/code-server/.env build`.
 - `WORKSPACE_ROOT` is bind-mounted at `/home/coder/project`, which is the folder the editor opens. Edits change the real files on this host, so git, the terminal and the files are all the host's. It is a second path var like immich's `UPLOAD_LOCATION`, but it points at source code, not app data, so it is deliberately **not** under `service_data/` (a snapshot should never archive your repo).
-- Extensions and settings live in `service_data/data/code-server/local` and `config`, so they survive container recreation and are in the service's snapshots.
+- Extensions, settings and every login live in the persisted home folder (see "The whole home directory persists").
 
 ## Security (read this)
 
@@ -56,16 +56,18 @@ uv run homeserver.py dev up code-server     # recreates the container on the new
 
 `restart` alone reuses the old image; `up` recreates it. Neither touches your data.
 
-**What you install yourself persists too**, because it goes into the persisted `~/.local` volume: `uv tool install …`, `uv python install 3.x` (`~/.local/share/uv`), and `npm install -g …` (`NPM_CONFIG_PREFIX=~/.local`) all survive recreation, and `~/.local/bin` is first on `PATH`. A copy of a tool there **shadows the baked one**, so avoid installing uv with its install script (it would pin an old copy in `~/.local/bin`); `uv self update` is not needed, bump `UV_VERSION` instead. Per-project `.venv` and `node_modules` live in the project folder under `WORKSPACE_ROOT`, so they persist too.
+**The whole home directory persists.** `/home/coder` is one bind mount of `service_data/data/code-server/home/`, so anything any tool writes under `~` survives a `down`/`up`, a recreate or an image rebuild: extensions and VS Code settings (`~/.local/share/code-server`), `gh auth login` (`~/.config/gh`), `git config --global`, `~/.ssh` keys, the Claude Code login (`~/.claude`, `~/.claude.json`), `~/.copilot`, shell history and dotfiles, `uv tool`/`uv python` installs and `npm install -g` (`~/.local`, first on `PATH`). No per-tool setting is needed, and a new tool's login is saved without any change here. This is the common setup for code-server in Docker (code-server's own install docs mount only `~/.local` and `~/.config`; community setups and templates mount the whole home, and LinuxServer's image keeps everything in one `/config` volume).
 
-**Git and SSH settings persist:**
-- `git config --global …` writes to `~/.config/git/config` (`GIT_CONFIG_GLOBAL`), which is the persisted `config/` volume. Set it once: `git config --global user.name "…"` and `user.email`.
-- `~/.ssh` is a persisted mount (`service_data/data/code-server/ssh/`, mode 700, fixed on every start by `persist.sh`). Generate a key there once (`ssh-keygen -t ed25519`) and add the public key to Forgejo. It is in the service's snapshots, so treat the snapshots as secret.
-- **Claude Code** (the VS Code extension or the CLI): its login and settings are redirected to `~/.config/claude` with `CLAUDE_CONFIG_DIR`, the persisted `config/` volume, so you sign in once. Without this they sit in `~/.claude` and `~/.claude.json` in the home directory, which is not a volume and is wiped whenever the container is recreated. That folder holds your login token, so it is in the service's snapshots; keep them private. Log in with the extension's sign-in prompt (or `claude` in the terminal) after the first start on this setup.
-- `gh auth login` is saved in `~/.config/gh` (the persisted `config/` volume), so you log in to GitHub once.
-- A startup script, `/entrypoint.d/10-persist.sh` (from `services/code-server/persist.sh`), recreates those directories on each start.
+Details that make it work:
+- **Default dotfiles:** a bind mount starts empty and hides the image's `.bashrc`/`.profile`, so `/entrypoint.d/10-persist.sh` (`services/code-server/persist.sh`) copies them from `/etc/skel` at each start, never overwriting an existing file, and sets `~/.ssh` to mode 700.
+- **Ownership:** the folder is owned by uid 1000 on the host (you), the same user the container runs as, so there is nothing to `chown`.
+- **Caches are separate:** `~/.cache` (uv, npm, pip downloads) is its own mount, `service_data/cache/code-server/home-cache/` (`CACHE_ROOT`), so it stays out of snapshots. Deleting it only costs a re-download.
+- **Pre-create the mount points** on the host (the `mkdir` in Setup): Docker would otherwise create `home/.cache` and `home/project` owned by root. `home/project` is just the mount point for the workspace, it stays empty on the host.
+- **Snapshots contain secrets:** the home folder holds SSH private keys and login tokens (gh, Claude), and it is in the service's snapshots, so keep `service_data/backup/code-server/` private. It also holds the extensions (a few hundred MB), which is why the cache is split out.
+- **A shadowing gotcha:** a tool copied into `~/.local/bin` takes priority over the image's baked copy. Avoid uv's install script and bump `UV_VERSION` instead.
+- Installing an apt package in the terminal is **not** persistent (system paths are in the image); add it to `DEV_PACKAGES` and rebuild.
 
-Not persisted (regenerable): the package caches under `~/.cache` (uv, npm), re-downloaded on demand. Also not persisted: anything else an app writes straight into the home directory (`~/.copilot`, for example). If a tool's login keeps disappearing, find where it stores state and either point its config-dir variable into `~/.config/…` or add a mount.
+Not persisted: anything outside `/home/coder` and the workspace (system paths such as `/usr`, `/etc`, `/opt`) lives in the image and is reset on recreate.
 
 ## Docker in the editor
 

@@ -499,7 +499,7 @@ data:
     ├── vikunja/          (postgres/, files/)
     ├── trilium/          (trilium-data/)
     ├── silverbullet/     (space/)
-    ├── code-server/      (local/, config/) — the code it edits is the host directory in WORKSPACE_ROOT, not under service_data/
+    ├── code-server/      (home/ = the whole /home/coder) — the code it edits is the host directory in WORKSPACE_ROOT, not under service_data/
     ├── outline/          (postgres/, redis/, data/)
     ├── bookstack/        (mariadb/, config/)
     ├── excalidraw/       (empty — no persistent data, no DB)
