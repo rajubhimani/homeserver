@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: mailpit
-        image: axllent/mailpit:v1.31.4
+        image: axllent/mailpit:v1.31.5
         envFrom:
         - configMapRef:
             name: homeserver-root
