@@ -158,6 +158,10 @@ Commands and caveats: [docs/17](../17-docker-to-kubernetes.md) step 8.
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 21,246 assets and 2 users restored; `immich-db` on its image's own check. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
+## Reverse proxy: no buffering (2026-10-11)
+
+The `immich` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Large originals and video playback (Range seeks) were buffered to disk by nginx-plain before reaching the client, and uploads were buffered in full before reaching Immich. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

@@ -31,6 +31,10 @@ The compose healthcheck runs `ollama list || exit 1` inside the container — no
 - No independent login/user accounts — access control is entirely the Authentik gate at the reverse-proxy layer for external requests; internal requests (Open WebUI and anything else in the stack) are unauthenticated by design, same as any other container-to-container call on the internal network.
 - `MODELS_ROOT` (not `DATA_ROOT`) is where actual state lives — see the secondary-data-root note in the `homeserver-add-service` skill if this path is ever restructured.
 
+## Reverse proxy: no buffering (2026-10-11)
+
+The `ollama` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Streamed generations could arrive in bursts, because nginx-plain buffered the streamed response. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

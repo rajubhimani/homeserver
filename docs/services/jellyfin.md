@@ -216,6 +216,14 @@ The `jellyfin-pgsql-test` container, its Postgres volume, `service_data/data/jel
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: config restored (setup wizard already completed). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
+## Fixed: playback hangs over the internet (nginx buffering the video)
+
+**Symptom (2026-10-11):** playback via `https://jellyfin.${DOMAIN}` hangs or stalls on start and seek, while Jellyfin itself is idle (about 0.2% CPU, healthy). nginx-plain logs `an upstream response is buffered to a temporary file` for `/Videos/<id>/stream.mkv?Static=true` (Direct Play of a 2GB MKV, Chrome sending many cancelled `Range` requests) and for HLS segments and `/Playback/BitrateTest`. cloudflared logs `http2: stream closed` and `Unable to reach the origin service ... EOF`.
+
+**Root cause:** the `jellyfin.${DOMAIN}` block in `services/nginx-plain/templates/default.conf.template` had proxy buffering on, so nginx copied each response from Jellyfin to its own disk before sending it on, and threw it away whenever the browser cancelled a seek.
+
+**Fix:** `proxy_buffering off;` and `proxy_request_buffering off;` in that block, as in [Jellyfin's reverse-proxy docs](https://jellyfin.org/docs/general/post-install/networking/advanced/nginx/). Apply with `docker restart nginx-plain` (the template is rendered at container start).
+
 ## Known issue: Firefox playback freezes
 
 In Firefox, transcoded playback can freeze the picture while the audio keeps playing. It's unresolved. Chrome, Edge and the Jellyfin Desktop app play the same media fine, so use one of those.

@@ -28,6 +28,10 @@ Official **Audiobookshelf** app ([Google Play](https://play.google.com/store/app
 
 - Health endpoint: `/ping` (confirmed via `services/audiobookshelf/compose.yml`'s healthcheck — `wget --spider http://localhost:80/ping`, plain 200 on success)
 
+## Reverse proxy: no buffering (2026-10-11)
+
+The `audiobookshelf` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Long audio files with seeking were buffered to disk by nginx-plain before reaching the client. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

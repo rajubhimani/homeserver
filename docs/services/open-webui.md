@@ -156,6 +156,10 @@ once and collide. The env var avoids that entirely.
   `ollama` container. Fix in the UI too — Admin Panel → Settings → Connections → edit the Ollama
   URL directly — the env var edit alone is not enough once a database already exists.
 
+## Reverse proxy: no buffering (2026-10-11)
+
+The `open-webui` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Token-by-token chat replies could arrive in bursts, because nginx-plain buffered the streamed response. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
+
 ---
 
 [← New Services](../10-new-services.md) | [Home](../../setup.md)

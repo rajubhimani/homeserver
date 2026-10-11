@@ -292,6 +292,10 @@ Via `uv run homeserver.py dev dump nextcloud` + `dev migrate nextcloud` — see 
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: installed state, users, the `/OS-ISOs` external storage and the OnlyOffice connection restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
+## Reverse proxy: no buffering (2026-10-11)
+
+The `nextcloud` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Large downloads and previews were buffered to disk by nginx-plain, and uploads (up to `client_max_body_size 10G`) were buffered in full before reaching Nextcloud. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

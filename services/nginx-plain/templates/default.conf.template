@@ -1293,6 +1293,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 3600s;
+        # Stream straight through; buffering to disk stalls seeks/tokens and delays uploads
+        proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 
@@ -1311,6 +1314,9 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 10G;
         proxy_read_timeout 300s;
+        # Stream straight through; buffering to disk stalls seeks/tokens and delays uploads
+        proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 
@@ -1378,6 +1384,9 @@ server {
         proxy_set_header Connection $connection_upgrade;
         client_max_body_size 10G;
         proxy_read_timeout 600s;
+        # Stream straight through; buffering to disk stalls seeks/tokens and delays uploads
+        proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 
@@ -1397,6 +1406,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 600s;
+        # Stream video straight through; buffering it to disk stalls seeks (Jellyfin reverse-proxy docs)
+        proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 
@@ -1536,6 +1548,9 @@ server {
         proxy_set_header Connection $connection_upgrade;
         proxy_http_version 1.1;
         proxy_read_timeout 300s;
+        # Stream straight through; buffering to disk stalls seeks/tokens and delays uploads
+        proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 
@@ -1553,6 +1568,9 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_http_version 1.1;
         proxy_read_timeout 300s;
+        # Stream straight through; buffering to disk stalls seeks/tokens and delays uploads
+        proxy_buffering off;
+        proxy_request_buffering off;
         # Authentik forward-auth — see docs/services/authentik.md. Ollama has
         # no browser login of its own (bare API), so external/programmatic
         # clients need a valid Authentik session cookie to reach this route;
