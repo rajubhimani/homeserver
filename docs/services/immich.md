@@ -135,6 +135,28 @@ Commands and caveats: [docs/17](../17-docker-to-kubernetes.md) step 8.
 
 **If this recurs even at 2GB:** check `docker inspect immich-db --format '{{.State.OOMKilled}}'` right after — `true` confirms the same failure mode, and the limit should be raised further rather than assumed fixed. No forensic OOM-kill logging exists in this stack by default (Windows/WSL2's kernel ring buffer rolls over, and container recreation resets `OOMKilled`/`RestartCount`), so catching it live via `docker stats` during an active upload is the reliable way to confirm before raising the cap again.
 
+## Safe updates and backups
+
+**What protects what (checked 2026-10-11):**
+
+| Data | Where it lives | Protected by | Gap |
+| --- | --- | --- | --- |
+| Photos and videos (`library`, `upload`, `profile`; about 133GB) | `UPLOAD_LOCATION` on `/mnt/media` | A manual copy on the external "My Passport" drive (`media_backup/immich`, last synced about 2026-10-03/04) | Snapshots deliberately skip it. The copy is manual and about a week stale, and the live disk is the only other copy |
+| Database (people, albums, face data, paths) | named volume `immich-postgres` | Immich's own daily dump (02:00 UTC, last 14 kept) in `UPLOAD_LOCATION/backups`; `down`/`backup` volume snapshots; hand-made dumps | The daily dumps sit on the same disk as the photos. A day when the server is down (like 2026-10-11) gets no dump |
+| `thumbs`, `encoded-video` | `UPLOAD_LOCATION` | Nothing, and that's fine | Regenerable from the job panel |
+
+**Before every Immich update:**
+
+1. Read the release notes for every version you skip over. Breaking changes only come with major versions, and patches aren't backported.
+2. Update the phone apps first or right away. A server major version needs a matching app major version.
+3. Take a database dump: `uv run homeserver.py prod dump immich` (writes `service_data/db_dump/immich/<ts>/`). Immich's own dump job (Administration > Job Queues > Create job > Create Database Dump) is the other way, and the one Immich's restore screen understands.
+4. Bump **both** tags together in `compose.yml` (`immich-server` and `immich-machine-learning`), then `uv run homeserver.py prod update immich`.
+5. Check `docker ps`, the server log for `Immich Server is listening ... [vX.Y.Z]`, and `/api/server/ping`.
+
+Immich doesn't support downgrading, even between patch versions, so the dump is the only way back. To roll back, restore it into the old version's images.
+
+**`dump` and Immich:** `homeserver.py dump immich` used to refuse with "has no POSTGRES_USER/POSTGRES_DB", because Immich's `.env` names its database variables `DB_USERNAME` and `DB_DATABASE_NAME`. `dump` now reads those as well (2026-10-11, covered by `tests/test_external_db.py`). It writes a `pg_dump -F c` of the `immich` database, which is not the file Immich's restore screen takes. Use Immich's own dump job when you want to restore through the web UI.
+
 ## Fixed: `UPLOAD_LOCATION` was nested inside `DATA_ROOT`, so every backup archived the whole photo/video library
 
 **Symptom:** `uv run homeserver.py dev backup immich` (and any auto-snapshot on `down`) took a very long time and produced a huge `service_data.tar.gz`, dominated by the actual photo/video library rather than app config.

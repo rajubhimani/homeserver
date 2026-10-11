@@ -2447,10 +2447,12 @@ def do_dump(service: str, env: str, profile: str | None) -> bool:
         return False
 
     service_env = load_env_file(SERVICES_DIR / service / ".env")
-    user = service_env.get("POSTGRES_USER")
-    db = service_env.get("POSTGRES_DB")
+    # Immich names its database variables DB_USERNAME/DB_DATABASE_NAME (the
+    # names its own server reads) instead of POSTGRES_USER/POSTGRES_DB.
+    user = service_env.get("POSTGRES_USER") or service_env.get("DB_USERNAME")
+    db = service_env.get("POSTGRES_DB") or service_env.get("DB_DATABASE_NAME")
     if not user or not db:
-        error(f"services/{service}/.env has no POSTGRES_USER/POSTGRES_DB — not a standard Postgres service")
+        error(f"services/{service}/.env has no POSTGRES_USER/POSTGRES_DB (or DB_USERNAME/DB_DATABASE_NAME) — not a standard Postgres service")
         return False
 
     ts = time.strftime("%Y%m%d-%H%M%S")

@@ -138,3 +138,10 @@ def _apps_reach_backing_services_through_env(svc):
             if isinstance(v, str) and pat.search(v):
                 offenders.append(f"{name}: {pat.search(v).group(1)} in {v.strip()[:80]!r}")
     assert not offenders, "move these endpoints into .env:\n" + "\n".join(offenders)
+
+
+def test_dump_reads_immichs_db_variable_names(fake):
+    """immich/.env uses DB_USERNAME/DB_DATABASE_NAME, not POSTGRES_USER/POSTGRES_DB."""
+    fake.running.add("immich-db")
+    assert hs.do_dump("immich", "prod", None) is True
+    assert ("pg_dump", "immich-db", "immich") in fake.events
