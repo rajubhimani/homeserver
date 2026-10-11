@@ -142,7 +142,7 @@ Commands and caveats: [docs/17](../17-docker-to-kubernetes.md) step 8.
 | Data | Where it lives | Protected by | Gap |
 | --- | --- | --- | --- |
 | Photos and videos (`library`, `upload`, `profile`; about 133GB) | `UPLOAD_LOCATION` on `/mnt/media` | A manual copy on the external "My Passport" drive (`media_backup/immich`, last synced about 2026-10-03/04) | Snapshots deliberately skip it. The copy is manual and about a week stale, and the live disk is the only other copy |
-| Database (people, albums, face data, paths) | named volume `immich-postgres` | Immich's own daily dump (02:00 UTC, last 14 kept) in `UPLOAD_LOCATION/backups`; `down`/`backup` volume snapshots; hand-made dumps | The daily dumps sit on the same disk as the photos. A day when the server is down (like 2026-10-11) gets no dump |
+| Database (people, albums, face data, paths) | named volume `immich-postgres` | Immich's own database dump in `UPLOAD_LOCATION/backups` (setting read from the database on 2026-10-11: cron `0 */8 * * *`, so 00:00, 08:00 and 16:00 UTC, last 30 kept; Immich's defaults are daily at 02:00 UTC and 14 kept); `down`/`backup` volume snapshots; hand-made dumps | The dumps sit on the same disk as the photos. A run that falls while the server is down is skipped. The newest file on 2026-10-11 was still the one from 2026-10-10 02:00 UTC, so check that the 8-hourly schedule is actually producing files |
 | `thumbs`, `encoded-video` | `UPLOAD_LOCATION` | Nothing, and that's fine | Regenerable from the job panel |
 
 **Before every Immich update:**
