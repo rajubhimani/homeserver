@@ -27,7 +27,7 @@ services:
       - homeserver
 
   uptime-kuma:
-    image: louislam/uptime-kuma:2.5.5
+    image: louislam/uptime-kuma:2.5.6
     container_name: uptime-kuma
     restart: unless-stopped
     env_file: .env
