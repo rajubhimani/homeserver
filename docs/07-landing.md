@@ -67,6 +67,15 @@ sequenceDiagram
 Health endpoints are in `nginx.conf`. Docker's internal DNS (`127.0.0.11`) with
 `set $upstream` defers resolution — the landing container starts even if other services are down.
 
+### Services on another server (public-URL fallback)
+
+`/health/<service>` only reaches containers on this host's Docker network, so a service that runs on a different server would always read offline. When the local check fails, the page calls `/ping/<subdomain>` instead. Nginx (`nginx.conf` and `nginx.podman.conf`) requests `https://<subdomain>.${DOMAIN}` server-side and passes the real status back, so Cloudflare's 530 and nginx-plain's 502 read as offline, which a browser `no-cors` fetch couldn't tell apart from a 200. A 2xx or redirect (a login redirect to Authentik, for example) counts as online. Hovering the badge says which path answered ("Reachable on this host" or "Reachable via its public URL (another server)").
+
+- Only runs when the local check fails, so services on this host add no extra requests. Fully stopped services do make one public request per minute each.
+- Skipped for cards with a `path` in `services.json` (the individual Browser Hub browsers): the hub's subdomain being up says nothing about one browser.
+- The subdomain is limited to `[a-z0-9-]` and the host is always `*.${DOMAIN}`, so `/ping/` can't be pointed at an arbitrary site.
+- Nothing new in `.env`: the public hostname is built from the existing `DOMAIN`.
+
 Redirects (e.g. GitLab's 302) are treated as online using `redirect: 'manual'` in the
 JS fetch call — opaque responses count as up.
 

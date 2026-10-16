@@ -528,6 +528,8 @@
       if (s.subcategory) card.dataset.subcategory = s.subcategory;
 
       const sub = s.sub || s.slug;
+      card.dataset.sub = sub;
+      if (s.path) card.dataset.path = s.path;
       // s.path is a subpath under THIS card's own subdomain (sub.${DOMAIN}),
       // not the bare apex domain -- Browser Hub's individual browsers live
       // at browser.${DOMAIN}/<path>/ (see docs/services/browser-hub.md),
@@ -663,8 +665,19 @@
     }
 
     async function pingHealth(service) {
+      return pingUrl(`/health/${service}`);
+    }
+
+    // Public-URL check: nginx requests https://<sub>.DOMAIN and passes the real
+    // status back (nginx.conf /ping/). Used when the local /health/ check fails,
+    // so a service running on another server still shows online.
+    async function pingPublic(sub) {
+      return pingUrl(`/ping/${sub}`);
+    }
+
+    async function pingUrl(path) {
       try {
-        const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000), redirect: 'manual', cache: 'no-store' });
+        const res = await fetch(path, { signal: AbortSignal.timeout(6000), redirect: 'manual', cache: 'no-store' });
         return res.status === 0 || (res.status >= 200 && res.status < 500);
       } catch {
         return false;
@@ -681,8 +694,16 @@
       // the main instance OR any test instance is up).
       const testLinks = Array.from(card.querySelectorAll('.card-link-secondary[data-testsub]'));
 
-      const [mainUp, testResults] = await Promise.all([
-        pingHealth(service),
+      // Local (same Docker network) first; if that fails, the public URL. Cards
+      // with a subpath (individual browsers under the Browser Hub's subdomain)
+      // skip the public check: the hub being up says nothing about one browser.
+      const checkMain = async () => {
+        if (await pingHealth(service)) return 'local';
+        if (!card.dataset.path && await pingPublic(card.dataset.sub)) return 'public';
+        return false;
+      };
+      const [mainVia, testResults] = await Promise.all([
+        checkMain(),
         Promise.all(testLinks.map(link => pingHealth(link.dataset.testhealth || link.dataset.testsub))),
       ]);
 
@@ -691,7 +712,10 @@
         if (dot) dot.className = `test-dot ${testResults[i] ? 'online' : 'offline'}`;
       });
 
+      const mainUp = !!mainVia;
       const up = mainUp || testResults.some(Boolean);
+      badge.title = mainVia === 'local' ? 'Reachable on this host'
+        : mainVia === 'public' ? 'Reachable via its public URL (another server)' : '';
 
       badge.className = `status ${up ? 'online' : 'offline'}`;
       text.textContent = up ? 'online' : 'offline';
