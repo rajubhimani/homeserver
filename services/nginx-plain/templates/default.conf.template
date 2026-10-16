@@ -47,7 +47,7 @@ server {
     }
 }
 
-# ── Landing page ──────────────────────────────────────────────────────────────
+# ── Company page (www) + service dashboard (status) ───────────────────────────
 server {
     listen 80;
     access_log /var/log/nginx/access.log cf_combined;
@@ -55,10 +55,23 @@ server {
     return 301 https://www.${DOMAIN}$request_uri;
 }
 
+# www is the public company page (static, html/company); the service
+# dashboard (landing) lives on status.${DOMAIN}.
 server {
     listen 80;
     access_log /var/log/nginx/access.log cf_combined;
     server_name www.${DOMAIN};
+    root /usr/share/nginx/html/company;
+    index index.html;
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+server {
+    listen 80;
+    access_log /var/log/nginx/access.log cf_combined;
+    server_name status.${DOMAIN};
     location / {
         set $upstream http://landing:80;
         proxy_pass $upstream;
@@ -1669,7 +1682,7 @@ server {
 server {
     listen 80;
     access_log /var/log/nginx/access.log cf_combined;
-    server_name uptime-kuma.${DOMAIN} status.${DOMAIN};
+    server_name uptime-kuma.${DOMAIN};
     location / {
         set $upstream http://uptime-kuma:3001;
         proxy_pass $upstream;

@@ -4,7 +4,7 @@
 
 ---
 
-A service dashboard served by Nginx Alpine. Shows all services with **live status indicators** —
+A service dashboard served by Nginx Alpine, at **`status.<domain>`** (since 2026-10-17; `www.<domain>` is now a simple static company page, `services/nginx-plain/html/company/index.html`, served by nginx-plain itself. Uptime Kuma stays on `uptime-kuma.<domain>`; it used to share `status.<domain>`). Shows all services with **live status indicators** —
 green when up, red when down, rechecked every 60 seconds.
 
 ## Files

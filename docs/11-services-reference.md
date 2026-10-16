@@ -203,7 +203,8 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `atuin.yourdomain.com` | `atuin` | `8888` | daily |
 | `plausible.yourdomain.com` | `plausible` | `8000` | automation-ai |
 | `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | core |
-| `status.yourdomain.com` | `uptime-kuma` | `3001` | core |
+| `status.yourdomain.com` | `landing` | `80` | min |
+| `www.yourdomain.com` | static company page (`services/nginx-plain/html/company`) | — | min |
 | `grafana.yourdomain.com` | `grafana` | `3000` | core |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | core |
 | `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | office |

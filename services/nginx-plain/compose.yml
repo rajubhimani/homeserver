@@ -12,6 +12,7 @@ services:
       - ./templates:/etc/nginx/templates:ro
       - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
       - ./html/browser-hub:/usr/share/nginx/html/browser-hub:ro
+      - ./html/company:/usr/share/nginx/html/company:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/_health || exit 1"]
       interval: 60s
