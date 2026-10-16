@@ -362,9 +362,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -638,9 +641,12 @@ server {
     location /outpost.goauthentik.io {
         internal;
         auth_request off;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_pass_request_body off;
@@ -678,9 +684,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -814,9 +823,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -856,9 +868,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -898,9 +913,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -1240,9 +1258,12 @@ server {
     location /outpost.goauthentik.io {
         internal;
         auth_request off;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -1584,9 +1605,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -1686,9 +1710,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;
@@ -1775,9 +1802,12 @@ server {
 
     location /outpost.goauthentik.io {
         internal;
-        set $authentik_upstream http://authentik-server:9000;
+        set $authentik_upstream ${AUTHENTIK_UPSTREAM};
         proxy_pass $authentik_upstream$uri;
-        proxy_set_header Host $host;
+        # Authentik's own name, not the app's: a public AUTHENTIK_UPSTREAM routes by Host,
+        # and X-Original-URL below carries the app being checked.
+        proxy_set_header Host authentik.${DOMAIN};
+        proxy_ssl_server_name on;
         proxy_set_header X-Original-URL https://$http_host$request_uri;
         proxy_set_header X-Forwarded-For $real_client_ip;
         proxy_pass_request_body off;

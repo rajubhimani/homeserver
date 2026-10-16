@@ -79,6 +79,10 @@ Sidebar **Applications → Applications → Create**:
 
 No client ID/secret to copy anywhere — unlike OIDC, forward-auth doesn't hand the protected app any credentials. Nothing in `services/<app>/.env` changes for any of the five services below.
 
+### Authentik on a different server
+
+nginx-plain reaches Authentik's forward-auth endpoint through `AUTHENTIK_UPSTREAM` in `services/nginx-plain/.env` (default `http://authentik-server:9000`, the Docker name, which only resolves on the same host). If Authentik runs on another server, set it to that server's address. The forward-auth subrequests always send `Host: authentik.${DOMAIN}` (with the protected app in `X-Original-URL`), so a public `https://authentik.${DOMAIN}` works too: Cloudflare routes by Host and would otherwise send an app-host request back to this server's own tunnel. Set to the public URL on 2026-10-17 because Authentik runs on the other server; a private LAN/WireGuard address is faster and avoids the internet hop. Without a reachable upstream every protected vhost (code-server, the remote browsers, ...) returns 500 with `authentik-server could not be resolved` in nginx-plain's log.
+
 ### 4. Protect a vhost
 
 Add this to a service's `server { }` block in `services/nginx-plain/templates/default.conf.template`, inside the existing `location / { }` (alongside its current `proxy_set_header` lines, not replacing them), plus two new top-level locations in the same server block:
