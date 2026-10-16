@@ -742,6 +742,41 @@ Then, in `~/homeserver`:
 
 Plain `up` would *not* restore here. Auto-restore only fires when a service has no volumes **and** no `service_data/data/<service>/`, and moving `service_data` into place above already put the data folders back. That's why `restore all` has to be run explicitly.
 
+## Copying a service's data back from another drive
+
+Use this when a service came up empty (a data drive was missing and Docker created blank folders) and the real data is on another disk: a pendrive, a laptop, the old drive. It copies the service's whole `service_data/data/<service>/` folder over the empty one. The service must be stopped first: overwriting a live database corrupts it.
+
+```bash
+cd ~/homeserver
+
+# 1. Stop the service. --no-backup skips the automatic snapshot, which would only record the empty state.
+uv run homeserver.py prod down <service> --no-backup
+
+# 2. Copy with sudo so the original owners and permissions are kept (containers expect their own uid).
+#    BOTH paths must end in "/" so the contents land inside the folder.
+sudo rsync -aH --info=progress2 /path/to/old/service_data/data/<service>/ ~/homeserver/service_data/data/<service>/
+
+# 3. Start it again and check the logs.
+uv run homeserver.py prod up <service>
+docker logs <service> --tail 20
+```
+
+Example (Vaultwarden, old data on a pendrive):
+
+```bash
+uv run homeserver.py prod down vaultwarden --no-backup
+sudo rsync -aH --info=progress2 /run/media/raju/Pendrive250/homeserver/service_data/data/vaultwarden/ ~/homeserver/service_data/data/vaultwarden/
+uv run homeserver.py prod up vaultwarden
+```
+
+Gotchas:
+
+- **A missing trailing `/` on the source nests the data one level too deep** (`data/vaultwarden/vaultwarden/data/...`) and the service keeps reading its empty copy. This happened on 2026-10-17. If you see it, rerun the `rsync` with both slashes, then delete the extra nested folder.
+- **Don't register a new account or log in first.** The copy replaces the whole database, so anything created on the empty instance is lost.
+- **Not a snapshot restore.** For data that exists as a snapshot in `service_data/backup/<service>/`, use `restore <service>` instead (see above). This is for a plain copy of the live folder.
+- **Named volumes aren't in the folder.** Databases and other Docker named volumes (Postgres, Nextcloud's `html`/`config`) live under `/var/lib/docker`, not `service_data/data/`. For those use a snapshot or the archive.
+- **Secondary data roots** (`/mnt/media/...` for Immich, Jellyfin, Nextcloud) are separate folders. Copy them on their own, and point the service's `.env` at the new location if it moved.
+
 ## Fresh start of a service (`reset`)
 
 ```bash
