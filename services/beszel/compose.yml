@@ -44,7 +44,6 @@ services:
     # would block the agent whenever it's unplugged.
     devices:
       - /dev/disk/by-id/ata-WD_Green_2.5_240GB_23410R801995:/dev/sda
-      - /dev/disk/by-id/ata-ST2000LM015-2E8174_ZDZEHTL0:/dev/sdb
     cap_add:
       - SYS_RAWIO # SATA S.M.A.R.T. via SG_IO (add SYS_ADMIN if an NVMe drive is ever added)
     depends_on:
