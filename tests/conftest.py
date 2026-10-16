@@ -86,6 +86,9 @@ class FakeBackend(hs.DockerBackend):
     def compose_pull(self, files, env):
         return True
 
+    def compose_config(self, files, env):
+        return {}
+
     def compose_logs_follow(self, files, env):
         return None
 

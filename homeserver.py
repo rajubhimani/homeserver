@@ -476,6 +476,9 @@ class DockerBackend(ABC):
     def compose_logs_follow(self, files: list[Path], env: dict[str, str]) -> None: ...
 
     @abstractmethod
+    def compose_config(self, files: list[Path], env: dict[str, str]) -> dict: ...
+
+    @abstractmethod
     def running_container_names(self) -> list[str]: ...
 
     @abstractmethod
@@ -689,6 +692,13 @@ class SubprocessBackend(DockerBackend):
     def compose_pull(self, files, env):
         proc = self._run(self._compose_args(files, None) + ["pull"], env=env)
         return proc.returncode == 0
+
+    def compose_config(self, files, env):
+        proc = self._run(self._compose_args(files, None) + ["config", "--format", "json"], env=env)
+        try:
+            return json.loads(proc.stdout) if proc.returncode == 0 else {}
+        except ValueError:
+            return {}
 
     def compose_logs_follow(self, files, env):
         subprocess.run([RUNTIME] + self._compose_args(files, None) + ["logs", "-f"], env=env)
@@ -974,6 +984,15 @@ class PythonOnWhalesBackend(DockerBackend):
             error(f"  pull failed: {e.stderr or e}")
             return False
 
+    def compose_config(self, files, env):
+        from python_on_whales.exceptions import DockerException  # noqa: PLC0415
+        client = self._client(files, None)
+        try:
+            with self._env(env):
+                return client.compose.config(return_json=True)
+        except DockerException:
+            return {}
+
     def compose_logs_follow(self, files, env):
         client = self._client(files, None)
         with self._env(env):
@@ -1236,7 +1255,37 @@ def compose_files(service: str, env: str) -> list[Path]:
         podman_file = d / "compose.podman.yml"
         if podman_file.is_file():
             files.append(podman_file)
+    if env == "prod" and NO_WG_START and not wg_tunnel_up() and not nonlocal_bind_enabled():
+        no_wg = _without_tunnel_ports(service, files)
+        if no_wg:
+            files.append(no_wg)
     return files
+
+
+def _without_tunnel_ports(service: str, files: list[Path]) -> Path | None:
+    """wg-easy is off and 10.8.0.1 can't be bound: write a throwaway override
+    that drops every 10.8.0.1 port mapping (the 127.0.0.1 ones stay), so the
+    service still starts. Compose appends port lists across files, hence the
+    '!override' tag. None when there is nothing to drop or compose can't tell."""
+    services = BACKEND.compose_config(files, {**os.environ, **compose_env(service)}).get("services", {})
+    lines, dropped = ["services:"], 0
+    for name, svc in services.items():
+        ports = svc.get("ports") or []
+        keep = [p for p in ports if p.get("host_ip") != "10.8.0.1"]
+        if len(keep) == len(ports):
+            continue
+        dropped += len(ports) - len(keep)
+        lines.append(f"  {name}:")
+        lines.append("    ports: !override" + ("" if keep else " []"))
+        for p in keep:
+            lines.append(f'      - "{p["host_ip"]}:{p["published"]}:{p["target"]}/{p.get("protocol", "tcp")}"'
+                         if p.get("host_ip") else f'      - "{p["published"]}:{p["target"]}/{p.get("protocol", "tcp")}"')
+    if not dropped:
+        return None
+    path = Path(tempfile.gettempdir()) / f"homeserver-no-wg-{service}.yml"
+    path.write_text("\n".join(lines) + "\n")
+    info(f"wg-easy is off: {service} starts without its 10.8.0.1 port mapping(s)")
+    return path
 
 
 def compose_files_all(service: str) -> list[Path]:
@@ -1891,6 +1940,8 @@ def wg_tunnel_up() -> bool:
 
 # Set by --no-wg: this invocation never starts wg-easy as a side effect.
 NO_WG_START = False
+# Set by --yes/-y: skip the "start wg-easy?" question and just start it.
+WG_ASSUME_YES = False
 
 
 def nonlocal_bind_enabled() -> bool:
@@ -1903,6 +1954,7 @@ def nonlocal_bind_enabled() -> bool:
 
 
 def ensure_wg_tunnel_ready(service: str, env: str) -> None:
+    global NO_WG_START
     """Every other prod service binds a second port to wg-easy's 10.8.0.1
     tunnel address, which only exists once wg-easy has brought up wg0. On a
     cold start (or the Docker daemon auto-restarting 'unless-stopped'
@@ -1920,6 +1972,19 @@ def ensure_wg_tunnel_ready(service: str, env: str) -> None:
             warn("--no-wg: not starting wg-easy, but net.ipv4.ip_nonlocal_bind is 0, so the 10.8.0.1 port binds "
                  "will fail: run docker/host-boot-safety.sh (docs/08-maintenance.md 'Boot safety') or start wg-easy")
         return
+    if not WG_ASSUME_YES and sys.stdin.isatty():
+        # Interactive: let the user decide. Declining means only the requested
+        # service starts; remembered for the rest of this invocation.
+        try:
+            reply = input(f"\n{BOLD}wg-easy's tunnel address (10.8.0.1) isn't up. Start wg-easy too? "
+                          f"[Y/n]{RESET} ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            reply = "n"
+        if reply in ("n", "no"):
+            NO_WG_START = True
+            info("Not starting wg-easy; only the requested service(s) will start")
+            return
     info("wg-easy's tunnel address (10.8.0.1) isn't up yet — starting wg-easy first...")
     do_up("wg-easy", env, None)
     for _ in range(30):
@@ -3281,7 +3346,7 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
 
 
 def main() -> int:
-    global NO_WG_START
+    global NO_WG_START, WG_ASSUME_YES
     argv = sys.argv[1:]
 
     # Standalone verb, not part of the <env> <action> <target> pattern below —
@@ -3373,6 +3438,7 @@ def main() -> int:
             update_flag = True
         elif tok in ("--yes", "-y"):
             assume_yes = True
+            WG_ASSUME_YES = True
         elif tok == "--snapshot":
             i += 1
             if i >= len(rest):
