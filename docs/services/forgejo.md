@@ -51,7 +51,7 @@ Confirmed against Forgejo's own current user documentation, not assumed from mem
 
 ## Notes
 
-- Image: `codeberg.org/forgejo/forgejo:16.0.5`
+- Image: `codeberg.org/forgejo/forgejo:16.0.6`
 - Config env vars use the `FORGEJO__` prefix
 - Setup wizard is skipped via `FORGEJO__security__INSTALL_LOCK=true`
 - `FORGEJO__server__ROOT_URL` must be `https://forgejo.${DOMAIN}` (not `http`) since Cloudflare always terminates TLS
