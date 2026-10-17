@@ -35,22 +35,24 @@ install_if_changed() {
   src=$1 dst=$2 mode=$3
   cmp -s "$src" "$dst" 2>/dev/null && return 0
   tmp=$(mktemp "$dst.XXXXXX")
-  cp "$src" "$tmp"
-  chmod "$mode" "$tmp"
-  mv "$tmp" "$dst"
+  if ! { cp "$src" "$tmp" && chmod "$mode" "$tmp" && mv "$tmp" "$dst"; }; then
+    rm -f "$tmp"
+    return 1
+  fi
   echo "acme: updated $dst"
 }
 
 sync_certs() {
-  src=$LEGO_PATH/certificates
-  [ -s "$src/wildcard.crt" ] && [ -s "$src/wildcard.key" ] || return 0
-  install_if_changed "$src/wildcard.crt" "$CERTS/fullchain.pem" 644
-  install_if_changed "$src/wildcard.key" "$CERTS/privkey.pem" 600
+  issued=$LEGO_PATH/certificates
+  [ -s "$issued/wildcard.crt" ] && [ -s "$issued/wildcard.key" ] || return 0
+  install_if_changed "$issued/wildcard.crt" "$CERTS/fullchain.pem" 644
+  install_if_changed "$issued/wildcard.key" "$CERTS/privkey.pem" 600
 }
 
 run_lego() {
-  set -- --accept-tos --email "$ACME_EMAIL" --server "$ACME_SERVER" --dns "$ACME_DNS_PROVIDER" \
+  set -- --accept-tos --server "$ACME_SERVER" --dns "$ACME_DNS_PROVIDER" \
     --cert.name wildcard -d "*.${DOMAIN}" -d "$DOMAIN"
+  [ -n "$ACME_EMAIL" ] && set -- "$@" --email "$ACME_EMAIL"
   [ "$ACME_RENEW_DAYS" != 0 ] && set -- "$@" --renew-days "$ACME_RENEW_DAYS"
   [ -n "$ACME_PROFILE" ] && set -- "$@" --profile "$ACME_PROFILE"
   [ -n "$ACME_PROPAGATION_WAIT" ] && set -- "$@" --dns.propagation.wait "$ACME_PROPAGATION_WAIT"
@@ -58,8 +60,8 @@ run_lego() {
   /lego --log.format text $ACME_LEGO_ARGS run "$@"
 }
 
-if [ -z "$ACME_EMAIL" ] || { [ "$ACME_DNS_PROVIDER" = cloudflare ] && [ -z "$CLOUDFLARE_DNS_API_TOKEN" ]; }; then
-  echo "acme: ACME_EMAIL and CLOUDFLARE_DNS_API_TOKEN are not set in services/acme/.env, so no certificate is requested (see docs/services/acme.md). Idling."
+if [ "$ACME_DNS_PROVIDER" = cloudflare ] && [ -z "$CLOUDFLARE_DNS_API_TOKEN" ]; then
+  echo "acme: CLOUDFLARE_DNS_API_TOKEN is not set in services/acme/.env, so no certificate is requested (see docs/services/acme.md). Idling."
   while true; do touch /tmp/alive; sleep 3600; done
 fi
 

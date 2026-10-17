@@ -21,12 +21,12 @@ Browser ══HTTPS══▶ Cloudflare edge ══encrypted tunnel══▶ clo
 ## Setup
 
 1. Create a Cloudflare API token (dash.cloudflare.com → My Profile → API Tokens → Create Custom Token) with **Zone / DNS / Edit** and **Zone / Zone / Read**, limited to this domain's zone.
-2. Fill `services/acme/.env` (see `.env.example`): `ACME_EMAIL` and `CLOUDFLARE_DNS_API_TOKEN`. Leave `ACME_SERVER=letsencrypt-staging` first.
+2. Fill `services/acme/.env` (see `.env.example`): `CLOUDFLARE_DNS_API_TOKEN` (and optionally `ACME_EMAIL`). Leave `ACME_SERVER=letsencrypt-staging` first.
 3. `uv run homeserver.py prod up acme`, then `docker logs -f acme`. A first issuance takes a minute or two (DNS propagation).
 4. When the staging certificate was written, `acme-reload` restarts `nginx-plain` once so it opens its HTTPS listeners. Check: `openssl x509 -in service_data/data/nginx-plain/certs/fullchain.pem -noout -issuer -ext subjectAltName`.
 5. Switch to production: set `ACME_SERVER=letsencrypt` and `uv run homeserver.py prod up acme`. Each CA has its own state directory under `service_data/data/acme/lego/`, so this requests a fresh certificate; `acme-reload` then reloads nginx-plain.
 
-Until both variables are set the container idles and says so in its log; nothing else changes.
+Until `CLOUDFLARE_DNS_API_TOKEN` is set the container idles and says so in its log; nothing else changes. `ACME_EMAIL` is optional (Let's Encrypt stopped expiry emails in 2025; lego registers without one).
 
 ## How it works
 
