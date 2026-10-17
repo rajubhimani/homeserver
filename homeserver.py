@@ -168,6 +168,10 @@ _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
 RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
+# WG_TUNNEL=off (root .env): this machine doesn't run the WireGuard VPN (a laptop/dev box next to the 24/7 server).
+# wg-easy then behaves like a manual-tier service, prod never asks to start it, and services start without their
+# 10.8.0.1 port mapping. Default on = the server's behaviour.
+WG_TUNNEL = _ROOT_ENV.get("WG_TUNNEL", "on").strip().lower() not in ("off", "false", "no", "0")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
 # The 'homeserver' network's subnet is pinned, never left to Docker. The browser containers have fixed IPs
 # inside it (compose: ipv4_address ${BROWSER_NET}.<n>, derived from this subnet below; the LAN-isolation rules
@@ -255,18 +259,25 @@ _SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
 # Firefly's compose.yml, while Browser Hub is a virtual card for a bundle.
 # Only entries with their own services/<slug>/ directory belong in lifecycle
 # commands; the landing page still renders every entry from services.json.
+def effective_tier(entry: dict) -> str | None:
+    """The tier the lifecycle commands use: services.json's, except wg-easy is manual while WG_TUNNEL=off."""
+    if entry.get("slug") == "wg-easy" and not WG_TUNNEL:
+        return "manual"
+    return entry.get("tier")
+
+
 def is_managed_service(entry: dict) -> bool:
     return bool(entry.get("tier")) and not entry.get("virtual") and (SERVICES_DIR / entry["slug"]).is_dir()
 
 
-SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and is_managed_service(s)]
-SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and is_managed_service(s)]
-SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "daily" and is_managed_service(s)]
-SERVICES_BROWSER = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "browser" and is_managed_service(s)]
-SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "office" and is_managed_service(s)]
-SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "automation-ai" and is_managed_service(s)]
-SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and is_managed_service(s)]
-SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual" and is_managed_service(s)]
+SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "min" and is_managed_service(s)]
+SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "core" and is_managed_service(s)]
+SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "daily" and is_managed_service(s)]
+SERVICES_BROWSER = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "browser" and is_managed_service(s)]
+SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "office" and is_managed_service(s)]
+SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "automation-ai" and is_managed_service(s)]
+SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "extra" and is_managed_service(s)]
+SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "manual" and is_managed_service(s)]
 
 # category/subcategory -> ordered list of slugs, e.g. SERVICE_GROUPS["notes"]
 # or SERVICE_GROUPS["productivity"] — powers 'up group:<name>' (and every
@@ -1255,7 +1266,7 @@ def compose_files(service: str, env: str) -> list[Path]:
         podman_file = d / "compose.podman.yml"
         if podman_file.is_file():
             files.append(podman_file)
-    if env == "prod" and NO_WG_START and not wg_tunnel_up() and not nonlocal_bind_enabled():
+    if env == "prod" and (not WG_TUNNEL or (NO_WG_START and not wg_tunnel_up() and not nonlocal_bind_enabled())):
         no_wg = _without_tunnel_ports(service, files)
         if no_wg:
             files.append(no_wg)
@@ -1284,7 +1295,7 @@ def _without_tunnel_ports(service: str, files: list[Path]) -> Path | None:
         return None
     path = Path(tempfile.gettempdir()) / f"homeserver-no-wg-{service}.yml"
     path.write_text("\n".join(lines) + "\n")
-    info(f"wg-easy is off: {service} starts without its 10.8.0.1 port mapping(s)")
+    info(f"{'WG_TUNNEL=off' if not WG_TUNNEL else 'wg-easy is off'}: {service} starts without its 10.8.0.1 port mapping(s)")
     return path
 
 
@@ -1961,7 +1972,7 @@ def ensure_wg_tunnel_ready(service: str, env: str) -> None:
     containers after a reboot) another service can win that race and fail
     to bind at all. services.json's list order only protects bulk 'up
     <tier>' calls, not a single-service 'up' — so check directly instead."""
-    if env != "prod" or service == "wg-easy" or wg_tunnel_up():
+    if env != "prod" or service == "wg-easy" or not WG_TUNNEL or wg_tunnel_up():
         return
     if NO_WG_START:
         # --no-wg: wg-easy stays as it is (e.g. stopped on purpose). Binding

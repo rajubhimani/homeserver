@@ -329,3 +329,12 @@ wg-easy's database has *two* similarly-named fields per client: `allowed_ips` (w
 ## Fresh-install verification (2026-10-03)
 
 Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: both WireGuard peers restored with the original server keys; start time cut from 60s to 5s. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
+## Per machine: `WG_TUNNEL`
+
+The VPN runs on the 24/7 server, not on every machine that clones this repo. `WG_TUNNEL` in the root `.env` (default `on`, see `.env.example`) says which kind of machine this is:
+
+- `on` (the server): wg-easy is a `core` service and `prod` starts it first whenever `10.8.0.1` is down, as described above.
+- `off` (a laptop or dev box): `homeserver.py` treats wg-easy as `manual` tier, so `up core`/`up all` skip it and `up wg-easy` still works by name. `prod` never asks to start it, and every service starts without its `10.8.0.1` port mapping (a temporary compose override drops it; the `127.0.0.1` ports stay). `compose.prod.yml` files are unchanged, so the same repo works on both machines.
+
+Switching a machine from `off` to `on` needs a restart of the services started while it was off to pick the `10.8.0.1` ports up.

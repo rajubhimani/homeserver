@@ -327,6 +327,7 @@ def test_no_wg_never_starts_wg_easy(monkeypatch):
     stopped on purpose (2026-10-05: AdGuard's start kept bringing it back).
     --no-wg leaves it alone, and warns when the 10.8.0.1 binds can't work."""
     started: list[str] = []
+    monkeypatch.setattr(hs, "WG_TUNNEL", True)
     monkeypatch.setattr(hs, "wg_tunnel_up", lambda: False)
     monkeypatch.setattr(hs, "do_up", lambda service, env, profile, *a, **k: started.append(service) or True)
     monkeypatch.setattr(hs.time, "sleep", lambda s: None)
@@ -354,3 +355,26 @@ def test_no_wg_flag_is_parsed(monkeypatch):
     monkeypatch.setattr(hs.sys, "argv", ["homeserver.py", "prod", "up", "--no-wg"])
     hs.main()  # no service named: prints the usage/error, but the flag is parsed first
     assert hs.NO_WG_START is True
+
+
+def test_wg_tunnel_off_makes_wg_easy_manual_and_skips_the_tunnel_prompt(monkeypatch):
+    """WG_TUNNEL=off (a laptop beside the 24/7 server): wg-easy leaves CORE, prod never starts it, and
+    the 10.8.0.1 port mappings are dropped from every prod start."""
+    entry = {"slug": "wg-easy", "tier": "core"}
+    monkeypatch.setattr(hs, "WG_TUNNEL", True)
+    assert hs.effective_tier(entry) == "core"
+    monkeypatch.setattr(hs, "WG_TUNNEL", False)
+    assert hs.effective_tier(entry) == "manual"
+    assert hs.effective_tier({"slug": "ntfy", "tier": "core"}) == "core"
+
+    started: list[str] = []
+    monkeypatch.setattr(hs, "wg_tunnel_up", lambda: False)
+    monkeypatch.setattr(hs, "do_up", lambda service, env, profile, *a, **k: started.append(service) or True)
+    _REAL_ENSURE_WG("adguard-home", "prod")
+    assert started == []
+
+    dropped: list[str] = []
+    monkeypatch.setattr(hs, "_without_tunnel_ports", lambda service, files: dropped.append(service))
+    hs.compose_files("adguard-home", "prod")
+    hs.compose_files("adguard-home", "dev")
+    assert dropped == ["adguard-home"]

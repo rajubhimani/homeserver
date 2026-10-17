@@ -226,6 +226,7 @@ def fake(tmp_path, monkeypatch):
     monkeypatch.setattr(hs, "BACKUP_ROOT", tmp_path / "backup")
     monkeypatch.setattr(hs, "DB_DUMP_ROOT", tmp_path / "db_dump")
     monkeypatch.setattr(hs, "ensure_wg_tunnel_ready", lambda service, env: None)
+    monkeypatch.setattr(hs, "WG_TUNNEL", True)  # tests must not depend on this machine's root .env
     monkeypatch.setattr(hs, "check_data_mounts", lambda service: True)
     monkeypatch.setattr(hs.time, "sleep", lambda s: None)
     monkeypatch.setattr(subprocess, "run", _no_subprocess)
