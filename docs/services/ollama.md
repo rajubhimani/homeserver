@@ -13,7 +13,7 @@
 uv run homeserver.py dev up ollama
 ```
 
-Downloaded models live in `service_data/cache/ollama` (`MODELS_ROOT` in `.env`), outside `service_data/data/` so multi-GB model files are never swept into a config-only backup snapshot.
+Downloaded models live at `MODELS_ROOT` in `.env`. The `.env.example` default is `service_data/cache/ollama`, but on this host it is set to `/home/raju/ollama-models` on the NVMe SSD, because `service_data/` sits on a spinning HDD and model load time is disk-bound (a special case for Ollama only). Either location is outside `service_data/data/` so multi-GB model files are never swept into a config-only backup snapshot.
 
 ## Using it day to day
 
@@ -30,6 +30,21 @@ The compose healthcheck runs `ollama list || exit 1` inside the container — no
 - **Gated behind Authentik forward-auth** — unlike this stack's other forward-auth services, Ollama has no UI of its own at all (it's a bare API); `ollama.${DOMAIN}` was still given the same gate as soon as it got a public subdomain, so an ungated bare API wasn't the one open door into the stack. See [Ollama in authentik.md](authentik.md#forward-auth-for-other-services-nginx-auth_request) for the mechanism, and [13-auth-posture.md](../13-auth-posture.md) for why this is a different case from the other five gated services.
 - No independent login/user accounts — access control is entirely the Authentik gate at the reverse-proxy layer for external requests; internal requests (Open WebUI and anything else in the stack) are unauthenticated by design, same as any other container-to-container call on the internal network.
 - `MODELS_ROOT` (not `DATA_ROOT`) is where actual state lives — see the secondary-data-root note in the `homeserver-add-service` skill if this path is ever restructured.
+
+## Troubleshooting: `ollama pull` fails with `Error: EOF` (2026-10-18)
+
+**Symptom:** a pull stops right after `pulling manifest` with `Error: EOF` (Open WebUI shows its `/api/pull` call ending after about 2 seconds), every time, for one model while other models pull fine. The registry is reachable and the manifest returns 200 from `curl`, so it is not the network.
+
+**Cause:** an earlier pull of that model was interrupted (killed, container restarted, or several pulls started at once). It left `*-partial*` files in `${MODELS_ROOT}/models/blobs/`: a sparse placeholder the size of the whole blob (5.5 GB for `gemma4:e4b`) plus per-part tracker files. Every retry tries to resume from that broken state and ends in EOF. A fresh Ollama container with no partials pulled the same model without trouble, which is how this was isolated.
+
+**Fix:** stop any running pull, delete the partial files, and pull again:
+
+```bash
+docker exec ollama sh -c 'pkill -f "ollama pull"; rm -f /root/.ollama/models/blobs/*-partial*'
+docker exec ollama ollama pull gemma4:e4b
+```
+
+Only `*-partial*` files are removed. Completed blobs and manifests are untouched. Pull one model at a time, and let it finish before starting the next.
 
 ## Reverse proxy: no buffering (2026-10-11)
 
