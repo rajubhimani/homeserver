@@ -30,7 +30,7 @@ services:
   # first certificate (nginx-plain only opens its HTTPS listeners at startup). It talks to the Docker
   # socket and only ever touches the nginx-plain container, like cloudflared-watchdog.
   acme-reload:
-    image: curlimages/curl:8.22.0
+    image: curlimages/curl:8.23.0
     container_name: acme-reload
     restart: unless-stopped
     # curlimages/curl runs as a non-root user that can't use the Docker socket; see cloudflared-watchdog.

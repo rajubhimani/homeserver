@@ -24,7 +24,7 @@ services:
   # (or, without an API token, probes a tunnelled hostname for Cloudflare's 530) and
   # restarts cloudflared when the tunnel is down or degraded.
   cloudflared-watchdog:
-    image: curlimages/curl:8.22.0
+    image: curlimages/curl:8.23.0
     container_name: cloudflared-watchdog
     restart: unless-stopped
     # curlimages/curl drops to a non-root user by default, which can't reach the
