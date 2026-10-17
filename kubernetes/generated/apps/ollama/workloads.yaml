@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: ollama
-        image: ollama/ollama:0.35.1
+        image: ollama/ollama:0.40.6
         envFrom:
         - configMapRef:
             name: homeserver-root
