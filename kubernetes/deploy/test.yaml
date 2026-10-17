@@ -4,7 +4,7 @@
 # file the same way homeserver.py up/down picks services.
 #
 # repo/revision: the git repo and branch ArgoCD follows.
-# running: targets that run, as homeserver.py takes them (min, core, daily,
+# running: targets that run, as homeserver.py takes them (min, core, monitoring, daily,
 #   browser, office, automation-ai, all, group:<name>, or service names).
 #   Every other ported service is deployed stopped: its config, volumes and
 #   databases exist, nothing runs. Shared Postgres/MariaDB start when a

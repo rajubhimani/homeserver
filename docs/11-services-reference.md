@@ -15,27 +15,31 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 | Tier | Command | Services |
 | --- | --- | --- |
 | `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, acme, nginx-plain, portainer, docs, landing |
-| `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, guacamole, it-tools, mailpit |
-| `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
-| `browser` | `uv run homeserver.py dev up browser` | min + core + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |
-| `office` | `uv run homeserver.py dev up office` | min + core + daily + browser + every office service below — **opt-in, never implied by `up browser`** |
-| `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + daily + browser + office + every automation/AI service below — **opt-in, never implied by `up office`** |
-| `extra` | `uv run homeserver.py dev up extra` | min + core + daily + browser + office + automation-ai + every extra service below — **opt-in, never implied by `up automation-ai`** |
-| `all` | `uv run homeserver.py dev up all` | core + daily + browser + office + automation-ai + every extra service (manual-only services excluded) |
+| `core` | `uv run homeserver.py dev up core` | min + adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, guacamole, it-tools, mailpit |
+| `monitoring` | `uv run homeserver.py dev up monitoring` | min + core + ntfy, uptime-kuma, observability, dozzle — **opt-in, never implied by `up core`** |
+| `daily` | `uv run homeserver.py dev up daily` | min + core + monitoring + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
+| `browser` | `uv run homeserver.py dev up browser` | min + core + monitoring + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |
+| `office` | `uv run homeserver.py dev up office` | min + core + monitoring + daily + browser + every office service below — **opt-in, never implied by `up browser`** |
+| `automation-ai` | `uv run homeserver.py dev up automation-ai` | min + core + monitoring + daily + browser + office + every automation/AI service below — **opt-in, never implied by `up office`** |
+| `extra` | `uv run homeserver.py dev up extra` | min + core + monitoring + daily + browser + office + automation-ai + every extra service below — **opt-in, never implied by `up automation-ai`** |
+| `all` | `uv run homeserver.py dev up all` | core + monitoring + daily + browser + office + automation-ai + every extra service (manual-only services excluded) |
 
-**`up core`/`up daily`/`up office`/`up automation-ai`/`up extra` bootstrap, they don't
+**`up core`/`up monitoring`/`up daily`/`up office`/`up automation-ai`/`up extra` bootstrap, they don't
 restart**: each checks which of its lower tier(s) are already running and
 only starts what's missing — an already-running lower tier is left
 untouched, not force-recreated.
 
 **`down` is tier-scoped, not cascading**: `down core` stops only core (`min`
-stays up), `down daily` stops only daily (`min`/`core` stay up), `down
+stays up), `down monitoring` stops only monitoring (`min`/`core` stay up), `down daily` stops only daily (`min`/`core`/`monitoring` stay up), `down
 office` stops only office (`min`/`core`/`daily` stay up), `down
 automation-ai` stops only automation-ai (`min`/`core`/`daily`/`office` stay
 up); `down extra` stops only extra. Every `down` command stops every optional Compose-profile container for
 the selected service(s), too (such as GitLab's CI runner). `down all` is the
 one command that stops the entire stack, in reverse order — no list to
 maintain.
+
+**Monitoring services** (alerting, uptime, metrics and logs — started with `up monitoring`/`up all` or individually):
+ntfy, uptime-kuma, observability, dozzle.
 
 **Daily services** (regular-use apps that aren't core infra — started with `up daily`/`up all` or individually):
 coolify, code-server, excalidraw, karakeep, homebox, silverbullet, syncthing, trilium,
@@ -52,7 +56,7 @@ brave, chromium, firefox, mullvad-browser, librewolf, zen, helium, chrome, edge,
 vivaldi, browser (the hub's virtual card).
 
 **Extra services** (started with `up extra`/`up all` or individually):
-dockge, dozzle,
+dockge,
 paperless, bookstack, audiobookshelf, mealie,
 supabase, nocodb, outline, penpot,
 documenso, invoiceshelf, erpnext, ghostfolio, openproject, mattermost,
@@ -72,7 +76,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Portainer | `portainer` | 9000 / 9445 | 9000 / 9443 | min |
 | Docs | `docs` | 8144 | 80 | min |
 | Landing Page | `landing` | 8080 | 80 | min |
-| ntfy | `ntfy` | 8118 | 80 | core |
+| ntfy | `ntfy` | 8118 | 80 | monitoring |
 | AdGuard Home | `adguard-home` | 8123 (web UI) / 53 (DNS, LAN-wide) | 3000 / 53 | core |
 | Authentik | `authentik-server` | 8088 / 9444 | 9000 / 9443 | core |
 | Vaultwarden | `vaultwarden` | 8200 | 80 | core |
@@ -89,9 +93,9 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Guacamole | `guacamole` | 8107 | 8080 | core |
 | IT-Tools | `it-tools` | 8119 | 80 | core |
 | Mailpit | `mailpit` | 8140 | 8025 | core |
-| Observability (Grafana) | `grafana` | 8134 | 3000 | core |
+| Observability (Grafana) | `grafana` | 8134 | 3000 | monitoring |
 | Observability (Prometheus) | `prometheus` | 8135 | 9090 | core |
-| Uptime Kuma | `uptime-kuma` | 3001 | 3001 | core |
+| Uptime Kuma | `uptime-kuma` | 3001 | 3001 | monitoring |
 | Plausible | `plausible` | 8130 | 8000 | automation-ai |
 | Coolify | `coolify` | 8132 | 8080 | daily |
 | Excalidraw | `excalidraw` | 8116 | 80 | daily |
@@ -127,7 +131,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Edge | `edge` | 8160 | 3000 | browser |
 | Vivaldi | `vivaldi` | 8161 | 3000 | browser |
 | Dockge | `dockge` | 5001 | 5001 | extra |
-| Dozzle | `dozzle` | 9999 | 8080 | extra |
+| Dozzle | `dozzle` | 9999 | 8080 | monitoring |
 | Paperless-ngx | `paperless` | 8010 | 8000 | extra |
 | BookStack | `bookstack` | 8115 | 80 | extra |
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
@@ -185,7 +189,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `beszel.yourdomain.com` | `beszel` | `8090` | min |
 | `portainer.yourdomain.com` | `portainer` | `9000` | min |
 | `docs.yourdomain.com` | `docs` | `80` | min |
-| `ntfy.yourdomain.com` | `ntfy` | `80` | core |
+| `ntfy.yourdomain.com` | `ntfy` | `80` | monitoring |
 | `nextcloud.yourdomain.com` | `nextcloud` | `80` | core |
 | `onlyoffice.yourdomain.com` | `onlyoffice` | `80` | core |
 | `whiteboard.yourdomain.com` | `whiteboard` | `3002` | core |
@@ -202,10 +206,10 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `mailpit.yourdomain.com` | `mailpit` | `8025` | core |
 | `atuin.yourdomain.com` | `atuin` | `8888` | daily |
 | `plausible.yourdomain.com` | `plausible` | `8000` | automation-ai |
-| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | core |
+| `uptime-kuma.yourdomain.com` | `uptime-kuma` | `3001` | monitoring |
 | `status.yourdomain.com` | `landing` | `80` | min |
 | `www.yourdomain.com` | static company page (`services/nginx-plain/html/company`) | — | min |
-| `grafana.yourdomain.com` | `grafana` | `3000` | core |
+| `grafana.yourdomain.com` | `grafana` | `3000` | monitoring |
 | `adguard-home.yourdomain.com` | `adguard-home` | `3000` | core |
 | `stirling-pdf-lite.yourdomain.com` | `stirling-pdf-lite` | `8080` | office |
 | `stirling-pdf.yourdomain.com` | `stirling-pdf` | `8080` | office |
@@ -231,7 +235,7 @@ UI at `http://<server>:8181`. Add proxy hosts manually through the web interface
 | `listmonk.yourdomain.com` | `listmonk` | `9000` | office |
 | `calcom.yourdomain.com` | `calcom` | `3000` | office |
 | `coolify.yourdomain.com` | `coolify` | `8080` | daily |
-| `dozzle.yourdomain.com` | `dozzle` | `8080` | extra |
+| `dozzle.yourdomain.com` | `dozzle` | `8080` | monitoring |
 | `dockge.yourdomain.com` | `dockge` | `5001` | extra |
 | `paperless.yourdomain.com` | `paperless` | `8000` | extra |
 | `mealie.yourdomain.com` | `mealie` | `9000` | extra |

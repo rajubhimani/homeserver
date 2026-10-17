@@ -6,7 +6,7 @@ re-run -- skips anything that already exists by name.
 Default mode only covers currently-running containers (docker ps), all
 enabled. --all instead discovers every container defined across every
 services/*/compose.yml -- including ones not currently started -- and
-creates a monitor for each: enabled for min/core tier (the always-on
+creates a monitor for each: enabled for min/core/monitoring tier (the always-on
 services), disabled for daily/browser/office/automation-ai/extra/manual (opt-in
 tiers, so a stopped-on-purpose service doesn't trigger false down alerts) --
 flip a monitor's Active toggle by hand later if you start using one of those
@@ -57,7 +57,7 @@ NOTIFICATION_NAME = "ntfy-homeserver-alerts"
 NTFY_SERVER_URL = "http://ntfy"
 NTFY_TOPIC = "homeserver-alerts"
 
-ALWAYS_ON_TIERS = {"min", "core"}
+ALWAYS_ON_TIERS = {"min", "core", "monitoring"}
 
 # Monitoring itself is circular -- if uptime-kuma is down, it can't alert
 # about itself anyway.

@@ -62,7 +62,7 @@
     },
     {
       "slug": "ntfy",
-      "tier": "core",
+      "tier": "monitoring",
       "name": "ntfy",
       "category": "system",
       "icon": "yellow",
@@ -72,7 +72,7 @@
     },
     {
       "slug": "uptime-kuma",
-      "tier": "core",
+      "tier": "monitoring",
       "name": "Uptime Kuma",
       "category": "system",
       "icon": "yellow",
@@ -729,7 +729,7 @@
     },
     {
       "slug": "observability",
-      "tier": "extra",
+      "tier": "monitoring",
       "name": "Grafana",
       "category": "system",
       "icon": "orange",
@@ -749,7 +749,7 @@
     },
     {
       "slug": "dozzle",
-      "tier": "extra",
+      "tier": "monitoring",
       "name": "Dozzle",
       "category": "system",
       "icon": "gray",

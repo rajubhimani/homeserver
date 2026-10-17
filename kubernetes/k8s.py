@@ -2,7 +2,7 @@
 """Start and stop services on Kubernetes the GitOps way: edit the running list
 in kubernetes/deploy/<env>.yaml, which ArgoCD applies from git.
 
-    uv run kubernetes/k8s.py up     <min|core|daily|browser|office|automation-ai|all|group:<name>|service...> [--env E]
+    uv run kubernetes/k8s.py up     <min|core|monitoring|daily|browser|office|automation-ai|all|group:<name>|service...> [--env E]
     uv run kubernetes/k8s.py down   <same targets> [--env E]
     uv run kubernetes/k8s.py status [targets] [--env E]
 

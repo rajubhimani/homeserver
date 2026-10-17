@@ -20,7 +20,7 @@ def downs(fake):
 
 
 def test_tier_lists_are_disjoint_and_cover_every_managed_service():
-    lists = [hs.SERVICES_MIN, hs.SERVICES_CORE, hs.SERVICES_DAILY, hs.SERVICES_BROWSER,
+    lists = [hs.SERVICES_MIN, hs.SERVICES_CORE, hs.SERVICES_MONITORING, hs.SERVICES_DAILY, hs.SERVICES_BROWSER,
              hs.SERVICES_OFFICE, hs.SERVICES_AUTOMATION_AI, hs.SERVICES_EXTRA, hs.SERVICES_MANUAL]
     flat = [s for lst in lists for s in lst]
     assert len(flat) == len(set(flat)), "a service is in two tiers"
@@ -378,3 +378,25 @@ def test_wg_tunnel_off_makes_wg_easy_manual_and_skips_the_tunnel_prompt(monkeypa
     hs.compose_files("adguard-home", "prod")
     hs.compose_files("adguard-home", "dev")
     assert dropped == ["adguard-home"]
+
+
+def test_monitoring_tier_sits_between_core_and_daily(fake, cli):
+    """up monitoring bootstraps min+core only; up core never starts it; up daily bootstraps it;
+    down monitoring stops only monitoring."""
+    assert hs.SERVICES_MONITORING, "no service is in the monitoring tier"
+    cli("prod", "up", "core")
+    assert not set(ups(fake)) & set(hs.SERVICES_MONITORING)
+
+    fake.events.clear(); fake.running.clear()
+    cli("prod", "up", "monitoring")
+    started = set(ups(fake))
+    assert set(hs.SERVICES_MONITORING) <= started
+    assert not started & set(hs.SERVICES_DAILY)
+
+    fake.events.clear(); fake.running.clear()
+    cli("prod", "up", "daily")
+    assert set(hs.SERVICES_MONITORING + hs.SERVICES_DAILY) <= set(ups(fake))
+
+    fake.events.clear(); fake.running |= set(hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING)
+    cli("prod", "down", "monitoring", "--no-backup")
+    assert set(downs(fake)) == set(hs.SERVICES_MONITORING)

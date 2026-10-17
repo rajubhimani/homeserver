@@ -17,8 +17,8 @@ from conftest import each
 REPO = hs.BASE_DIR
 SERVICES = json.loads((REPO / "services.json").read_text())["services"]
 BY_SLUG = {s["slug"]: s for s in SERVICES}
-KNOWN_TIERS = {"min", "core", "daily", "browser", "office", "automation-ai", "extra", "manual", "shared"}
-ABOVE_CORE = {"daily", "browser", "office", "automation-ai", "extra", "manual"}
+KNOWN_TIERS = {"min", "core", "monitoring", "daily", "browser", "office", "automation-ai", "extra", "manual", "shared"}
+ABOVE_CORE = {"monitoring", "daily", "browser", "office", "automation-ai", "extra", "manual"}
 INJECTED_VARS = {"DOMAIN", "DATA_ROOT", "DOCKER_SOCKET", "HOMESERVER_SUBNET", "BROWSER_NET"}  # set by homeserver.py's compose_env / root .env
 
 
@@ -268,7 +268,7 @@ def test_claude_md_tier_lists_match_services_json():
     if not claude.is_file():
         pytest.skip("CLAUDE.md is gitignored/local-only")
     text = claude.read_text()
-    tiers = {"SERVICES_MIN": "min", "SERVICES_CORE": "core", "SERVICES_DAILY": "daily", "SERVICES_OFFICE": "office",
+    tiers = {"SERVICES_MIN": "min", "SERVICES_CORE": "core", "SERVICES_MONITORING": "monitoring", "SERVICES_DAILY": "daily", "SERVICES_OFFICE": "office",
              "SERVICES_AUTOMATION_AI": "automation-ai", "SERVICES_EXTRA": "extra"}
     for key, tier in tiers.items():
         m = re.search(rf"\*\*{key}\*\*[^:]*:\s*(.+)", text)

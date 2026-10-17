@@ -4,7 +4,7 @@
 # file the same way homeserver.py up/down picks services.
 #
 # repo/revision: the git repo and branch ArgoCD follows.
-# running: targets that run, as homeserver.py takes them (min, core, daily,
+# running: targets that run, as homeserver.py takes them (min, core, monitoring, daily,
 #   browser, office, automation-ai, all, group:<name>, or service names).
 #   Every other ported service is deployed stopped: its config, volumes and
 #   databases exist, nothing runs. Shared Postgres/MariaDB start when a
@@ -25,7 +25,7 @@ watchdog: active
 #   changes in the cluster); false = press Sync in the ArgoCD UI.
 repo: https://github.com/rajubhimani/homeserver.git
 revision: feature/k8s-generated
-running: [min, core, miniflux, bookstack, airflow, temporal, dagster, observability, cloudflared]
+running: [min, core, monitoring, miniflux, bookstack, airflow, temporal, dagster, observability, cloudflared]
 stopped: []
 auto_sync: true
 # backup: where backups go (docs/17 "Backups"). endpoint: any S3 API; the

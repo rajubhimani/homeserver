@@ -15,17 +15,19 @@ import homeserver as hs  # noqa: E402
 TIERS = {
     "min": lambda: hs.SERVICES_MIN,
     "core": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE,
-    "daily": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_DAILY,
-    "browser": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_DAILY + hs.SERVICES_BROWSER,
-    "office": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_DAILY + hs.SERVICES_BROWSER + hs.SERVICES_OFFICE,
-    "automation-ai": lambda: (hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_DAILY + hs.SERVICES_BROWSER
+    "monitoring": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING,
+    "daily": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING + hs.SERVICES_DAILY,
+    "browser": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING + hs.SERVICES_DAILY + hs.SERVICES_BROWSER,
+    "office": lambda: hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING + hs.SERVICES_DAILY + hs.SERVICES_BROWSER + hs.SERVICES_OFFICE,
+    "automation-ai": lambda: (hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING + hs.SERVICES_DAILY + hs.SERVICES_BROWSER
                               + hs.SERVICES_OFFICE + hs.SERVICES_AUTOMATION_AI),
-    "all": lambda: (hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_DAILY + hs.SERVICES_BROWSER + hs.SERVICES_OFFICE
+    "all": lambda: (hs.SERVICES_MIN + hs.SERVICES_CORE + hs.SERVICES_MONITORING + hs.SERVICES_DAILY + hs.SERVICES_BROWSER + hs.SERVICES_OFFICE
                     + hs.SERVICES_AUTOMATION_AI + hs.SERVICES_EXTRA),
 }
 # 'down <tier>' stops only that tier (homeserver.py semantics); 'down all' everything.
 DOWN_ONLY = {
-    "min": lambda: hs.SERVICES_MIN, "core": lambda: hs.SERVICES_CORE, "daily": lambda: hs.SERVICES_DAILY,
+    "min": lambda: hs.SERVICES_MIN, "core": lambda: hs.SERVICES_CORE, "monitoring": lambda: hs.SERVICES_MONITORING,
+    "daily": lambda: hs.SERVICES_DAILY,
     "browser": lambda: hs.SERVICES_BROWSER, "office": lambda: hs.SERVICES_OFFICE,
     "automation-ai": lambda: hs.SERVICES_AUTOMATION_AI, "all": TIERS["all"],
 }
