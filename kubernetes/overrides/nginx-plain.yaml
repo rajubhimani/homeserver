@@ -6,6 +6,11 @@ sites:
   browser-hub:
     host: browser.${DOMAIN}
     html: html/browser-hub
+  # The public company page on www (static); the landing dashboard moved to status.${DOMAIN}.
+  # The bare domain -> www redirect is generated for it (nginx_site_routes).
+  company:
+    host: www.${DOMAIN}
+    html: html/company
 
 # Upstreams nginx-plain reaches by address (host-network containers): the
 # container each address means, so their routes are generated too.

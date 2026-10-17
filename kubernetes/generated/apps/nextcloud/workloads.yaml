@@ -23,8 +23,7 @@ spec:
         homeserver/service: nextcloud
         app.kubernetes.io/name: nextcloud
       annotations:
-        homeserver/config-sha256: 0629578c31a926735292ddcbdd73753145953ad7fe6a152795ecc32894efa0b4
-        backup.velero.io/backup-volumes-excludes: v-nextcloud-host-nextcloud-os-iso
+        homeserver/config-sha256: d0db6b4b76c8bb6363004c22125debb1900025259f1d6b41c3b06e9b0b8098d5
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -50,7 +49,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: nextcloud
-        image: nextcloud:34.0.4
+        image: nextcloud:35.0.2
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -114,7 +113,7 @@ spec:
         - name: v-nextcloud-nextcloud-config
           mountPath: /var/www/html/config
         - name: files
-          mountPath: /var/www/html/config/db.config.php
+          mountPath: /usr/src/homeserver/db.config.php
           subPath: services-nextcloud-config-db-config-php
           readOnly: true
         - name: files
@@ -128,10 +127,6 @@ spec:
         - name: d-nextcloud-before-starting
           mountPath: /docker-entrypoint-hooks.d/before-starting
           readOnly: true
-        - name: v-nextcloud-user-data
-          mountPath: /mnt/seagate
-        - name: v-nextcloud-host-nextcloud-os-iso
-          mountPath: /mnt/os-iso
         securityContext:
           allowPrivilegeEscalation: false
       volumes:
@@ -154,6 +149,9 @@ spec:
           - key: 00-fix-permissions-sh
             path: 00-fix-permissions.sh
             mode: 493
+          - key: 00-install-db-config-sh
+            path: 00-install-db-config.sh
+            mode: 493
           - key: 00-sync-php-sh
             path: 00-sync-php.sh
             mode: 493
@@ -163,12 +161,6 @@ spec:
           - key: 02-configure-proxy-sh
             path: 02-configure-proxy.sh
             mode: 493
-      - name: v-nextcloud-user-data
-        persistentVolumeClaim:
-          claimName: nextcloud-user-data
-      - name: v-nextcloud-host-nextcloud-os-iso
-        persistentVolumeClaim:
-          claimName: nextcloud-host-nextcloud-os-iso
       - name: files
         configMap:
           name: nextcloud-files
@@ -204,9 +196,6 @@ spec:
         app.kubernetes.io/part-of: homeserver
         homeserver/service: nextcloud
         app.kubernetes.io/name: nextcloud-cron
-      annotations:
-        homeserver/config-sha256: 9f3966ebb99087d3f389aafa7c6f7e0abde63107d1bf2dc54d678b8114d74ca7
-        backup.velero.io/backup-volumes-excludes: v-nextcloud-host-nextcloud-os-iso
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -224,12 +213,12 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: nextcloud-cron
-        image: nextcloud:34.0.4
+        image: nextcloud:35.0.2
         command:
         - /bin/sh
         - -c
         - until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php;
-          runuser -u www-data -- php /var/www/html/occ files:scan --all; sleep $(CRON_SCAN_INTERVAL_SECONDS); done
+          sleep $(CRON_INTERVAL_SECONDS); done
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -249,17 +238,10 @@ spec:
           mountPath: /var/www/html
         - name: v-nextcloud-nextcloud-config
           mountPath: /var/www/html/config
-        - name: files
-          mountPath: /var/www/html/config/db.config.php
-          subPath: services-nextcloud-config-db-config-php
-          readOnly: true
         - name: v-nextcloud-nextcloud-data
           mountPath: /var/www/html/data
         - name: v-nextcloud-nextcloud-custom-apps
           mountPath: /var/www/html/custom_apps
-        - name: v-nextcloud-host-nextcloud-os-iso
-          mountPath: /mnt/os-iso
-          readOnly: true
         securityContext:
           allowPrivilegeEscalation: false
       volumes:
@@ -275,16 +257,6 @@ spec:
       - name: v-nextcloud-nextcloud-custom-apps
         persistentVolumeClaim:
           claimName: nextcloud-nextcloud-custom-apps
-      - name: v-nextcloud-host-nextcloud-os-iso
-        persistentVolumeClaim:
-          claimName: nextcloud-host-nextcloud-os-iso
-      - name: files
-        configMap:
-          name: nextcloud-cron-files
-          items:
-          - key: services-nextcloud-config-db-config-php
-            path: services-nextcloud-config-db-config-php
-            mode: 420
   strategy:
     type: Recreate
 ---

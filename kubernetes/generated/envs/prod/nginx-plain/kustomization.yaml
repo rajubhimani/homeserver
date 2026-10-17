@@ -12,5 +12,9 @@ patches:
   patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
 - target:
     kind: Deployment
+    name: company
+  patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"
+- target:
+    kind: Deployment
     name: nginx-plain
   patch: "- op: replace\n  path: /spec/replicas\n  value: 1\n"

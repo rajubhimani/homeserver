@@ -12,7 +12,6 @@ spec:
   - name: homeserver-gateway
     namespace: infra
   hostnames:
-  - status.prajnatech.in
   - uptime-kuma.prajnatech.in
   rules:
   - backendRefs:

@@ -964,18 +964,24 @@ def route_objects(svc: str, domain: str) -> list[dict]:
         # nginx-plain's redirect-only blocks that point at this container's
         # hostnames -> Gateway API's standard RequestRedirect filter (path and
         # query are kept, like $request_uri).
-        own = {h for h, _ in routes[up]}
-        redirects = [(f, to, code) for f, to, code in nginx_redirects() if to in own]
-        if redirects:
-            out.append({
-                "apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
-                "metadata": {"name": f"{c}-redirect", "labels": {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}},
-                "spec": {"parentRefs": [GATEWAY],
-                         "hostnames": sorted({f.replace("${DOMAIN}", domain) for f, _, _ in redirects}),
-                         "rules": [{"filters": [{"type": "RequestRedirect", "requestRedirect": {
-                             "scheme": "https", "hostname": redirects[0][1].replace("${DOMAIN}", domain),
-                             "statusCode": redirects[0][2]}}]}]}})
+        out += redirect_routes(c, svc, {h for h, _ in routes[up]}, domain)
     return out
+
+
+def redirect_routes(name: str, svc: str, own: set[str], domain: str) -> list[dict]:
+    """nginx-plain's redirect-only blocks that point at `own` hostnames -> Gateway
+    API's standard RequestRedirect filter (path and query are kept, like $request_uri)."""
+    redirects = [(f, to, code) for f, to, code in nginx_redirects() if to in own]
+    if not redirects:
+        return []
+    return [{
+        "apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute",
+        "metadata": {"name": f"{name}-redirect", "labels": {"app.kubernetes.io/part-of": "homeserver", "homeserver/service": svc}},
+        "spec": {"parentRefs": [GATEWAY],
+                 "hostnames": sorted({f.replace("${DOMAIN}", domain) for f, _, _ in redirects}),
+                 "rules": [{"filters": [{"type": "RequestRedirect", "requestRedirect": {
+                     "scheme": "https", "hostname": redirects[0][1].replace("${DOMAIN}", domain),
+                     "statusCode": redirects[0][2]}}]}]}}]
 
 
 
@@ -1452,6 +1458,7 @@ def nginx_site_routes(domain: str) -> list[dict]:
     out = []
     for site, conf in (load_overrides("nginx-plain").get("sites") or {}).items():
         out += http_route(site, "nginx-plain", [conf["host"]], {"name": site, "port": 80}, domain)
+        out += redirect_routes(site, "nginx-plain", {conf["host"]}, domain)
     return out
 
 

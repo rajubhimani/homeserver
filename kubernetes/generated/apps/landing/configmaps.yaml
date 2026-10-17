@@ -41,6 +41,10 @@ data:
           "tier": "min"
         },
         {
+          "slug": "acme",
+          "tier": "min"
+        },
+        {
           "slug": "nginx-plain",
           "tier": "min"
         },
@@ -1632,6 +1636,8 @@ data:
           if (s.subcategory) card.dataset.subcategory = s.subcategory;
 
           const sub = s.sub || s.slug;
+          card.dataset.sub = sub;
+          if (s.path) card.dataset.path = s.path;
           // s.path is a subpath under THIS card's own subdomain (sub.${DOMAIN}),
           // not the bare apex domain -- Browser Hub's individual browsers live
           // at browser.${DOMAIN}/<path>/ (see docs/services/browser-hub.md),
@@ -1767,8 +1773,19 @@ data:
         }
 
         async function pingHealth(service) {
+          return pingUrl(`/health/${service}`);
+        }
+
+        // Public-URL check: nginx requests https://<sub>.DOMAIN and passes the real
+        // status back (nginx.conf /ping/). Used when the local /health/ check fails,
+        // so a service running on another server still shows online.
+        async function pingPublic(sub) {
+          return pingUrl(`/ping/${sub}`);
+        }
+
+        async function pingUrl(path) {
           try {
-            const res = await fetch(`/health/${service}`, { signal: AbortSignal.timeout(6000), redirect: 'manual', cache: 'no-store' });
+            const res = await fetch(path, { signal: AbortSignal.timeout(6000), redirect: 'manual', cache: 'no-store' });
             return res.status === 0 || (res.status >= 200 && res.status < 500);
           } catch {
             return false;
@@ -1785,8 +1802,16 @@ data:
           // the main instance OR any test instance is up).
           const testLinks = Array.from(card.querySelectorAll('.card-link-secondary[data-testsub]'));
 
-          const [mainUp, testResults] = await Promise.all([
-            pingHealth(service),
+          // Local (same Docker network) first; if that fails, the public URL. Cards
+          // with a subpath (individual browsers under the Browser Hub's subdomain)
+          // skip the public check: the hub being up says nothing about one browser.
+          const checkMain = async () => {
+            if (await pingHealth(service)) return 'local';
+            if (!card.dataset.path && await pingPublic(card.dataset.sub)) return 'public';
+            return false;
+          };
+          const [mainVia, testResults] = await Promise.all([
+            checkMain(),
             Promise.all(testLinks.map(link => pingHealth(link.dataset.testhealth || link.dataset.testsub))),
           ]);
 
@@ -1795,7 +1820,10 @@ data:
             if (dot) dot.className = `test-dot ${testResults[i] ? 'online' : 'offline'}`;
           });
 
+          const mainUp = !!mainVia;
           const up = mainUp || testResults.some(Boolean);
+          badge.title = mainVia === 'local' ? 'Reachable on this host'
+            : mainVia === 'public' ? 'Reachable via its public URL (another server)' : '';
 
           badge.className = `status ${up ? 'online' : 'offline'}`;
           text.textContent = up ? 'online' : 'offline';
@@ -1843,6 +1871,22 @@ data:
             add_header Cache-Control "no-store, no-cache, must-revalidate";
             add_header Pragma "no-cache";
             expires 0;
+        }
+
+        # Public-URL check for the landing page's "online" badge: the page calls
+        # /ping/<subdomain> when the local /health/<service> check fails, so a
+        # service that runs on ANOTHER server (not on this Docker network) still
+        # shows online. Requests https://<subdomain>.DOMAIN and passes the real
+        # status through, so Cloudflare's 530 / nginx-plain's 502 read as offline
+        # (a browser's no-cors fetch can't tell those from a 200). The subdomain is
+        # restricted to [a-z0-9-], so this can only ever reach *.DOMAIN.
+        location ~ ^/ping/(?<ping_sub>[a-z0-9-]+)$ {
+            set $ping_host $ping_sub.DOMAIN_PLACEHOLDER;
+            proxy_pass https://$ping_host/;
+            proxy_ssl_server_name on;
+            proxy_set_header Host $ping_host;
+            proxy_connect_timeout 3s;
+            proxy_read_timeout 5s;
         }
 
         location /health/immich {

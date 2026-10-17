@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: immich-ml
-        image: ghcr.io/immich-app/immich-machine-learning:v3.3.1
+        image: ghcr.io/immich-app/immich-machine-learning:v3.3.3
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -175,7 +175,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: immich-server
-        image: ghcr.io/immich-app/immich-server:v3.3.1
+        image: ghcr.io/immich-app/immich-server:v3.3.3
         envFrom:
         - configMapRef:
             name: homeserver-root

@@ -19,6 +19,22 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: company
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: nginx-plain
+    app.kubernetes.io/name: company
+spec:
+  selector:
+    app.kubernetes.io/name: company
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: nginx-plain
   labels:
     app.kubernetes.io/part-of: homeserver

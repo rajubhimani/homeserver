@@ -23,7 +23,7 @@ spec:
         homeserver/service: landing
         app.kubernetes.io/name: landing
       annotations:
-        homeserver/config-sha256: 52b5ecfa080d7a1d3dc3e3159e05b5916a30e5c3d8c3d827ab93c30a4042e19c
+        homeserver/config-sha256: b312a2191a37175bea4ace4a654188aeabefa03dccaafa9ea9cac5c88974a5e0
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false

@@ -40,6 +40,13 @@ spec:
     - protocol: TCP
       port: 9443
   - from:
+    - podSelector:
+        matchLabels:
+          homeserver/service: nginx-plain
+    ports:
+    - protocol: TCP
+      port: 9000
+  - from:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: cnpg-system
