@@ -68,6 +68,8 @@ The Forward Hostname is the Docker **container name** — NPM resolves via the `
 
 > No SSL certs in NPM when using Cloudflare — Cloudflare handles TLS at the edge.
 > Adding certs here causes double-encryption.
+>
+> `nginx-plain` is different: the [acme](services/acme.md) service can give it a Let's Encrypt wildcard certificate and it then also listens on 443, so the tunnel can re-encrypt to it and LAN/VPN clients get a trusted padlock. Cloudflare still terminates the visitor's HTTPS at its edge either way.
 
 → See [11 — Services Reference](11-services-reference.md) for the full proxy host table.
 

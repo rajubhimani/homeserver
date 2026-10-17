@@ -11,6 +11,8 @@ services:
     volumes:
       - ./templates:/etc/nginx/templates:ro
       - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
+      # Turns on the HTTPS listeners when the acme service has put a certificate in certs/
+      - ./docker-entrypoint.d/30-enable-tls.sh:/docker-entrypoint.d/30-enable-tls.sh:ro
       - ./html/browser-hub:/usr/share/nginx/html/browser-hub:ro
       - ./html/company:/usr/share/nginx/html/company:ro
     healthcheck:

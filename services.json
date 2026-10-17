@@ -30,6 +30,10 @@
       "tier": "min"
     },
     {
+      "slug": "acme",
+      "tier": "min"
+    },
+    {
       "slug": "nginx-plain",
       "tier": "min"
     },

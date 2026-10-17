@@ -43,6 +43,7 @@ IMAGE_HEALTHCHECK = {
 NO_HEALTHCHECK = {
     "adguard-watchdog": "is itself a monitor (curl loop restarting adguard-home)",
     "cloudflared-watchdog": "is itself a monitor",
+    "acme-reload": "is itself a monitor (curl loop reloading nginx-plain when the certificate changes)",
     "appflowy-web": "upstream AppFlowy-Cloud compose defines none; static frontend behind appflowy-nginx",
     "appflowy-admin": "upstream AppFlowy-Cloud compose defines none; served under a sub-path behind appflowy-nginx",
     "erpnext-queue-short": "background worker, no listener or health command",

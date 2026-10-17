@@ -1,0 +1,50 @@
+services:
+  # Issues and renews the wildcard certificate (*.DOMAIN + DOMAIN) with lego and DNS-01.
+  # See acme.sh. Idles, requesting nothing, until ACME_EMAIL and CLOUDFLARE_DNS_API_TOKEN are set.
+  acme:
+    image: goacme/lego:v5.5.2
+    container_name: acme
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DOMAIN: ${DOMAIN}
+    # The image's entrypoint is the lego binary itself (/lego), so replace it with the loop.
+    entrypoint: ["/bin/sh", "/acme.sh"]
+    volumes:
+      - ./acme.sh:/acme.sh:ro
+      # lego's account key and certificates, one directory per CA (the binary lives at /lego, hence /data)
+      - ${DATA_ROOT}/lego:/data
+      # nginx-plain's certificate directory: fullchain.pem + privkey.pem land here
+      - ${CERTS_DIR}:/certs
+    healthcheck:
+      # acme.sh touches /tmp/alive after every pass; unhealthy means the loop died
+      test: ["CMD-SHELL", "test -n \"$$(find /tmp/alive -mmin -$$(( ($${ACME_CHECK_INTERVAL:-43200} * 2 + 7200) / 60 )) 2>/dev/null)\""]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 10m
+    networks:
+      - homeserver
+
+  # Reloads nginx-plain when the certificate changes: SIGHUP for a renewal, a restart for the very
+  # first certificate (nginx-plain only opens its HTTPS listeners at startup). It talks to the Docker
+  # socket and only ever touches the nginx-plain container, like cloudflared-watchdog.
+  acme-reload:
+    image: curlimages/curl:8.22.0
+    container_name: acme-reload
+    restart: unless-stopped
+    # curlimages/curl runs as a non-root user that can't use the Docker socket; see cloudflared-watchdog.
+    user: "0:0"
+    entrypoint: ["/bin/sh", "/acme-reload.sh"]
+    volumes:
+      - ./acme-reload.sh:/acme-reload.sh:ro
+      - ${CERTS_DIR}:/certs:ro
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    networks:
+      - homeserver
+    depends_on:
+      - acme
+
+networks:
+  homeserver:
+    external: true

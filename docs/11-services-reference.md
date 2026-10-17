@@ -14,7 +14,7 @@ Services are grouped into additive tiers, plus a manual-only group. Each tier bu
 
 | Tier | Command | Services |
 | --- | --- | --- |
-| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, nginx-plain, portainer, docs, landing |
+| `min` | `uv run homeserver.py dev up min` | beszel, cloudflared, acme, nginx-plain, portainer, docs, landing |
 | `core` | `uv run homeserver.py dev up core` | min + ntfy, uptime-kuma, adguard-home, authentik, vaultwarden, firefly, immich, clamav, nextcloud, onlyoffice, whiteboard, jellyfin, forgejo, wg-easy, guacamole, it-tools, mailpit |
 | `daily` | `uv run homeserver.py dev up daily` | min + core + every daily service below — **opt-in, never implied by `up core`**; turned on/off explicitly |
 | `browser` | `uv run homeserver.py dev up browser` | min + core + daily + the Browser Hub's 10 browsers — **opt-in, never implied by `up daily`** |

@@ -75,6 +75,7 @@ links — hover (or tap-and-hold on mobile) any name for what it does and what i
 ### Infrastructure
 
 [Cloudflare Tunnel](docs/services/cloudflared.md "Public HTTPS access, no open ports — replaces Port forwarding") ·
+[acme](docs/services/acme.md "Own Let's Encrypt wildcard certificate for nginx-plain, renewed automatically — replaces Manual certificate renewal") ·
 [nginx-plain](docs/04-nginx.md "Reverse proxy, default — replaces Manual nginx config") ·
 Nginx Proxy Manager (optional, UI-based reverse proxy — see [04 — Nginx](docs/04-nginx.md)) ·
 [ClamAV](docs/services/clamav.md "Antivirus scanning daemon backing Nextcloud's files_antivirus app. No UI of its own.") ·
@@ -168,7 +169,7 @@ Quick links for day-to-day use once the stack is running.
 
 ```bash
 # Service tiers — MIN ⊂ CORE ⊂ ALL
-uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, nginx-plain, landing, docs, portainer)
+uv run homeserver.py dev up min          # infrastructure only (beszel, cloudflared, acme, nginx-plain, landing, docs, portainer)
 uv run homeserver.py dev up core         # min + nextcloud
 uv run homeserver.py dev up all          # everything (core + all extra services)
 
@@ -210,6 +211,7 @@ uv run homeserver.py prod up all
     ├── nginx-plain/           ← default reverse proxy
     ├── nginx/                 ← optional: Nginx Proxy Manager
     ├── cloudflared/
+    ├── acme/              ← Let's Encrypt wildcard certificate, auto-renewed
     ├── landing/
     ├── nextcloud/
     ├── onlyoffice/

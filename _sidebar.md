@@ -119,6 +119,7 @@
     - [Docs](/docs/services/docs.md "Searchable site over every doc in this repo — setup guides, service reference, all per-service notes, live off the source files. Replaces: Read the Docs.")
   - Infrastructure
     - [Cloudflare Tunnel](/docs/services/cloudflared.md "Public HTTPS access, no open ports — replaces Port forwarding")
+    - [acme](/docs/services/acme.md "Own Let's Encrypt wildcard certificate for nginx-plain, renewed automatically — replaces Manual certificate renewal")
     - [nginx-plain](/docs/04-nginx.md "Reverse proxy, default — replaces Manual nginx config")
     - [ClamAV](/docs/services/clamav.md "Antivirus scanning daemon backing Nextcloud's files_antivirus app. No UI of its own.")
     - [Landing Page](/docs/07-landing.md "Service dashboard with live status")

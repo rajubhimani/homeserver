@@ -1,0 +1,4 @@
+# acme needs no port bindings: it only talks outbound to the ACME CA and the Cloudflare DNS API.
+# This file exists only to satisfy the three-file compose pattern.
+services:
+  acme: {}
