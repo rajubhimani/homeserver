@@ -797,6 +797,8 @@ uv sync            # once — installs pytest (dev dependency only; homeserver.p
 uv run pytest      # ~20s (the Kubernetes sync test renders every service with `docker compose config`); never changes Docker
 ```
 
+Once per clone, also run `git config core.hooksPath .githooks`: the pre-commit hook refuses a commit that changes Compose, `.env.example`, `services.json` or the Kubernetes overrides while `kubernetes/generated/` is stale (details in [17 — Docker to Kubernetes](17-docker-to-kubernetes.md)).
+
 - **`tests/test_lifecycle.py`, `tests/test_shared_db.py`** run the real `homeserver.py` code (`main()`, `do_up`, `do_down`, backup/restore…) against `FakeBackend` (`tests/conftest.py`), an in-memory implementation of the `DockerBackend` interface. Any real `subprocess.run` fails the test, so the live stack can't be touched. They cover:
   - the tier cascades and `down` semantics;
   - bundles never stopping `requires` infra;

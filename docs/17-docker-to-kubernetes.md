@@ -100,6 +100,8 @@ uv run kubernetes/generate.py           # writes kubernetes/generated/
 uv run kubernetes/generate.py --check   # is generated/ up to date? (the test suite runs this)
 ```
 
+**Keeping it from drifting.** The tests only report drift after the fact (2026-10-17: the immich bump, the Nextcloud reinstall and the `www` company page all landed without a regeneration). `.githooks/pre-commit` stops it earlier: when a commit touches `services/`, `services.json` or the Kubernetes overrides/scope, it runs `generate.py --check` and refuses the commit if `kubernetes/generated/` is stale. Install it once per clone with `git config core.hooksPath .githooks`; fix a refusal with `uv run kubernetes/generate.py && git add kubernetes/generated`; skip on purpose with `git commit --no-verify`.
+
 - **Inputs:** each `services/<svc>/compose.yml` + `compose.prod.yml` (read through `docker compose config`, so everything resolves exactly as Docker sees it), `.env.example`, `services.json`, and nginx-plain's route template.
 - **Kubernetes-only details** live in small `kubernetes/overrides/<svc>.yaml` files (e.g. "clone the docs folders with git-sync", "the agent runs on every node").
 - **Which services are done:** [`kubernetes/scope.yaml`](../kubernetes/scope.yaml) lists what's ported so far, what's skipped and why.
