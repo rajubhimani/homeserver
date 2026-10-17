@@ -6,7 +6,7 @@
 
 **Purpose:** Real-time collaborative in-browser editing of Word/Excel/PowerPoint documents stored in [Nextcloud](nextcloud.md), via the standalone ONLYOFFICE Document Server (Community Edition) instead of Nextcloud's built-in CODE (Collabora) editor.
 **Port:** `8150` (host) → `80` (container) | **Data:** `service_data/data/onlyoffice/` (`data/`, `log/`, `lib/` — see below) | **Requires:** nothing — self-contained, bundles its own Postgres/RabbitMQ/Redis internally (see "Data paths" below); Nextcloud itself is what depends on this, via its `onlyoffice` connector app | **Memory:** ONLYOFFICE's own docs recommend 2 CPU / 6GB RAM minimum for production workloads; measured idle on this stack, no documents open: **~434MB** — the official figure is a headroom recommendation for heavier concurrent use, not what an idle or lightly-used family instance actually costs.
-**Pinned version:** `onlyoffice/documentserver:9.4.0.1`, current stable at the time this was added (confirmed against Docker Hub tags directly, not training-data memory).
+**Pinned version:** `onlyoffice/documentserver:10.0.0.1`, current stable (Docker Hub tags checked 2026-10-17; `latest` = 10.0.0.1). Updated from 9.4.0.1.
 
 ## Why a standalone container instead of the built-in CODE server
 
