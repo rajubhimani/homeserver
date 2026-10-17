@@ -36,12 +36,12 @@ A companion container (same compose file) that guards against a specific failure
 
 Every `WATCHDOG_CHECK_INTERVAL` (default 60s), the watchdog:
 
-1. Curls `https://${DOMAIN}/` — the real public path through Cloudflare's edge.
-2. On failure, curls `nginx-plain:80` directly on the Docker network with the right `Host` header, to check whether the origin itself is the problem.
-3. If the origin is reachable but the public path isn't, that's a stale tunnel: after `WATCHDOG_FAIL_THRESHOLD` consecutive failures (default 3, ~3 min), it restarts the `cloudflared` container via the Docker socket, then waits `WATCHDOG_RESTART_COOLDOWN` (default 120s) before resuming checks.
-4. If the origin is also unreachable, it skips the restart and just logs — restarting cloudflared won't fix a broken `nginx-plain` or a wider network outage, so it doesn't flap.
+1. **With `CLOUDFLARE_API_TOKEN` set (preferred):** asks the Cloudflare API for this tunnel's status (`GET /accounts/{account}/cfd_tunnel/{tunnel}`, the edge's own view, which `cloudflared`'s local `ready` check can't give). `down` (no connections) or `degraded` is a failure, `healthy` is good. The account and tunnel IDs are decoded from `TUNNEL_TOKEN` (base64 JSON `{"a": account, "t": tunnel, "s": secret}`), so only the token is new. Create it at dash.cloudflare.com → My Profile → API Tokens → Create Custom Token with **Account → Cloudflare Tunnel → Read**.
+2. **Fallback (no token, or the API gives no usable answer):** requests `https://${WATCHDOG_HOST}/` (default `immich.${DOMAIN}`) and reads only the HTTP status. **The host must be routed through the tunnel**: the apex `${DOMAIN}` (an edge 301 to `www`) and `docs.${DOMAIN}` are answered by Cloudflare itself and stayed up while every tunnelled hostname returned 1033 on 2026-10-17, which is how the earlier apex probe never fired. `530` is Cloudflare's "no live connector for this tunnel" answer (the page says Error 1033), whatever the app behind it is doing. `000` (DNS or network down on this host) is logged and ignored: restarting cloudflared doesn't fix that.
+3. Each failure adds one; a good answer cancels one rather than resetting to zero, because the edge flaps between 530 and 200 while some connections are dead.
+4. After `WATCHDOG_FAIL_THRESHOLD` failures (default 3, ~3 min) it restarts the `cloudflared` container via the Docker socket, then waits `WATCHDOG_RESTART_COOLDOWN` (default 120s) before resuming checks.
 
-Override the defaults via `WATCHDOG_CHECK_INTERVAL` / `WATCHDOG_FAIL_THRESHOLD` / `WATCHDOG_RESTART_COOLDOWN` in `.env` (see `.env.example`). Logic lives in `watchdog.sh` — it's bind-mounted read-only into a stock `curlimages/curl` container rather than baked into an image, so it's editable without a rebuild.
+Also turn on **Zero Trust → Notifications → Tunnel Health Alerts** so Cloudflare tells you about outages the restart doesn't clear. Override the defaults via `CLOUDFLARE_API_TOKEN` / `WATCHDOG_HOST` / `WATCHDOG_CHECK_INTERVAL` / `WATCHDOG_FAIL_THRESHOLD` / `WATCHDOG_RESTART_COOLDOWN` in `.env` (see `.env.example`). Pick a `WATCHDOG_HOST` that is in this tunnel's public hostnames and that you keep running. Logic lives in `watchdog.sh` — it's bind-mounted read-only into a stock `curlimages/curl` container rather than baked into an image, so it's editable without a rebuild.
 
 The watchdog needs read-write access to the Docker socket (same pattern as dozzle/portainer/dockge) to call the restart API — it only ever restarts the `cloudflared` container by name, nothing else.
 
