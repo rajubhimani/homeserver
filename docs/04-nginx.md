@@ -4,7 +4,7 @@
 
 ---
 
-**nginx version:** every nginx container (`nginx-plain`, `docs`, `landing`, AppFlowy's proxy) runs `nginx:1.31.7-alpine`, the **mainline** branch. On 2026-10-03 the stack was moved to stable (1.30.x) under the LTS-always rule ([10 — New Services](10-new-services.md
+**nginx version:** every nginx container (`nginx-plain`, `docs`, `landing`, AppFlowy's proxy) runs `nginx:1.31.7-alpine`, the **mainline** branch. On 2026-10-03 the stack was moved to stable (1.30.x) under the LTS-always rule ([10 — New Services](10-new-services.md#which-version-to-run-lts-always)); on 2026-10-17 it was moved back to mainline at the owner's request. To return to stable, pin the newest `1.30.x-alpine`.
 
 Two reverse proxy options — **run only one at a time**, both bind to ports 80/443.
 
