@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: landing
-        image: nginx:1.30.6-alpine
+        image: nginx:1.31.7-alpine
         command:
         - /entrypoint.sh
         envFrom:

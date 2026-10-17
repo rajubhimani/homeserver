@@ -47,7 +47,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: docs
-        image: nginx:1.30.6-alpine
+        image: nginx:1.31.7-alpine
         command:
         - /entrypoint.sh
         envFrom:
