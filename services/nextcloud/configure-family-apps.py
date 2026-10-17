@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Configure Nextcloud for family Drive/Calendar/Talk use on a fresh install.
+"""Configure Nextcloud for Files + ONLYOFFICE + Whiteboard + antivirus on a fresh install.
 
 Usage: uv run services/nextcloud/configure-family-apps.py    (from repo root)
        uv run services/nextcloud/configure-family-apps.py --yes     (skip prompts, apply a saved selection if one exists, else the full list)
        uv run services/nextcloud/configure-family-apps.py --fresh   (ignore any saved selection, decide from scratch)
        uv run services/nextcloud/configure-family-apps.py --list    (just report what's installed, no action taken)
 
-Installs and enables the apps a family actually uses (Files, Calendar,
-Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE) and wires up
+Installs and enables the only apps this install uses (Files plus the
+default apps, ONLYOFFICE, Whiteboard, Files Antivirus) and wires up
 ONLYOFFICE/Whiteboard/ClamAV integration from their own .env files if those
 services are set up -- unconditionally, no prompt, since that's unambiguous
 setup work.
@@ -47,14 +47,12 @@ SERVICE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SERVICE_DIR.parent.parent
 SELECTION_FILE = SERVICE_DIR / "family-apps-selection.json"
 
-# Apps a family actually uses day to day -- installed/enabled unconditionally.
+# The only apps installed on top of Nextcloud's defaults -- installed/enabled
+# unconditionally. No Talk, Calendar, Contacts, Mail or Deck: not used here.
 FAMILY_APPS = [
-    "calendar",
-    "contacts",
-    "mail",
-    "deck",
     "whiteboard",
     "onlyoffice",
+    "files_antivirus",
 ]
 
 # Enterprise/business-bundle apps that add nothing for personal/family use,

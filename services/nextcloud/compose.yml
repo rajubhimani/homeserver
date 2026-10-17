@@ -44,7 +44,7 @@ services:
       - homeserver
 
   nextcloud:
-    image: nextcloud:34.0.4
+    image: nextcloud:35.0.2
     container_name: nextcloud
     restart: unless-stopped
     env_file: .env
@@ -65,13 +65,11 @@ services:
     volumes:
       - nextcloud-html:/var/www/html
       - nextcloud-config:/var/www/html/config
-      - ./config/db.config.php:/var/www/html/config/db.config.php:ro   # DB login from .env (POSTGRES_*)
+      - ./config/db.config.php:/usr/src/homeserver/db.config.php:ro   # DB login from .env (POSTGRES_*); copied into config/ by hooks/before-starting/00-install-db-config.sh
       - ./config/remoteip.conf:/etc/apache2/conf-available/remoteip.conf:ro   # real client IP in the access log
       - nextcloud-data:/var/www/html/data
       - nextcloud-custom-apps:/var/www/html/custom_apps
       - ./hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
-      - ${USER_DATA_ROOT}:/mnt/seagate
-      - ${OS_ISO_ROOT}:/mnt/os-iso
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/status.php || exit 1"]
       interval: 30s
@@ -87,7 +85,7 @@ services:
       - homeserver
 
   nextcloud-cron:
-    image: nextcloud:34.0.4
+    image: nextcloud:35.0.2
     container_name: nextcloud-cron
     restart: unless-stopped
     env_file: .env
@@ -96,27 +94,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    # The extra `occ files:scan --all` alongside cron.php exists because
-    # external storage mounts (OS_ISO_ROOT) don't reliably self-detect new
-    # files just from users browsing the folder in the web UI — confirmed
-    # after swapping OS_ISO_ROOT to a new host path: filesystem_check_changes
-    # didn't pick up the new files until a manual `occ files:scan` ran. This
-    # keeps that mount in sync automatically instead of needing a manual
-    # rescan every time files change on disk. Dataset is small (a few dozen
-    # ISOs), so a full scan every CRON_SCAN_INTERVAL_SECONDS (default 300 =
-    # 5 minutes, see .env.example) is cheap in the common case. Raise this
-    # if OS_ISO_ROOT sits on a slow/shared disk under I/O contention with
-    # something else — see "Jellyfin playback buffering" in
-    # docs/services/jellyfin.md for a worked example of exactly that.
-    entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; runuser -u www-data -- php /var/www/html/occ files:scan --all; sleep ${CRON_SCAN_INTERVAL_SECONDS:-300}; done"
+    # Nextcloud's own background jobs (notifications, previews, housekeeping) every
+    # CRON_INTERVAL_SECONDS (default 300 = 5 minutes, the interval Nextcloud documents).
+    entrypoint: /bin/sh -c "until [ -f /var/www/html/lib/versioncheck.php ]; do sleep 5; done; while true; do runuser -u www-data -- php /var/www/html/cron.php; sleep ${CRON_INTERVAL_SECONDS:-300}; done"
     volumes:
       - nextcloud-html:/var/www/html
       - nextcloud-config:/var/www/html/config
-      - ./config/db.config.php:/var/www/html/config/db.config.php:ro   # DB login from .env (POSTGRES_*)
       - nextcloud-data:/var/www/html/data
       - nextcloud-custom-apps:/var/www/html/custom_apps
-      - ${OS_ISO_ROOT}:/mnt/os-iso:ro
-      # - ${USER_DATA_ROOT}:/mnt/seagate
     depends_on:
       nextcloud:
         condition: service_healthy

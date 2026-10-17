@@ -5,8 +5,8 @@
 ---
 
 **Purpose:** File storage + sharing, replaces Google Drive.
-**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes now — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres-alpine` (see below for why; nothing left under `service_data/data/nextcloud/` needs browsing directly) | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
-**Pinned versions (as of this pass):** `nextcloud:34.0.4` (app + cron), `postgres:18.6-alpine` (db), `valkey/valkey:9.1.2-alpine` (cache/locking; Valkey, the Redis-protocol drop-in that AWS and GCP run, since 2026-10-03, [managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). All facts below are checked against Nextcloud 34's own current documentation, not general/older Nextcloud knowledge.
+**Port:** `8081` (host) → `80` (container) | **Data:** entirely named volumes — `nextcloud-html`/`nextcloud-config`/`nextcloud-data`/`nextcloud-custom-apps`/`nextcloud-postgres-alpine` (see below for why; nothing under `service_data/data/nextcloud/` needs browsing directly). **Apps in use:** Files and the default apps, plus ONLYOFFICE, Whiteboard and Files Antivirus. Nothing else is installed (no Talk, Calendar, Contacts, Mail or Deck). | **Requires:** Postgres + Redis | **Memory:** DB capped 512M in compose.yml; app: no hard limit set; measured idle ~181MB total (app 122 + db 21 + redis 6 + cron 31) — comfortably within Nextcloud's own official guidance (128MB min / 512MB recommended per PHP-FPM process, though their docs note actual needs scale with users/apps/file volume)
+**Pinned versions (as of this pass):** `nextcloud:35.0.2` (app + cron), `postgres:18.6-alpine` (db), `valkey/valkey:9.1.2-alpine` (cache/locking; Valkey, the Redis-protocol drop-in that AWS and GCP run, since 2026-10-03, [managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). Fresh install of 35.0.2 on 2026-10-17 (see "Fresh start on 35.0.2" below). Apps: `files_antivirus` 6.5.0, `onlyoffice` 10.2.1, `whiteboard` 2.0.0 (checked against the App Store's NC35 listing).
 
 ## Setup
 
@@ -17,16 +17,13 @@ cp services/nextcloud/.env.example services/nextcloud/.env
 Edit `services/nextcloud/.env`:
 
 ```env
-USER_DATA_ROOT=/mnt/seagate
-OS_ISO_ROOT=/mnt/os-iso
-
 # Postgres
 POSTGRES_DB=nextcloud
 POSTGRES_USER=nextcloud
 POSTGRES_PASSWORD=your_strong_password
 
 # Nextcloud admin
-NEXTCLOUD_ADMIN_USER=admin
+NEXTCLOUD_ADMIN_USER=your_username
 NEXTCLOUD_ADMIN_PASSWORD=your_strong_password
 ```
 
@@ -44,7 +41,7 @@ uv run homeserver.py dev up nextcloud
 uv run services/nextcloud/configure-family-apps.py
 ```
 
-Installs and enables the apps a family actually uses (Files, Calendar, Contacts, Talk, Mail, Deck, Whiteboard, Office/ONLYOFFICE) and wires up [ONLYOFFICE](onlyoffice.md)/[Whiteboard](whiteboard.md)/[ClamAV](clamav.md) integration automatically if those services are set up (reads their JWT secrets straight from their own `.env` files — nothing to copy-paste by hand) — unconditionally, no prompt, since that part is unambiguous setup work.
+Installs and enables the only apps this install uses on top of Nextcloud's defaults (Whiteboard, ONLYOFFICE, Files Antivirus) and wires up [ONLYOFFICE](onlyoffice.md)/[Whiteboard](whiteboard.md)/[ClamAV](clamav.md) integration automatically if those services are set up (reads their JWT secrets straight from their own `.env` files — nothing to copy-paste by hand) — unconditionally, no prompt, since that part is unambiguous setup work.
 
 It then walks through the enterprise/business-bundle apps that ship by default but add nothing for personal use (workflow automation, retention policies, LDAP/SAML, social-media sharing, the global lookup directory, etc. — see "Enterprise app cleanup" below) with a one-line reason each, and asks **how** to apply the cleanup:
 
@@ -85,22 +82,9 @@ Nextcloud ships (and its app-store "bundles" install) a lot of apps aimed at bus
 
 **A few apps couldn't be removed even though they're disabled** — Nextcloud marks `support`, `survey_client`, `files_downloadlimit`, `user_ldap`, `webhook_listeners`, `nextcloud_announcements`, `circles`, `related_resources` as shipped/core, so `occ app:remove` refuses (`"is a shipped/core app and cannot be removed"`). Disabled means none of their code runs — no functional or privacy exposure — just a small amount of disk space that can't be reclaimed since Nextcloud treats them as part of its own core distribution, not separately-installed apps.
 
-## Enable External Storage
+## External storage
 
-```text
-Apps → search "External storage support" → Enable
-
-Settings → Administration → External Storage → Add Storage
-  Folder name: Seagate
-  Storage type: Local
-  Configuration: /mnt/seagate
-  Available for: All users
-→ click checkmark (green = working)
-```
-
-`OS_ISO_ROOT` (mounted at `/mnt/os-iso`) works the same way — add a second External Storage entry pointing at that path if you want the ISO folder browsable in Nextcloud too.
-
-**External storage doesn't reliably self-detect new files just from browsing the folder in the web UI**, despite `filesystem_check_changes` being enabled by default — confirmed after repointing `OS_ISO_ROOT` at a new host path: the files existed on disk and the mount tested green, but nothing showed up until a manual `occ files:scan` ran. This now self-heals automatically — see `nextcloud-cron`'s dual responsibility under "Architecture notes" below. If you add another external storage mount that's large (thousands of files), reconsider the blanket `--all` scan — scope it to a path/user instead so the cron doesn't get expensive.
+Not used. The `/mnt/seagate` and `/mnt/os-iso` mounts, the `OS_ISO_ROOT`/`USER_DATA_ROOT` settings and the cron `files:scan --all` loop were removed on 2026-10-17 with the fresh start. To add a mount again, add the volume to `nextcloud` in `compose.yml`, enable **External storage support**, and add the folder under **Administration → External Storage**. External mounts don't reliably self-detect new files, so a scheduled `occ files:scan` for that path would be needed too.
 
 ## Create Family Accounts
 
@@ -130,19 +114,19 @@ Confirmed against Nextcloud's own current user manual, not assumed from memory.
 `compose.yml`'s healthcheck runs `curl -f http://localhost/status.php` inside the `nextcloud` container every 30s (10s timeout, 5 retries, 60s start period). Confirmed live on this instance (`docker exec nextcloud curl -s http://localhost/status.php`):
 
 ```json
-{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"34.0.4.1","versionstring":"34.0.4","edition":"","productname":"Nextcloud","extendedSupport":false}
+{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"35.0.2.2","versionstring":"35.0.2","edition":"","productname":"Nextcloud","extendedSupport":false}
 ```
 
-`installed`/`maintenance`/`needsDbUpgrade` are the fields that actually matter for health — `curl -f` just checks for a non-error HTTP status, so a `200` with `"maintenance":true` still reports "healthy" to Docker even though the app is refusing normal requests (see the maintenance-mode troubleshooting section below, which checks this endpoint's near-neighbor `occ status` for exactly that reason). `versionstring` matches the pinned image tag (`34.0.4`) as expected.
+`installed`/`maintenance`/`needsDbUpgrade` are the fields that actually matter for health — `curl -f` just checks for a non-error HTTP status, so a `200` with `"maintenance":true` still reports "healthy" to Docker even though the app is refusing normal requests (see the maintenance-mode troubleshooting section below, which checks this endpoint's near-neighbor `occ status` for exactly that reason). `versionstring` matches the pinned image tag (`35.0.2`) as expected.
 
 ## Architecture notes
 
-- **Database login comes from `.env`** (since 2026-10-04): `config/db.config.php` is mounted next to `config.php` in both containers and sets `dbhost`/`dbname`/`dbuser`/`dbpassword` from `POSTGRES_*`. It follows the image's own `redis.config.php`/`smtp.config.php` pattern; Nextcloud merges every `*.config.php` over `config.php`. Before that, Nextcloud logged in as the `oc_admin` role its installer had created, with a generated password kept only in `config.php`. That caused the ownership and migration problems below, and it broke the Kubernetes import, where the app's role isn't a superuser and `oc_admin` doesn't exist. Moving the database (a managed Postgres, or Kubernetes) is now a `.env` change.
-- Two hook scripts (`00-fix-permissions.sh`, `02-configure-proxy.sh`) were stored in git without their executable bit (they're executable in the working copy, so Docker never noticed). On a fresh clone, or on Kubernetes (git-sync), the image skipped them (`... was skipped, because it lacks the executable flag`). Fixed in git on 2026-10-04.
+- **Database login comes from `.env`:** `config/db.config.php` sets `dbhost`/`dbname`/`dbuser`/`dbpassword` from `POSTGRES_*`. It follows the image's own `redis.config.php`/`smtp.config.php` pattern; Nextcloud merges every `*.config.php` over `config.php`. Without it Nextcloud would log in as the `oc_<admin>` role its installer wrote into `config.php`, which exists only in that one database server (the cause of the ownership and migration problems recorded below, and of the Kubernetes import failure). Moving the database (a managed Postgres, or Kubernetes) is a `.env` change. **How it gets into `config/`:** the file is mounted *outside* the Nextcloud tree (`/usr/src/homeserver/db.config.php`) and `hooks/before-starting/00-install-db-config.sh` copies it into `config/` on every start. It must not be mounted straight into `config/` (see "Fresh start on 35.0.2").
+- Hook scripts must be executable in git (`git update-index --chmod=+x` / `git add --chmod=+x`). The image skips a hook without the executable flag (`... was skipped, because it lacks the executable flag`); two were stored without it in the past (fixed 2026-10-04). Hooks run as `www-data`, not root.
 - Uses **partial volume mounts** (`config`, `data`, `custom_apps`) — do **not** mount the full `/var/www/html`
 - `nextcloud/hooks/before-starting/00-sync-php.sh` runs `rsync` on every startup to populate PHP files into the partial mount
 - `nextcloud/hooks/before-starting/02-configure-proxy.sh` runs `occ config:system:set` for `trusted_proxies`, `trusted_domains`, `overwriteprotocol`, and `overwrite.cli.url` on **every** startup (skipped only pre-install) — this is why those don't need to be set manually and won't drift even if `DOMAIN`/network config changes later. If you ever need a value this hook doesn't set (e.g. a raw Tailscale IP in `trusted_domains` for IP-only access with no domain), edit that script directly — a one-off `docker exec ... occ config:system:set` gets silently overwritten by the hook on the next restart.
-- **`nextcloud-cron` has two responsibilities, not one** — its entrypoint loop (`compose.yml`) runs `cron.php` (Nextcloud's own background jobs: notifications, previews, housekeeping — the reason this container exists at all) *and* `occ files:scan --all` (external storage rescan — added because `filesystem_check_changes` doesn't reliably pick up new files on the `OS_ISO_ROOT` mount from browsing alone; see "Enable External Storage" above), back-to-back, every `CRON_SCAN_INTERVAL_SECONDS` (`.env`, default `300` = 5 minutes). It mounts `OS_ISO_ROOT` read-only for the scan step — `USER_DATA_ROOT`/`/mnt/seagate` is deliberately commented out here since nothing currently needs cron to rescan it, only the app container. If you add another external storage mount that should also self-heal this way, mount it here too and it rides the same loop. **Raise this interval if `OS_ISO_ROOT` sits on a slow or shared disk** — see `docs/services/jellyfin.md`'s playback-buffering troubleshooting entry for the general pattern (slow/FUSE-mounted storage, or contention with another service sharing the same physical disk).
+- **`nextcloud-cron`** runs `cron.php` (Nextcloud's own background jobs: notifications, previews, housekeeping, the antivirus background scan) every `CRON_INTERVAL_SECONDS` (`.env`, default `300`). It shares the `nextcloud` container's volumes, including `config/`, so it gets `db.config.php` from the hook above without its own mount.
 
 ## Real client IPs
 
@@ -204,7 +188,7 @@ After the restart, `occ status` should show `needsDbUpgrade: false`, but the upg
 docker exec -u www-data nextcloud php occ maintenance:mode --off
 ```
 
-**To stop this from recurring:** `compose.yml` is now pinned to the exact tag `nextcloud:34.0.4` (was the floating `nextcloud:34`) — bump it deliberately rather than letting `dev update` silently jump point releases.
+**To stop this from recurring:** `compose.yml` is pinned to an exact tag (was the floating `nextcloud:34`; now `nextcloud:35.0.2`) — bump it deliberately rather than letting `dev update` silently jump point releases.
 
 ## Upgrading safely (pre-flight checklist)
 
@@ -234,14 +218,17 @@ docker exec -u www-data nextcloud php occ status   # maintenance: false, needsDb
 
 Avoid `app:update --all`. Treat a major version as its own planned change. **`whiteboard` must stay in lockstep with the separate [Whiteboard](whiteboard.md) backend image** — bump `services/whiteboard/compose.yml` in the same pass (done for 1.5.9 → 2.0.0 on 2026-09-28). If an update fails: read the error (so far it has always been ownership), fix it, then `occ upgrade` + `occ maintenance:mode --off`; the dump is the fallback.
 
-**Only move up one major version at a time** (Nextcloud doesn't support skipping majors). **Nextcloud 35 is deliberately on hold** as of 2026-09-28. Only 35.0.1 is out, and there are open high-priority reports of schema drift after 34.0.4 → 35.0.0, mostly involving `oc_talk_*`/`oc_mail_*` tables, and this instance runs both Talk and Mail ([server#64505](https://github.com/nextcloud/server/issues/64505), [server#64590](https://github.com/nextcloud/server/issues/64590)). Revisit at 35.0.2 or later, once the apps in use list NC35 support.
+**Only move up one major version at a time** (Nextcloud doesn't support skipping majors). Nextcloud 35 had been on hold since 2026-09-28 (open schema-drift reports after 34.0.4 → 35.0.0 involving `oc_talk_*`/`oc_mail_*` tables, [server#64505](https://github.com/nextcloud/server/issues/64505), [server#64590](https://github.com/nextcloud/server/issues/64590)). It was revisited at 35.0.2 and installed fresh on 2026-10-17, without Talk or Mail, so those reports don't apply. See "Fresh start on 35.0.2" below.
 
-**Sandbox trial, 2026-09-30 (34.0.4 → 35.0.1)** — a full clone of this instance was upgraded in an isolated sandbox (`experiments/nextcloud35/`; removed on 2026-10-02 once its findings were recorded here. Recover it from git history at commit `bc16144` if a re-test is ever needed), which is isolated from the live one. What it showed:
+**Sandbox trial, 2026-09-30 (34.0.4 → 35.0.1)** — a full clone of the old instance was upgraded in an isolated sandbox (removed on 2026-10-02; recover it from git history at commit `bc16144`). Findings, kept for reference if a major upgrade is ever done in place again: the upgrade aborts with `HMAC does not match` until `notifications.webpush_vapid_privkey`/`..._pubkey` are removed from `oc_appconfig`; it disables `spreed`, `deck` and `quota_warning` as incompatible; `occ db:schema:check` then reports Mail-index and `oc_federated_invites` differences that are checker-side (NC35's own `DropFederatedInvitesTable` migration drops that table on purpose).
 
-- **The upgrade aborts with `HMAC does not match`** until one broken key is removed: `notifications.webpush_vapid_privkey` in `oc_appconfig` was encrypted with a different `secret` than `config.php` now has. The live instance logs the same error on every notifications poll today. **Before the real upgrade**, after the dump, run `docker exec -u www-data nextcloud php occ config:app:delete notifications webpush_vapid_privkey` and the same for `webpush_vapid_pubkey`. Notifications regenerates the pair, and `oc_notifications_webpush` had 0 rows, so nothing is lost.
-- The upgrade disables `spreed` (Talk), `deck` and `quota_warning` as incompatible. Deck came back by itself at 1.19.0. Talk needs `occ app:update spreed` (→ 25.0.2) and quota_warning needs `app:update quota_warning` (→ 1.25.0), then `occ app:enable spreed quota_warning`.
-- After that, `occ status` is clean (35.0.1.1, `needsDbUpgrade: false`) and the web UI works. `occ db:schema:check` still reports Mail-index and `oc_federated_invites` differences, but they're checker-side: the table is dropped on purpose by NC35's own `DropFederatedInvitesTable` migration, and Mail's `db:add-missing-indices` step removes indexes the checker expects. This lines up with the upstream issues above rather than with anything wrong in this instance's data.
+## Fresh start on 35.0.2 (2026-10-17)
 
+**Why:** a stuck `cron.php` ran at about 96% CPU for 11 hours (load average 8). It was the Files Antivirus background scan (`OCA\Files_Antivirus\BackgroundJob\BackgroundScanner`), and the cause was data missing from disk. Two accounts (`admin`, `Neeraj Badal`) still had 64 file rows each in `oc_filecache`, but their data folders were gone from the `nextcloud-data` volume (`files:scan` reported "User folder … exists in cache but not on disk"). Those rows were never scanned, so the scanner picked them first, tried to open a file that wasn't there, and spun. It reproduced by hand: `occ files_antivirus:scan` on one of those paths pinned a core and ignored `timeout`'s TERM signal. ClamAV was healthy throughout (PING/VERSION answered, `files_antivirus:test` passed). The exact line where it spins wasn't traced; files_antivirus 6.5.0 (released 2026-10-16) has no changelog entry about it.
+
+**What was done:** snapshot (`service_data/backup/nextcloud/`), `pg_dump`, a verified plain-file copy of `rajubhimani`'s 177 files (`pre-fresh-start-files-20261017/`), then `prod reset nextcloud`, a blank 35.0.2, the app script, and the files copied back into the new account's data folder followed by `occ files:scan rajubhimani` (177 files, 0 errors). `files_antivirus:background-scan` then scanned all 173 non-empty files in 90 s with exit 0. Lost on purpose: the two orphaned accounts, shares, version history, trash, and the Talk/Mail/Deck/Calendar/Contacts apps (all test-only).
+
+**Gotcha found and fixed — fresh install failed with `Cannot write into "config" directory!`:** on a blank volume the image seeds and chowns `config/` only while it is empty (`directory_empty` in its entrypoint). The old setup mounted `db.config.php` straight into `config/`, which made it non-empty, so `config/` stayed root-owned and the installer could not write `config.php`. The setup worked before only because the volumes already existed. It had been broken for any blank start since the file mount was added on 2026-10-04, so the 2026-10-03 "fresh-install verification" below predates it. Hooks can't fix it (the image runs them as `www-data`), and an init container would work but adds a service. Upstream's own approach — custom `*.config.php` files may be added to `config/`, hooks run before start — is followed instead: the file is mounted outside the tree and copied in by `00-install-db-config.sh`. Verified with `prod reset nextcloud` from blank: no error, `config/` seeded with the image's default config files, `db.config.php` in place, `occ status` clean.
 
 ## Why `html`/`config`/`data`/`custom_apps` are named volumes, not bind mounts
 
