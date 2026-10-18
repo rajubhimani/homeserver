@@ -46,6 +46,12 @@ docker exec ollama ollama pull gemma4:e4b
 
 Only `*-partial*` files are removed. Completed blobs and manifests are untouched. Pull one model at a time, and let it finish before starting the next.
 
+## Memory: one model at a time (2026-10-18)
+
+`.env` sets `OLLAMA_MAX_LOADED_MODELS=1` and `OLLAMA_KEEP_ALIVE=15m`. Ollama's own defaults are up to 3 models loaded on CPU and 5 minutes of keep-alive ([FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)), so a large model you had stopped using stayed in RAM after you switched to another one. With these values a new model replaces the idle one, and an idle model is unloaded after 15 minutes. The cost is a reload from disk when you come back after a pause or switch models. The models are on the NVMe, so that is quick. Set `OLLAMA_KEEP_ALIVE=-1` to pin a model, or `0` to unload right after every reply.
+
+To free memory by hand: `docker exec ollama ollama ps` lists loaded models and `docker exec ollama ollama stop <model>` unloads one.
+
 ## Reverse proxy: no buffering (2026-10-11)
 
 The `ollama` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Streamed generations could arrive in bursts, because nginx-plain buffered the streamed response. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
