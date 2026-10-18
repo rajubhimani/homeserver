@@ -47,7 +47,8 @@ On top of that, `OPEN_TERMINAL_PIP_PACKAGES` installs at every start:
 | Area | Packages |
 |---|---|
 | ML / DL | torch, torchvision, torchaudio (CPU builds: the host has no GPU), transformers, sentence-transformers, onnxruntime, xgboost, lightgbm, optuna, shap, imbalanced-learn, statsmodels |
-| Data | polars, duckdb, pyarrow, xlsxwriter, sympy, networkx |
+| Data | polars, duckdb (library + the `duckdb` CLI from the first-party `duckdb-cli` PyPI package), pyarrow, xlsxwriter, sympy, networkx |
+| APIs / databases | fastapi, uvicorn, sqlalchemy, alembic |
 | Pipelines | pydantic, tenacity, python-dotenv, pytest, ruff |
 | Scraping | httpx, scrapy, trafilatura, html5lib, feedparser |
 | Documents | pdfplumber, pymupdf, reportlab, markitdown, docx2txt, pytesseract (+ apt `tesseract-ocr`), pdf2image, pillow, opencv-python-headless |
