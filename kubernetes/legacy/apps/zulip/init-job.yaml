@@ -1,0 +1,106 @@
+# One-shot equivalent of docs/services/zulip.md's manual setup step:
+#   docker compose ... run --rm zulip app:init
+# `app:init` runs Zulip's database migrations and secret provisioning
+# once — not part of the normal container lifecycle, so a Job
+# (restartPolicy: OnFailure), same pattern as
+# kubernetes/apps/plane/migrator-job.yaml, not a Deployment.
+#
+# Same env block as deployment.yaml (minus LOADBALANCER_IPS, irrelevant
+# for a one-shot migration run) — must match so the secrets/DB it
+# provisions during init are the same ones the long-running Deployment
+# connects with afterward.
+#
+# Same "no depends_on equivalent" gap as elsewhere in this pilot: apply
+# this only after zulip-db/zulip-rabbitmq/zulip-redis/zulip-memcached are
+# up, and let it complete before scaling up deployment.yaml's Deployment —
+# mirrors the order docs/services/zulip.md's own manual setup already
+# requires backing services up, then `app:init`, then the app itself.
+# Also avoids two pods racing to mount zulip-data (ReadWriteOnce; see
+# kubernetes/README.md's "Same-node PVC risk").
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zulip-init
+  namespace: apps
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: zulip-init
+          image: ghcr.io/zulip/zulip-server:12.2-0
+          # compose's `docker compose run --rm zulip app:init` overrides
+          # CMD only (same container, same ENTRYPOINT) — args: here, not
+          # command:, same convention as every other container in this
+          # repo (see TROUBLESHOOTING.md).
+          args: ["app:init"]
+          env:
+            - name: SETTING_REMOTE_POSTGRES_HOST
+              value: zulip-db
+            - name: SETTING_MEMCACHED_LOCATION
+              value: zulip-memcached:11211
+            - name: SETTING_RABBITMQ_HOST
+              value: zulip-rabbitmq
+            - name: SETTING_REDIS_HOST
+              value: zulip-redis
+            - name: SETTING_EXTERNAL_HOST
+              value: zulip.k8s.local
+            - name: SETTING_ZULIP_ADMINISTRATOR
+              value: admin@example.com
+            - name: SETTING_OPEN_REALM_CREATION
+              value: "True"
+            - name: SETTING_EMAIL_HOST
+              value: mailpit
+            - name: SETTING_EMAIL_PORT
+              value: "1025"
+            - name: SETTING_EMAIL_USE_TLS
+              value: "False"
+            - name: SETTING_EMAIL_USE_SSL
+              value: "False"
+            - name: SETTING_MAX_FILE_UPLOAD_SIZE
+              value: "100"
+            - name: SETTING_RATE_LIMITING
+              value: "True"
+            - name: SETTING_PASSWORD_MIN_LENGTH
+              value: "8"
+            - name: SETTING_SESSION_COOKIE_AGE
+              value: "1209600"
+            - name: SECRETS_postgres_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: password
+            - name: SECRETS_rabbitmq_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: rabbitmq-password
+            - name: SECRETS_redis_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: redis-password
+            - name: SECRETS_memcached_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-db-credentials
+                  key: memcached-password
+            - name: SECRETS_secret_key
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-credentials
+                  key: secret-key
+            - name: SECRETS_email_password
+              valueFrom:
+                secretKeyRef:
+                  name: zulip-credentials
+                  key: email-password
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: zulip-data

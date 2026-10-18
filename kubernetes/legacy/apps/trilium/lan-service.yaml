@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8112 matches trilium/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down trilium) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: trilium-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: trilium
+  ports:
+    - port: 8112
+      targetPort: 8080

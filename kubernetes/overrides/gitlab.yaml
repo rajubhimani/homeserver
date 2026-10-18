@@ -1,0 +1,4 @@
+containers:
+  gitlab-runner:
+    skip: true
+    reason: "CI runner: needs a Docker engine for jobs (GitLab's Kubernetes executor is the upstream alternative); ported separately. GitLab itself works without it."

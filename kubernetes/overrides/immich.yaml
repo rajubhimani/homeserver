@@ -1,0 +1,42 @@
+containers:
+  immich-ml:
+    # The image's own HEALTHCHECK (ghcr.io/immich-app/immich-machine-learning:v3.2.4), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - python3 healthcheck.py
+  immich-db:
+    # Immich's own Kubernetes recommendation (immich-charts local/cloudnative-pg.yaml):
+    # CloudNativePG's standard image + VectorChord as an image-volume extension,
+    # pinned to the VectorChord release Compose runs (vectorchord0.5.3).
+    # pgvector ships in CNPG's standard image.
+    cnpg:
+      shared_preload_libraries: [vchord.so]
+      extensions:
+        - name: vchord
+          image: {reference: "ghcr.io/tensorchord/vchord-scratch:pg18-v0.5.3"}
+          dynamic_library_path: [/usr/lib/postgresql/18/lib]
+          extension_control_path: [/usr/share/postgresql/18/]
+      database_extensions: [vector, vchord, earthdistance, cube]
+  immich-server:
+    # The image's own HEALTHCHECK (ghcr.io/immich-app/immich-server:v3.2.4), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - immich-healthcheck
+    mounts:
+      # Photos: the real UPLOAD_LOCATION folder, read-write (Immich refuses
+      # to start if it can't write its .immich check files). cluster.py create
+      # mounts it from services/immich/.env at this node path. Not a copy:
+      # whatever Immich changes here changes the real library, and Compose
+      # snapshots don't include it (only the database) - see docs/17 step 8.
+      /usr/src/app/upload: {hostPath: /var/k8s/host/immich-upload, env: UPLOAD_LOCATION}
+  immich-offline-remover:
+    skip: true
+    reason: "Removes Immich assets whose files are missing, through Immich's API. Off while Kubernetes shares the real photo folder with Compose's Immich, so a test run never deletes library entries."
+  immich-redis:
+    ports: [6379]   # valkey's default port; Compose never publishes it
+storage:
+  immich-db: {size: 10Gi}

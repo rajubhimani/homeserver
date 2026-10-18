@@ -8,7 +8,7 @@
 mkdir -p ~/homeserver/nextcloud
 cd ~/homeserver/nextcloud
 cp .env.example .env
-# edit .env: set DATA_ROOT, USER_DATA_ROOT, POSTGRES_PASSWORD, NEXTCLOUD_ADMIN_PASSWORD
+# edit .env: set DATA_ROOT, POSTGRES_PASSWORD, NEXTCLOUD_ADMIN_PASSWORD
 uv run homeserver.py dev up nextcloud
 ```
 

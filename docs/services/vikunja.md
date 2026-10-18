@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Self-hosted to-do list and task management app — projects, due dates, labels, Kanban/Gantt views.
-**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~52MB total (app 31 + db 21)
+**Port:** `8111` (host) → `3456` (container) | **Data:** `service_data/data/vikunja/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~52MB total (app 31 + db 21), measured before the 2026-10-01 move to the shared server
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/vikunja/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 
@@ -17,13 +20,15 @@ uv run homeserver.py dev up vikunja
 
 Vikunja ships as a single combined image (frontend + API on one port, 3456) as of the 2.x releases — there's no separate frontend/api container to wire up.
 
+**Permissions, handled automatically**: Vikunja's image runs as a hardcoded `uid=1000,gid=0` with no root fallback, so it can never self-heal its own bind mount (`${DATA_ROOT}/files:/app/vikunja/files`) if it ever gets recreated root-owned (e.g. after a wipe/`--fresh` restart). `vikunja-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it to `1000:0` on every start, before `vikunja` itself starts. Confirmed live: without it, a fresh/empty `files/` dir fails every request with `storage validation failed: ... permission denied [process uid=1000 gid=0, dir owner uid=0 gid=0]` — the exact uid/gid mismatch is right there in Vikunja's own error message, which is how the required ownership was confirmed rather than guessed.
+
 ## Admin account
 
 No admin account is created on first start. Open `https://vikunja.<domain>/` (or `http://<host>:8111` in dev) and register the first account through the UI — it becomes a regular user, not an auto-promoted admin; grant admin rights from inside the app if needed.
 
 ## Registration
 
-`VIKUNJA_ENABLE_REGISTRATION` in `.env` (maps to `VIKUNJA_SERVICE_ENABLEREGISTRATION`) controls self-signup, default `true`. Set to `false` once accounts are provisioned to close the instance to new signups.
+`VIKUNJA_ENABLE_REGISTRATION` in `.env` (maps to `VIKUNJA_SERVICE_ENABLEREGISTRATION`) controls self-signup, default `false` (closed). Register your own first account before this matters (see First login above). Vikunja's self-hosted CE has no admin "create user" panel; to add another account later, temporarily set this back to `true`, have them register, then set it back to `false`.
 
 ## Connecting the mobile app
 
@@ -31,7 +36,7 @@ Vikunja has official native apps for [Android](https://play.google.com/store/app
 
 1. Install the app from the store above.
 2. On the login screen, enter the instance URL: `https://vikunja.${DOMAIN}` (do **not** point it at the bare host/port — the app needs the public HTTPS URL that matches `VIKUNJA_SERVICE_PUBLICURL`, or CORS rejects it).
-3. Log in with the account created in the web UI (or register from the app if `VIKUNJA_ENABLE_REGISTRATION` is `true`).
+3. Log in with the account created in the web UI.
 
 This works because `VIKUNJA_SERVICE_PUBLICURL` is already hardcoded to `https://vikunja.${DOMAIN}/` in `compose.yml` (see Notes below) — without a matching public URL, the mobile app's requests get blocked by CORS before login even gets a chance to fail on credentials.
 

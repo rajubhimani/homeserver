@@ -1,0 +1,31 @@
+# Mirrors rocketchat/compose.yml's mongodb-init container: a one-shot
+# rs.initiate() so Mongo actually leaves the replSet's initial unconfigured
+# state — without it rocketchat's MONGO_URL (?replicaSet=rs0) never
+# connects. `restart: "no"` in compose -> Job with restartPolicy: OnFailure,
+# same pattern as plane/migrator-job.yaml.
+#
+# No depends_on equivalent (see kubernetes/README.md's documented gap) —
+# apply this after rocketchat-mongodb's StatefulSet is up. backoffLimit
+# gives it room to retry if it races ahead of mongod actually accepting
+# connections. rs.initiate() on an already-initiated set errors harmlessly
+# (`|| true`), so re-running this Job (e.g. after a rocketchat-mongodb pod
+# restart) is safe — same idempotency note as compose's own comment.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rocketchat-mongo-init
+  namespace: apps
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: mongo-init
+          image: docker.io/mongodb/mongodb-community-server:8.2-ubi8
+          command:
+            - sh
+            - -xc
+            - |
+              mongosh "mongodb://rocketchat-mongodb:27017/?directConnection=true" --eval "rs.initiate({_id: 'rs0', members: [{ _id: 0, host: 'rocketchat-mongodb:27017' }]})" || true

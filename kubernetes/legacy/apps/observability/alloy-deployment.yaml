@@ -1,0 +1,72 @@
+# Alloy discovers containers to tail logs from via the Docker socket
+# (discovery.docker in config.alloy) — same docker.sock-dependency family as
+# Coolify/cadvisor elsewhere in this pilot. On a containerd-based node
+# there's no dockerd behind this socket, so Alloy will find zero containers
+# to discover and ship no logs, even though the pod itself starts fine and
+# passes its own probe. Kept for pattern-completeness; not a working log
+# pipeline on a non-Docker node.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alloy
+  namespace: apps
+  labels:
+    app: alloy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: alloy
+  template:
+    metadata:
+      labels:
+        app: alloy
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: alloy
+          image: grafana/alloy:v1.18.0
+          args:
+            - run
+            - --server.http.listen-addr=0.0.0.0:12345
+            - /etc/alloy/config.alloy
+          ports:
+            - containerPort: 12345
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy/config.alloy
+              subPath: config.alloy
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          # Image has bash but no wget/curl (confirmed in compose.yml's own
+          # comment) — /dev/tcp via bash is the same trick compose's
+          # healthcheck uses.
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "exec 3<>/dev/tcp/localhost/12345 && printf 'GET /-/ready HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q 200"]
+            initialDelaySeconds: 15
+            periodSeconds: 60
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+        # hostPath, not a PVC — must be the real Docker socket. See the
+        # caveat above: broken by design on a containerd-based node.
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  namespace: apps
+spec:
+  selector:
+    app: alloy
+  ports:
+    - port: 12345

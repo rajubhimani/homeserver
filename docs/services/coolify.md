@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted PaaS — deploy and manage *other* projects/services with a Vercel/Heroku-style workflow (git push to deploy, one-click databases, etc.).
-**Port:** `8132` (host) → `8080` (container); realtime websocket on `6001`/`6002` | **Data:** `service_data/data/coolify/` | **Requires:** Postgres, Redis | **Memory:** DB capped 384M in compose.yml; other 5 containers: no hard limit set; measured idle ~470MB total across all 6 containers (coolify 324 + realtime 56 + proxy 28 + sentinel 27 + redis 8 + db 26)
+**Port:** `8132` (host) → `8080` (container); realtime websocket on `6001`/`6002` | **Data:** `service_data/data/coolify/` | **Requires:** Postgres, Valkey (Redis protocol, `valkey/valkey:9.1.2-alpine`) | **Memory:** DB capped 384M in compose.yml; other 5 containers: no hard limit set; measured idle ~470MB total across all 6 containers (coolify 324 + realtime 56 + proxy 28 + sentinel 27 + redis 8 + db 26)
 
 ## Conceptual overlap worth naming
 
@@ -43,9 +43,9 @@ that no stable tag existed at all), then
 appearing between bumps — that's just Coolify comparing its own
 baked-in version string against the latest tagged release, harmless.
 
-Currently pinned to `coollabsio/coolify:4.3.9` (real semver tag,
+Currently pinned to `coollabsio/coolify:4.3.23` (real semver tag,
 confirmed compatible — Coolify's own upgrade-path check treats
-`4.3.0 → 4.3.9` as a valid forward upgrade, not a downgrade, and this
+`4.3.0 → 4.3.16` as a valid forward upgrade, not a downgrade, and this
 image previously ran as `edge` self-reporting version `4.3.0`).
 
 ## Setup — full checklist, in order
@@ -280,6 +280,8 @@ existed. All six are fixed now (five real `service_data/` bind mounts +
 further to do, just worth knowing why a `coolify` container recreation
 used to lose things that looked like they should have survived it.
 
+**Ownership on those five bind mounts is also handled automatically now.** `coolify`'s image runs as a hardcoded `www-data` (uid `9999`, confirmed via `/etc/passwd` inside the container) with no root fallback, so it could never self-heal `applications/databases/services/backups/images` if any of them got recreated root-owned (e.g. by a wipe or `--fresh` restart). `coolify-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) creates and `chown`s all five to `9999:9999` on every start, before `coolify` itself starts. Doesn't block boot — Coolify doesn't touch these paths at startup, only when actually deploying something through its UI — but confirmed live that a wipe otherwise leaves them silently unusable for a real deploy.
+
 ## Deploying your first app
 
 The whole point of this service — everything above is just getting Coolify itself running. Once logged in: create/open a **Project**, then **+ New Resource**, and pick one of:
@@ -360,7 +362,7 @@ start" note in Setup above.
 ## Notes
 
 - `APP_ID`/`APP_KEY`/`DB_PASSWORD`/`REDIS_PASSWORD`/`PUSHER_*` are all one-time secrets — generate them once, keep them, never rotate casually (documented upstream behavior: changing them later can break the installation).
-- Health endpoint: `/api/health`.
+- Health endpoint: `/api/health`. The healthcheck timings (interval 5s, timeout 2s, 24 retries, `start_period: 60s`) are taken from coollabsio/coolify's own `docker-compose.prod.yml`. A fresh install runs its migrations for a few minutes, and the previous 30s/3-retries setting reported that as a failure (2026-10-02).
 - Since Coolify mounts the Docker socket, treat it with the same trust level as `portainer`/`dockge` in this stack — anything with socket access can affect any other container on the host.
 
 ---

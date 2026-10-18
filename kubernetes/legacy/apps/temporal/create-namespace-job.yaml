@@ -1,0 +1,43 @@
+# temporalio/auto-setup used to also register the "default" namespace on
+# first boot — temporalio/server doesn't, so this Job replaces that half.
+# Also registers "staging" and "production" as two more Namespaces — see
+# docs/services/temporal/temporal.md's "Namespaces" section for why (the
+# isolation-boundary demo: one Worker loop per Namespace on the same task
+# queue name, never seeing each other's work). Idempotent (describe-then-
+# create, same as auto-setup's own logic), so backoffLimit-driven retries
+# against a not-yet-healthy temporal Deployment are harmless — same
+# depends_on gap as schema-setup-job.yaml, same fix (retry via
+# backoffLimit rather than a startup-ordering guarantee).
+#
+# Same command/args split as schema-setup-job.yaml: compose's `entrypoint:`
+# → k8s `command:`, compose's `command:` → k8s `args:`.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-create-namespace
+  namespace: apps
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: temporal-create-namespace
+          image: temporalio/admin-tools:1.30.4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              for ns in default staging production; do
+                if ! temporal operator namespace describe --namespace "$ns"; then
+                  temporal operator namespace create --retention 24h --description "Homeserver namespace: $ns" --namespace "$ns"
+                else
+                  echo "Namespace $ns already registered."
+                fi
+              done
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal:7233
+            - name: TEMPORAL_CLI_ADDRESS
+              value: temporal:7233

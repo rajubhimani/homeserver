@@ -1,0 +1,4 @@
+services:
+  whiteboard:
+    ports:
+      - "8151:3002"

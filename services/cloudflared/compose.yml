@@ -1,6 +1,6 @@
 services:
   cloudflared:
-    image: cloudflare/cloudflared:2026.8.2
+    image: cloudflare/cloudflared:2026.10.1
     container_name: cloudflared
     restart: unless-stopped
     env_file: .env
@@ -20,10 +20,11 @@ services:
 
   # cloudflared's own healthcheck only checks its local connection count, which
   # doesn't detect the edge silently dropping connections (see watchdog.sh for
-  # the incident this covers). This probes the real public URL and restarts
-  # cloudflared when the tunnel is stale but the origin is confirmed fine.
+  # the incident this covers). This asks the Cloudflare API for the tunnel's status
+  # (or, without an API token, probes a tunnelled hostname for Cloudflare's 530) and
+  # restarts cloudflared when the tunnel is down or degraded.
   cloudflared-watchdog:
-    image: curlimages/curl:8.11.1
+    image: curlimages/curl:8.23.0
     container_name: cloudflared-watchdog
     restart: unless-stopped
     # curlimages/curl drops to a non-root user by default, which can't reach the
@@ -32,6 +33,9 @@ services:
     user: "0:0"
     environment:
       DOMAIN: ${DOMAIN}
+      WATCHDOG_HOST: ${WATCHDOG_HOST:-immich.${DOMAIN}}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
       CHECK_INTERVAL: ${WATCHDOG_CHECK_INTERVAL:-60}
       FAIL_THRESHOLD: ${WATCHDOG_FAIL_THRESHOLD:-3}
       RESTART_COOLDOWN: ${WATCHDOG_RESTART_COOLDOWN:-120}

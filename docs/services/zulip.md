@@ -36,12 +36,12 @@ Defaults to **on** here (`SETTING_OPEN_REALM_CREATION` in `compose.yml`, sourced
 
 ## Architecture
 
-Five containers: `zulip-db` (Zulip's own `zulip/zulip-postgresql` image — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.4-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis`, and `zulip` itself.
+Five containers: `zulip-db` (Zulip's own `zulip-postgresql` image, rebuilt on PostgreSQL 18 locally — bakes in extensions Zulip specifically needs, not this stack's usual `postgres:18.6-alpine`), `zulip-memcached`, `zulip-rabbitmq`, `zulip-redis` (`valkey/valkey:9.1.2-alpine` since 2026-10-03, data on the fresh `zulip-valkey` volume), and `zulip` itself.
 
 ```mermaid
 flowchart LR
     subgraph Backing["Backing services, one each"]
-        DB["zulip-db<br/>(zulip/zulip-postgresql)"]
+        DB["zulip-db<br/>(zulip-postgresql, PG 18)"]
         MC[zulip-memcached]
         RMQ[zulip-rabbitmq]
         RD[zulip-redis]
@@ -73,6 +73,15 @@ flowchart LR
 
 **Health check needs a real `Host` header** — Zulip validates `Host` strictly against its configured `EXTERNAL_HOST`; a bare `proxy_pass` (which forwards the container name, `zulip`, as `Host`) gets a permanent 400. `services/landing/nginx.conf`'s `/health/zulip` location sets `proxy_set_header Host zulip.DOMAIN_PLACEHOLDER` — and since `landing`'s `nginx.conf` previously had no domain-templating mechanism (only `index.html` did), this required extending `entrypoint.sh` to template `nginx.conf` through the same `DOMAIN_PLACEHOLDER` substitution, so the real domain is never hardcoded into a git-tracked file.
 
+## Healthchecks
+
+Every long-running container has one (added 2026-10-02, verified healthy on a fresh install):
+- `zulip` curls its own `/health` endpoint, first over https (self-signed) and then over http. `start_period: 300s`, because first boot runs the migrations.
+- `zulip-db` uses `pg_isready -U zulip`.
+- `zulip-redis` uses `redis-cli ping` with the password read from its secret file.
+- `zulip-rabbitmq` uses `rabbitmq-diagnostics -q ping`.
+- `zulip-memcached` uses a TCP check (`nc -z 127.0.0.1 11211`), because memcached is SASL-protected here, so a stats query would need credentials.
+
 ## Connecting the Android app
 
 Official **Zulip** app ([Google Play](https://play.google.com/store/apps/details?id=com.zulipmobile)) — on first launch (or via profile picture → **Switch account** → **Add new account** if adding a second organization), enter the organization's URL — `https://zulip.${DOMAIN}` if the realm was created at the root domain, or `https://<realm-subdomain>.${DOMAIN}` if a named realm/organization was created (see the "No organization found" note below) — then log in normally.
@@ -82,6 +91,16 @@ Official **Zulip** app ([Google Play](https://play.google.com/store/apps/details
 - **Resource usage**: heaviest bring-up procedure of the three chat apps (5 containers + a one-time migration step) — bring it up when you want it, down when you don't (`uv run homeserver.py dev down zulip`) rather than leaving it running idle. `down` snapshots all 4 named volumes automatically first.
 - **The bare root path (`/`) shows a "No organization found" page until an organization exists** — expected Zulip behavior for a zero-realm deployment, not a bug: the real entry point is always the realm-creation link (or an existing organization's own subdomain/URL), not the bare domain.
 - **Outgoing email routed through the shared [Mailpit](mailpit.md) catcher by default** (`SETTING_EMAIL_HOST=mailpit` in `compose.yml`) — invite/notification emails genuinely send, nothing ever leaves this host. `ZULIP__EMAIL_PASSWORD` stays an unused placeholder since Mailpit needs no auth; point `SETTING_EMAIL_HOST`/etc. at a real relay instead in `.env` if you want actual delivery.
+
+## Version line
+
+- `zulip-rabbitmq` runs `rabbitmq:4.3.6`. RabbitMQ patches only its latest minor series for the community, and 4.2 (upstream docker-zulip's pin) left community support on 2026-07-31 ([RabbitMQ versions](https://www.rabbitmq.com/docs/versions)). There's no LTS track, so this is the newest supported release ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)).
+- **`zulip-db` runs PostgreSQL 18**, built from Zulip's own `Dockerfile-postgresql` (zulip/zulip tag 12.3) in `services/zulip/postgresql/` as `homeserver/zulip-postgresql:18-pgroonga4.0.9`. Upstream publishes `zulip/zulip-postgresql` only up to `:14` (EOL 2026-11-12), but Zulip 12.x supports PostgreSQL 14–18 and its docs say Docker installs upgrade PostgreSQL "via image bumps" ([upgrade docs](https://zulip.readthedocs.io/en/stable/production/upgrade.html), [docker-zulip `upgrade-postgresql`](https://github.com/zulip/docker-zulip/blob/main/upgrade-postgresql)). The image is the same thing upstream's is: `groonga/pgroonga:<v>-alpine-<pg>-slim` plus hunspell-en, Zulip's stop words and its init SQL, with the three files vendored verbatim. Moved on 2026-10-03 while Zulip was empty, so no dump/restore was needed. The new volume `zulip-postgres-18` is mounted at `/var/lib/postgresql`, where PostgreSQL 18 images declare their `VOLUME`. On a Zulip upgrade, re-fetch those files from the new tag. Moving an instance *with data* across Postgres majors needs a dump/restore, as in upstream's `upgrade-postgresql` script.
+
+
+## Backing-service endpoints
+
+The database, Valkey, RabbitMQ and memcached endpoints come from `.env` (`DB_HOST`/`DB_PORT`, `CACHE_HOST`/`CACHE_PORT`, `MQ_HOST`, `MEMCACHED_HOST`/`MEMCACHED_PORT`), the stack-wide convention ([10 — New Services](../10-new-services.md#configuration-lives-in-env-twelve-factor)). One Zulip-specific catch: `env_file` also passes `DB_HOST` into the `zulip` container, and Zulip 12's entrypoint **refuses to start** while its legacy `DB_HOST` is non-empty (`ERROR: 'DB_HOST' was replaced by 'SETTING_REMOTE_POSTGRES_HOST' in 12.x`). Compose therefore sets `DB_HOST: ""` inside that container, and the real host reaches Zulip through `SETTING_REMOTE_POSTGRES_HOST`. Zulip's other legacy names (`DB_HOST_PORT`, `DB_USER`, `DB_NAME`…) aren't used anywhere in this stack.
 
 ---
 

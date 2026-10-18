@@ -27,6 +27,9 @@ run_launcher:
       - DAGSTER_POSTGRES_USER
       - DAGSTER_POSTGRES_PASSWORD
       - DAGSTER_POSTGRES_DB
+      # Run containers resolve the storage hostname/port from these too.
+      - DB_HOST
+      - DB_PORT
     network: homeserver
     container_kwargs:
       mem_limit: "512m"
@@ -38,57 +41,56 @@ run_launcher:
       # Dropping this (as an earlier version of this file did) makes every
       # run fail immediately with "Error while fetching server API version:
       # FileNotFoundError" the moment its first step tries to launch.
-      # /opt/dagster/app: the run container uses the same
-      # homeserver/dagster-user-code image (DAGSTER_CURRENT_IMAGE), which no
-      # longer bakes in definitions.py (see user-code/Dockerfile) — needs
-      # this bind mount too, or the run container can't import the code it's
-      # supposed to run. Hardcoded absolute host path, not
-      # ${DATA_ROOT}/service_data/... — this file is baked into the image at
-      # build time, not compose-interpolated, so env var substitution
-      # doesn't apply here. Update this if service_data/ ever moves.
+      # The run container uses the same homeserver/dagster-user-code image
+      # (DAGSTER_CURRENT_IMAGE), which carries the pipeline code itself.
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
         - dagster-io-manager-storage:/tmp/io_manager_storage
-        - /mnt/mydata/homeserver/service_data/data/dagster/user-code:/opt/dagster/app
 
 run_storage:
   module: dagster_postgres.run_storage
   class: PostgresRunStorage
   config:
     postgres_db:
-      hostname: dagster-db
+      hostname:
+        env: DB_HOST
       username:
         env: DAGSTER_POSTGRES_USER
       password:
         env: DAGSTER_POSTGRES_PASSWORD
       db_name:
         env: DAGSTER_POSTGRES_DB
-      port: 5432
+      port:
+        env: DB_PORT
 
 schedule_storage:
   module: dagster_postgres.schedule_storage
   class: PostgresScheduleStorage
   config:
     postgres_db:
-      hostname: dagster-db
+      hostname:
+        env: DB_HOST
       username:
         env: DAGSTER_POSTGRES_USER
       password:
         env: DAGSTER_POSTGRES_PASSWORD
       db_name:
         env: DAGSTER_POSTGRES_DB
-      port: 5432
+      port:
+        env: DB_PORT
 
 event_log_storage:
   module: dagster_postgres.event_log
   class: PostgresEventLogStorage
   config:
     postgres_db:
-      hostname: dagster-db
+      hostname:
+        env: DB_HOST
       username:
         env: DAGSTER_POSTGRES_USER
       password:
         env: DAGSTER_POSTGRES_PASSWORD
       db_name:
         env: DAGSTER_POSTGRES_DB
-      port: 5432
+      port:
+        env: DB_PORT

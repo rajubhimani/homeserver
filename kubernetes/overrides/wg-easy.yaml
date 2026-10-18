@@ -1,0 +1,22 @@
+# wg-easy has no Kubernetes guide upstream (its docs cover Docker, Podman,
+# dockerless, Traefik and Caddy), so this mirrors the Compose setup exactly:
+# host network (here the kind node's), NET_ADMIN + SYS_MODULE,
+# /lib/modules read-only. Own design; see docs/services/wg-easy.md.
+containers:
+  wg-easy:
+    # The image's own HEALTHCHECK (ghcr.io/wg-easy/wg-easy:15.4.0), verbatim;
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py compares it.
+    image_healthcheck:
+      test: [CMD-SHELL, /usr/bin/timeout 5s /bin/sh -c "/usr/bin/wg show | /bin/grep -q interface || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    # The web UI (51821) as a Service, for its route and the landing check.
+    ports: [51821]
+    service: true
+    # WireGuard's UDP port straight from the host into the node
+    # (cluster.py create adds the kind port mapping).
+    node_ports:
+      - {port: 51820, protocol: udp}
+    mounts:
+      /lib/modules: {hostPath: /lib/modules}

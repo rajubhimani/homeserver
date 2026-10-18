@@ -1,0 +1,24 @@
+containers:
+  beszel-agent:
+    # Host metrics agent: one per node, on the node's network (as in Compose).
+    kind: DaemonSet
+    # From Beszel's own Kubernetes example (beszel.dev/guide/advanced-deployment):
+    # run on control-plane nodes too, and replace agents all at once (with
+    # hostNetwork, old and new pods can't hold the same port side by side).
+    pod:
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+        - {key: node-role.kubernetes.io/master, operator: Exists, effect: NoSchedule}
+    workload:
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate: {maxSurge: 0, maxUnavailable: 100%}
+    env:
+      # Compose reaches the hub through its host port; in the cluster it's the Service.
+      HUB_URL: http://beszel:8090
+    mounts:
+      /var/run/docker.sock:
+        skip: true
+        reason: "No Docker socket on Kubernetes nodes; per-container stats come from Grafana/kubelet."
+    devices: skip
+    devices_reason: "SMART disk passthrough uses this host's /dev/disk/by-id paths, which don't exist inside kind's node containers."

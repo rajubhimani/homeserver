@@ -1,0 +1,18 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8137 matches airflow/compose.dev.yml exactly (airflow-apiserver is
+# the container that binds it there too). Stop the Compose version
+# (uv run homeserver.py dev down airflow) before applying this — same host
+# port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: airflow-apiserver
+  ports:
+    - port: 8137
+      targetPort: 8080

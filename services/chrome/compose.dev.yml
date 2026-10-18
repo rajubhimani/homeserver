@@ -1,0 +1,4 @@
+services:
+  chrome:
+    ports:
+      - "0.0.0.0:8159:3000"

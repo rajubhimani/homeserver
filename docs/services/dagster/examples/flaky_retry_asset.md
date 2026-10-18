@@ -26,7 +26,7 @@ sequenceDiagram
     D-->>D: succeed, unlink counter file
 ```
 
-**Verified via the run's own event log** (`event_logs` table, `dagster-db`): `STEP_UP_FOR_RETRY: 2`, `STEP_RESTARTED: 2`, `STEP_WORKER_STARTED: 3` (three separate step containers), then `STEP_SUCCESS: 1`.
+**Verified via the run's own event log** (`event_logs` table, in the old per-service `dagster-db` at the time): `STEP_UP_FOR_RETRY: 2`, `STEP_RESTARTED: 2`, `STEP_WORKER_STARTED: 3` (three separate step containers), then `STEP_SUCCESS: 1`.
 
 ## Try it
 

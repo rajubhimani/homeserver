@@ -1,0 +1,26 @@
+services:
+  whiteboard:
+    # Was floating on :stable (no clean numbered release tags published
+    # upstream at the time this service was first added -- GHCR listing was
+    # a mix of beta/daily/commit-hash tags). Numbered tags exist now --
+    # pinned to an exact release. Must match the Nextcloud "whiteboard" app
+    # version exactly -- app and backend are versioned together, so bump
+    # this in the same pass as the app (see docs/services/whiteboard.md).
+    image: ghcr.io/nextcloud-releases/whiteboard:v2.0.0
+    container_name: whiteboard
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Internal container URL, not the public domain — avoids a hairpin
+      # through cloudflared for every file read/write, same reasoning as
+      # ONLYOFFICE's "Advanced server settings" internal address.
+      NEXTCLOUD_URL: http://nextcloud
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    # No healthcheck here on purpose: the image ships its own (node GET :3002, 30s interval), and
+    # upstream's compose defines none, so a compose one would only replace it.
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

@@ -1,0 +1,58 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
+services:
+  # Cache only (market-data lookups, job queue) — nothing here needs to
+  # survive a restart, so no volume and persistence turned off.
+  ghostfolio-redis:
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
+    container_name: ghostfolio-redis
+    restart: unless-stopped
+    env_file: .env
+    command: >-
+      sh -c 'valkey-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homeserver
+
+  ghostfolio:
+    image: ghostfolio/ghostfolio:3.77.0
+    container_name: ghostfolio
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}?connect_timeout=300
+      REDIS_HOST: ${CACHE_HOST}
+      REDIS_PORT: 6379
+      ROOT_URL: https://ghostfolio.${DOMAIN}
+      # Behind nginx-plain (and Cloudflare in front of that) — needed so
+      # the login rate limiter sees the real client IP, not nginx's.
+      TRUST_PROXY: "2"
+      TZ: ${TZ:-Asia/Kolkata}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3333/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First start runs the Prisma migrations + seed before the API listens.
+      start_period: 120s
+    depends_on:
+      ghostfolio-redis:
+        condition: service_healthy
+    networks:
+      - homeserver
+
+networks:
+  homeserver:
+    external: true

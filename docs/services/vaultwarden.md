@@ -15,11 +15,11 @@ cp services/vaultwarden/.env.example services/vaultwarden/.env
 uv run homeserver.py dev up vaultwarden
 ```
 
-**First login:** browse to `https://vaultwarden.${DOMAIN}` (or `http://<ip>:8200` in dev) and register the first account directly on that page — self-signup is enabled by default (`SIGNUPS_ALLOWED=true`), no invite needed. Every later visitor can self-register the same way until you turn that off (see Registration below).
+**First login:** `SIGNUPS_ALLOWED` defaults to `false` (closed) — set it to `true` first, `up`/restart, browse to `https://vaultwarden.${DOMAIN}` (or `http://<ip>:8200` in dev) and register your first account directly on that page, then set it back to `false` and restart. See Registration below for adding more accounts afterward without reopening public signup.
 
 ## Health endpoint
 
-Confirmed live against the running container (`vaultwarden/server:1.37.1`): the image ships its own `/healthcheck.sh` baked into `CMD` (60s interval, 10s timeout) — this repo's `compose.yml`/`compose.dev.yml` do not define a separate `healthcheck:` block, `docker inspect` shows the image default is in effect. The script curls `http://localhost:80/alive` (reading `ROCKET_PORT`/`DOMAIN` from the container's own env/`config.json` to build the URL) and exits non-zero on anything but success.
+Confirmed live against the running container (`vaultwarden/server:1.37.2`, unchanged in 1.37.3): the image ships its own `/healthcheck.sh` baked into `CMD` (60s interval, 10s timeout). `compose.yml` keeps that command and only retunes its timing (no `test:`; `start_period: 30s`, `start_interval: 2s`). Without that, the first check came a full minute after start, so every start waited 60s (measured 2026-10-03, now 5s). The script curls `http://localhost:80/alive` (reading `ROCKET_PORT`/`DOMAIN` from the container's own env/`config.json` to build the URL) and exits non-zero on anything but success.
 
 `GET /alive` returns HTTP `200` with a bare JSON timestamp string, e.g. `"2026-08-21T22:37:44.046902Z"` — confirmed both with `docker exec vaultwarden curl http://localhost:80/alive` and with `curl http://localhost:8200/alive` from the host (dev port). `docker ps` / `docker inspect` reports the container as `healthy` accordingly.
 
@@ -29,7 +29,7 @@ Confirmed live against the running container (`vaultwarden/server:1.37.1`): the 
 
 ## Registration
 
-`.env.example` ships with `SIGNUPS_ALLOWED=true` (self-signup enabled) — set it to `false` to invite-only via the admin panel → Users → Invite instead.
+`.env.example` ships with `SIGNUPS_ALLOWED=false` (closed) — add every account after the first via the admin panel → Users → Invite instead (see Admin panel above for the `ADMIN_TOKEN` login). Set it back to `true` only if open self-signup is actually wanted.
 
 ## Making devices actually use it
 
@@ -42,7 +42,7 @@ Vaultwarden implements the real Bitwarden server API, so every **official Bitwar
 
 ### Client version compatibility with this stack's pinned Vaultwarden version
 
-This stack pins `vaultwarden/server:1.37.1`. Checked directly against Vaultwarden's own GitHub release notes (not assumed): the **1.37.0** release (1.37.1 is a same-day-ish patch on top, fixing an invite-URL bug and an Alpine build issue — no further client-facing changes) states plainly *"This update is required for support with clients with version 2026.7.0+, please update before reporting any issues with them."* — i.e. 1.37.0/1.37.1 exists specifically because newer official Bitwarden clients (2026.7.0 and later, which use an updated `/identity/accounts/prelogin` flow, updated registration requests, and a `vnext` policy format) stopped working against older Vaultwarden servers. Running 1.37.1 means current Bitwarden clients are expected to work correctly against this instance — if a client ever reports a login/registration failure after an autoupdate, the Vaultwarden image pin here (not the client) is the first thing to check.
+This stack pins `vaultwarden/server:1.37.4` (bumped 2026-10-11; a security release fixing seven advisories, mostly organization-related, up to High. Its reverse-proxy note only changes `IP_HEADER=X-Forwarded-For` handling, so our single-value `CF-Connecting-IP` is unaffected). Checked directly against Vaultwarden's own GitHub release notes (not assumed): 1.37.0 first required newer Bitwarden clients (2026.7.0+, an updated `/identity/accounts/prelogin` flow, updated registration requests, and a `vnext` policy format); 1.37.2 is a maintenance release on top (Debian build fix, sendmail permission-check fix, login logs now include the user's email) that states it's *"required for support with clients with version 2026.8.0+"*; 1.37.3 (bumped 2026-09-28) adds security fixes on top — remembered-2FA tokens are revoked when credentials or 2FA change, and prelogin/auth-request endpoints are rate-limited. Running 1.37.3 means current Bitwarden clients are expected to work correctly against this instance — if a client ever reports a login/registration failure after an autoupdate, the Vaultwarden image pin here (not the client) is the first thing to check.
 
 ## Using it day to day
 
@@ -51,6 +51,14 @@ Confirmed against Bitwarden's own current Help Center, not assumed from memory.
 - **Organizations (sharing with others):** in the web vault, **New organization** creates a shared space with its own **Admin Console** for managing members and items. Free/self-hosted plans cover the basics needed here — invite members from the Admin Console's Members page, then move or share vault items into the organization so members other than you can see them.
 - **Collections:** shared-folder equivalents inside an organization — create one under the org's Collections page, then assign members/groups to it with their own permission level (view vs. edit). An item can belong to several collections; a member only sees the collections they've been granted access to, so collections are the actual sharing/access-control unit, not the organization membership alone.
 - **Admin panel vs. vault login — these are separate accounts/purposes.** The `/admin` panel (gated by `ADMIN_TOKEN`, see above) is instance-level administration: user list, diagnostics, disabling accounts, server config overrides. It has no vault of its own and isn't where you store or view passwords — that's the normal login at `https://vaultwarden.${DOMAIN}` with a real user account, same as any Bitwarden client.
+
+## Real client IPs
+
+`IP_HEADER=CF-Connecting-IP` (`.env`, since 2026-10-04; it was `X-Real-IP`). Vaultwarden logs this address for failed logins and uses it for login rate limiting. Cloudflare sets `CF-Connecting-IP` itself, so a visitor can't fake it through the tunnel, and it reaches Vaultwarden under Docker (nginx-plain) and Kubernetes (Traefik) alike. `X-Real-IP` isn't passed on by Traefik. `X-Forwarded-For` isn't safe here, because Vaultwarden takes its *first* entry, which a visitor can fake (`src/auth.rs`). Verified: a failed login through the tunnel logs the real IP.
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 2 users and 317 vault items restored; start time cut from 60s to 5s (timing-only healthcheck override). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

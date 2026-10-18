@@ -1,0 +1,19 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8123 matches adguard-home/compose.dev.yml's web UI port exactly. Port
+# 53 (DNS) is intentionally not exposed here — see deployment.yaml's
+# top-of-file comment for why LAN-wide DNS is out of scope for this pilot.
+# The Compose version was stopped (uv run homeserver.py dev down
+# adguard-home) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: adguard-home-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: adguard-home
+  ports:
+    - port: 8123
+      targetPort: 3000

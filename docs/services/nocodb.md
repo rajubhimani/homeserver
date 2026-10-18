@@ -7,6 +7,9 @@
 **Purpose:** Turns any database into a spreadsheet-style UI (Airtable alternative).
 **Port:** `8126` (host) → `8080` (container) | **Data:** `service_data/data/nocodb/` | **Requires:** Postgres
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/nocodb/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -31,7 +34,7 @@ No mobile app — a third-party prototype client exists on GitHub but isn't publ
 
 ## Notes
 
-- `NC_DB` wires NocoDB's own metadata store to the `nocodb-db` Postgres container; this is separate from any external database you later connect NocoDB *to* as a data source (that's configured per-base inside the app).
+- `NC_DB` wires NocoDB's own metadata store to its database on `shared-postgres`; this is separate from any external database you later connect NocoDB *to* as a data source (that's configured per-base inside the app).
 - `NC_AUTH_JWT_SECRET` is set explicitly rather than left unset — NocoDB generates a random JWT secret on every restart if it's not set, which silently invalidates every active session each time the container restarts.
 - Health endpoint: `/api/v1/health`.
 

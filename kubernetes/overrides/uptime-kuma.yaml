@@ -1,0 +1,16 @@
+containers:
+  uptime-kuma:
+    # The image's own HEALTHCHECK (louislam/uptime-kuma:2.5.5), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - extra/healthcheck
+      interval: 60s
+      timeout: 30s
+      start_period: 180s
+      retries: 5
+    mounts:
+      /var/run/docker.sock:
+        skip: true
+        reason: "Only for Uptime Kuma's 'Docker container' monitor type, which reads Docker's API. Kubernetes has none; HTTP/TCP monitors work unchanged."

@@ -1,14 +1,28 @@
 .DS_Store
+# FUSE artifact left behind when a file is deleted while still open, e.g. by
+# cloudflared-watchdog on the FUSE-mounted HDD (/mnt/mydata) — harmless, regenerates
+.fuse_hidden*
 /._data
 /._immich
 /._nextcloud
 /._setup.md
-service_data/
+service_data
 # k8s pilot's placeholder test data (see kubernetes/README.md) — never real data
 service_data-test/
+# Local working files (agent config/notes) — not synced or tracked, same
+# reasoning as service_data above.
+CLAUDE.md
+AGENTS.md
+TODO.md
+.claude
+.agents
 .env
+# Ghostfolio <-> Firefly sync credentials (services/ghostfolio/sync.env.example)
+sync.env
 *.log
 *.json
+# the watchdog's generated config ships in a ConfigMap, so it must be in git
+!kubernetes/generated/platform/cluster-watchdog/*/watchdog.json
 # services.json is the single source of truth for tiers + landing-page
 # grouping (homeserver.py, services/landing/index.html both read it) — must
 # override the blanket *.json ignore above or it silently never gets committed.

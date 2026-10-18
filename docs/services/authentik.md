@@ -18,13 +18,15 @@ uv run homeserver.py dev up authentik
 
 `AUTHENTIK_SECRET_KEY` must be set **before** first start.
 
+**Permissions, handled automatically**: authentik's server/worker images run as a hardcoded uid 1000 (confirmed via `docker inspect ghcr.io/goauthentik/server:2026.8.4 --format '{{.Config.User}}'`) with no root fallback, so neither can self-heal `media/`/`templates/`/`certs/` if those are ever recreated root-owned. `authentik-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `mkdir -p`s and `chown`s all three to `1000:1000` on every start, before `authentik-server`/`authentik-worker` start. Verified live via a real backup + recreate of this actively-running service (not a destructive data wipe, given this is the SSO for the whole stack) — confirmed healthy afterward via `docker exec authentik-server ak healthcheck` (`"successfully checked health"`) and correct `1000:1000` ownership in place of the previous `root:root`.
+
 ## First login
 
 Browse to `http://<ip>:8088/if/admin/` — set the password for the default admin account `akadmin`.
 
 ## Health endpoint
 
-`authentik-server`'s compose healthcheck runs `ak healthcheck` inside the container, which itself hits `http://localhost:9000/-/health/live/` — confirmed live in the container's own logs (`"event":"/-/health/live/","status":200`). Both `/-/health/live/` and `/-/health/ready/` on port 9000 return HTTP 200 with an empty body — confirmed directly with `docker exec authentik-server python3 -c "..."` (this image has no `curl`/`wget`, only its own bundled Python, so `docker exec ... curl` won't work — use `ak healthcheck` or a short Python one-liner instead). `authentik-worker` has no compose healthcheck of its own; its health is inferred from the shared Postgres dependency and its own log output.
+`authentik-server` and `authentik-worker` both use the image's own `HEALTHCHECK` (`ak healthcheck`, 30s interval, 120s start period); upstream's compose defines none for them, so `compose.yml` doesn't either. `authentik-db` uses upstream's check (`pg_isready -d $POSTGRES_DB -U $POSTGRES_USER`, 30s/5s/5 retries/20s start) plus `-h 127.0.0.1` and `start_interval: 2s` (see [shared-postgres](shared-postgres.md#healthcheck) for why every CORE `pg_isready` probes TCP). `ak healthcheck` itself hits `http://localhost:9000/-/health/live/` — confirmed live in the container's own logs (`"event":"/-/health/live/","status":200`). Both `/-/health/live/` and `/-/health/ready/` on port 9000 return HTTP 200 with an empty body — confirmed directly with `docker exec authentik-server python3 -c "..."` (this image has no `curl`/`wget`, only its own bundled Python, so `docker exec ... curl` won't work — use `ak healthcheck` or a short Python one-liner instead).
 
 ## End-user self-service — password and MFA
 
@@ -58,7 +60,7 @@ Sidebar **Applications → Providers → Create**:
 - Proxy type: **Forward auth (domain level)**
 - Name: `forward-auth-domain` (or anything memorable — only one of these should exist)
 - Authorization flow: the default (`default-provider-authorization-implicit-consent`) — same as every other provider in this stack
-- Cookie domain: `${DOMAIN}` (e.g. `prajnatech.in` — no leading dot, no subdomain)
+- Cookie domain: `${DOMAIN}` (e.g. `yourdomain.com` — no leading dot, no subdomain)
 - Everything else: leave at its default
 - Save
 
@@ -76,6 +78,10 @@ Sidebar **Applications → Applications → Create**:
 - Save
 
 No client ID/secret to copy anywhere — unlike OIDC, forward-auth doesn't hand the protected app any credentials. Nothing in `services/<app>/.env` changes for any of the five services below.
+
+### Authentik on a different server
+
+nginx-plain reaches Authentik's forward-auth endpoint through `AUTHENTIK_UPSTREAM` in `services/nginx-plain/.env` (default `http://authentik-server:9000`, the Docker name, which only resolves on the same host). If Authentik runs on another server, set it to that server's address. The forward-auth subrequests always send `Host: authentik.${DOMAIN}` (with the protected app in `X-Original-URL`), so a public `https://authentik.${DOMAIN}` works too: Cloudflare routes by Host and would otherwise send an app-host request back to this server's own tunnel. Set to the public URL on 2026-10-17 because Authentik runs on the other server; a private LAN/WireGuard address is faster and avoids the internet hop. Without a reachable upstream every protected vhost (code-server, the remote browsers, ...) returns 500 with `authentik-server could not be resolved` in nginx-plain's log.
 
 ### 4. Protect a vhost
 
@@ -128,7 +134,7 @@ The `auth_request` subrequest talks to `authentik-server` directly over the inte
 
 For a team/firm, always prefer inviting people over creating their accounts yourself — you never see or handle anyone's password, they self-serve their own signup via a one-time link, and revoking an unused invitation is cleaner than resetting a password you handed out. Manually creating a user (**Directory → Users → Create**, leave **"Is superuser" off**, then set a password yourself) should only be a fallback for one-off edge cases.
 
-**Simpler alternative, no blueprint needed:** current Authentik versions (this stack pins `2026.8.0`) ship a native **Invitation Wizard** — **Directory → Invitations → click the caret (▾) next to "New Invitation" → "with New Enrollment Flow and Invitation Stage..."** (confirmed current wording against [the official Invitations docs](https://docs.goauthentik.io/users-sources/user/invitations/)) — that walks through naming the flow, the invitation stage, and the invitation itself without ever touching **Customization → Blueprints** or hitting the apply gotcha noted below.
+**Simpler alternative, no blueprint needed:** current Authentik versions (this stack pins `2026.8.4`) ship a native **Invitation Wizard** — **Directory → Invitations → click the caret (▾) next to "New Invitation" → "with New Enrollment Flow and Invitation Stage..."** (confirmed current wording against [the official Invitations docs](https://docs.goauthentik.io/users-sources/user/invitations/)) — that walks through naming the flow, the invitation stage, and the invitation itself without ever touching **Customization → Blueprints** or hitting the apply gotcha noted below.
 
 **Correction from an earlier pass of this doc:** the blueprint imported below, `example/flows-invitation-enrollment-minimal.yaml`, does **not** provide any extras over the wizard — its own header comment in the authentik source calls it a "Companion to `flows-invitation-enrollment.yaml`, intended for the 'New Invitation' wizard," and confirmed live against this instance's own database, the flow it created (`Team Enrollment`, slug `invitation-enrollment-flow`) has no group assignment and no user-path templates — just the same bare username/password/name/email/user-write/login stage chain the wizard itself builds. The blueprint that actually adds group assignment and user-path templates is the **other** example file, `example/flows-invitation-enrollment.yaml` (no `-minimal` suffix) — it creates three separate flows (external users, internal users, and an internal-with-auto-group-assignment variant) plus an example group. Neither is currently imported in this stack; if you want the group-assignment behavior, import that file instead, following the same steps below. For a first pass, the wizard and the `-minimal` blueprint are functionally equivalent — pick whichever is more convenient.
 
@@ -169,6 +175,24 @@ They open the link, pick their own username, set their own password, fill in nam
 
 None of the five forward-auth apps above, nor Outline's OIDC application, have any group/policy restrictions configured — every application has zero bindings, which in Authentik means *any* authenticated user can reach it. A freshly-enrolled account gets access to everything immediately, no per-app step needed. The flip side: those five apps have no internal user/role system of their own, so anyone you invite gets full access to all of them (e.g. can read every captured email in Mailpit, see all Docker logs in Dozzle). Restricting *which* people can reach *which* app would need group-based policy bindings added per-application — not set up today.
 
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 4 users and 2 applications restored; the empty install needs about 50s for its first migrations. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## On Kubernetes
+
+Generated from this compose file:
+
+- **Database:** `authentik-db` becomes its own CloudNativePG cluster under the same name. Database and owner come from `POSTGRES_DB`/`POSTGRES_USER`; the owner isn't a superuser.
+- **Server and worker:** they share one `authentik-data` volume (`media`, `templates` and `certs` as subPaths). `authentik-permissions` runs as an init container on that volume.
+- **Probes:** copied from Authentik's official Helm chart (2026.8.4).
+- **Docker socket:** not mounted. It's only for Docker-managed outposts; forward auth uses the embedded outpost.
+- **Login in front of apps:** the Traefik `Middleware` `authentik-forward-auth` (from Authentik's Traefik guide) protects every hostname nginx-plain sends through `auth_request`.
+
+Copy your data in with `uv run kubernetes/cluster.py import authentik --live-db` ([docs/17](../17-docker-to-kubernetes.md) step 8).
+

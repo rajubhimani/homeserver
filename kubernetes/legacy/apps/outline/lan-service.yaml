@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8114 matches outline/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down outline) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: outline-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: outline
+  ports:
+    - port: 8114
+      targetPort: 3000

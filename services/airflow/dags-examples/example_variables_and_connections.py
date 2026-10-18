@@ -21,7 +21,7 @@ then trigger:
 Prove it's genuinely encrypted, not plaintext, straight from the DB — the
 password column should be an unreadable Fernet blob, not "super-secret-value":
 
-    docker exec airflow-db psql -U airflow -c "SELECT conn_id, password FROM connection WHERE conn_id='demo_api_connection';"
+    docker exec shared-postgres psql -U airflow -d airflow -c "SELECT conn_id, password FROM connection WHERE conn_id='demo_api_connection';"
 """
 
 from datetime import datetime

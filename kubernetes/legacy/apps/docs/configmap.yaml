@@ -1,0 +1,148 @@
+# Small, static config files baked into a ConfigMap — same pattern as
+# kubernetes/apps/landing/configmap.yaml (nginx + entrypoint templating).
+# The large content this site actually serves (vendor/ — mermaid.min.js
+# alone is ~3.5MB, over the 1MiB ConfigMap/Secret limit — plus the repo's
+# own docs/, setup.md, docker/, kubernetes/, _sidebar.md) lives on the
+# docs-content PVC in deployment.yaml instead, populated via kubectl cp
+# after the pod starts — same "no host filesystem passthrough on kind"
+# reasoning as jellyfin's media PVC and immich's upload PVC. This is a
+# point-in-time copy of services/docs/{index.html,nginx.conf,entrypoint.sh},
+# not a live bind mount — re-apply after editing those files.
+#
+# index.html below deliberately drops the real Plausible analytics
+# snippet services/docs/index.html has — that script reports to the real
+# production domain/account, and a checked-into-git pilot manifest
+# shouldn't fire page views from every test deployment. Same reasoning
+# landing/deployment.yaml used for generic placeholder DOMAIN/SITE_NAME
+# instead of real values.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docs-config
+  namespace: apps
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>SITE_TITLE_PLACEHOLDER</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+      <meta name="robots" content="noindex, nofollow">
+      <link rel="stylesheet" href="/vendor/docsify-vue.css">
+      <link rel="stylesheet" href="/vendor/prism-tomorrow.min.css">
+      <style>
+        :root {
+          --theme-color: #3a5ba0;
+        }
+        .markdown-section { max-width: 900px; }
+        .markdown-section code { background-color: rgba(58,91,160,0.08); }
+        .search input { border-radius: 4px; }
+      </style>
+    </head>
+    <body>
+      <div id="app"></div>
+      <script>
+        window.$docsify = {
+          name: 'SITE_TITLE_PLACEHOLDER',
+          homepage: 'setup.md',
+          loadSidebar: true,
+          loadNavbar: false,
+          relativePath: true,
+          maxLevel: 4,
+          subMaxLevel: 3,
+          sidebarDisplayLevel: 1,
+          search: {
+            maxAge: 0,
+            paths: 'auto',
+            placeholder: 'Search docs',
+            noData: 'No results',
+            depth: 4,
+          },
+          copyCode: {
+            buttonText: 'Copy',
+            errorText: 'Error',
+            successText: 'Copied',
+          },
+          formatUpdated: '{MM}/{DD}/{YYYY}',
+        };
+
+        (function () {
+          var isPopping = false;
+          window.addEventListener('popstate', function () {
+            isPopping = true;
+          });
+          window.addEventListener(
+            'scroll',
+            function () {
+              sessionStorage.setItem('docsify-scroll:' + location.hash, String(window.scrollY));
+            },
+            { passive: true }
+          );
+          window.$docsify.plugins = (window.$docsify.plugins || []).concat(function (hook) {
+            hook.doneEach(function () {
+              if (isPopping) {
+                isPopping = false;
+                var saved = sessionStorage.getItem('docsify-scroll:' + location.hash);
+                if (saved !== null) {
+                  requestAnimationFrame(function () {
+                    window.scrollTo(0, parseInt(saved, 10));
+                  });
+                  return;
+                }
+              }
+              window.scrollTo(0, 0);
+            });
+          });
+        })();
+      </script>
+      <script src="/vendor/docsify.min.js"></script>
+      <script src="/vendor/docsify-search.min.js"></script>
+      <script src="/vendor/docsify-sidebar-collapse.min.js"></script>
+      <script src="/vendor/docsify-copy-code.min.js"></script>
+      <script src="/vendor/mermaid.min.js"></script>
+      <script src="/vendor/docsify-mermaid.js"></script>
+      <script>
+        mermaid.initialize({ startOnLoad: false });
+      </script>
+      <script src="/vendor/prism.min.js"></script>
+      <script src="/vendor/prism-bash.min.js"></script>
+      <script src="/vendor/prism-yaml.min.js"></script>
+      <script src="/vendor/prism-json.min.js"></script>
+      <script src="/vendor/prism-python.min.js"></script>
+      <script src="/vendor/prism-nginx.min.js"></script>
+      <script src="/vendor/prism-docker.min.js"></script>
+    </body>
+    </html>
+  nginx.conf: |
+    server {
+        listen 80;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /vendor/ {
+            add_header Cache-Control "public, max-age=604800";
+        }
+
+        location ~* \.md$ {
+            default_type text/plain; charset utf-8;
+            add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+            add_header Pragma "no-cache" always;
+            expires 0;
+        }
+
+        location / {
+            add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+            add_header Pragma "no-cache" always;
+            expires 0;
+            try_files $uri $uri/ /index.html;
+        }
+    }
+  entrypoint.sh: |
+    #!/bin/sh
+    set -e
+    sed \
+      -e "s/SITE_TITLE_PLACEHOLDER/${SITE_TITLE}/g" \
+      /template/index.html > /usr/share/nginx/html/index.html
+    exec nginx -g 'daemon off;'

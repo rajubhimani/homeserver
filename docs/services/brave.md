@@ -33,7 +33,7 @@ Shields (per-site ad/tracker blocking) and Brave's own **Private Window with Tor
 ## Gotchas
 
 - Same `seccomp:unconfined`/`shm_size: "1gb"` requirements as Chromium (Brave is Chromium-based).
-- **No app-specific CLI-flags env var exists for this image** (unlike Chromium/Ungoogled Chromium's `CHROME_CLI`) — upstream's own docs don't document one, so `.env.example` doesn't carry a stale/guessed var for it.
+- **No app-specific CLI-flags env var exists for this image** (unlike Chromium's `CHROME_CLI`) — upstream's own docs don't document one, so `.env.example` doesn't carry a stale/guessed var for it.
 
 ---
 

@@ -2,20 +2,22 @@
 """homeserver.py — manage all homeserver services (Python port of homeserver.sh)
 
 Usage:
-  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots> <min|core|daily|office|automation-ai|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--fresh] [--snapshot <ts>] [--yes]
+  python homeserver.py <env> <up|down|restart|logs|update|backup|restore|snapshots|reset> <min|core|monitoring|daily|browser|office|automation-ai|extra|all|running|group:<name>|service...> [--profile <name>] [--no-backup] [--no-ml] [--no-wg] [--fresh] [--snapshot <ts>] [--yes]
 
-  Any command targeting a tier keyword (min/core/daily/all/running),
+  Any command targeting a tier keyword (min/core/monitoring/daily/browser/office/automation-ai/extra/all/running),
   'group:<name>', or a bare bundle name (e.g. 'browser') prints the exact
   resolved service list and asks for confirmation before acting — pass
   --yes/-y to skip the prompt (e.g. non-interactive/cron use). Naming
   explicit service(s) directly (e.g. 'up nextcloud vaultwarden') never
   prompts — you already said exactly what you want.
+  Exception: 'reset' always asks (type 'reset'), even for named services,
+  and refuses outright when stdin isn't a terminal unless --yes is given.
   python homeserver.py <env> -r <service...>   (shorthand for restart)
   python homeserver.py <env> up group:notes    start every service in category/subcategory
                                                 'notes' (or any other group — see services.json's
                                                 'category'/'subcategory' fields for valid names).
                                                 Works with every action, same as min/core/all.
-  python homeserver.py <env> precreate <min|core|all|service...>
+  python homeserver.py <env> precreate <min|core|all|service...> [--update]
                                                 create containers without starting them, so a
                                                 never-started service shows up as a stack in
                                                 Portainer (auto-detected by its labels) and can be
@@ -23,11 +25,18 @@ Usage:
                                                 already has containers. Manual-tier services aren't
                                                 included in 'all' here either — list them by name
                                                 alongside 'all' if you want them too.
+                                                --update: force-recreate containers that already
+                                                exist (e.g. after an .env/compose edit) instead of
+                                                skipping them — still refuses to touch a service
+                                                that's currently running (use 'up' for that).
   python homeserver.py gc [--yes]              reclaim Docker disk space (prune + Windows VHDX compaction)
   python homeserver.py orphaned-volumes [service|all] [--yes]
                                                 list/remove volumes not declared in a service's current compose.yml
   python homeserver.py status (or ps)          list every known service, tier by tier, marking which are running,
                                                 plus every group and exactly which services 'group:<name>' resolves to
+  python homeserver.py fix-network [--yes]     detect + recreate any running container left detached from the
+                                                'homeserver' network (looks running/healthy but unreachable by
+                                                everything else — a plain restart does not fix this)
 
 Service tiers:
   min    — bare minimum to run the server (beszel, cloudflared, nginx-plain, landing, docs, portainer)
@@ -35,17 +44,30 @@ Service tiers:
            NOT already running (idempotent otherwise); 'down core' stops
            ONLY core, min is left running — 'down all' is the only command
            that also stops min.
+  monitoring — alerting, uptime, metrics and logs (ntfy, uptime-kuma,
+           observability, dozzle); opt-in, NOT included by 'up core'. 'up
+           monitoring' bootstraps any of min/core NOT already running, then
+           starts monitoring; 'down monitoring' stops ONLY monitoring.
   daily  — apps used regularly but not core infra; opt-in, NOT included by
-           'up core'. 'up daily' bootstraps any of min/core NOT already
-           running, then starts daily; 'down daily' stops ONLY daily, min/core
-           are left running. You flip this tier on/off yourself as needed.
+           'up core'. 'up daily' bootstraps any of min/core/monitoring NOT
+           already running, then starts daily; 'down daily' stops ONLY daily,
+           min/core/monitoring are left running. You flip this tier on/off
+           yourself as needed.
+  browser — the Browser Hub's remote browsers (firefox, chromium, brave,
+           mullvad-browser, librewolf, zen, helium, chrome, edge, vivaldi);
+           opt-in, same idiom as daily but bootstraps min/core/monitoring/daily first.
+           'browser' is the tier keyword — it takes precedence over the
+           same-named bundle; use 'group:browser' to act on just the
+           browsers without the lower-tier cascade (e.g. restart/update).
   office — firm/business apps (calcom, listmonk, plane, vikunja, appflowy,
            stirling-pdf-lite, stirling-pdf); opt-in, same idiom as daily but
-           bootstraps min/core/daily first.
+           bootstraps min/core/monitoring/daily/browser first.
   automation-ai — workflow/automation/AI apps (ollama, open-webui, n8n,
            airflow, temporal, dagster); opt-in, bootstraps
-           min/core/daily/office first.
-  all    — core + daily + office + automation-ai + extra (everything)
+           min/core/monitoring/daily/browser/office first.
+  extra  — everything else, opt-in (observability, paperless, erpnext, ...);
+           bootstraps min/core/monitoring/daily/browser/office/automation-ai first.
+  all    — core + monitoring + daily + browser + office + automation-ai + extra (everything)
 
   Every `down` target (a service, group, tier, or all) also stops containers
   from every optional Compose profile declared by the selected service.
@@ -57,6 +79,7 @@ IMPORTANT: When adding a new service —
   - Add to SERVICES_CORE if it should auto-start with 'up core'
   - Add to SERVICES_DAILY if it's used regularly but shouldn't auto-start
     with core — the user turns it on/off explicitly with 'up/down daily'
+  - Add to SERVICES_BROWSER only if it's a Browser Hub member browser
   - Add to SERVICES_OFFICE/SERVICES_AUTOMATION_AI if it fits one of those
     opt-in groupings (firm/business apps, or workflow/automation/AI apps)
     instead of general-purpose daily
@@ -85,6 +108,7 @@ shell at all, so none of that applies here — no workarounds needed.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -149,9 +173,34 @@ _ROOT_ENV = load_env_file(BASE_DIR / ".env")
 
 DOMAIN = _ROOT_ENV.get("DOMAIN", "yourdomain.com")
 RUNTIME = _ROOT_ENV.get("RUNTIME", "docker")
+# WG_TUNNEL=off (root .env): this machine doesn't run the WireGuard VPN (a laptop/dev box next to the 24/7 server).
+# wg-easy then behaves like a manual-tier service, prod never asks to start it, and services start without their
+# 10.8.0.1 port mapping. Default on = the server's behaviour.
+WG_TUNNEL = _ROOT_ENV.get("WG_TUNNEL", "on").strip().lower() not in ("off", "false", "no", "0")
 DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
+# The 'homeserver' network's subnet is pinned, never left to Docker. The browser containers have fixed IPs
+# inside it (compose: ipv4_address ${BROWSER_NET}.<n>, derived from this subnet below; the LAN-isolation rules
+# in services/nginx-plain/browser-lan-block.sh read the live network). When the network was recreated without a
+# subnet on 2026-10-05, Docker picked 172.19.0.0/16 instead of the old 172.18.0.0/16 and every browser failed to
+# create ("no configured subnet contains IP address"). Set HOMESERVER_SUBNET in the root .env to change it.
+HOMESERVER_SUBNET = _ROOT_ENV.get("HOMESERVER_SUBNET", "172.19.0.0/16")
+
+
+def browser_net(subnet: str = HOMESERVER_SUBNET) -> str:
+    """First three octets of the browsers' fixed-IP block: <a>.<b>.255, the top /24 of the pinned /16
+    (a.b.255.240-250). compose_env injects it as BROWSER_NET."""
+    import ipaddress
+    net = ipaddress.ip_network(subnet)
+    if net.version != 4 or net.prefixlen > 16:
+        print(f"HOMESERVER_SUBNET={subnet}: needs an IPv4 subnet of /16 or larger (the browsers use its x.y.255.* block)", file=sys.stderr)
+        sys.exit(1)
+    a, b = net.network_address.packed[:2]
+    return f"{a}.{b}.255"
 # Snapshots to keep per service before auto-pruning the oldest; -1 = unlimited
 BACKUP_RETENTION = int(_ROOT_ENV.get("BACKUP_RETENTION", "5"))
+# reset-backup-<ts> folders (each reset's verified pre-wipe snapshot) to keep
+# per service; they never count against BACKUP_RETENTION. -1 = unlimited.
+RESET_BACKUP_RETENTION = int(_ROOT_ENV.get("RESET_BACKUP_RETENTION", "5"))
 # 'subprocess' (default, zero extra deps) or 'python-on-whales' (optional —
 # uv sync --extra docker-sdk) for typed exceptions/structured errors instead
 # of parsed CLI text. Both call the same underlying docker/docker compose CLI
@@ -172,13 +221,19 @@ if os.path.exists(DOCKER_SOCKET):
 #
 #   up min           = MIN
 #   up core          = bootstrap any of MIN not already running, + CORE
-#   up daily         = bootstrap any of MIN/CORE not already running, + DAILY
+#   up monitoring    = bootstrap any of MIN/CORE not already running, + MONITORING
 #                      (opt-in — never implied by 'up core')
-#   up office        = bootstrap any of MIN/CORE/DAILY not already running,
-#                      + OFFICE (opt-in — never implied by 'up daily')
-#   up automation-ai = bootstrap any of MIN/CORE/DAILY/OFFICE not already
-#                      running, + AUTOMATION_AI (opt-in)
-#   up all           = MIN + CORE + DAILY + OFFICE + AUTOMATION_AI + EXTRA,
+#   up daily         = bootstrap any of MIN/CORE/MONITORING not already running,
+#                      + DAILY (opt-in — never implied by 'up monitoring')
+#   up browser       = bootstrap any of MIN/CORE/MONITORING/DAILY not already
+#                      running, + BROWSER (opt-in — never implied by 'up daily')
+#   up office        = bootstrap any of MIN/CORE/MONITORING/DAILY/BROWSER not
+#                      already running, + OFFICE (opt-in — never implied by 'up browser')
+#   up automation-ai = bootstrap any of MIN/CORE/MONITORING/DAILY/BROWSER/OFFICE
+#                      not already running, + AUTOMATION_AI (opt-in)
+#   up extra         = bootstrap any of MIN/CORE/MONITORING/DAILY/BROWSER/OFFICE/
+#                      AUTOMATION_AI not already running, + EXTRA (opt-in)
+#   up all           = MIN + CORE + MONITORING + DAILY + BROWSER + OFFICE + AUTOMATION_AI + EXTRA,
 #                      always (full cascade)
 #
 #   every down target  = selected services, reversed when tier/group/all;
@@ -211,17 +266,26 @@ _SERVICES_DATA = load_services_json(BASE_DIR / "services.json")
 # Firefly's compose.yml, while Browser Hub is a virtual card for a bundle.
 # Only entries with their own services/<slug>/ directory belong in lifecycle
 # commands; the landing page still renders every entry from services.json.
+def effective_tier(entry: dict) -> str | None:
+    """The tier the lifecycle commands use: services.json's, except wg-easy is manual while WG_TUNNEL=off."""
+    if entry.get("slug") == "wg-easy" and not WG_TUNNEL:
+        return "manual"
+    return entry.get("tier")
+
+
 def is_managed_service(entry: dict) -> bool:
     return bool(entry.get("tier")) and not entry.get("virtual") and (SERVICES_DIR / entry["slug"]).is_dir()
 
 
-SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "min" and is_managed_service(s)]
-SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "core" and is_managed_service(s)]
-SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "daily" and is_managed_service(s)]
-SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "office" and is_managed_service(s)]
-SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "automation-ai" and is_managed_service(s)]
-SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "extra" and is_managed_service(s)]
-SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if s.get("tier") == "manual" and is_managed_service(s)]
+SERVICES_MIN = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "min" and is_managed_service(s)]
+SERVICES_CORE = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "core" and is_managed_service(s)]
+SERVICES_MONITORING = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "monitoring" and is_managed_service(s)]
+SERVICES_DAILY = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "daily" and is_managed_service(s)]
+SERVICES_BROWSER = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "browser" and is_managed_service(s)]
+SERVICES_OFFICE = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "office" and is_managed_service(s)]
+SERVICES_AUTOMATION_AI = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "automation-ai" and is_managed_service(s)]
+SERVICES_EXTRA = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "extra" and is_managed_service(s)]
+SERVICES_MANUAL = [s["slug"] for s in _SERVICES_DATA["services"] if effective_tier(s) == "manual" and is_managed_service(s)]
 
 # category/subcategory -> ordered list of slugs, e.g. SERVICE_GROUPS["notes"]
 # or SERVICE_GROUPS["productivity"] — powers 'up group:<name>' (and every
@@ -251,7 +315,7 @@ for _s in _SERVICES_DATA["services"]:
 del _s, _key, _val, _cat, _sub
 
 # "bundle" groups multiple independently-deployed service directories under
-# one startable name — a hub-of-containers (Browser Hub's five browser
+# one startable name — a hub-of-containers (Browser Hub's ten browser
 # containers behind one shared login, see docs/services/browser-hub.md) that
 # isn't a category/subcategory grouping. A member declares "bundle": "<hub
 # slug>"; the hub's own (virtual) entry can declare "requires": [...] for
@@ -345,6 +409,20 @@ def header(msg: str) -> None:
 # only to the BACKEND instance, never to subprocess/docker directly.
 
 
+def _healthcheck_seconds(hc: dict | None) -> dict:
+    """Docker's .Config.Healthcheck (durations in ns, 0 = unset) -> seconds
+    with Docker's documented defaults applied. {} when there's no check."""
+    if not hc or not hc.get("Test") or hc["Test"][0] == "NONE":
+        return {}
+    ns = 1_000_000_000
+    return {
+        "interval": (hc.get("Interval") or 30 * ns) / ns,
+        "timeout": (hc.get("Timeout") or 30 * ns) / ns,
+        "start_period": (hc.get("StartPeriod") or 0) / ns,
+        "retries": hc.get("Retries") or 3,
+    }
+
+
 class DockerBackend(ABC):
     @abstractmethod
     def compose_up(
@@ -385,11 +463,27 @@ class DockerBackend(ABC):
         and harmless). Returns (success, stderr_text)."""
 
     @abstractmethod
-    def compose_create(self, files: list[Path], env: dict[str, str], profile: str | None) -> tuple[bool, str]:
+    def db_exec(
+        self, container: str, cmd: list[str], input: bytes | None = None, env: dict[str, str] | None = None,
+    ) -> tuple[bool, bytes, str]:
+        """docker exec [-i] [-e K=V ...] container cmd..., stdin from input,
+        stdout captured as bytes. The shared-db helpers (provision_shared_db,
+        shared-db dump/restore) build psql/mariadb/mariadb-dump commands on
+        top of this; env carries credentials (e.g. MYSQL_PWD) so they never
+        appear in the process list. Returns (success, stdout_bytes,
+        stderr_text)."""
+
+    @abstractmethod
+    def compose_create(
+        self, files: list[Path], env: dict[str, str], profile: str | None, force_recreate: bool = False,
+    ) -> tuple[bool, str]:
         """docker compose create — makes containers (pulls images, wires
         networks/volumes) without starting them. Used by 'precreate' so a
         service becomes visible/startable from Portainer's own UI without
-        actually running it yet. Returns (success, combined output)."""
+        actually running it yet. force_recreate: used by 'precreate --update'
+        to rebuild containers that already exist (e.g. after an .env change)
+        instead of leaving their stale config in place. Returns (success,
+        combined output)."""
 
     @abstractmethod
     def compose_down(self, files: list[Path], env: dict[str, str], profile: str | None) -> bool: ...
@@ -399,6 +493,9 @@ class DockerBackend(ABC):
 
     @abstractmethod
     def compose_logs_follow(self, files: list[Path], env: dict[str, str]) -> None: ...
+
+    @abstractmethod
+    def compose_config(self, files: list[Path], env: dict[str, str]) -> dict: ...
 
     @abstractmethod
     def running_container_names(self) -> list[str]: ...
@@ -413,6 +510,29 @@ class DockerBackend(ABC):
     @abstractmethod
     def container_health(self, name: str) -> str:
         """'healthy', 'unhealthy', 'starting', or 'none' (no HEALTHCHECK defined)."""
+
+    @abstractmethod
+    def container_healthcheck(self, name: str) -> dict:
+        """The container's effective healthcheck settings in seconds:
+        {"interval", "timeout", "start_period", "retries"} — from compose or
+        the image's own HEALTHCHECK, with Docker's defaults (30s/30s/0s/3)
+        where unset. {} if the container has no healthcheck or doesn't exist.
+        wait_healthy uses it to wait as long as Docker itself would before
+        calling a container unhealthy."""
+
+    @abstractmethod
+    def container_info(self, name: str) -> dict:
+        """network_mode (HostConfig.NetworkMode), networks (list of network
+        names currently in NetworkSettings.Networks — empty means the
+        container has no live network endpoint, the detached/stale-network
+        symptom this stack hit twice: a container created before the
+        'homeserver' network was recreated during the 2026-09-04 IPv6-lockdown
+        work kept running but could no longer be reached by anything else on
+        it, see find_stale_network_containers), plus the compose labels
+        needed to recreate it the same way it was originally started
+        (compose_project, compose_service, config_files — a list of the
+        compose file paths recorded on com.docker.compose.project.config_files).
+        Returns {} if the container doesn't exist."""
 
     @abstractmethod
     def volumes_for_project(self, project: str) -> list[str]: ...
@@ -430,7 +550,11 @@ class DockerBackend(ABC):
     def network_exists(self, name: str) -> bool: ...
 
     @abstractmethod
-    def network_create(self, name: str) -> None: ...
+    def network_create(self, name: str, subnet: str | None = None) -> None: ...
+
+    @abstractmethod
+    def network_subnets(self, name: str) -> list[str]:
+        """The subnets of an existing network ([] if it has none or doesn't exist)."""
 
     @abstractmethod
     def tar_volume_to(self, volume: str, dest_dir: Path, archive_name: str) -> bool:
@@ -444,7 +568,34 @@ class DockerBackend(ABC):
         """Clear the volume (if it has contents) and extract archive_path into it."""
 
     @abstractmethod
-    def untar_into_dir(self, archive_path: Path, dest_dir: Path) -> bool: ...
+    def untar_into_dir(self, archive_path: Path, dest_dir: Path) -> bool:
+        """Clear dest_dir (if it has contents) and extract archive_path into
+        it -- same contract as untar_into_volume. Restoring an older snapshot
+        must always leave dest_dir as an exact copy of the snapshot, never a
+        merge with whatever was already there: for a WAL-based store
+        (Prometheus, Loki) a merge produces a directory holding segments from
+        two different points in the WAL's history, which the engine reads as
+        corruption ("segments are not sequential") rather than just stale
+        data. Confirmed as the root cause of a real incident against this
+        stack's own observability service data."""
+
+    @abstractmethod
+    def archive_paths(self, mounts: dict[Path, str], members: list[str], excludes: list[str], dest_file: Path) -> tuple[bool, str]:
+        """tar+gzip `members` (paths relative to /src inside a throwaway root
+        container, where each mounts[host_path] is bind-mounted read-only at
+        /src/<name>) into dest_file. Root so container-owned files (root, or
+        an app's own uid) are readable — a host-user tar would silently skip
+        them. excludes are tar --exclude patterns. Used by `archive`.
+        Returns (success, stderr_text)."""
+
+    @abstractmethod
+    def remove_dir(self, host_dir: Path) -> bool:
+        """Delete host_dir entirely through a throwaway container running as
+        root. Containers create files under service_data/data/<service> as
+        root or their own uid, so a plain shutil.rmtree from homeserver.py
+        (running as the host user) fails with Permission denied — the bug
+        that broke the first 'reset' run on 2026-10-02. Mounts the parent and
+        removes the child, so the directory itself goes too."""
 
     @abstractmethod
     def system_prune(self) -> tuple[bool, str]:
@@ -531,8 +682,26 @@ class SubprocessBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
-    def compose_create(self, files, env, profile):
-        proc = self._run(self._compose_args(files, profile) + ["create"], env=env)
+    def db_exec(self, container, cmd, input=None, env=None):
+        args = [RUNTIME, "exec"]
+        if input is not None:
+            args.append("-i")
+        # '-e NAME' (no '=value') makes docker copy the value from this
+        # process's environment, so secrets never appear in the docker exec
+        # argv on the host (visible to anyone running ps).
+        run_env = None
+        if env:
+            run_env = {**os.environ, **env}
+            for k in env:
+                args += ["-e", k]
+        proc = subprocess.run(args + [container] + list(cmd), input=input, capture_output=True, env=run_env)
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
+    def compose_create(self, files, env, profile, force_recreate=False):
+        args = self._compose_args(files, profile) + ["create"]
+        if force_recreate:
+            args.append("--force-recreate")
+        proc = self._run(args, env=env)
         return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
 
     def compose_down(self, files, env, profile):
@@ -542,6 +711,13 @@ class SubprocessBackend(DockerBackend):
     def compose_pull(self, files, env):
         proc = self._run(self._compose_args(files, None) + ["pull"], env=env)
         return proc.returncode == 0
+
+    def compose_config(self, files, env):
+        proc = self._run(self._compose_args(files, None) + ["config", "--format", "json"], env=env)
+        try:
+            return json.loads(proc.stdout) if proc.returncode == 0 else {}
+        except ValueError:
+            return {}
 
     def compose_logs_follow(self, files, env):
         subprocess.run([RUNTIME] + self._compose_args(files, None) + ["logs", "-f"], env=env)
@@ -564,6 +740,38 @@ class SubprocessBackend(DockerBackend):
             ["inspect", "--format={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", name]
         )
         return proc.stdout.strip() or "none"
+
+    def container_healthcheck(self, name: str) -> dict:
+        proc = self._run(["inspect", "--format={{json .Config.Healthcheck}}", name])
+        try:
+            hc = json.loads(proc.stdout.strip() or "null")
+        except json.JSONDecodeError:
+            return {}
+        return _healthcheck_seconds(hc)
+
+    def container_info(self, name: str) -> dict:
+        fmt = (
+            '{"network_mode":{{json .HostConfig.NetworkMode}},'
+            '"networks":{{json .NetworkSettings.Networks}},'
+            '"compose_project":{{json (index .Config.Labels "com.docker.compose.project")}},'
+            '"compose_service":{{json (index .Config.Labels "com.docker.compose.service")}},'
+            '"config_files":{{json (index .Config.Labels "com.docker.compose.project.config_files")}}}'
+        )
+        proc = self._run(["inspect", f"--format={fmt}", name])
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return {}
+        try:
+            raw = json.loads(proc.stdout.strip())
+        except json.JSONDecodeError:
+            return {}
+        config_files = raw.get("config_files") or ""
+        return {
+            "network_mode": raw.get("network_mode") or "",
+            "networks": list((raw.get("networks") or {}).keys()),
+            "compose_project": raw.get("compose_project") or "",
+            "compose_service": raw.get("compose_service") or "",
+            "config_files": config_files.split(",") if config_files else [],
+        }
 
     def volumes_for_project(self, project: str) -> list[str]:
         # Match by Compose's own naming convention (<project>_<volume-name>)
@@ -588,8 +796,12 @@ class SubprocessBackend(DockerBackend):
     def network_exists(self, name: str) -> bool:
         return self._run(["network", "inspect", name]).returncode == 0
 
-    def network_create(self, name: str) -> None:
-        self._run(["network", "create", name])
+    def network_create(self, name: str, subnet: str | None = None) -> None:
+        self._run(["network", "create"] + (["--subnet", subnet] if subnet else []) + [name])
+
+    def network_subnets(self, name: str) -> list[str]:
+        r = self._run(["network", "inspect", name, "--format", "{{range .IPAM.Config}}{{.Subnet}} {{end}}"])
+        return r.stdout.split() if r.returncode == 0 else []
 
     def tar_volume_to(self, volume: str, dest_dir: Path, archive_name: str) -> bool:
         args = [
@@ -616,9 +828,28 @@ class SubprocessBackend(DockerBackend):
         dest_dir.mkdir(parents=True, exist_ok=True)
         args = [
             "run", "--rm", "-v", f"{dest_dir}:/to", "-v", f"{archive_path.parent}:/backup", "alpine:3.21",
-            "sh", "-c", f"tar xzf /backup/{archive_path.name} -C /to",
+            "sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to",
         ]
         return self._run(args).returncode == 0
+
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        # Raw subprocess in both backends: the member list goes in on stdin,
+        # which python-on-whales' run() doesn't expose.
+        args = [RUNTIME, "run", "--rm", "-i"]
+        for host, name in mounts.items():
+            args += ["-v", f"{Path(host).resolve()}:/src/{name}:ro"]
+        args += ["-v", f"{dest_file.parent.resolve()}:/out", "alpine:3.21", "sh", "-c",
+                 "cd /src && tar " + " ".join(f"--exclude='{e}'" for e in excludes)
+                 + f" -cf - -T - | gzip -1 > '/out/{dest_file.name}'"]
+        proc = subprocess.run(args, input="\n".join(members).encode(), capture_output=True)
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def remove_dir(self, host_dir: Path) -> bool:
+        host_dir = host_dir.resolve()
+        if not host_dir.exists():
+            return True
+        args = ["run", "--rm", "-v", f"{host_dir.parent}:/parent", "alpine:3.21", "rm", "-rf", f"/parent/{host_dir.name}"]
+        return self._run(args).returncode == 0 and not host_dir.exists()
 
     def system_prune(self) -> tuple[bool, str]:
         proc = self._run(["system", "prune", "-a", "--volumes", "-f"])
@@ -724,12 +955,27 @@ class PythonOnWhalesBackend(DockerBackend):
         )
         return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
 
-    def compose_create(self, files, env, profile):
+    def db_exec(self, container, cmd, input=None, env=None):
+        args = [RUNTIME, "exec"]
+        if input is not None:
+            args.append("-i")
+        # '-e NAME' (no '=value') makes docker copy the value from this
+        # process's environment, so secrets never appear in the docker exec
+        # argv on the host (visible to anyone running ps).
+        run_env = None
+        if env:
+            run_env = {**os.environ, **env}
+            for k in env:
+                args += ["-e", k]
+        proc = subprocess.run(args + [container] + list(cmd), input=input, capture_output=True, env=run_env)
+        return proc.returncode == 0, proc.stdout, (proc.stderr or b"").decode(errors="replace")
+
+    def compose_create(self, files, env, profile, force_recreate=False):
         from python_on_whales.exceptions import DockerException  # noqa: PLC0415
         client = self._client(files, profile)
         try:
             with self._env(env):
-                client.compose.create()
+                client.compose.create(force_recreate=force_recreate)
             return True, ""
         except DockerException as e:
             out = f"{e.stderr or ''}\n{e.stdout or ''}"
@@ -756,6 +1002,15 @@ class PythonOnWhalesBackend(DockerBackend):
         except DockerException as e:
             error(f"  pull failed: {e.stderr or e}")
             return False
+
+    def compose_config(self, files, env):
+        from python_on_whales.exceptions import DockerException  # noqa: PLC0415
+        client = self._client(files, None)
+        try:
+            with self._env(env):
+                return client.compose.config(return_json=True)
+        except DockerException:
+            return {}
 
     def compose_logs_follow(self, files, env):
         client = self._client(files, None)
@@ -785,6 +1040,31 @@ class PythonOnWhalesBackend(DockerBackend):
         except Exception:
             return "none"
 
+    def container_healthcheck(self, name: str) -> dict:
+        # Raw inspect JSON rather than python-on-whales' model, which renames
+        # and type-converts these fields differently across versions.
+        proc = subprocess.run([RUNTIME, "inspect", "--format={{json .Config.Healthcheck}}", name], capture_output=True, text=True)
+        try:
+            hc = json.loads(proc.stdout.strip() or "null")
+        except json.JSONDecodeError:
+            return {}
+        return _healthcheck_seconds(hc)
+
+    def container_info(self, name: str) -> dict:
+        try:
+            c = self._docker.container.inspect(name)
+            labels = c.config.labels or {}
+            config_files = labels.get("com.docker.compose.project.config_files") or ""
+            return {
+                "network_mode": c.host_config.network_mode or "",
+                "networks": list((c.network_settings.networks or {}).keys()),
+                "compose_project": labels.get("com.docker.compose.project") or "",
+                "compose_service": labels.get("com.docker.compose.service") or "",
+                "config_files": config_files.split(",") if config_files else [],
+            }
+        except Exception:
+            return {}
+
     def volumes_for_project(self, project: str) -> list[str]:
         # Match by Compose's own naming convention (<project>_<volume-name>)
         # rather than the com.docker.compose.project label — see the
@@ -808,8 +1088,14 @@ class PythonOnWhalesBackend(DockerBackend):
     def network_exists(self, name: str) -> bool:
         return self._docker.network.exists(name)
 
-    def network_create(self, name: str) -> None:
-        self._docker.network.create(name)
+    def network_create(self, name: str, subnet: str | None = None) -> None:
+        self._docker.network.create(name, **({"subnet": [subnet]} if subnet else {}))
+
+    def network_subnets(self, name: str) -> list[str]:
+        try:
+            return [c["Subnet"] for c in (self._docker.network.inspect(name).ipam.config or []) if c.get("Subnet")]
+        except Exception:
+            return []
 
     def tar_volume_to(self, volume: str, dest_dir: Path, archive_name: str) -> bool:
         try:
@@ -852,7 +1138,8 @@ class PythonOnWhalesBackend(DockerBackend):
         dest_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._docker.run(
-                "alpine:3.21", ["sh", "-c", f"tar xzf /backup/{archive_path.name} -C /to"],
+                "alpine:3.21",
+                ["sh", "-c", f"find /to -mindepth 1 -delete; tar xzf /backup/{archive_path.name} -C /to"],
                 volumes=[(dest_dir, "/to"), (archive_path.parent, "/backup")],
                 remove=True,
             )
@@ -860,6 +1147,34 @@ class PythonOnWhalesBackend(DockerBackend):
         except Exception as e:
             error(f"  {e}")
             return False
+
+    def archive_paths(self, mounts, members, excludes, dest_file):
+        # Raw subprocess in both backends: the member list goes in on stdin,
+        # which python-on-whales' run() doesn't expose.
+        args = [RUNTIME, "run", "--rm", "-i"]
+        for host, name in mounts.items():
+            args += ["-v", f"{Path(host).resolve()}:/src/{name}:ro"]
+        args += ["-v", f"{dest_file.parent.resolve()}:/out", "alpine:3.21", "sh", "-c",
+                 "cd /src && tar " + " ".join(f"--exclude='{e}'" for e in excludes)
+                 + f" -cf - -T - | gzip -1 > '/out/{dest_file.name}'"]
+        proc = subprocess.run(args, input="\n".join(members).encode(), capture_output=True)
+        return proc.returncode == 0, (proc.stderr or b"").decode(errors="replace")
+
+    def remove_dir(self, host_dir: Path) -> bool:
+        host_dir = host_dir.resolve()
+        if not host_dir.exists():
+            return True
+        try:
+            self._docker.run(
+                "alpine:3.21",
+                ["rm", "-rf", f"/parent/{host_dir.name}"],
+                volumes=[(host_dir.parent, "/parent")],
+                remove=True,
+            )
+        except Exception as e:
+            error(f"  {e}")
+            return False
+        return not host_dir.exists()
 
     def system_prune(self) -> tuple[bool, str]:
         # Raw subprocess rather than python-on-whales here — same reasoning
@@ -900,12 +1215,17 @@ def is_valid_service(service: str) -> bool:
     return service in (
         SERVICES_MIN
         + SERVICES_CORE
+        + SERVICES_MONITORING
         + SERVICES_DAILY
+        + SERVICES_BROWSER
         + SERVICES_OFFICE
         + SERVICES_AUTOMATION_AI
         + SERVICES_EXTRA
         + SERVICES_MANUAL
         + [PROXY_STANDBY]
+        # Shared DB servers: valid for logs/snapshots/backup/restore by name;
+        # normally started/stopped automatically (see Shared databases).
+        + list(SHARED_DB_SERVICES.values())
     )
 
 
@@ -955,7 +1275,37 @@ def compose_files(service: str, env: str) -> list[Path]:
         podman_file = d / "compose.podman.yml"
         if podman_file.is_file():
             files.append(podman_file)
+    if env == "prod" and (not WG_TUNNEL or (NO_WG_START and not wg_tunnel_up() and not nonlocal_bind_enabled())):
+        no_wg = _without_tunnel_ports(service, files)
+        if no_wg:
+            files.append(no_wg)
     return files
+
+
+def _without_tunnel_ports(service: str, files: list[Path]) -> Path | None:
+    """wg-easy is off and 10.8.0.1 can't be bound: write a throwaway override
+    that drops every 10.8.0.1 port mapping (the 127.0.0.1 ones stay), so the
+    service still starts. Compose appends port lists across files, hence the
+    '!override' tag. None when there is nothing to drop or compose can't tell."""
+    services = BACKEND.compose_config(files, {**os.environ, **compose_env(service)}).get("services", {})
+    lines, dropped = ["services:"], 0
+    for name, svc in services.items():
+        ports = svc.get("ports") or []
+        keep = [p for p in ports if p.get("host_ip") != "10.8.0.1"]
+        if len(keep) == len(ports):
+            continue
+        dropped += len(ports) - len(keep)
+        lines.append(f"  {name}:")
+        lines.append("    ports: !override" + ("" if keep else " []"))
+        for p in keep:
+            lines.append(f'      - "{p["host_ip"]}:{p["published"]}:{p["target"]}/{p.get("protocol", "tcp")}"'
+                         if p.get("host_ip") else f'      - "{p["published"]}:{p["target"]}/{p.get("protocol", "tcp")}"')
+    if not dropped:
+        return None
+    path = Path(tempfile.gettempdir()) / f"homeserver-no-wg-{service}.yml"
+    path.write_text("\n".join(lines) + "\n")
+    info(f"{'WG_TUNNEL=off' if not WG_TUNNEL else 'wg-easy is off'}: {service} starts without its 10.8.0.1 port mapping(s)")
+    return path
 
 
 def compose_files_all(service: str) -> list[Path]:
@@ -976,6 +1326,8 @@ def compose_env(service: str) -> dict[str, str]:
     env = dict(os.environ)
     env["DATA_ROOT"] = str(SERVICE_DATA_ROOT / service)
     env["DOMAIN"] = DOMAIN
+    env["HOMESERVER_SUBNET"] = HOMESERVER_SUBNET
+    env["BROWSER_NET"] = browser_net()
     return env
 
 
@@ -999,7 +1351,9 @@ def get_running_services() -> list[str]:
     for svc in (
         SERVICES_MIN
         + SERVICES_CORE
+        + SERVICES_MONITORING
         + SERVICES_DAILY
+        + SERVICES_BROWSER
         + SERVICES_OFFICE
         + SERVICES_AUTOMATION_AI
         + SERVICES_EXTRA
@@ -1010,12 +1364,322 @@ def get_running_services() -> list[str]:
     return result
 
 
+# ── Shared databases (above-CORE services only) ─────────────────────
+#
+# Services above CORE that declare "shared_db" in services.json keep their
+# database inside one shared server per engine (services/shared-postgres,
+# services/shared-mariadb) instead of their own <service>-db container. CORE
+# and MIN keep per-service databases. See docs/services/shared-postgres.md.
+#
+# Lifecycle is reference-counted at the CLI layer (main()), never inside
+# do_up/do_down: do_backup, do_restore, do_up and stop_proxy_conflict all call
+# do_down internally, so counting there would bounce the shared server in the
+# middle of an unrelated operation. Starting is safe from anywhere (it's
+# idempotent), so do_up also ensures the server for the auto-restore path;
+# only stopping is counted, in release_shared_dbs() after a 'down'.
+#
+# The shared servers' tier ("shared") is in none of the SERVICES_* lists, so
+# 'up all'/'down all', tier keywords, groups and 'status' tiers never treat
+# them as ordinary services.
+
+SHARED_DB_SERVICES = {"postgres": "shared-postgres", "mariadb": "shared-mariadb"}
+_SERVICES_BY_SLUG = {s["slug"]: s for s in _SERVICES_DATA["services"]}
+
+
+def shared_db_external(service: str) -> str | None:
+    """The outside database host a "shared_db" app is pointed at, or None.
+    Every shared_db app reads its database host from DB_HOST in its own .env
+    (default: the shared server's container name). Any other value, e.g. an
+    RDS / Azure / Cloud SQL endpoint, means the database lives outside this
+    stack. See docs/10-new-services.md "Managed-cloud parity"."""
+    spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_db")
+    if not spec:
+        return None
+    host = load_env_file(SERVICES_DIR / service / ".env").get("DB_HOST", "").strip()
+    return host if host and host != SHARED_DB_SERVICES[spec["engine"]] else None
+
+
+def shared_db_creds(service: str) -> dict | None:
+    """Resolve a service's "shared_db" spec into concrete values. Spec values
+    are key names in services/<service>/.env, or '=literal' for values the
+    app hard-codes (e.g. penpot's db/user). Returns None if the service
+    doesn't use a shared database, and also when its DB_HOST points outside
+    the stack (shared_db_external). Every caller already treats None as "no
+    shared server": nothing is started, provisioned, counted, dumped,
+    restored or dropped for it."""
+    spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_db")
+    if not spec or shared_db_external(service):
+        return None
+    env_vals = load_env_file(SERVICES_DIR / service / ".env")
+
+    def resolve(key: str) -> str:
+        return key[1:] if key.startswith("=") else env_vals.get(key, "")
+
+    return {
+        "engine": spec["engine"],
+        "container": SHARED_DB_SERVICES[spec["engine"]],
+        "db": resolve(spec["db"]),
+        "user": resolve(spec["user"]),
+        "password": resolve(spec["password"]),
+        "extra_dbs": list(spec.get("extra_dbs", [])),
+    }
+
+
+def shared_admin(engine: str) -> tuple[str, str]:
+    """(admin user, admin password) for a shared server, from its own .env."""
+    env_vals = load_env_file(SERVICES_DIR / SHARED_DB_SERVICES[engine] / ".env")
+    if engine == "postgres":
+        return env_vals.get("POSTGRES_USER", "postgres"), env_vals.get("POSTGRES_PASSWORD", "")
+    return "root", env_vals.get("MARIADB_ROOT_PASSWORD", "")
+
+
+def _pg_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _my_ident(name: str) -> str:
+    return "`" + name.replace("`", "``") + "`"
+
+
+def shared_sql(engine: str, sql: str, db: str | None = None) -> tuple[bool, str, str]:
+    """Run SQL (sent on stdin, so passwords never hit argv) as the shared
+    server's admin. Returns (success, stdout, stderr)."""
+    container = SHARED_DB_SERVICES[engine]
+    user, password = shared_admin(engine)
+    if engine == "postgres":
+        cmd = ["psql", "-v", "ON_ERROR_STOP=1", "-tA", "-U", user, "-d", db or "postgres"]
+        ok, out, err = BACKEND.db_exec(container, cmd, input=sql.encode())
+    else:
+        cmd = ["mariadb", "-N", "-B", "-u", user] + ([db] if db else [])
+        ok, out, err = BACKEND.db_exec(container, cmd, input=sql.encode(), env={"MYSQL_PWD": password})
+    return ok, out.decode(errors="replace"), err
+
+
+def shared_db_exists(service: str) -> bool:
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return False
+    if c["engine"] == "postgres":
+        ok, out, _ = shared_sql("postgres", f"SELECT 1 FROM pg_database WHERE datname = {_sql_literal(c['db'])};")
+    else:
+        ok, out, _ = shared_sql("mariadb", f"SHOW DATABASES LIKE {_sql_literal(c['db'])};")
+    return ok and bool(out.strip())
+
+
+def ensure_shared_db(engine: str, env: str) -> bool:
+    """Start the shared server for engine if it isn't already running."""
+    container = SHARED_DB_SERVICES[engine]
+    if BACKEND.container_status(container) == "running" and BACKEND.container_health(container) == "healthy":
+        return True
+    info(f"Starting shared database {container} (needed by services above CORE)...")
+    return do_up(container, env, None)
+
+
+def provision_shared_db(service: str) -> bool:
+    """Idempotently create the service's role/user and database(s) on its
+    shared server, owned by that role — what each per-service
+    postgres-init/init.sh used to do on its own container. Also resets the
+    password to whatever the service's .env says, so editing .env is
+    enough to rotate it."""
+    c = shared_db_creds(service)
+    if not c:
+        return True
+    if not (c["db"] and c["user"] and c["password"]):
+        error(f"{service}: shared_db spec in services.json didn't resolve a db/user/password from services/{service}/.env")
+        return False
+
+    dbs = [c["db"]] + c["extra_dbs"]
+    if c["engine"] == "postgres":
+        role, pw = _pg_ident(c["user"]), _sql_literal(c["password"])
+        ok, _, err = shared_sql("postgres", f"""
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {_sql_literal(c['user'])}) THEN
+                CREATE ROLE {role} LOGIN PASSWORD {pw};
+              ELSE
+                ALTER ROLE {role} WITH LOGIN PASSWORD {pw};
+              END IF;
+            END $$;""")
+        if not ok:
+            error(f"{service}: couldn't create role {c['user']}: {err.strip()}")
+            return False
+        for db in dbs:
+            ok, out, err = shared_sql("postgres", f"SELECT 1 FROM pg_database WHERE datname = {_sql_literal(db)};")
+            if ok and not out.strip():
+                # CREATE DATABASE can't run inside a DO block/transaction.
+                ok, _, err = shared_sql("postgres", f"CREATE DATABASE {_pg_ident(db)} OWNER {role};")
+            if ok:
+                # Postgres grants CONNECT/TEMP on every new database to
+                # PUBLIC, so without this any app's role could open any other
+                # app's database (its tables stay unreadable, but it could
+                # still connect and see the schema). Lock it to its owner.
+                ok, _, err = shared_sql("postgres", f"REVOKE ALL ON DATABASE {_pg_ident(db)} FROM PUBLIC;")
+            if ok:
+                # Postgres 15+ no longer lets non-owners create objects in
+                # public, so hand the schema to the app's role.
+                ok, _, err = shared_sql("postgres", f"ALTER SCHEMA public OWNER TO {role}; GRANT ALL ON SCHEMA public TO {role};", db=db)
+            if not ok:
+                error(f"{service}: couldn't create database {db}: {err.strip()}")
+                return False
+    else:
+        user, pw = _sql_literal(c["user"]), _sql_literal(c["password"])
+        stmts = [f"CREATE USER IF NOT EXISTS {user}@'%' IDENTIFIED BY {pw};", f"ALTER USER {user}@'%' IDENTIFIED BY {pw};"]
+        for db in dbs:
+            stmts.append(f"CREATE DATABASE IF NOT EXISTS {_my_ident(db)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+            stmts.append(f"GRANT ALL PRIVILEGES ON {_my_ident(db)}.* TO {user}@'%';")
+        stmts.append("FLUSH PRIVILEGES;")
+        ok, _, err = shared_sql("mariadb", "\n".join(stmts))
+        if not ok:
+            error(f"{service}: couldn't create database/user on shared-mariadb: {err.strip()}")
+            return False
+    return True
+
+
+def shared_db_ready(service: str, env: str, provision: bool = True) -> bool:
+    """Called by every function that can start an app (do_up, do_update,
+    do_restart, do_restore): start the app's shared server if needed, then
+    provision its database. No-op for services without "shared_db". Safe to
+    call from anywhere — starting is idempotent; only stopping is
+    reference-counted (release_shared_dbs, from main())."""
+    ext = shared_db_external(service)
+    if ext:
+        info(f"{service}: database on outside host {ext} (DB_HOST) — shared server not used")
+        return True
+    c = shared_db_creds(service)
+    if not c:
+        return True
+    if not ensure_shared_db(c["engine"], env):
+        error(f"{c['container']} failed to start — {service} can't come up without it")
+        return False
+    return provision_shared_db(service) if provision else True
+
+
+def release_shared_dbs(env: str) -> None:
+    """After a 'down': stop each shared server no running service still uses."""
+    running = get_running_services()
+    for engine, container in SHARED_DB_SERVICES.items():
+        if BACKEND.container_status(container) != "running":
+            continue
+        users = [s for s in running if (c := shared_db_creds(s)) and c["engine"] == engine]
+        if users:
+            info(f"{container} stays up — still used by: {', '.join(users)}")
+            continue
+        info(f"No running service uses {container} any more — stopping it...")
+        do_down(container, env, None)
+
+
+def dump_shared_db(service: str, dest_dir: Path, ts: str) -> Path | None:
+    """Logical dump of the service's own database(s) on its shared server into
+    dest_dir — the per-app part of a snapshot (a volume tar of the shared
+    server would hold every app's data at once). Postgres: one custom-format
+    file per database; MariaDB: one SQL file per database."""
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return None
+    admin_user, admin_pw = shared_admin(c["engine"])
+    last = None
+    for db in [c["db"]] + c["extra_dbs"]:
+        if c["engine"] == "postgres":
+            ok, data, err = BACKEND.db_pg_dump(c["container"], admin_user, db)
+            fname = f"{service}_shareddb_{db}_{ts}.dump"
+        else:
+            ok, data, err = BACKEND.db_exec(
+                c["container"],
+                ["mariadb-dump", "-u", admin_user, "--single-transaction", "--routines", "--triggers", db],
+                env={"MYSQL_PWD": admin_pw},
+            )
+            fname = f"{service}_shareddb_{db}_{ts}.sql"
+        if not ok:
+            error(f"  failed to dump {db} from {c['container']}: {err.strip()}")
+            continue
+        (dest_dir / fname).write_bytes(data)
+        last = dest_dir / fname
+        shown = dest_dir.relative_to(BASE_DIR) if dest_dir.is_relative_to(BASE_DIR) else dest_dir
+        success(f"  {c['container']}/{db} -> {shown}/{fname}")
+    return last
+
+
+def restore_shared_db(service: str, snap_dir: Path) -> bool:
+    """Replace the service's database(s) on its shared server with the dumps
+    in snap_dir: drop, re-provision (fresh empty db owned by the app's role),
+    then load. The app must be stopped (do_restore guarantees this)."""
+    c = shared_db_creds(service)
+    files = sorted(snap_dir.glob(f"{service}_shareddb_*"))
+    if not c or not files:
+        return True
+    admin_user, admin_pw = shared_admin(c["engine"])
+    ok = True
+    for db in [c["db"]] + c["extra_dbs"]:
+        f = next((p for p in files if p.name.startswith(f"{service}_shareddb_{db}_")), None)
+        if not f:
+            continue
+        if c["engine"] == "postgres":
+            shared_sql("postgres", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_sql_literal(db)};")
+            dropped, _, err = shared_sql("postgres", f"DROP DATABASE IF EXISTS {_pg_ident(db)};")
+        else:
+            dropped, _, err = shared_sql("mariadb", f"DROP DATABASE IF EXISTS {_my_ident(db)};")
+        if not dropped or not provision_shared_db(service):
+            error(f"  couldn't reset {db} on {c['container']}: {err.strip()}")
+            ok = False
+            continue
+        if c["engine"] == "postgres":
+            # --role: objects are created as the app's role (the admin can
+            # SET ROLE to it), so the app owns everything it owned before.
+            loaded, _, err = BACKEND.db_exec(
+                c["container"],
+                ["pg_restore", "-U", admin_user, "-d", db, "--no-owner", "--role", c["user"]],
+                input=f.read_bytes(),
+            )
+        else:
+            loaded, _, err = BACKEND.db_exec(
+                c["container"], ["mariadb", "-u", admin_user, db], input=f.read_bytes(), env={"MYSQL_PWD": admin_pw},
+            )
+        if loaded:
+            success(f"  restored {db} on {c['container']}")
+        else:
+            error(f"  failed to restore {db} on {c['container']}: {err.strip()}")
+            ok = False
+    return ok
+
+
+def drop_shared_db(service: str) -> bool:
+    """Remove the service's database(s) and its login from its shared server
+    (reset only — never called on the normal down/up path). Other apps'
+    databases on the same server are untouched."""
+    c = shared_db_creds(service)
+    if not c or BACKEND.container_status(c["container"]) != "running":
+        return True
+    ok = True
+    for db in [c["db"]] + c["extra_dbs"]:
+        if c["engine"] == "postgres":
+            shared_sql("postgres", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_sql_literal(db)};")
+            dropped, _, err = shared_sql("postgres", f"DROP DATABASE IF EXISTS {_pg_ident(db)};")
+        else:
+            dropped, _, err = shared_sql("mariadb", f"DROP DATABASE IF EXISTS {_my_ident(db)};")
+        if not dropped:
+            error(f"  couldn't drop {db} on {c['container']}: {err.strip()}")
+            ok = False
+    if c["engine"] == "postgres":
+        dropped, _, err = shared_sql("postgres", f"DROP ROLE IF EXISTS {_pg_ident(c['user'])};")
+    else:
+        dropped, _, err = shared_sql("mariadb", f"DROP USER IF EXISTS {_sql_literal(c['user'])}@'%';")
+    if not dropped:
+        error(f"  couldn't drop login {c['user']} on {c['container']}: {err.strip()}")
+        ok = False
+    return ok
+
+
 def do_status() -> int:
     running = set(get_running_services())
     all_services = (
         SERVICES_MIN
         + SERVICES_CORE
+        + SERVICES_MONITORING
         + SERVICES_DAILY
+        + SERVICES_BROWSER
         + SERVICES_OFFICE
         + SERVICES_AUTOMATION_AI
         + SERVICES_EXTRA
@@ -1034,11 +1698,22 @@ def do_status() -> int:
     header("Service status (● running, ○ stopped):")
     show_tier("MIN", SERVICES_MIN)
     show_tier("CORE", SERVICES_CORE)
+    show_tier("MONITORING", SERVICES_MONITORING)
     show_tier("DAILY", SERVICES_DAILY)
+    show_tier("BROWSER", SERVICES_BROWSER)
     show_tier("OFFICE", SERVICES_OFFICE)
     show_tier("AUTOMATION-AI", SERVICES_AUTOMATION_AI)
     show_tier("EXTRA", SERVICES_EXTRA)
     show_tier("MANUAL", SERVICES_MANUAL)
+
+    print(f"  {BOLD}SHARED DATABASES (started/stopped automatically with the services that use them):{RESET}")
+    for engine, container in SHARED_DB_SERVICES.items():
+        up = BACKEND.container_status(container) == "running"
+        users = [s for s in all_services if (c := shared_db_creds(s)) and c["engine"] == engine]
+        live = [s for s in users if s in running]
+        marker = f"{GREEN}●{RESET}" if up else "○"
+        print(f"    {marker} {container} — used by {len(users)} service(s){', running: ' + ' '.join(live) if live else ''}")
+    print()
     success(f"{len(running)}/{len(all_services)} service(s) running")
 
     def show_group(name: str, indent: int) -> None:
@@ -1060,6 +1735,19 @@ def do_status() -> int:
 # ── Wait for healthy ─────────────────────────────────────────────────
 
 
+def health_deadline(container: str) -> int:
+    """How long to wait for container to turn healthy: as long as Docker
+    itself would before calling it unhealthy (start_period plus retries
+    rounds of interval+timeout, from its compose or image healthcheck), but
+    never less than HEALTH_TIMEOUT. A fixed 180s made first boots that run
+    long migrations (Grafana, Coolify, GitLab) look like failures even
+    though they came up fine (2026-10-02 fresh-install run)."""
+    hc = BACKEND.container_healthcheck(container)
+    if not hc:
+        return HEALTH_TIMEOUT
+    return int(max(HEALTH_TIMEOUT, hc["start_period"] + hc["retries"] * (hc["interval"] + hc["timeout"]) + 30))
+
+
 def wait_healthy(service: str) -> bool:
     all_names = BACKEND.all_container_names()
 
@@ -1073,11 +1761,12 @@ def wait_healthy(service: str) -> bool:
     if not container:
         container = service
 
+    deadline = health_deadline(container)
     print(f"  {CYAN}waiting for {service} to be ready...", end="", flush=True)
 
     elapsed = 0
     interval = 5
-    while elapsed < HEALTH_TIMEOUT:
+    while elapsed < deadline:
         status = BACKEND.container_status(container) or ""
         health = BACKEND.container_health(container)
 
@@ -1098,15 +1787,17 @@ def wait_healthy(service: str) -> bool:
         elapsed += interval
         print(".", end="", flush=True)
 
-    print(f" timeout after {HEALTH_TIMEOUT}s{RESET}")
+    print(f" timeout after {deadline}s{RESET}")
     return False
 
 
-def wait_container_healthy(container: str, timeout: int = HEALTH_TIMEOUT) -> bool:
+def wait_container_healthy(container: str, timeout: int | None = None) -> bool:
     """Like wait_healthy but for one exact container name — no fuzzy matching,
     used by do_migrate to wait on a freshly-started <service>-db alone."""
     print(f"  {CYAN}waiting for {container} to be ready...", end="", flush=True)
 
+    if timeout is None:
+        timeout = health_deadline(container)
     elapsed = 0
     interval = 5
     while elapsed < timeout:
@@ -1134,13 +1825,44 @@ def wait_container_healthy(container: str, timeout: int = HEALTH_TIMEOUT) -> boo
 # ── Backup / snapshots ───────────────────────────────────────────────
 
 
+SNAPSHOT_NAME = re.compile(r"^\d{8}-\d{6}$")
+
+
 def list_snapshots(service: str) -> list[Path]:
     """Snapshot directories for a service, oldest first (names sort correctly
-    since they're YYYYMMDD-HHMMSS)."""
+    since they're YYYYMMDD-HHMMSS). Only timestamp-named directories count:
+    a hand-made folder next to them (e.g. nextcloud's
+    'pre-upgrade-fix-20260817-232941') sorts after every timestamp ('p' > '2'),
+    so it used to be taken as the *newest* snapshot — restore/auto-restore
+    would have loaded August's data, and pruning would have deleted real
+    recent snapshots first (found 2026-10-02). Such folders are left alone:
+    never restored by default, never pruned; restore one explicitly with
+    --snapshot <name>."""
     svc_dir = BACKUP_ROOT / service
     if not svc_dir.is_dir():
         return []
-    return sorted(p for p in svc_dir.iterdir() if p.is_dir())
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir() and SNAPSHOT_NAME.match(p.name))
+
+
+RESET_BACKUP_NAME = re.compile(r"^reset-backup-\d{8}-\d{6}$")
+
+
+def list_reset_backups(service: str) -> list[Path]:
+    """reset-backup-<ts> folders for a service, oldest first. Kept apart
+    from regular snapshots (list_snapshots ignores them), so neither
+    'restore <service>' nor BACKUP_RETENTION ever touches them."""
+    svc_dir = BACKUP_ROOT / service
+    if not svc_dir.is_dir():
+        return []
+    return sorted(p for p in svc_dir.iterdir() if p.is_dir() and RESET_BACKUP_NAME.match(p.name))
+
+
+def prune_reset_backups(service: str) -> None:
+    if RESET_BACKUP_RETENTION == -1:
+        return
+    backups = list_reset_backups(service)
+    for old in backups[: max(0, len(backups) - RESET_BACKUP_RETENTION)]:
+        shutil.rmtree(old, ignore_errors=True)
 
 
 def prune_snapshots(service: str) -> None:
@@ -1157,8 +1879,12 @@ def backup_service(service: str) -> None:
     snapshot, then prune old snapshots beyond BACKUP_RETENTION."""
     vols = BACKEND.volumes_for_project(service)
     service_data_dir = SERVICE_DATA_ROOT / service
+    has_shared_db = bool(shared_db_creds(service)) and shared_db_exists(service)
+    ext = shared_db_external(service)
+    if ext:
+        warn(f"{service}: database is on outside host {ext} (DB_HOST) — not in this snapshot; use that provider's backups")
 
-    if not vols and not service_data_dir.is_dir():
+    if not vols and not service_data_dir.is_dir() and not has_shared_db:
         return  # nothing to back up
 
     declared = declared_volumes(service)
@@ -1189,6 +1915,10 @@ def backup_service(service: str) -> None:
         BACKEND.tar_dir_to(service_data_dir, snap_dir, fname)
         success(f"  service_data -> service_data/backup/{service}/{ts}/{fname}")
 
+    # The app's own database(s) on its shared server, as logical dumps.
+    if has_shared_db:
+        dump_shared_db(service, snap_dir, ts)
+
     prune_snapshots(service)
 
 
@@ -1217,10 +1947,167 @@ def do_snapshots(service: str) -> None:
 # ── Actions ──────────────────────────────────────────────────────────
 
 
+def wg_tunnel_up() -> bool:
+    """True once wg-easy's wg0 interface actually holds 10.8.0.1 — the
+    address every prod compose.prod.yml also binds each port to (see
+    docs/09-firewall.md). Missing 'ip' (e.g. non-Linux) is treated as
+    "can't tell" rather than "not up", so the caller doesn't loop pointlessly."""
+    if not shutil.which("ip"):
+        return True
+    try:
+        out = subprocess.run(["ip", "-o", "addr", "show", "wg0"], capture_output=True, text=True, timeout=5)
+        return out.returncode == 0 and "10.8.0.1" in out.stdout
+    except Exception:
+        return True
+
+
+# Set by --no-wg: this invocation never starts wg-easy as a side effect.
+NO_WG_START = False
+# Set by --yes/-y: skip the "start wg-easy?" question and just start it.
+WG_ASSUME_YES = False
+
+
+def nonlocal_bind_enabled() -> bool:
+    """net.ipv4.ip_nonlocal_bind=1 (docker/host-boot-safety.sh): a service can
+    bind 10.8.0.1 before wg0 exists. Unreadable (non-Linux) counts as fine."""
+    try:
+        return Path("/proc/sys/net/ipv4/ip_nonlocal_bind").read_text().strip() == "1"
+    except OSError:
+        return True
+
+
+def ensure_wg_tunnel_ready(service: str, env: str) -> None:
+    global NO_WG_START
+    """Every other prod service binds a second port to wg-easy's 10.8.0.1
+    tunnel address, which only exists once wg-easy has brought up wg0. On a
+    cold start (or the Docker daemon auto-restarting 'unless-stopped'
+    containers after a reboot) another service can win that race and fail
+    to bind at all. services.json's list order only protects bulk 'up
+    <tier>' calls, not a single-service 'up' — so check directly instead."""
+    if env != "prod" or service == "wg-easy" or not WG_TUNNEL or wg_tunnel_up():
+        return
+    if NO_WG_START:
+        # --no-wg: wg-easy stays as it is (e.g. stopped on purpose). Binding
+        # 10.8.0.1 then only works with ip_nonlocal_bind=1.
+        if nonlocal_bind_enabled():
+            info("--no-wg: not starting wg-easy; 10.8.0.1 isn't up, binds to it rely on net.ipv4.ip_nonlocal_bind=1")
+        else:
+            warn("--no-wg: not starting wg-easy, but net.ipv4.ip_nonlocal_bind is 0, so the 10.8.0.1 port binds "
+                 "will fail: run docker/host-boot-safety.sh (docs/08-maintenance.md 'Boot safety') or start wg-easy")
+        return
+    if not WG_ASSUME_YES and sys.stdin.isatty():
+        # Interactive: let the user decide. Declining means only the requested
+        # service starts; remembered for the rest of this invocation.
+        try:
+            reply = input(f"\n{BOLD}wg-easy's tunnel address (10.8.0.1) isn't up. Start wg-easy too? "
+                          f"[Y/n]{RESET} ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            reply = "n"
+        if reply in ("n", "no"):
+            NO_WG_START = True
+            info("Not starting wg-easy; only the requested service(s) will start")
+            return
+    info("wg-easy's tunnel address (10.8.0.1) isn't up yet — starting wg-easy first...")
+    do_up("wg-easy", env, None)
+    for _ in range(30):
+        if wg_tunnel_up():
+            return
+        time.sleep(1)
+    warn("wg-easy's tunnel address (10.8.0.1) still isn't up after 30s — continuing anyway")
+
+
+def fstab_mountpoints() -> list[str]:
+    """Non-root mountpoints declared in /etc/fstab, longest first. Empty on
+    hosts without an fstab (Windows/macOS) — the mount check below then
+    becomes a no-op rather than a false alarm."""
+    fstab = Path("/etc/fstab")
+    if not fstab.is_file():
+        return []
+    mps = []
+    for line in fstab.read_text().splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and not fields[0].startswith("#") and fields[1].startswith("/") and fields[1] != "/":
+            mps.append(fields[1])
+    return sorted(set(mps), key=len, reverse=True)
+
+
+def check_data_mounts(service: str) -> bool:
+    """Refuse to start a service whose host data paths sit on an fstab mount
+    that isn't mounted, or is mounted read-only. Both data drives here are
+    'nofail', so the host boots fine without them — and a container started
+    then silently binds the empty directory *under* the mountpoint (writes
+    land on the root disk), or gets EROFS on every upload (NTFS falls back to
+    read-only after a Windows Fast Startup/hibernate). Checks DATA_ROOT plus
+    every path-valued var in the service's own .env (UPLOAD_LOCATION,
+    MEDIA_ROOT, ...), since those secondary roots aren't auto-injected."""
+    mountpoints = fstab_mountpoints()
+    if not mountpoints:
+        return True
+    svc_dir = SERVICES_DIR / service
+    paths = [SERVICE_DATA_ROOT / service]
+    for key, val in load_env_file(svc_dir / ".env").items():
+        if key != "DATA_ROOT" and val.startswith(("/", "./", "../")):
+            paths.append(svc_dir / val)
+
+    problems = set()
+    for p in paths:
+        real = os.path.realpath(p)
+        mp = next((m for m in mountpoints if real == m or real.startswith(m + "/")), None)
+        if mp is None:
+            continue
+        if not os.path.ismount(mp):
+            problems.add(f"{mp} is not mounted (needed by {real})")
+        elif os.statvfs(mp).f_flag & os.ST_RDONLY:
+            problems.add(f"{mp} is mounted read-only (needed by {real})")
+    for msg in sorted(problems):
+        error(f"{service}: {msg}")
+    if problems:
+        error(f"Not starting {service} — fix the mount first (see docs/08-maintenance.md 'Boot safety')")
+    return not problems
+
+
+def restore_lost_state(service: str) -> None:
+    """The partial-loss case do_up's auto-restore does not cover: service_data/data/<service>/ survived (it
+    lives on the HDD) but the Docker volumes (on the SSD) are gone, e.g. after an SSD wipe. The auto-restore
+    only fires when the data folder, the volumes AND the database are all missing, so such a service started
+    against an empty database, and the next nightly snapshot then recorded that empty state and would
+    have pruned the good ones (Uptime Kuma, 2026-10-06). So: restore each named volume the newest snapshot
+    holds and Docker lacks, and a shared database that is gone. Present volumes are never touched."""
+    snaps = list_snapshots(service)
+    if not snaps:
+        return
+    latest = snaps[-1]
+    ts_suffix = re.compile(r"_\d{8}-\d{6}$")
+    for f in sorted(latest.glob("*.tar.gz")):
+        base = ts_suffix.sub("", f.name[: -len(".tar.gz")])
+        if base == "service_data" or BACKEND.volume_exists(base):
+            continue
+        info(f"{service}: volume {base} is missing but snapshot {latest.name} holds it — restoring it before starting (pass --fresh to start blank instead)...")
+        BACKEND.volume_create(base)
+        if not BACKEND.untar_into_volume(base, f):
+            error(f"  failed to restore volume {base}")
+    c = shared_db_creds(service)
+    if c and any(latest.glob(f"{service}_shareddb_*")) and not shared_db_exists(service):
+        info(f"{service}: its database on {c['container']} is missing but snapshot {latest.name} holds it — restoring it before starting...")
+        restore_shared_db(service, latest)
+
+
 def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None = None, fresh: bool = False) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
+        return False
+
+    if not check_data_mounts(service):
+        return False
+    ensure_wg_tunnel_ready(service, env)
+
+    # Start the app's shared database server (if it uses one) before the
+    # auto-restore check below, which needs to ask it whether the app's
+    # database exists. Provisioning waits until after that check — creating
+    # the database first would make a fresh app look like it has data.
+    if not shared_db_ready(service, env, provision=False):
         return False
 
     if not fresh:
@@ -1233,11 +2120,20 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
         # back into do_up once if a live container's volume was deleted out
         # from under it — safe, terminates because restored state is no
         # longer "fresh" on that second pass.
-        if not service_data_dir.is_dir() and not BACKEND.volumes_for_project(service):
+        if (
+            not service_data_dir.is_dir()
+            and not BACKEND.volumes_for_project(service)
+            and not (shared_db_creds(service) and shared_db_exists(service))
+        ):
             snaps = list_snapshots(service)
             if snaps:
                 info(f"{service} has no live volumes or data on disk — restoring latest snapshot ({snaps[-1].name}) before starting (pass --fresh to start blank instead)...")
                 do_restore(service, env, profile)
+        else:
+            restore_lost_state(service)
+
+    if not provision_shared_db(service):
+        return False
 
     stop_proxy_conflict(service, env)
     # Landing bakes env vars into HTML at startup; nginx-plain runs envsubst
@@ -1282,21 +2178,29 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
     return wait_healthy(service)
 
 
-def do_precreate(service: str, env: str, profile: str | None) -> bool:
+def do_precreate(service: str, env: str, profile: str | None, update: bool = False) -> bool:
     """Creates a service's containers without starting them — so it shows
     up as a stack in Portainer (which auto-detects any compose project by
     its container labels, running or not) and can be started from there
     later, without ever needing Portainer's own API/credentials. Skips
     services that already have containers (running or previously started)
-    so this never touches/recreates anything already in use."""
+    so this never touches/recreates anything already in use — unless
+    update=True (--update), which force-recreates a not-currently-running
+    service's containers so a later .env/compose edit actually takes
+    effect. Still refuses to touch a service that's currently running —
+    use 'up' (which force-recreates on config change) for that instead."""
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
 
     all_names = BACKEND.all_container_names()
-    if any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in all_names):
-        info(f"{service} already has containers — skipping (use 'up' to start it)")
+    has_containers = any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in all_names)
+    if has_containers and not update:
+        info(f"{service} already has containers — skipping (use 'up' to start it, or 'precreate --update' to rebuild)")
+        return True
+    if has_containers and service in get_running_services():
+        warn(f"{service} is currently running — skipping (stop it first, or use 'up' to apply the new .env)")
         return True
 
     files = compose_files(service, env)
@@ -1307,26 +2211,36 @@ def do_precreate(service: str, env: str, profile: str | None) -> bool:
     # replicating 'up's normal profile-gating.
     cenv.setdefault("COMPOSE_PROFILES", "*")
 
+    verb = "Rebuilding" if (has_containers and update) else "Pre-creating"
     if profile:
-        info(f"Pre-creating {service} ({env}) --profile {profile}...")
+        info(f"{verb} {service} ({env}) --profile {profile}...")
     else:
-        info(f"Pre-creating {service} ({env})...")
+        info(f"{verb} {service} ({env})...")
 
-    ok, out = BACKEND.compose_create(files, cenv, profile)
+    ok, out = BACKEND.compose_create(files, cenv, profile, force_recreate=update)
     if out:
         print(out)
     return ok
 
 
-def do_down(service: str, env: str, profile: str | None, no_backup: bool = False) -> bool:
+def do_down(service: str, env: str, profile: str | None, no_backup: bool = False, force_snapshot: bool = False) -> bool:
     # env is unused here (compose_files_all tears down both dev/prod
     # regardless) — kept in the signature so do_up/do_down/do_update/
     # do_restart/do_backup/do_restore all share one uniform call shape.
+    #
+    # Snapshot only if the service was actually running: a stopped service's
+    # last snapshot (taken when it stopped) is still current, and
+    # re-snapshotting it just churns BACKUP_RETENTION (pushing out older,
+    # different snapshots) and — for a shared-db app whose server is down —
+    # writes an incomplete one with no database dump (both seen 2026-10-02
+    # after a `down all`). do_backup/do_reset pass force_snapshot=True: an
+    # explicit backup, or a reset about to delete data, always snapshots.
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
         return False
 
+    was_running = any(re.match(rf"^{re.escape(service)}(-|$)", n) for n in BACKEND.running_container_names())
     files = compose_files_all(service)
     cenv = compose_env(service)
 
@@ -1338,8 +2252,12 @@ def do_down(service: str, env: str, profile: str | None, no_backup: bool = False
 
     success(f"{service} stopped")
 
-    if not no_backup:
+    if no_backup:
+        pass
+    elif was_running or force_snapshot:
         backup_service(service)
+    else:
+        info(f"  {service} was already stopped — its last snapshot is still current, not taking another")
 
     return True
 
@@ -1350,6 +2268,11 @@ def do_update(service: str, env: str, profile: str | None = None) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
+        return False
+    if not check_data_mounts(service):
+        return False
+
+    if not shared_db_ready(service, env):
         return False
 
     files = compose_files(service, env)
@@ -1373,6 +2296,11 @@ def do_restart(service: str, env: str, profile: str | None) -> bool:
     d = SERVICES_DIR / service
     if not d.is_dir():
         error(f"Service '{service}' not found")
+        return False
+    if not check_data_mounts(service):
+        return False
+
+    if not shared_db_ready(service, env):
         return False
 
     files = compose_files(service, env)
@@ -1404,7 +2332,12 @@ def do_backup(service: str, env: str, profile: str | None) -> bool:
 
     was_running = service in get_running_services()
 
-    do_down(service, env, profile, no_backup=False)
+    # A stopped app's shared server may be down too; the snapshot needs it
+    # up to dump the app's database. main() releases it again afterwards.
+    if not shared_db_ready(service, env, provision=False):
+        return False
+
+    do_down(service, env, profile, no_backup=False, force_snapshot=True)
     if was_running:
         do_up(service, env, profile)
 
@@ -1437,15 +2370,18 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
 
     info(f"Restoring {service} from snapshot {backup_dir.name}...")
     ok = True
-    ts_suffix = f"_{backup_dir.name}"
+    # Archive names end in _<YYYYMMDD-HHMMSS> (the moment they were taken).
+    # Strip that from the file name itself, not "_<folder name>": a snapshot
+    # folder renamed to keep it out of pruning (e.g. pre-fresh-install-<ts>)
+    # would otherwise restore into volumes named "<vol>_<ts>".
+    ts_suffix_re = re.compile(r"_\d{8}-\d{6}$")
     for f in sorted(backup_dir.glob("*.tar.gz")):
         base = f.name[: -len(".tar.gz")]
         # Newer snapshots suffix the filename with the timestamp too (e.g.
         # 'service_data_20260730-071152.tar.gz') — strip it to recover the
         # plain name. Older snapshots (pre-dating this) have no suffix, so
         # this is a no-op for them — both forms restore correctly.
-        if base.endswith(ts_suffix):
-            base = base[: -len(ts_suffix)]
+        base = ts_suffix_re.sub("", base)
         if base == "service_data":
             service_data_dir = SERVICE_DATA_ROOT / service
             if BACKEND.untar_into_dir(f, service_data_dir):
@@ -1462,6 +2398,13 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
                 error(f"  failed to restore volume {base}")
                 ok = False
 
+    if any(backup_dir.glob(f"{service}_shareddb_*")):
+        if shared_db_ready(service, env, provision=False):
+            if not restore_shared_db(service, backup_dir):
+                ok = False
+        else:
+            ok = False
+
     # Mirror do_backup: put the service back the way it was found, so
     # 'restore' never leaves something the caller didn't ask to stop.
     if was_running:
@@ -1470,20 +2413,134 @@ def do_restore(service: str, env: str, profile: str | None, snapshot: str | None
     return ok
 
 
+def do_reset(service: str, env: str, profile: str | None) -> bool:
+    """Fresh start with a safety net: snapshot everything the service owns,
+    verify the snapshot really holds it, then wipe exactly that service and
+    start it blank. 'restore <service>' undoes it.
+
+    Wipes: the service's named volumes, service_data/data/<service>/, and —
+    for an app on a shared database server — its own database(s) and login
+    there (other apps on that server are untouched). Does NOT touch secondary
+    data roots outside service_data/data (immich UPLOAD_LOCATION, jellyfin
+    MEDIA_ROOT, ...): those hold bulk media, not app state."""
+    if service in SHARED_DB_SERVICES.values():
+        error(f"{service} is a shared database server — reset the services that use it instead")
+        return False
+    d = SERVICES_DIR / service
+    if not d.is_dir():
+        error(f"Service '{service}' not found")
+        return False
+
+    c = shared_db_creds(service)
+    ext = shared_db_external(service)
+    if ext:
+        warn(f"{service}: its database on outside host {ext} (DB_HOST) is NOT wiped or snapshotted by reset —")
+        warn("  reset it on that provider if a truly fresh start is wanted.")
+    # The snapshot below needs the shared server up to dump the app's database.
+    if c and not shared_db_ready(service, env, provision=False):
+        return False
+
+    vols = BACKEND.volumes_for_project(service)
+    data_dir = SERVICE_DATA_ROOT / service
+    has_db = bool(c) and shared_db_exists(service)
+    before = set(list_snapshots(service))
+
+    # 1. Snapshot (do_down stops the service and snapshots it, whether or
+    #    not it was running — stopped containers still hold volumes).
+    info(f"Resetting {service}: snapshotting first...")
+    do_down(service, env, profile or "*", no_backup=False, force_snapshot=True)
+
+    # 2. Verify the snapshot holds everything about to be deleted. Pruning
+    #    can't remove it: it's the newest.
+    if vols or data_dir.is_dir() or has_db:
+        new = sorted(set(list_snapshots(service)) - before)
+        if not new:
+            error(f"  no snapshot was written for {service} — nothing deleted")
+            return False
+        names = {p.name for p in new[-1].iterdir()}
+        missing = [v for v in vols if not any(n.startswith(f"{v}_") for n in names)]
+        if data_dir.is_dir() and not any(n.startswith("service_data_") for n in names):
+            missing.append("service_data")
+        if has_db and not any(n.startswith(f"{service}_shareddb_") for n in names):
+            missing.append(f"{c['container']}/{c['db']}")
+        if missing:
+            error(f"  snapshot {new[-1].name} is missing {', '.join(missing)} — nothing deleted")
+            return False
+        success(f"  snapshot verified: service_data/backup/{service}/{new[-1].name}/")
+        # Keep it out of regular retention: it's the only copy of the data
+        # about to be wiped, and later downs/backups would otherwise push it
+        # out. Renamed, not copied — same data, no extra disk.
+        kept = new[-1].with_name(f"reset-backup-{new[-1].name}")
+        new[-1].rename(kept)
+        prune_reset_backups(service)
+        success(f"  kept as service_data/backup/{service}/{kept.name}/ (never pruned by BACKUP_RETENTION; newest {RESET_BACKUP_RETENTION} reset backups kept)")
+    else:
+        kept = None
+
+    # 3. Wipe exactly this service.
+    ok = True
+    for v in vols:
+        if BACKEND.volume_remove(v):
+            success(f"  removed volume {v}")
+        else:
+            error(f"  couldn't remove volume {v}")
+            ok = False
+    if data_dir.is_dir():
+        if BACKEND.remove_dir(data_dir):
+            success(f"  removed service_data/data/{service}/")
+        else:
+            error(f"  couldn't remove service_data/data/{service}/")
+            ok = False
+    if has_db and drop_shared_db(service):
+        success(f"  dropped {service}'s database and login on {c['container']}")
+    elif has_db:
+        ok = False
+    if not ok:
+        error(f"  {service} was only partly wiped — not starting it; 'restore {service}' brings the snapshot back")
+        return False
+
+    # 4. Start blank (provisioning creates a new empty database).
+    info(f"Starting {service} fresh...")
+    started = do_up(service, env, profile, fresh=True)
+    if kept:
+        info(f"  undo with: uv run homeserver.py {env} restore {service} --snapshot {kept.name}")
+    return started
+
+
 def do_dump(service: str, env: str, profile: str | None) -> bool:
     """Logical pg_dump of <service>-db into service_data/db_dump/<service>/<ts>/
     — the source dump 'migrate' restores from for a Debian->Alpine (or any
     other Postgres image) migration. Requires the DB container running."""
+    ext = shared_db_external(service)
+    if ext:
+        error(f"{service}'s database is on outside host {ext} (DB_HOST) — dump it with that provider's tools (pg_dump/mariadb-dump against {ext})")
+        return False
+    c = shared_db_creds(service)
+    if c:
+        if BACKEND.container_status(c["container"]) != "running":
+            error(f"{c['container']} is not running — start {service} first")
+            return False
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        dump_dir = DB_DUMP_ROOT / service / ts
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        info(f"Dumping {service}'s database(s) from {c['container']} -> service_data/db_dump/{service}/{ts}/")
+        # No roles file: the app's role is recreated from its .env by
+        # provision_shared_db, and a --roles-only dump of a shared server
+        # would carry every other app's role and password with it.
+        return dump_shared_db(service, dump_dir, ts) is not None
+
     db_container = f"{service}-db"
     if BACKEND.container_status(db_container) != "running":
         error(f"{db_container} is not running — start {service} first")
         return False
 
     service_env = load_env_file(SERVICES_DIR / service / ".env")
-    user = service_env.get("POSTGRES_USER")
-    db = service_env.get("POSTGRES_DB")
+    # Immich names its database variables DB_USERNAME/DB_DATABASE_NAME (the
+    # names its own server reads) instead of POSTGRES_USER/POSTGRES_DB.
+    user = service_env.get("POSTGRES_USER") or service_env.get("DB_USERNAME")
+    db = service_env.get("POSTGRES_DB") or service_env.get("DB_DATABASE_NAME")
     if not user or not db:
-        error(f"services/{service}/.env has no POSTGRES_USER/POSTGRES_DB — not a standard Postgres service")
+        error(f"services/{service}/.env has no POSTGRES_USER/POSTGRES_DB (or DB_USERNAME/DB_DATABASE_NAME) — not a standard Postgres service")
         return False
 
     ts = time.strftime("%Y%m%d-%H%M%S")
@@ -1538,6 +2595,9 @@ def do_migrate(service: str, env: str, profile: str | None, image_override: str 
     pgvector fork) is never auto-inferred — there's no way to know whether
     that specific fork even publishes an alpine (or any other) variant, so
     --image is required for those."""
+    if shared_db_creds(service):
+        error(f"{service} keeps its database on {shared_db_creds(service)['container']} — migrate only handles a per-service <service>-db container")
+        return False
     dumps = list_dumps(service)
     if not dumps:
         error(f"No dump found for {service} — run 'dump {service}' first")
@@ -1753,6 +2813,153 @@ def _compact_docker_vhdx(vhdx: Path) -> None:
         warn("  If this persists, try the export/reimport procedure in docs/08-maintenance.md")
 
 
+# ── Archive: everything git doesn't hold, in one verified file ──────
+#
+# `archive <dest-dir>` packs what a fresh clone of this repo can't recreate:
+# every git-ignored file in the repo (all .env secrets, local-only notes),
+# service_data/ (snapshots — the only copy of the databases, which are named
+# Docker volumes — plus live data and db dumps), and a git bundle of the repo
+# itself so unpushed commits survive too. Regenerable things are left out.
+
+ARCHIVE_SKIP_IGNORED = ("service_data", ".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "node_modules/")
+ARCHIVE_EXCLUDES = ["service_data/cache", "*/__pycache__"]
+
+
+def archive_ignored_paths() -> list[str]:
+    """Git-ignored/untracked paths in the repo (directories collapsed), minus
+    regenerable ones and service_data (archived separately, from its real
+    location). Asks git, so new ignored files are covered automatically."""
+    proc = subprocess.run(
+        ["git", "-C", str(BASE_DIR), "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+        capture_output=True, text=True,
+    )
+    paths = []
+    for line in proc.stdout.splitlines():
+        if not line or any(line == skip.rstrip("/") or line.startswith(skip) or f"/{skip}" in f"/{line}" for skip in ARCHIVE_SKIP_IGNORED):
+            continue
+        paths.append(line.rstrip("/"))
+    # Drop entries already covered by a listed parent directory (git lists
+    # e.g. both services/photoprism and services/photoprism/.env), so no file
+    # lands in the archive twice.
+    paths = sorted(set(paths))
+    return [p for p in paths if not any(p.startswith(q + "/") for q in paths if q != p)]
+
+
+def archive_meta(meta_dir: Path, running: list[str]) -> None:
+    """README, MANIFEST and a git bundle, written into meta_dir."""
+    git = lambda *a: subprocess.run(["git", "-C", str(BASE_DIR), *a], capture_output=True, text=True).stdout.strip()  # noqa: E731
+    subprocess.run(["git", "-C", str(BASE_DIR), "bundle", "create", str(meta_dir / "homeserver.bundle"), "--all"], capture_output=True)
+    lines = [
+        f"created: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"git: branch {git('rev-parse', '--abbrev-ref', 'HEAD')} at {git('rev-parse', 'HEAD')}",
+        f"running when archived: {', '.join(running) or 'none'}",
+        "",
+        "latest snapshot per service:",
+    ]
+    for d in sorted(p for p in BACKUP_ROOT.iterdir() if p.is_dir()) if BACKUP_ROOT.is_dir() else []:
+        snaps = list_snapshots(d.name)
+        resets = list_reset_backups(d.name)
+        lines.append(f"  {d.name}: {snaps[-1].name if snaps else '-'}" + (f"  (+{len(resets)} reset-backup)" if resets else ""))
+    (meta_dir / "MANIFEST.txt").write_text("\n".join(lines) + "\n")
+    (meta_dir / "README.txt").write_text(
+        "homeserver archive\n\n"
+        "homeserver/      every git-ignored file of the repo (.env secrets, local notes)\n"
+        "service_data/    snapshots (incl. databases), live data, db dumps — not cache/\n"
+        "meta/homeserver.bundle   the git repo, incl. unpushed commits\n\n"
+        "Restore on a new machine (Docker, git and uv installed; see docs/08-maintenance.md):\n"
+        "  sha256sum -c <archive>.tar.gz.sha256\n"
+        "  sudo tar --numeric-owner -xpzf <archive>.tar.gz -C <staging dir>\n"
+        "      (as root, numerically: files belong to app uids like 472 or 10001)\n"
+        "  git clone <staging>/meta/homeserver.bundle homeserver\n"
+        "  git -C homeserver checkout <branch from MANIFEST.txt>\n"
+        "  cp -a <staging>/homeserver/. homeserver/   ('/.', not '/*': .env is a dotfile)\n"
+        "  sudo mv <staging>/service_data <data drive>/service_data\n"
+        "  ln -s <data drive>/service_data homeserver/service_data\n"
+        "  edit homeserver/.env for this machine (RUNTIME, DOCKER_SOCKET), then:\n"
+        "  uv run homeserver.py prod restore all -y   (volumes and databases from snapshots)\n"
+        "  uv run homeserver.py prod up all\n"
+        "Not included: media under /mnt/media (Immich photos, Nextcloud user files,\n"
+        "Jellyfin library), service_data/cache, .venv — all regenerable or separate.\n"
+    )
+
+
+def archive_verify(archive: Path) -> tuple[bool, str]:
+    """Read the whole archive back (which also validates gzip) and check the
+    three top-level parts are inside. Returns (ok, top-level names found)."""
+    proc = subprocess.run(["tar", "-tzf", str(archive)], capture_output=True, text=True)
+    tops = sorted({line.split("/", 1)[0] for line in proc.stdout.splitlines() if line})
+    ok = proc.returncode == 0 and {"homeserver", "service_data", "meta"} <= set(tops)
+    return ok, ", ".join(tops)
+
+
+def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def tree_size(path: Path) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(path, onerror=lambda e: None):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(root, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def do_archive(dest: str) -> int:
+    dest_dir = Path(dest).expanduser()
+    if not dest_dir.is_dir():
+        error(f"{dest_dir} doesn't exist — create it (or mount the drive) first")
+        return 1
+
+    running = get_running_services()
+    if running:
+        warn(f"Running now: {', '.join(running)}")
+        warn("  their live service_data/data may be mid-write; snapshots are always consistent.")
+        warn("  For a fully consistent archive: 'down all' (or 'backup <service>') first.")
+
+    data_real = (BASE_DIR / "service_data").resolve()
+    needed = tree_size(data_real) - tree_size(data_real / "cache")
+    free = shutil.disk_usage(dest_dir).free
+    if free < needed:
+        error(f"Not enough space in {dest_dir}: need up to {needed / 1e9:.1f} GB, {free / 1e9:.1f} GB free")
+        return 1
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    out = dest_dir / f"homeserver-archive-{ts}.tar.gz"
+    ignored = archive_ignored_paths()
+    with tempfile.TemporaryDirectory() as tmp:
+        meta = Path(tmp)
+        archive_meta(meta, running)
+        header(f"Archiving to {out}")
+        info(f"{len(ignored)} git-ignored path(s) from the repo, service_data (minus cache), meta (README, MANIFEST, git bundle)...")
+        ok, err = BACKEND.archive_paths(
+            {BASE_DIR: "homeserver", data_real: "service_data", meta: "meta"},
+            [f"homeserver/{p}" for p in ignored] + ["service_data", "meta"],
+            ARCHIVE_EXCLUDES,
+            out,
+        )
+    if not ok:
+        error(f"Archive failed: {err.strip()[-400:]}")
+        return 1
+
+    info("Verifying (reading the whole archive back)...")
+    ok, tops = archive_verify(out)
+    if not ok:
+        error(f"Verification failed — archive is incomplete or unreadable (found: {tops})")
+        return 1
+    digest = file_sha256(out)
+    (dest_dir / f"{out.name}.sha256").write_text(f"{digest}  {out.name}\n")
+    success(f"{out} ({out.stat().st_size / 1e9:.1f} GB) verified: {tops}")
+    success(f"checksum: {out.name}.sha256 — check later with: sha256sum -c {out.name}.sha256")
+    return 0
+
+
 def do_gc(assume_yes: bool = False) -> int:
     header(f"Reclaiming Docker disk space (runtime: {RUNTIME})...")
 
@@ -1813,7 +3020,9 @@ def do_orphaned_volumes(target: str, assume_yes: bool) -> int:
         services = (
             SERVICES_MIN
             + SERVICES_CORE
+            + SERVICES_MONITORING
             + SERVICES_DAILY
+            + SERVICES_BROWSER
             + SERVICES_OFFICE
             + SERVICES_AUTOMATION_AI
             + SERVICES_EXTRA
@@ -1862,6 +3071,96 @@ def do_orphaned_volumes(target: str, assume_yes: bool) -> int:
     return 0 if ok else 1
 
 
+def find_stale_network_containers() -> list[dict]:
+    """Running containers whose HostConfig.NetworkMode names a real network
+    (not host/none/container:<id>) but whose NetworkSettings.Networks is
+    currently empty — a detached/orphaned network endpoint. The container's
+    own process never notices (it keeps running, even reporting healthy on
+    its own localhost-only healthcheck) but nothing else can reach it, and
+    anything it depends on for its own outbound connections (e.g. atuin ->
+    atuin-db) fails DNS resolution outright. Hit on this stack right after
+    the 'homeserver' network was recreated during the 2026-09-04
+    IPv6-lockdown work (docs/09-firewall.md) — atuin, then separately
+    jellyfin/guacamole/it-tools/mailpit, were all left in this state. A
+    plain `docker restart` does NOT fix it (confirmed against atuin): restart
+    reuses the same stale endpoint. Only a full recreate rebuilds it, which
+    is what do_fix_network does below."""
+    stale = []
+    for name in BACKEND.running_container_names():
+        info = BACKEND.container_info(name)
+        if not info:
+            continue
+        mode = info.get("network_mode", "")
+        if not mode or mode in ("host", "none") or mode.startswith("container:"):
+            continue
+        if info.get("networks"):
+            continue
+        stale.append({"container": name, **info})
+    return stale
+
+
+def do_fix_network(assume_yes: bool) -> int:
+    """Detect and repair containers stuck with a detached network endpoint
+    (see find_stale_network_containers) by recreating just the affected
+    container(s) — via the same compose project/service/files each was
+    originally started with, read back off its own Docker labels, so this
+    needs no <env> argument and never touches anything else in the
+    project. Bind mounts and named volumes are untouched by a recreate."""
+    header("Checking for containers detached from their Docker network...")
+    stale = find_stale_network_containers()
+    if not stale:
+        success("No stale network attachments found")
+        return 0
+
+    for s in stale:
+        warn(f"{s['container']}  (service: {s.get('compose_project') or '?'}, network mode: {s.get('network_mode')})")
+
+    print()
+    warn(f"{len(stale)} container(s) found above with no live network endpoint.")
+    warn("A plain restart will NOT fix this — each will be force-recreated (bind mounts/volumes untouched).")
+
+    if not assume_yes:
+        try:
+            reply = input(f"\n{BOLD}Recreate all {len(stale)} listed above? [y/N]{RESET} ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            info("Cancelled")
+            return 1
+        if reply not in ("y", "yes"):
+            info("Cancelled — nothing recreated")
+            return 0
+
+    print()
+    ok = True
+    for s in stale:
+        container = s["container"]
+        service = s.get("compose_project", "")
+        compose_service = s.get("compose_service", "")
+        config_files = s.get("config_files") or []
+        if not service or not is_valid_service(service):
+            error(f"  {container}: unknown/missing compose project label — recreate it manually")
+            ok = False
+            continue
+        if any("compose.prod.yml" in f for f in config_files):
+            env = "prod"
+        elif any("compose.dev.yml" in f for f in config_files):
+            env = "dev"
+        else:
+            error(f"  {container}: can't tell dev/prod from its recorded compose files — recreate it manually")
+            ok = False
+            continue
+        recreated, output = BACKEND.compose_up(
+            compose_files(service, env), compose_env(service), None,
+            force_recreate=True, only=[compose_service] if compose_service else None,
+        )
+        if recreated:
+            success(f"Recreated {container} ({service}, {env})")
+        else:
+            error(f"  Failed to recreate {container}: {output.strip()[-300:]}")
+            ok = False
+    return 0 if ok else 1
+
+
 # ── Help ─────────────────────────────────────────────────────────────
 
 
@@ -1874,10 +3173,12 @@ def show_help() -> None:
     print("    python homeserver.py <env> -u <service...>                     (up shorthand)")
     print("    python homeserver.py <env> -d <service...>                     (down shorthand)")
     print("    python homeserver.py <env> -r <service...>                     (restart shorthand)")
-    print("    python homeserver.py <env> precreate <tier|service...>          create without starting (visible in Portainer)")
+    print("    python homeserver.py <env> precreate <tier|service...> [--update]  create without starting (visible in Portainer);")
+    print("                                                                     --update force-recreates existing (not running) containers")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
     print("    python homeserver.py status (or ps)                             list every service + every group (tier by tier, marking which are running)")
+    print("    python homeserver.py fix-network [--yes]                        recreate any running container detached from the 'homeserver' network")
     print()
     print(f"  {BOLD}Environments:{RESET}")
     print("    dev    ports on all interfaces (direct access)")
@@ -1889,11 +3190,15 @@ def show_help() -> None:
     print("            'down core' stops only core, min stays up")
     print("    daily   apps used regularly but not core infra — opt-in, NOT included by 'core';")
     print("            'up daily' bootstraps min/core if needed; 'down daily' stops only daily")
-    print("    office  firm/business apps — opt-in; 'up office' bootstraps min/core/daily if needed;")
+    print("    browser the Browser Hub's remote browsers — opt-in; 'up browser' bootstraps min/core/monitoring/daily if needed;")
+    print("            'down browser' stops only the browsers")
+    print("    office  firm/business apps — opt-in; 'up office' bootstraps min/core/monitoring/daily/browser if needed;")
     print("            'down office' stops only office")
     print("    automation-ai workflow/automation/AI apps — opt-in; 'up automation-ai' bootstraps")
-    print("            min/core/daily/office if needed; 'down automation-ai' stops only automation-ai")
-    print("    all     core + daily + office + automation-ai + extra — starts/stops literally everything")
+    print("            min/core/monitoring/daily/browser/office if needed; 'down automation-ai' stops only automation-ai")
+    print("    extra   everything else (observability, paperless, erpnext, ...) — opt-in; 'up extra' bootstraps")
+    print("            min/core/monitoring/daily/browser/office/automation-ai if needed; 'down extra' stops only extra")
+    print("    all     core + daily + browser + office + automation-ai + extra — starts/stops literally everything")
     print("    running update only — currently running services")
     print()
     print(f"  {BOLD}Groups:{RESET}")
@@ -1904,9 +3209,11 @@ def show_help() -> None:
     print("    python homeserver.py dev up min                      start bare minimum")
     print("    python homeserver.py dev up core                     start full default stack")
     print("    python homeserver.py dev up daily                    start core + the daily-use opt-in tier")
-    print("    python homeserver.py dev up office                   start core + daily + the firm/business opt-in tier")
-    print("    python homeserver.py dev up automation-ai            start core + daily + office + the automation/AI opt-in tier")
-    print("    python homeserver.py dev up all                      start everything (core + daily + office + automation-ai + extra)")
+    print("    python homeserver.py dev up browser                  start core + daily + the Browser Hub's browsers")
+    print("    python homeserver.py dev up office                   start core + daily + browser + the firm/business opt-in tier")
+    print("    python homeserver.py dev up automation-ai            start core + daily + browser + office + the automation/AI opt-in tier")
+    print("    python homeserver.py dev up extra                    start everything below 'all' plus the extra opt-in tier (bootstraps lower tiers)")
+    print("    python homeserver.py dev up all                      start everything (core + daily + browser + office + automation-ai + extra)")
     print("    python homeserver.py dev down min                    stop minimum (reverse order)")
     print("    python homeserver.py dev down core                   stop core only, reverse order (min stays up)")
     print("    python homeserver.py dev down daily                  stop daily only, reverse order (min/core stay up)")
@@ -1926,12 +3233,16 @@ def show_help() -> None:
     print("    python homeserver.py dev down mealie --no-backup     stop without snapshotting")
     print("    python homeserver.py dev up mealie                   auto-restores the latest snapshot if data/volumes are missing")
     print("    python homeserver.py dev up mealie --fresh           start blank even if a snapshot exists")
+    print("    python homeserver.py dev reset mealie                snapshot, wipe and start blank (restore undoes it)")
+    print("    python homeserver.py archive /run/media/<you>/Drive   everything git doesn't hold, in one verified tar.gz")
     print("    python homeserver.py dev up immich --no-ml           start immich without the ML container")
+    print("    python homeserver.py prod up adguard-home --no-wg    don't start wg-easy first (it stays as it is)")
     print("    python homeserver.py dev up group:notes              start every note-taking app (category/subcategory group)")
     print("    python homeserver.py dev down group:notes            stop the same group")
     print("    python homeserver.py dev precreate all gitlab stirling-pdf")
     print("                                                         create every never-started service (incl. manual-tier) so")
     print("                                                         they all show up as start-able stacks in Portainer")
+    print("    python homeserver.py dev precreate daily --update    rebuild daily-tier containers with the current .env (skips any that are running)")
     print("    python homeserver.py dev backup all                  snapshot every service now, regardless of running state")
     print("    python homeserver.py dev snapshots mealie            list available snapshots for a service")
     print("    python homeserver.py dev restore mealie              restore the latest snapshot")
@@ -1944,6 +3255,8 @@ def show_help() -> None:
     print("    python homeserver.py gc                              prune + (Windows) compact Docker Desktop's WSL2 VHDX")
     print("    python homeserver.py gc --yes                        same, skip the confirmation prompt")
     print("    python homeserver.py status                          list every service + every group, marking which are running")
+    print("    python homeserver.py fix-network                     recreate any container detached from the 'homeserver' network")
+    print("    python homeserver.py fix-network --yes                same, skip the confirmation prompt")
     print()
     print(f"  {BOLD}MIN (infrastructure):{RESET}")
     print(f"    {' '.join(SERVICES_MIN)}")
@@ -1951,16 +3264,22 @@ def show_help() -> None:
     print(f"  {BOLD}CORE (always-on apps, added on top of min):{RESET}")
     print(f"    {' '.join(SERVICES_CORE)}")
     print()
+    print(f"  {BOLD}MONITORING (alerting, uptime, metrics and logs, opt-in — 'up monitoring' or 'up all', NOT 'up core'):{RESET}")
+    print(f"    {' '.join(SERVICES_MONITORING)}")
+    print()
     print(f"  {BOLD}DAILY (regular-use apps, opt-in — 'up daily' or 'up all', NOT 'up core'):{RESET}")
     print(f"    {' '.join(SERVICES_DAILY)}")
     print()
-    print(f"  {BOLD}OFFICE (firm/business apps, opt-in — 'up office' or 'up all', NOT 'up daily'):{RESET}")
+    print(f"  {BOLD}BROWSER (Browser Hub's remote browsers, opt-in — 'up browser' or 'up all', NOT 'up daily'):{RESET}")
+    print(f"    {' '.join(SERVICES_BROWSER)}")
+    print()
+    print(f"  {BOLD}OFFICE (firm/business apps, opt-in — 'up office' or 'up all', NOT 'up browser'):{RESET}")
     print(f"    {' '.join(SERVICES_OFFICE)}")
     print()
     print(f"  {BOLD}AUTOMATION-AI (workflow/automation/AI apps, opt-in — 'up automation-ai' or 'up all', NOT 'up office'):{RESET}")
     print(f"    {' '.join(SERVICES_AUTOMATION_AI)}")
     print()
-    print(f"  {BOLD}EXTRA (optional, started with 'up all' or individually):{RESET}")
+    print(f"  {BOLD}EXTRA (optional, opt-in — 'up extra' or 'up all', NOT 'up automation-ai'):{RESET}")
     print(f"    {' '.join(SERVICES_EXTRA)}")
     print()
     print(f"  {BOLD}MANUAL (never auto-started — start individually):{RESET}")
@@ -1976,15 +3295,23 @@ def show_help() -> None:
 # ── Execute ──────────────────────────────────────────────────────────
 
 
+
+
 def ensure_network() -> None:
     if not BACKEND.network_exists("homeserver"):
         warn("Network 'homeserver' not found — creating...")
-        BACKEND.network_create("homeserver")
-        success("Network 'homeserver' created")
+        BACKEND.network_create("homeserver", HOMESERVER_SUBNET)
+        success(f"Network 'homeserver' created ({HOMESERVER_SUBNET})")
+    else:
+        have = BACKEND.network_subnets("homeserver")
+        if have and HOMESERVER_SUBNET not in have:
+            warn(f"Network 'homeserver' is on {', '.join(have)}, not {HOMESERVER_SUBNET}: containers with a fixed IP "
+                 f"(the Browser Hub) will fail to create. Recreate the network on that subnet, or change HOMESERVER_SUBNET "
+                 f"and the browsers' IPs together (docs/02-docker-network.md).")
 
 
 def confirm_expansion(services: list[str], assume_yes: bool) -> bool:
-    """Preview + confirm before acting on a tier keyword (min/core/daily/all/
+    """Preview + confirm before acting on a tier keyword (min/core/monitoring/daily/all/
     running) or a group:<name>/bundle expansion — anything where one token
     resolved into more than what was literally typed. Never called for a
     literal list of explicitly-named services (see the call sites in main()):
@@ -2030,6 +3357,8 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
                 success(f"{service} dumped")
             elif action_fn is do_migrate:
                 success(f"{service} migrated")
+            elif action_fn is do_reset:
+                success(f"{service} reset — fresh start")
         print()
 
     print(f"{BOLD}{'━' * 40}{RESET}")
@@ -2044,6 +3373,7 @@ def run_list(action_fn, services: list[str], env: str, profile: str | None, labe
 
 
 def main() -> int:
+    global NO_WG_START, WG_ASSUME_YES
     argv = sys.argv[1:]
 
     # Standalone verb, not part of the <env> <action> <target> pattern below —
@@ -2061,6 +3391,19 @@ def main() -> int:
     # dev/prod (only the port bindings do), so this needs no env argument.
     if argv and argv[0] in ("status", "ps"):
         return do_status()
+
+    # Same reasoning again — each affected container's own compose labels
+    # say which env it was started under (see do_fix_network), so this
+    # doesn't need one passed in either.
+    # Not env-scoped either: it packs the whole repo + service_data.
+    if argv and argv[0] == "archive":
+        if len(argv) < 2:
+            error("usage: homeserver.py archive <destination-folder>")
+            return 1
+        return do_archive(argv[1])
+
+    if argv and argv[0] == "fix-network":
+        return do_fix_network(assume_yes="--yes" in argv or "-y" in argv)
 
     if len(argv) < 3:
         show_help()
@@ -2080,11 +3423,11 @@ def main() -> int:
 
     if action not in (
         "up", "-u", "down", "-d", "restart", "-r", "logs", "update",
-        "backup", "restore", "snapshots", "dump", "migrate", "precreate",
+        "backup", "restore", "snapshots", "dump", "migrate", "precreate", "reset",
     ):
         error(
             "Unknown action "
-            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, or precreate"
+            f"'{action}' — use up, down, restart, logs, update, backup, restore, snapshots, dump, migrate, precreate, or reset"
         )
         show_help()
         return 1
@@ -2094,11 +3437,12 @@ def main() -> int:
     no_backup = False
     no_ml = False
     fresh = False
+    update_flag = False
     assume_yes = False
     used_group_or_bundle = False
     snapshot: str | None = None
     image_flag: str | None = None
-    run_all = run_core = run_daily = run_office = run_automation_ai = run_min = run_running = False
+    run_all = run_core = run_monitoring = run_daily = run_browser = run_office = run_automation_ai = run_extra = run_min = run_running = False
 
     i = 0
     while i < len(rest):
@@ -2113,10 +3457,15 @@ def main() -> int:
             no_backup = True
         elif tok == "--no-ml":
             no_ml = True
+        elif tok == "--no-wg":
+            NO_WG_START = True
         elif tok == "--fresh":
             fresh = True
+        elif tok == "--update":
+            update_flag = True
         elif tok in ("--yes", "-y"):
             assume_yes = True
+            WG_ASSUME_YES = True
         elif tok == "--snapshot":
             i += 1
             if i >= len(rest):
@@ -2133,12 +3482,21 @@ def main() -> int:
             run_all = True
         elif tok == "core":
             run_core = True
+        elif tok == "monitoring":
+            run_monitoring = True
         elif tok == "daily":
             run_daily = True
+        elif tok == "browser":
+            # Tier keyword — checked before the bare-bundle branch below, so
+            # 'browser' means the whole browser tier (same members as the
+            # Browser Hub bundle) with normal tier semantics.
+            run_browser = True
         elif tok == "office":
             run_office = True
         elif tok == "automation-ai":
             run_automation_ai = True
+        elif tok == "extra":
+            run_extra = True
         elif tok == "min":
             run_min = True
         elif tok == "running":
@@ -2179,13 +3537,13 @@ def main() -> int:
     # first-seen order so nothing runs twice.
     services_to_run = list(dict.fromkeys(services_to_run))
 
-    if not (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running) and not services_to_run:
+    if not (run_all or run_core or run_monitoring or run_daily or run_browser or run_office or run_automation_ai or run_extra or run_min or run_running) and not services_to_run:
         error("No services specified")
         show_help()
         return 1
 
     if no_ml:
-        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running:
+        if action not in ("up", "-u") or services_to_run != ["immich"] or run_all or run_core or run_monitoring or run_daily or run_browser or run_office or run_automation_ai or run_extra or run_min or run_running:
             error("--no-ml is only valid with 'up immich' on its own (excludes immich-ml)")
             return 1
 
@@ -2193,7 +3551,11 @@ def main() -> int:
         error("--fresh is only valid with the up action")
         return 1
 
-    if action == "migrate" and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or run_running):
+    if update_flag and action != "precreate":
+        error("--update is only valid with the precreate action")
+        return 1
+
+    if action == "migrate" and (run_all or run_core or run_monitoring or run_daily or run_browser or run_office or run_automation_ai or run_extra or run_min or run_running):
         error("migrate only works against explicitly named services, e.g. 'dev migrate forgejo' — no tier-wide migration")
         return 1
 
@@ -2208,8 +3570,8 @@ def main() -> int:
         ensure_network()
         exclude = ["immich-machine-learning"] if no_ml else None
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
-            header(f"Starting all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Starting all services (min + core + monitoring + daily + browser + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "All services", fresh=fresh)
@@ -2224,39 +3586,72 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "Core services", fresh=fresh)
-        elif run_daily:
+        elif run_monitoring:
             running = set(get_running_services())
             missing = [s for s in SERVICES_MIN + SERVICES_CORE if s not in running]
             if missing:
-                header(f"Starting daily services in {env} mode (bootstrapping missing min/core: {', '.join(missing)})...")
+                header(f"Starting monitoring services in {env} mode (bootstrapping missing min/core: {', '.join(missing)})...")
             else:
-                header(f"Starting daily services in {env} mode (min/core already running, left untouched)...")
+                header(f"Starting monitoring services in {env} mode (min/core already running, left untouched)...")
+            services = missing + SERVICES_MONITORING + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Monitoring services", fresh=fresh)
+        elif run_daily:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING if s not in running]
+            if missing:
+                header(f"Starting daily services in {env} mode (bootstrapping missing min/core/monitoring: {', '.join(missing)})...")
+            else:
+                header(f"Starting daily services in {env} mode (min/core/monitoring already running, left untouched)...")
             services = missing + SERVICES_DAILY + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "Daily services", fresh=fresh)
+        elif run_browser:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY if s not in running]
+            if missing:
+                header(f"Starting browser services in {env} mode (bootstrapping missing min/core/monitoring/daily: {', '.join(missing)})...")
+            else:
+                header(f"Starting browser services in {env} mode (min/core/monitoring/daily already running, left untouched)...")
+            services = missing + SERVICES_BROWSER + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Browser services", fresh=fresh)
         elif run_office:
             running = set(get_running_services())
-            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY if s not in running]
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER if s not in running]
             if missing:
-                header(f"Starting office services in {env} mode (bootstrapping missing min/core/daily: {', '.join(missing)})...")
+                header(f"Starting office services in {env} mode (bootstrapping missing min/core/monitoring/daily/browser: {', '.join(missing)})...")
             else:
-                header(f"Starting office services in {env} mode (min/core/daily already running, left untouched)...")
+                header(f"Starting office services in {env} mode (min/core/monitoring/daily/browser already running, left untouched)...")
             services = missing + SERVICES_OFFICE + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "Office services", fresh=fresh)
         elif run_automation_ai:
             running = set(get_running_services())
-            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE if s not in running]
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE if s not in running]
             if missing:
-                header(f"Starting automation-ai services in {env} mode (bootstrapping missing min/core/daily/office: {', '.join(missing)})...")
+                header(f"Starting automation-ai services in {env} mode (bootstrapping missing min/core/monitoring/daily/browser/office: {', '.join(missing)})...")
             else:
-                header(f"Starting automation-ai services in {env} mode (min/core/daily/office already running, left untouched)...")
+                header(f"Starting automation-ai services in {env} mode (min/core/monitoring/daily/browser/office already running, left untouched)...")
             services = missing + SERVICES_AUTOMATION_AI + services_to_run
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_up, services, env, profile, "Automation-AI services", fresh=fresh)
+        elif run_extra:
+            running = set(get_running_services())
+            missing = [s for s in SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI if s not in running]
+            if missing:
+                header(f"Starting extra services in {env} mode (bootstrapping missing min/core/monitoring/daily/browser/office/automation-ai: {', '.join(missing)})...")
+            else:
+                header(f"Starting extra services in {env} mode (min/core/monitoring/daily/browser/office/automation-ai already running, left untouched)...")
+            services = missing + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_up, services, env, profile, "Extra services", fresh=fresh)
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header(f"Starting min services in {env} mode...")
@@ -2272,70 +3667,101 @@ def main() -> int:
     elif action == "precreate":
         ensure_network()
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
-            header(f"Pre-creating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Pre-creating all services (min + core + monitoring + daily + browser + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "All services")
+            run_list(do_precreate, services, env, profile, "All services", update=update_flag)
         elif run_core:
             services = SERVICES_MIN + SERVICES_CORE + services_to_run
             header(f"Pre-creating core services (min + core) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Core services")
+            run_list(do_precreate, services, env, profile, "Core services", update=update_flag)
+        elif run_monitoring:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + services_to_run
+            header(f"Pre-creating monitoring services (min + core + monitoring) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Monitoring services", update=update_flag)
         elif run_daily:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
-            header(f"Pre-creating daily services (min + core + daily) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + services_to_run
+            header(f"Pre-creating daily services (min + core + monitoring + daily) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Daily services")
+            run_list(do_precreate, services, env, profile, "Daily services", update=update_flag)
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header(f"Pre-creating browser services (min + core + monitoring + daily + browser) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Browser services", update=update_flag)
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
-            header(f"Pre-creating office services (min + core + daily + office) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
+            header(f"Pre-creating office services (min + core + monitoring + daily + browser + office) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Office services")
+            run_list(do_precreate, services, env, profile, "Office services", update=update_flag)
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
-            header(f"Pre-creating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Pre-creating automation-ai services (min + core + monitoring + daily + browser + office + automation-ai) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Automation-AI services")
+            run_list(do_precreate, services, env, profile, "Automation-AI services", update=update_flag)
+        elif run_extra:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Pre-creating extra services (min + core + monitoring + daily + browser + office + automation-ai + extra) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_precreate, services, env, profile, "Extra services", update=update_flag)
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header(f"Pre-creating min services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
-            run_list(do_precreate, services, env, profile, "Min services")
+            run_list(do_precreate, services, env, profile, "Min services", update=update_flag)
         else:
             header(f"Pre-creating services in {env} mode...")
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
-            run_list(do_precreate, services_to_run, env, profile, "Services")
+            run_list(do_precreate, services_to_run, env, profile, "Services", update=update_flag)
 
     elif action in ("down", "-d"):
         if run_all:
             header("Stopping all services and profile containers (reverse order)...")
-            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run))
+            # MANUAL services are never auto-started, but 'down all' is the
+            # one command that stops everything, so include the ones actually
+            # running (not stopped ones, which would only churn snapshots).
+            running_manual = [s for s in SERVICES_MANUAL if s in get_running_services()]
+            lst = list(reversed(SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + running_manual + services_to_run))
         elif run_core:
             header("Stopping core services (reverse order) — min stays running...")
             lst = list(reversed(SERVICES_CORE + services_to_run))
+        elif run_monitoring:
+            header("Stopping monitoring services (reverse order) — min/core stay running...")
+            lst = list(reversed(SERVICES_MONITORING + services_to_run))
         elif run_daily:
             header("Stopping daily services (reverse order) — min/core stay running...")
             lst = list(reversed(SERVICES_DAILY + services_to_run))
+        elif run_browser:
+            header("Stopping browser services (reverse order) — min/core/monitoring/daily stay running...")
+            lst = list(reversed(SERVICES_BROWSER + services_to_run))
         elif run_office:
-            header("Stopping office services (reverse order) — min/core/daily stay running...")
+            header("Stopping office services (reverse order) — min/core/monitoring/daily/browser stay running...")
             lst = list(reversed(SERVICES_OFFICE + services_to_run))
         elif run_automation_ai:
-            header("Stopping automation-ai services (reverse order) — min/core/daily/office stay running...")
+            header("Stopping automation-ai services (reverse order) — min/core/monitoring/daily/browser/office stay running...")
             lst = list(reversed(SERVICES_AUTOMATION_AI + services_to_run))
+        elif run_extra:
+            header("Stopping extra services (reverse order) — min/core/monitoring/daily/browser/office/automation-ai stay running...")
+            lst = list(reversed(SERVICES_EXTRA + services_to_run))
         elif run_min:
             header("Stopping min services (reverse order)...")
             lst = list(reversed(SERVICES_MIN + services_to_run))
         else:
             header("Stopping services...")
             lst = services_to_run
-        if (run_all or run_core or run_daily or run_office or run_automation_ai or run_min or used_group_or_bundle) and not confirm_expansion(lst, assume_yes):
+        if (run_all or run_core or run_monitoring or run_daily or run_browser or run_office or run_automation_ai or run_extra or run_min or used_group_or_bundle) and not confirm_expansion(lst, assume_yes):
             return 1
         # A Compose profile is opt-in by default, so a plain `compose down`
         # misses profile-only containers that were previously started (for
@@ -2345,13 +3771,16 @@ def main() -> int:
         down_profile = "*"
         for service in lst:
             do_down(service, env, down_profile, no_backup=no_backup)
+        # Reference count: stop a shared database server once no running
+        # service uses it any more (see the Shared databases section).
+        release_shared_dbs(env)
         print()
         success("Done")
 
     elif action in ("restart", "-r"):
         ensure_network()
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header(f"Restarting all services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2362,24 +3791,42 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restart, services, env, profile, "Core services")
+        elif run_monitoring:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + services_to_run
+            header(f"Restarting monitoring services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Monitoring services")
         elif run_daily:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + services_to_run
             header(f"Restarting daily services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restart, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header(f"Restarting browser services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header(f"Restarting office services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restart, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header(f"Restarting automation-ai services in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restart, services, env, profile, "Automation-AI services")
+        elif run_extra:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Restarting extra services in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restart, services, env, profile, "Extra services")
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header(f"Restarting min services in {env} mode...")
@@ -2400,8 +3847,8 @@ def main() -> int:
     elif action == "update":
         ensure_network()
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
-            header(f"Updating all services (min + core + daily + office + automation-ai + extra) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Updating all services (min + core + monitoring + daily + browser + office + automation-ai + extra) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "All services")
@@ -2411,24 +3858,42 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Core services")
+        elif run_monitoring:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + services_to_run
+            header(f"Updating monitoring services (min + core + monitoring) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Monitoring services")
         elif run_daily:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
-            header(f"Updating daily services (min + core + daily) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + services_to_run
+            header(f"Updating daily services (min + core + monitoring + daily) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header(f"Updating browser services (min + core + monitoring + daily + browser) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
-            header(f"Updating office services (min + core + daily + office) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
+            header(f"Updating office services (min + core + monitoring + daily + browser + office) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
-            header(f"Updating automation-ai services (min + core + daily + office + automation-ai) in {env} mode...")
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            header(f"Updating automation-ai services (min + core + monitoring + daily + browser + office + automation-ai) in {env} mode...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_update, services, env, profile, "Automation-AI services")
+        elif run_extra:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header(f"Updating extra services (min + core + monitoring + daily + browser + office + automation-ai + extra) in {env} mode...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_update, services, env, profile, "Extra services")
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header(f"Updating min services in {env} mode...")
@@ -2454,7 +3919,7 @@ def main() -> int:
 
     elif action == "backup":
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Backing up all services (named volumes + service_data) to service_data/backup/...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2465,43 +3930,79 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Core services")
+        elif run_monitoring:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + services_to_run
+            header("Backing up monitoring services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Monitoring services")
         elif run_daily:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + services_to_run
             header("Backing up daily services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header("Backing up browser services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header("Backing up office services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header("Backing up automation-ai services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Automation-AI services")
+        elif run_extra:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header("Backing up extra services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_backup, services, env, profile, "Extra services")
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header("Backing up min services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_backup, services, env, profile, "Min services")
+        elif run_running:
+            header("Backing up running services...")
+            lst = get_running_services() + services_to_run
+            if not lst:
+                error("backup running: no running services detected, nothing to back up")
+                return 1
+            info(f"Detected running services: {' '.join(lst)}")
+            if not confirm_expansion(lst, assume_yes):
+                return 1
+            run_list(do_backup, lst, env, profile, "Running services")
         else:
             header("Backing up services...")
+            if not services_to_run:
+                # `backup running` once matched nothing here and reported success: a backup that did
+                # nothing must never look like one that worked.
+                error("backup: no service named and no tier or target given, nothing to back up")
+                return 1
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_backup, services_to_run, env, profile, "Services")
+        # Backing up a stopped app starts its shared server to dump its
+        # database; stop it again if nothing running needs it.
+        release_shared_dbs(env)
 
     elif action == "restore":
         ensure_network()
-        if snapshot and (run_all or run_core or run_daily or run_office or run_automation_ai or run_min):
+        if snapshot and (run_all or run_core or run_monitoring or run_daily or run_browser or run_office or run_automation_ai or run_extra or run_min):
             error("--snapshot only works when restoring a single named service")
             return 1
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Restoring all services from service_data/backup/...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2512,24 +4013,42 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restore, services, env, profile, "Core services")
+        elif run_monitoring:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + services_to_run
+            header("Restoring monitoring services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Monitoring services")
         elif run_daily:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + services_to_run
             header("Restoring daily services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restore, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header("Restoring browser services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header("Restoring office services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restore, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header("Restoring automation-ai services...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_restore, services, env, profile, "Automation-AI services")
+        elif run_extra:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header("Restoring extra services...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_restore, services, env, profile, "Extra services")
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header("Restoring min services...")
@@ -2541,6 +4060,49 @@ def main() -> int:
             if used_group_or_bundle and not confirm_expansion(services_to_run, assume_yes):
                 return 1
             run_list(do_restore, services_to_run, env, profile, "Services", snapshot=snapshot)
+        release_shared_dbs(env)
+
+    elif action == "reset":
+        # Same target semantics as 'down': a tier keyword means just that
+        # tier (never cascades into lower tiers). Order is startup order,
+        # since each service comes back up as part of its own reset.
+        if run_running:
+            error("reset takes services, tiers or groups — not 'running'")
+            return 1
+        if run_all:
+            lst = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + [s for s in SERVICES_MANUAL if s in get_running_services()] + services_to_run
+        elif run_core:
+            lst = SERVICES_CORE + services_to_run
+        elif run_monitoring:
+            lst = SERVICES_MONITORING + services_to_run
+        elif run_daily:
+            lst = SERVICES_DAILY + services_to_run
+        elif run_browser:
+            lst = SERVICES_BROWSER + services_to_run
+        elif run_office:
+            lst = SERVICES_OFFICE + services_to_run
+        elif run_automation_ai:
+            lst = SERVICES_AUTOMATION_AI + services_to_run
+        elif run_extra:
+            lst = SERVICES_EXTRA + services_to_run
+        elif run_min:
+            lst = SERVICES_MIN + services_to_run
+        else:
+            lst = services_to_run
+        header(f"Reset = snapshot, wipe, start blank ('restore <service>' undoes it): {' '.join(lst)}")
+        # Never auto-confirmed: unlike other tier commands, a non-interactive
+        # reset without -y refuses instead of proceeding (see the
+        # homeserver-py-no-dry-run note in docs/08-maintenance.md).
+        if not assume_yes:
+            if not sys.stdin.isatty():
+                error("reset deletes data — pass -y to confirm when not running interactively")
+                return 1
+            if input(f"Type 'reset' to snapshot and wipe {len(lst)} service(s): ").strip() != "reset":
+                warn("Aborted — nothing changed")
+                return 1
+        ensure_network()
+        run_list(do_reset, lst, env, profile, "Reset")
+        release_shared_dbs(env)
 
     elif action == "snapshots":
         if not services_to_run:
@@ -2551,7 +4113,7 @@ def main() -> int:
 
     elif action == "dump":
         if run_all:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
             header("Dumping all running services' databases to service_data/db_dump/...")
             if not confirm_expansion(services, assume_yes):
                 return 1
@@ -2562,24 +4124,42 @@ def main() -> int:
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_dump, services, env, profile, "Core services")
+        elif run_monitoring:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + services_to_run
+            header("Dumping monitoring services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Monitoring services")
         elif run_daily:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + services_to_run
             header("Dumping daily services' databases...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_dump, services, env, profile, "Daily services")
+        elif run_browser:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + services_to_run
+            header("Dumping browser services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Browser services")
         elif run_office:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + services_to_run
             header("Dumping office services' databases...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_dump, services, env, profile, "Office services")
         elif run_automation_ai:
-            services = SERVICES_MIN + SERVICES_CORE + SERVICES_DAILY + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + services_to_run
             header("Dumping automation-ai services' databases...")
             if not confirm_expansion(services, assume_yes):
                 return 1
             run_list(do_dump, services, env, profile, "Automation-AI services")
+        elif run_extra:
+            services = SERVICES_MIN + SERVICES_CORE + SERVICES_MONITORING + SERVICES_DAILY + SERVICES_BROWSER + SERVICES_OFFICE + SERVICES_AUTOMATION_AI + SERVICES_EXTRA + services_to_run
+            header("Dumping extra services' databases...")
+            if not confirm_expansion(services, assume_yes):
+                return 1
+            run_list(do_dump, services, env, profile, "Extra services")
         elif run_min:
             services = SERVICES_MIN + services_to_run
             header("Dumping min services' databases...")

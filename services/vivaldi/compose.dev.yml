@@ -1,0 +1,4 @@
+services:
+  vivaldi:
+    ports:
+      - "0.0.0.0:8161:3000"

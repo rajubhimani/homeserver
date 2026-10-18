@@ -1,0 +1,12 @@
+containers:
+  atuin:
+    # The image's own HEALTHCHECK (ghcr.io/atuinsh/atuin:18.23.0), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS -o /dev/null "http://localhost:${ATUIN_PORT:-8888}/healthz"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

@@ -1,0 +1,4 @@
+services:
+  clamav:
+    security_opt:
+      - label=disable

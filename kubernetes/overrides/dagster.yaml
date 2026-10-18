@@ -1,0 +1,12 @@
+# Dagster runs from its official Helm chart on Kubernetes (decided 2026-10-04,
+# docs/17 "Dagster"): Dagster's documented Kubernetes deployment, with
+# K8sRunLauncher (each run a Job pod). The generator still writes what the
+# rest of the stack needs (its login and database on shared-postgres, its
+# ExternalSecrets, network policy and route) and renders the chart's values
+# (gitops/<env>: Application dagster-chart): the chart version is the dagster
+# version in user-code/pyproject.toml, the code image the one Compose builds,
+# and the copies follow kubernetes/deploy/<env>.yaml.
+helm:
+  repo: https://dagster-io.github.io/helm
+  chart: dagster
+  release: dagster

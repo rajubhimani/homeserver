@@ -1,0 +1,51 @@
+# temporalio/auto-setup is deprecated upstream — temporal-schema-setup does
+# what auto-setup used to do at boot (temporal-sql-tool create/setup-schema/
+# update-schema for both the main and visibility databases), once, as its
+# own one-shot step. Mirrors compose.yml's temporal-schema-setup exactly:
+# `restart: "no"` there → a Job (restartPolicy: OnFailure) here, same as
+# plane-migrator. Both `create` and `update-schema` are idempotent no-ops
+# when already applied, so backoffLimit gives this room to retry if it
+# races ahead of temporal-db coming up (no `depends_on: condition:
+# service_healthy` equivalent in k8s — see kubernetes/README.md's
+# "No depends_on equivalent" note) without doing anything harmful on a
+# re-run.
+#
+# Compose's `entrypoint: ["/bin/sh", "-c"]` + `command: [<script>]` maps to
+# k8s's `command:` (overrides ENTRYPOINT) + `args:` (overrides CMD) — see
+# TROUBLESHOOTING.md's command-vs-args note. The compose script's `$$db`/
+# `$$ns` double-dollar escaping was Compose's own variable-substitution
+# escaping for its YAML — not needed here, so this uses plain `$db`.
+#
+# The temporal server Deployment has no way to block on this Job finishing
+# either — it will crash-loop against a not-yet-migrated schema until this
+# Job completes, then recover on its own restart, same category of gap.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-schema-setup
+  namespace: apps
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: temporal-schema-setup
+          image: temporalio/admin-tools:1.30.4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              for db in temporal temporal_visibility; do
+                temporal-sql-tool --plugin postgres12 --ep postgres-shared.data.svc.cluster.local -u temporal -p 5432 --db "$db" create
+                temporal-sql-tool --plugin postgres12 --ep postgres-shared.data.svc.cluster.local -u temporal -p 5432 --db "$db" setup-schema -v 0.0
+              done
+              temporal-sql-tool --plugin postgres12 --ep postgres-shared.data.svc.cluster.local -u temporal -p 5432 --db temporal update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
+              temporal-sql-tool --plugin postgres12 --ep postgres-shared.data.svc.cluster.local -u temporal -p 5432 --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+          env:
+            - name: SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-db-credentials
+                  key: password

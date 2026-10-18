@@ -1,0 +1,5 @@
+containers:
+  ollama:
+    mounts:
+      # Downloaded models (MODELS_ROOT, re-downloadable, large): own volume on the HDD.
+      /root/.ollama: {volume: models, size: 100Gi, class: bulk}

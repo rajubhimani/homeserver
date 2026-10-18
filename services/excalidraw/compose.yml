@@ -7,7 +7,10 @@ services:
     # would be a downgrade, not a real pin. Re-check
     # https://hub.docker.com/r/excalidraw/excalidraw/tags occasionally in
     # case that ever changes.
-    image: excalidraw/excalidraw:latest
+    # Excalidraw publishes only `latest` (versioned image tags stopped in 2021),
+    # so it's pinned by digest: the image can't change underneath, and an update
+    # is a deliberate digest bump (docs/services/excalidraw.md).
+    image: excalidraw/excalidraw:latest@sha256:f7ee194addd607bf831d2af0f0a34463dd4225e426cf35199ef0b12a803398e9
     container_name: excalidraw
     restart: unless-stopped
     healthcheck:

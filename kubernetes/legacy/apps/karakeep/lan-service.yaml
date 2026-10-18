@@ -1,0 +1,16 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8117 matches karakeep/compose.dev.yml exactly. Not currently
+# live-applied — see kubernetes/README.md's "Current status".
+apiVersion: v1
+kind: Service
+metadata:
+  name: karakeep-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: karakeep
+  ports:
+    - port: 8117
+      targetPort: 3000

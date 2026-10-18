@@ -1,0 +1,8 @@
+containers:
+  landing:
+    env:
+      # nginx's resolver doesn't apply the pod's search domains, so the
+      # health-check upstreams need the full in-cluster name.
+      UPSTREAM_SUFFIX: .apps.svc.cluster.local
+      # wg-easy's web UI through its Service (host-network pod)
+      WG_EASY_HOST: wg-easy.apps.svc.cluster.local

@@ -1,0 +1,6 @@
+containers:
+  airflow-scheduler:
+    mounts:
+      /var/run/docker.sock:
+        skip: true
+        reason: "Only for DAGs using DockerOperator (LocalExecutor runs tasks here). Kubernetes has no Docker socket; Airflow's equivalent there is KubernetesPodOperator (cncf.kubernetes provider). Other DAGs run unchanged."

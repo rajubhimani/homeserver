@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Blocks the 5 remote-browser containers (Firefox/Chromium/Ungoogled
-# Chromium/Brave/Mullvad Browser — services/{firefox,chromium,...}/compose.yml)
+# Blocks the 10 remote-browser containers (Firefox/Chromium/Brave/Mullvad
+# Browser/LibreWolf/Zen/Helium/Chrome/Edge/Vivaldi —
+# services/{firefox,chromium,...}/compose.yml)
 # from reaching this host's LAN, while leaving their internet access
-# untouched. Scoped to just these 5 static IPs deliberately — never applied
+# untouched. Scoped to just these 10 static IPs deliberately — never applied
 # stack-wide, since e.g. Guacamole's whole job is reaching LAN devices.
 #
 # Usage:
@@ -53,12 +54,25 @@ LAN_SUBNET="192.168.1.0/24"
 HOST_LAN_IP="192.168.1.7"
 FIREWALLD_ZONE="docker"
 
+# The browsers' fixed IPs are <a>.<b>.255.<n> inside the 'homeserver' network (compose: ipv4_address
+# ${BROWSER_NET}.<n>, with BROWSER_NET derived by homeserver.py from HOMESERVER_SUBNET). Read the prefix from the
+# live network so this can never drift from it; override with BROWSER_NET=a.b.255 if the network is down.
+if [ -z "${BROWSER_NET:-}" ]; then
+    SUBNET=$(docker network inspect homeserver --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)
+    [ -n "$SUBNET" ] || { echo "Network 'homeserver' not found; start the stack first or set BROWSER_NET=a.b.255" >&2; exit 1; }
+    BROWSER_NET=$(echo "$SUBNET" | awk -F'[./]' '{print $1"."$2".255"}')
+fi
 BROWSER_IPS=(
-    172.18.255.240 # firefox
-    172.18.255.241 # chromium
-    172.18.255.242 # ungoogled-chromium
-    172.18.255.243 # brave
-    172.18.255.244 # mullvad-browser
+    "$BROWSER_NET.240" # firefox
+    "$BROWSER_NET.241" # chromium
+    "$BROWSER_NET.243" # brave
+    "$BROWSER_NET.244" # mullvad-browser
+    "$BROWSER_NET.245" # librewolf
+    "$BROWSER_NET.246" # zen
+    "$BROWSER_NET.247" # helium
+    "$BROWSER_NET.248" # chrome
+    "$BROWSER_NET.249" # edge
+    "$BROWSER_NET.250" # vivaldi
 )
 
 apply() {

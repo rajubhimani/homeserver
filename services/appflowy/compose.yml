@@ -19,17 +19,19 @@ services:
       - homeserver
 
   appflowy-redis:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: appflowy-redis
     restart: unless-stopped
-    command: redis-server --save "" --stop-writes-on-bgsave-error no
+    command: valkey-server --save "" --stop-writes-on-bgsave-error no
     volumes:
       # --save "" disables persistence, so nothing is actually written here —
       # this mount exists only so the image's own `VOLUME /data` declaration
       # doesn't cause Docker to silently create an anonymous volume instead.
-      - appflowy-redis-alpine:/data
+      - appflowy-valkey:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 60s
       timeout: 5s
       retries: 5
@@ -37,7 +39,7 @@ services:
       - homeserver
 
   appflowy-minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: appflowy-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -56,7 +58,7 @@ services:
       - homeserver
 
   appflowy-minio-setup:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: appflowy-minio-setup
     restart: "no"
     env_file: .env
@@ -73,7 +75,7 @@ services:
       - homeserver
 
   appflowy-gotrue:
-    image: appflowyinc/gotrue:0.17.1
+    image: appflowyinc/gotrue:0.18.11
     container_name: appflowy-gotrue
     restart: unless-stopped
     env_file: .env
@@ -84,7 +86,7 @@ services:
       # search_path is scoped to this connection string only (not the DB role) so it
       # doesn't affect AppFlowy Cloud's migrations, which assume unqualified names
       # resolve to public — see appflowy-cloud's APPFLOWY_DATABASE_URL below.
-      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@appflowy-db/${POSTGRES_DB}?options=-c%20search_path%3Dauth%2Cpublic
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}?options=-c%20search_path%3Dauth%2Cpublic
       GOTRUE_SITE_URL: https://appflowy.${DOMAIN}
       GOTRUE_URI_ALLOW_LIST: "https://appflowy.${DOMAIN}/**,appflowy-flutter://**"
       GOTRUE_DISABLE_SIGNUP: "false"
@@ -99,25 +101,36 @@ services:
     depends_on:
       appflowy-db:
         condition: service_healthy
+    # Same check as AppFlowy-Cloud's own docker-compose.yml.
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     networks:
       - homeserver
 
   appflowy-cloud:
-    image: appflowyinc/appflowy_cloud:0.16.5
+    image: appflowyinc/appflowy_cloud:0.19.0
     container_name: appflowy-cloud
     restart: unless-stopped
     env_file: .env
     environment:
-      APPFLOWY_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@appflowy-db/${POSTGRES_DB}
-      APPFLOWY_REDIS_URI: redis://appflowy-redis:6379
+      APPFLOWY_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
+      APPFLOWY_REDIS_URI: redis://${CACHE_HOST}:${CACHE_PORT}
       APPFLOWY_GOTRUE_BASE_URL: http://appflowy-gotrue:9999
       APPFLOWY_GOTRUE_JWT_SECRET: ${GOTRUE_JWT_SECRET}
       APPFLOWY_S3_USE_MINIO: "true"
-      APPFLOWY_S3_MINIO_URL: http://appflowy-minio:9000
+      APPFLOWY_S3_MINIO_URL: ${S3_ENDPOINT}
       APPFLOWY_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
       APPFLOWY_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       APPFLOWY_S3_BUCKET: appflowy
       APPFLOWY_S3_REGION: us-east-1
+      # Required since appflowy_cloud 0.18 ("Public Form uploads with MinIO
+      # require APPFLOWY_S3_PRESIGNED_URL_ENDPOINT"); served by the
+      # /minio-api/ block in nginx.conf. Value per AppFlowy-Cloud's deploy.env.
+      APPFLOWY_S3_PRESIGNED_URL_ENDPOINT: https://appflowy.${DOMAIN}/minio-api
       APPFLOWY_ENVIRONMENT: production
       APPFLOWY_WEB_URL: https://appflowy.${DOMAIN}
     healthcheck:
@@ -139,7 +152,7 @@ services:
       - homeserver
 
   appflowy-web:
-    image: appflowyinc/appflowy_web:0.16.2
+    image: appflowyinc/appflowy_web:0.19.4
     container_name: appflowy-web
     restart: unless-stopped
     environment:
@@ -149,11 +162,13 @@ services:
     depends_on:
       appflowy-cloud:
         condition: service_healthy
+    # No healthcheck, matching AppFlowy-Cloud's own docker-compose.yml (and the
+    # image): static frontend behind appflowy-nginx, whose check covers it.
     networks:
       - homeserver
 
   appflowy-admin:
-    image: appflowyinc/admin_frontend:0.17.1
+    image: appflowyinc/admin_frontend:0.18.2
     container_name: appflowy-admin
     restart: unless-stopped
     env_file: .env
@@ -163,11 +178,13 @@ services:
     depends_on:
       appflowy-cloud:
         condition: service_healthy
+    # No healthcheck, matching AppFlowy-Cloud's own docker-compose.yml (and the
+    # image): static frontend behind appflowy-nginx, whose check covers it.
     networks:
       - homeserver
 
   appflowy-nginx:
-    image: nginx:1.30-alpine
+    image: nginx:1.31.7-alpine
     container_name: appflowy-nginx
     restart: unless-stopped
     volumes:
@@ -188,7 +205,7 @@ services:
 
 volumes:
   appflowy-postgres:
-  appflowy-redis-alpine:
+  appflowy-valkey:
 
 networks:
   homeserver:

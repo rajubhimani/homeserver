@@ -1,5 +1,8 @@
 # Mattermost
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/mattermost/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
 
 ---
@@ -10,10 +13,10 @@ Slack-style team chat — channels, DMs, threads, plugins (Playbooks/Calls ship 
 
 ```bash
 cp services/mattermost/.env.example services/mattermost/.env
-mkdir -p service_data/data/mattermost/{config,data,logs,plugins,client-plugins,bleve-indexes}
-sudo chown -R 2000:2000 service_data/data/mattermost/   # container runs as uid 2000
 uv run homeserver.py dev up mattermost
 ```
+
+No manual pre-create/chown step needed — `mattermost-permissions` (a one-shot `alpine` container in `compose.yml`, same pattern as `firefly-permissions`) creates and `chown`s all six `DATA_ROOT` subdirectories to `2000:2000` on every start, before `mattermost` itself starts (`depends_on: service_completed_successfully`). The official image hardcodes `user: "2000:2000"` with no root fallback, so it can never self-heal this on its own — confirmed live by fully wiping `service_data/data/mattermost/` and running `up --fresh` twice: the first attempt (a bare `chown -R` with no `mkdir` first) still failed, because Docker creates each of the six bind-mount subdirectories root-owned *after* the permissions container had already run and exited — fixed by having the permissions container `mkdir -p` them itself first.
 
 Open `https://mattermost.<domain>/` (or `http://<host>:8141` in dev) and create the first account — it becomes System Admin automatically (first user on a fresh install always does).
 
@@ -29,7 +32,7 @@ curl http://localhost:8141/api/v4/system/ping
 
 ## Connecting the Android app
 
-Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.10.0` (`.env.example`), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
+Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/details?id=com.mattermost.rn)) — needs server `v11.7.0+`; this stack pins `MATTERMOST_VERSION=11.7.8` (`.env.example`, the current ESR), so it clears that. On first launch, enter `https://mattermost.${DOMAIN}` as the server URL, then log in normally. **Push notifications need extra setup for a self-hosted server** — Mattermost's mobile app relies on Mattermost's own hosted push-notification relay by default; without registering this server at mattermost.com's push-proxy signup (or running your own push proxy) and setting the resulting address under System Console → Environment → Push Notification Server, the app works fine in foreground but won't reliably notify in the background. Not configured in this stack by default.
 
 ## Registration
 
@@ -40,6 +43,10 @@ Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/de
 - **Resource usage**: this is part of a "try it and see" playground (Rocket.Chat/Zulip alongside it) — bring it up when you want it, down when you don't (`uv run homeserver.py dev down mattermost`), rather than leaving it running idle. `down` auto-snapshots first, same as every other service.
 - **Outgoing email routed through the shared [Mailpit](mailpit.md) catcher by default** (`MM_EMAILSETTINGS_SMTPSERVER=mailpit` in `compose.yml`) — invites/notifications genuinely send, nothing ever leaves this host. Point `MM_EMAILSETTINGS_SMTPSERVER`/etc. at a real relay instead in `.env` if you want actual delivery.
 - **Playbooks/Calls plugins log "requires a professional license or higher"** on startup — expected in Team Edition, not an error; core messaging is unaffected.
+
+## Version line
+
+`MATTERMOST_VERSION=11.7.8`, the current **Extended Support Release** (ESR, supported to 2027-05-15; ESRs come every 9 months with 12 months of support, see the [release policy](https://docs.mattermost.com/product-overview/release-policy.html)), per the LTS-always rule ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)). It moved from 11.11.1 on 2026-10-03 with a reset, since the instance was still empty and Mattermost can't downgrade its database. The next ESR is expected around February 2027.
 
 ---
 

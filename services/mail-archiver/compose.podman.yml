@@ -1,0 +1,4 @@
+services:
+  mail-archiver:
+    security_opt:
+      - label=disable

@@ -6,6 +6,7 @@
 
 **Purpose:** Docker container management UI.
 **Port:** `9000` (HTTP) or `9445` (HTTPS, host-mapped off the image's default `9443` — that port is claimed locally by the `kind` k8s-pilot cluster's ingress) | **Data:** `service_data/data/portainer/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~38MB
+**Pinned version:** `portainer/portainer-ce:2.45.2` (LTS). Portainer runs two tracks: LTS (`2.39.x`, `2.45.x`) and short-term STS releases (`2.44.0`). Stay on the LTS line, and take patch bumps within it — `2.45.0` → `2.45.1` on 2026-09-28, then `2.45.2` on 2026-10-17 was CVE fixes plus SSRF hardening, with no removed features.
 
 ## Setup
 
@@ -37,6 +38,11 @@ Everything happens in the Portainer web UI, confirmed against Portainer CE's own
 - **Volumes:** browse and remove Docker volumes directly — useful for spotting orphaned volumes left behind by a container that was torn down manually instead of through `homeserver.py down`.
 - **Stacks:** Portainer's own compose-deployment feature (web editor, file upload, or a Git repo). This repo's services aren't managed as Portainer stacks — `homeserver.py` is the entrypoint for those — but Stacks is there for one-off compose experiments independent of this repo's tooling.
 - In short: the fastest way to answer "what's actually running and how much RAM is it using right now" without `docker ps`/`docker stats` on the host itself.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: data restored (no healthcheck by design). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

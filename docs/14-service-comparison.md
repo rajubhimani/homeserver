@@ -27,8 +27,8 @@ This stack runs several services that solve the *same* job — three team-chat a
 | Our Service | Status | Tier | Containers | Memory | Version |
 | --- | --- | --- | --- | --- | --- |
 | **Trilium Notes** | ● up | extra | **1** | **~119MB** (live, this session) | v0.104.1 — current |
-| **SilverBullet** | ● up | extra | **1** | **~2.4MB** (live, this session) | 2.10.0 — unconfirmed, check github.com/silverbulletmd/silverbullet/releases directly |
-| **Outline** | ○ down | extra | 3 (db, redis, app) | not measured | 1.9.2 — current |
+| **SilverBullet** | ● up | extra | **1** | **~2.4MB** (live, this session) | 2.11.1 — unconfirmed, check github.com/silverbulletmd/silverbullet/releases directly |
+| **Outline** | ○ down | extra | 3 (db, redis, app) | not measured | 1.10.1 — current |
 | **BookStack** | ○ down | extra | 2 (db, app) | not measured | v26.05.3 — current, and already has an OIDC/SAML2/LDAP security fix |
 | **AppFlowy** | ● up | daily | 8 | **~509MB** total (appflowy-cloud alone ~218MB) | appflowy_cloud 0.16.5 — unconfirmed (search only surfaced the separate desktop-client versioning) |
 
@@ -39,7 +39,7 @@ This stack runs several services that solve the *same* job — three team-chat a
 | Our Service | Status | Tier | Containers | Memory | Version |
 | --- | --- | --- | --- | --- | --- |
 | **OpenProject** | ○ down | extra | 1 (bundled Postgres inside) | **~1.94GB** idle (65% of its 3G cap — already below OpenProject's own stated 4GB minimum) | 17.7.2 — current |
-| **Plane** | ● up | extra | 11 | **~709MB** total (`plane-worker` alone ~205MB) | v1.4.1 — current (verified via Docker Hub directly, not just search) |
+| **Plane** | ● up | extra | 11 | **~709MB** total (`plane-worker` alone ~205MB) | v1.4.2 — current (verified via Docker Hub directly, not just search) |
 | **Vikunja** | ● up | extra | 2 (db, app) | **~48MB** (live, this session — app ~30MB + db ~18MB) | 2.5.0 — current |
 
 **Notes:** OpenProject is the most Jira/Asana-like (biggest feature surface: Gantt, time tracking, budgets, wiki) but also the heaviest per-container and already running close to its memory cap with zero users — real OOM risk under actual load, and it's still the one of these three not brought up this session. Plane is lighter overall despite 11 containers (microservice split, most are small) and closer to Linear's UX. Vikunja, now measured, confirms it as the lightest of the three by a wide margin (~48MB total, 2 containers) — worth weighing ahead of OpenProject/Plane on footprint alone if project tracking is the deciding factor.
@@ -99,7 +99,7 @@ See [`docs/12-orchestration.md`](12-orchestration.md) for what each of these is 
 | Our Service | Status | Tier | Memory | Version |
 | --- | --- | --- | --- | --- |
 | **Nextcloud** | ● up | **core** | **~181MB** total (app 122 + db 21 + redis 6 + cron 31) | 34.0.3 — current |
-| **Syncthing** | ● up | extra | **~25MB** | v2.1.3 — current |
+| **Syncthing** | ● up | extra | **~25MB** | v2.1.5 — current |
 
 **Notes:** different mechanisms more than direct competitors — Nextcloud is a hosted cloud drive with a web UI, calendar/contacts, and apps ecosystem (closer to Google Drive); Syncthing is pure peer-to-peer folder sync with no server-side web UI or storage of its own (closer to a private Dropbox-sync-only mode). Syncthing is ~7x cheaper if all you actually need is "keep folders in sync across my own devices," not a hosted drive with sharing/collaboration features.
 
@@ -107,10 +107,19 @@ See [`docs/12-orchestration.md`](12-orchestration.md) for what each of these is 
 
 | Our Service | Status | Tier | Memory | Version |
 | --- | --- | --- | --- | --- |
-| **Stirling PDF (lite)** | ● up | extra | **~274MB** (live, this session) | 2.14.3 — current |
-| **Stirling PDF (full)** | ● up | extra | **~501MB** (live, this session) | 2.14.3 — current |
+| **Stirling PDF (lite)** | ● up | extra | **~274MB** (live, this session) | 3.0.0 — current |
+| **Stirling PDF (full)** | ● up | extra | **~501MB** (live, this session) | 3.0.0 — current |
 
 **Notes:** the "lite"/"ultra-lite" naming previously looked misleading based on a "nearly identical idle RAM" claim — but now measured live, full (~501MB) is actually ~83% heavier than lite (~274MB), a real difference, not "nearly identical." Both are still JVM/Spring Boot apps with a large baseline heap, so this could shift with longer settle time or different load; worth treating the "nearly identical" claim as unconfirmed until re-checked rather than assuming either figure is final. The one certain functional difference is the full variant supports login (`SECURITY_ENABLELOGIN`); the lite image's build has no security module at all — if login doesn't matter, lite is both simpler and, per this session's numbers, lighter too.
+
+## Email archiving / mailbox backup
+
+| Our Service | Status | Tier | Containers | Memory | Version |
+| --- | --- | --- | --- | --- | --- |
+| **Mail-Archiver** | ○ down | extra | 2 (db + app) | **~134MB** idle, empty archive (app 84 + db 50) | 2609.1 — current |
+| **Bichon** | ○ down | extra | **1** | **~22MB** idle, empty archive | 2.0.3 — current |
+
+**Notes:** both keep a searchable copy of real mailboxes on this server; neither is an email client. They split along one line: **Mail-Archiver** is the one that gets you *off* a provider. It has a Microsoft Graph connector for M365 (no IMAP/OAuth fiddling) and a built-in "copy this whole mailbox into another account" migration. **Bichon** is the nicer place to *search and browse* (faster full-text search, tags, threads, attachment browser) at a sixth of the memory, but it's IMAP-only and its restore only goes back to the original account. Running both against the same mailbox is fine as long as neither has a server-side retention (delete) policy turned on and gives two independent copies in two different formats.
 
 ---
 
@@ -143,8 +152,7 @@ Single-purpose services with nothing else in this stack doing the same job. List
 | Ollama | — (AI backend, pairs with Open WebUI) | ● up | daily | ~18MB idle, one small model pulled (`qwen2.5:0.5b`, live) |
 | Excalidraw | draw.io / Miro | ● up | extra | ~10MB (live) |
 | ntfy | Pushover / Pushbullet | ○ down | extra | not measured |
-| Firefox / Chromium / Ungoogled Chromium / Brave / Mullvad Browser | — (isolated remote browsers via Browser Hub) | ● up | extra | 207-442MB each (live, this session) — still well under docs' "~1GB each" estimate, though noticeably higher than a prior session's 91-252MB range; real session-to-session variance, worth eventually settling the individual browser docs to a real range instead of the old ~1GB placeholder |
-| Crowdsec | Fail2ban / Cloudflare WAF | ● up | extra | ~80MB (live) |
+| Firefox / Chromium / Brave / Mullvad Browser / LibreWolf / Zen / Helium / Chrome / Edge / Vivaldi | — (isolated remote browsers via Browser Hub) | ● up | extra | 207-442MB each (live, this session) — still well under docs' "~1GB each" estimate, though noticeably higher than a prior session's 91-252MB range; real session-to-session variance, worth eventually settling the individual browser docs to a real range instead of the old ~1GB placeholder |
 | AdGuard Home | Pi-hole | ● up | extra | ~57MB (live) |
 | OrangeHRM | BambooHR / Workday | ○ down | extra | not measured |
 | NocoDB | Airtable | ○ down | extra | not measured |

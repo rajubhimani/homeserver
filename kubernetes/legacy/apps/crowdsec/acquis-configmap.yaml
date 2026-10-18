@@ -1,0 +1,13 @@
+# Verbatim copy of crowdsec/acquis.yaml (bind-mounted in compose via
+# `./acquis.yaml:/etc/crowdsec/acquis.yaml:ro`) — this file lives in the
+# crowdsec/ directory in this repo, not under DATA_ROOT, so it becomes a
+# ConfigMap here rather than a PVC.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crowdsec-acquis-config
+  namespace: apps
+data:
+  acquis.yaml: |
+    source: docker
+    use_container_labels: true

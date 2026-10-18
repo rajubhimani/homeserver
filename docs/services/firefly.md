@@ -6,6 +6,7 @@
 
 **Purpose:** Personal finance manager — income, expenses, budgets, accounts, recurring transactions.
 **Port:** `8102` (host) → `8080` (container) | **Data:** `service_data/data/firefly/` (app storage) + named volume `firefly-postgres-alpine` (DB) | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~141MB total (importer 59 + cron 2 + app 74 + db 6)
+**Pinned versions:** `fireflyiii/core:version-6.7.9` (6.7.8 → 6.7.9 on 2026-10-17, fixes the "Target class [hash] does not exist" error; before that 6.7.6 → 6.7.8 on 2026-10-11; 6.7.7 fixes a wrong running balance on transfers into a wallet-type account with a foreign-currency reference, issue 12433), `fireflyiii/data-importer:version-2.3.5` (bumped 2026-09-28 from 6.6.6 / 2.3.4). **6.7 is a full UI redesign**, and it runs DB upgrade steps automatically on first start (`upgrade:6xx-*` in the logs). It also has security fixes, including a possible MFA bypass. Two behaviour changes to know about: the rule engine's **expression engine is now off by default** — re-enable it under `/settings` if any rule uses expressions; and upstream lists a known issue where editing split transactions can display the splits out of order (the stored data isn't affected). OAuth tokens moved to their own page.
 
 ## Setup
 
@@ -37,12 +38,15 @@ Confirmed against Firefly III's own current documentation, not assumed from memo
 - **Budgets:** the `/budgets` page — set a maximum amount for each budget, which applies to the current period (a month, for most users). Every transaction can optionally be assigned to a budget so you can track spend-vs-budget per category of spending; **Categories** are a separate, unrelated grouping used mainly for reporting rather than a spending cap.
 - **Recurring transactions:** **Recurring** → create one for any withdrawal, deposit, or transfer that repeats — give it a title/description and a repetition rule (every week on day X, every month on a fixed day, every month on the nth weekday, or yearly on a date) plus a first-fire date in the future. This stack's `firefly-cron` container checks daily at 03:00 and creates the actual transaction whenever one is due — nothing to trigger manually.
 - **Rules:** **Automation → Rules** — a rule group holds ordered rules, each with triggers (e.g. description contains X, amount over Y, from a specific account) and actions (set category, set budget, add a tag, etc.). Rules can auto-apply to new transactions as they're entered/imported, or be run in bulk over existing transactions from the rule's own page — useful for auto-categorizing imports from the Data Importer below.
+- **Investments / net worth:** Firefly can't price stocks or funds itself. Keep each broker as an asset account and let [Ghostfolio](ghostfolio.md#connecting-to-firefly-iii)'s `firefly-sync.sh` book the change in market value as a gain/loss transaction, so net worth stays current.
 
 ## Notes
 
 - `APP_KEY` and `STATIC_CRON_TOKEN` must each be **exactly 32 characters**
 - `APP_URL` must be `https://firefly.${DOMAIN}` and `TRUSTED_PROXIES` must be `"**"` — both required by Firefly III's own docs for it to generate `https://` links instead of `http://` (a mismatched scheme gets blocked by the browser's CSP `connect-src`, e.g. on the transaction-delete API call)
 - Includes an alpine `firefly-cron` container that triggers recurring transactions daily at 03:00
+- Healthchecks: `firefly` and `firefly-importer` use their images' own `HEALTHCHECK` (curl `$HEALTHCHECK_PATH`, `/healthcheck` for the core app, with a 300s start period for first-boot migrations). Upstream's compose defines none, so `compose.yml` doesn't either.
+- The landing page's status checks (`/health/firefly`, `/health/firefly-importer`) call that same `/healthcheck`. Until 2026-10-04 they called `/`, which redirects a logged-out request to `/login`, and Laravel logged `production.ERROR: Unauthenticated.` every 30 seconds while the landing page was open.
 
 ## Data Importer
 
@@ -79,17 +83,17 @@ docker logs firefly-db 2>&1 | grep "database system was"
 ```bash
 # 1. Copy the corrupted volume to a scratch volume and try pg_resetwal there
 docker volume create firefly-recovery-test
-docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v firefly-recovery-test:/to alpine:3.24.1 sh -c "cp -a /from/. /to/"
-docker run --rm -u 999:999 -v firefly-recovery-test:/var/lib/postgresql postgres:18.4 pg_resetwal -f /var/lib/postgresql/18/docker
+docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v firefly-recovery-test:/to alpine:3.24.2 sh -c "cp -a /from/. /to/"
+docker run --rm -u 70:70 -v firefly-recovery-test:/var/lib/postgresql postgres:18.6-alpine pg_resetwal -f /var/lib/postgresql/18/docker
 
 # 2. Boot postgres against the scratch copy and verify with pg_dump — not just SELECT count(*),
 #    which can look fine while page-level corruption still exists
-docker run -d --name firefly-recovery-test -v firefly-recovery-test:/var/lib/postgresql -e POSTGRES_DB=firefly -e POSTGRES_USER=firefly -e POSTGRES_PASSWORD=test postgres:18.4
+docker run -d --name firefly-recovery-test -v firefly-recovery-test:/var/lib/postgresql -e POSTGRES_DB=firefly -e POSTGRES_USER=firefly -e POSTGRES_PASSWORD=test postgres:18.6-alpine
 docker exec firefly-recovery-test pg_dump -U firefly -d firefly -f /tmp/dump.sql && echo OK
 
 # 3. Only once that validates cleanly: back up the real volume, then apply the same fix to it
-docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v "$(pwd)/service_data/backup/firefly:/backup" alpine:3.24.1 sh -c "tar czf /backup/firefly-postgres-precorrupt.tar.gz -C /from ."
-docker run --rm -u 999:999 -v firefly_firefly-postgres-alpine:/var/lib/postgresql postgres:18.4 pg_resetwal -f /var/lib/postgresql/18/docker
+docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v "$(pwd)/service_data/backup/firefly:/backup" alpine:3.24.2 sh -c "tar czf /backup/firefly-postgres-precorrupt.tar.gz -C /from ."
+docker run --rm -u 70:70 -v firefly_firefly-postgres-alpine:/var/lib/postgresql postgres:18.6-alpine pg_resetwal -f /var/lib/postgresql/18/docker
 
 # 4. Clean up the scratch volume/container
 docker rm -f firefly-recovery-test
@@ -97,6 +101,11 @@ docker volume rm firefly-recovery-test
 ```
 
 Verify row counts (accounts/transactions/users) after bringing `firefly-db` back up match what you expect before trusting it.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 1,576 transactions restored; `firefly` and `firefly-importer` on their images' own checks. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

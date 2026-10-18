@@ -24,14 +24,16 @@ services:
       - homeserver
 
   coolify-redis:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: coolify-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    command: valkey-server --requirepass ${REDIS_PASSWORD}
     volumes:
-      - coolify-redis-alpine:/data
+      - coolify-valkey:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      test: ["CMD", "valkey-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -39,7 +41,7 @@ services:
       - homeserver
 
   coolify-realtime:
-    image: coollabsio/coolify-realtime:1.0.17
+    image: coollabsio/coolify-realtime:1.0.20
     container_name: coolify-realtime
     restart: unless-stopped
     env_file: .env
@@ -68,8 +70,30 @@ services:
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/n8n-permissions/
+  # vikunja-permissions/rocketchat-permissions -- coolify's image runs as a
+  # hardcoded www-data (uid 9999, confirmed via /etc/passwd inside the
+  # container) with no root fallback, so it can never self-heal these bind
+  # mounts. Doesn't block boot -- coolify doesn't touch these paths at
+  # startup, only when actually deploying an application/database/service
+  # through its UI -- but a real deploy against a root-owned dir (e.g. left
+  # behind by a wipe/--fresh restart) would fail silently, same latent shape
+  # as rocketchat's uploads/.
+  coolify-permissions:
+    image: alpine:3.24.2
+    container_name: coolify-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/applications:/coolify-data/applications
+      - ${DATA_ROOT}/databases:/coolify-data/databases
+      - ${DATA_ROOT}/services:/coolify-data/services
+      - ${DATA_ROOT}/backups:/coolify-data/backups
+      - ${DATA_ROOT}/images:/coolify-data/images
+    command: sh -c "mkdir -p /coolify-data/applications /coolify-data/databases /coolify-data/services /coolify-data/backups /coolify-data/images && chown -R 9999:9999 /coolify-data"
+
   coolify:
-    image: coollabsio/coolify:4.3.9
+    image: coollabsio/coolify:4.3.23
     container_name: coolify
     restart: unless-stopped
     env_file: .env
@@ -77,12 +101,12 @@ services:
       APP_ID: ${APP_ID}
       APP_KEY: ${APP_KEY}
       APP_URL: https://coolify.${DOMAIN}
-      DB_HOST: coolify-db
+      DB_HOST: ${DB_HOST}
       DB_PORT: 5432
       DB_DATABASE: coolify
       DB_USERNAME: coolify
       DB_PASSWORD: ${DB_PASSWORD}
-      REDIS_HOST: coolify-redis
+      REDIS_HOST: ${CACHE_HOST}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       PUSHER_APP_ID: ${PUSHER_APP_ID}
       PUSHER_APP_KEY: ${PUSHER_APP_KEY}
@@ -132,9 +156,13 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      # Timings from coollabsio/coolify's own docker-compose.prod.yml: a fresh
+      # install runs its migrations for a few minutes, and 30s/3 retries
+      # reported it as failed. (Upstream also curls the realtime server's
+      # /up; here realtime is its own container with its own check.)
+      interval: 5s
+      timeout: 2s
+      retries: 24
       start_period: 60s
     depends_on:
       coolify-db:
@@ -143,12 +171,14 @@ services:
         condition: service_healthy
       coolify-realtime:
         condition: service_healthy
+      coolify-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
 volumes:
   coolify-postgres-alpine:
-  coolify-redis-alpine:
+  coolify-valkey:
   coolify-ssh-keys:
 
 networks:

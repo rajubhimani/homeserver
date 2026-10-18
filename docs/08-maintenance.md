@@ -83,6 +83,32 @@ docker compose logs --tail=50 <container-name>
 sudo systemctl status cloudflared
 ```
 
+### A container looks "running healthy" but the landing page shows it offline
+
+`docker ps` / `docker inspect`'s health status only reflect the container's
+own process — they say nothing about whether it's actually reachable by
+anything else on the `homeserver` Docker network. A container can be left
+with a detached/orphaned network endpoint (its own healthcheck still passes
+since that usually only hits `localhost`, but nothing else can reach it, and
+if it depends on a sibling container for its own outbound connections —
+e.g. `atuin` -> `atuin-db` — even DNS resolution for that sibling fails
+outright). This happens whenever the `homeserver` network itself gets
+recreated (it did during the 2026-09-04 IPv6-lockdown work, see
+[09-firewall.md](09-firewall.md)) without every attached container being
+disconnected and reconnected in the same pass.
+
+**A plain `docker restart <container>` does NOT fix this** — restart reuses
+the same stale network endpoint. Run:
+
+```bash
+uv run homeserver.py fix-network          # lists affected containers, asks to confirm
+uv run homeserver.py fix-network --yes    # same, non-interactive
+```
+
+This force-recreates only the affected container(s) — via the same compose
+project/service/files each was originally started with, read back off its
+own Docker labels — leaving bind mounts and named volumes untouched.
+
 ---
 
 ## Remote Management from Mac
@@ -396,14 +422,16 @@ Raise it (`max_user_instances` is a separate, much lower-ceiling limit
 than `max_user_watches` — raising the latter doesn't help here):
 
 ```bash
-sudo sysctl -w fs.inotify.max_user_instances=1024   # takes effect immediately, no restart needed
-
-# Persist across reboots:
-sudo tee /etc/sysctl.d/99-docker-inotify.conf <<'EOF'
-fs.inotify.max_user_instances=1024
-EOF
-sudo sysctl --system
+sudo tee /etc/sysctl.d/99-inotify.conf <<'SYSCTL'
+# Many containers (Docker + a kind Kubernetes node) each need inotify instances
+# and watches; the defaults (128 / ~270k) run out ("Too many open files").
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+SYSCTL
+sudo sysctl --system | grep inotify     # takes effect immediately, survives reboots
 ```
+
+Running a **kind** Kubernetes node next to the Compose stack makes this **required**, not optional. On 2026-10-03, with the defaults still in place, `systemd` started failing with `Failed to allocate manager object: Too many open files` minutes after the test cluster came up. [kind's known issues](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files) recommend raising both limits.
 
 Verify:
 
@@ -482,6 +510,145 @@ After reimporting, open Docker Desktop → **Settings → Resources → Advanced
 
 ---
 
+## Nightly backup
+
+`sudo bash docker/host-boot-safety.sh` (item 7) installs `homeserver-nightly-backup.timer`: **every night at 03:00** it runs `homeserver.py prod backup running --no-wg`, which stops each running service for a few seconds, snapshots it into `service_data/backup/<service>/<timestamp>/` on the HDD (the newest `BACKUP_RETENTION`, 5, are kept) and starts it again. A full run is a couple of GB. A night the machine was off runs at the next boot (`Persistent=true`). A failure sends an ntfy alert (same path as the mount watch) and is in the journal.
+
+Why: after an SSD wipe Docker's volumes are gone (they live in `/var/lib/docker` on the SSD), and the snapshots are what you restore from. On 2026-10-05 the newest were three days old.
+
+- **Next run and history:** `systemctl list-timers homeserver-nightly-backup`, `journalctl -u homeserver-nightly-backup`.
+- **Run it now:** `uv run homeserver.py prod backup running --no-wg` (`--no-wg` keeps it from starting wg-easy as a side effect).
+- **`backup running` silently did nothing** until 2026-10-06: the parser accepted the word and no branch handled it, so it reported success after backing up nothing. It now backs up what is running, and a backup with nothing to do is an error (tests pin both).
+- **Restore:** `uv run homeserver.py prod restore <service>` (newest snapshot) or `--snapshot <timestamp>`.
+- **After an SSD wipe, `up` restores what is missing (2026-10-06).** Docker's volumes live on the SSD, `service_data/` on the HDD. `up` used to auto-restore only when the data folder, the volumes and the database were *all* missing, so a service whose folder survived started on an empty database (Uptime Kuma showed its first-run setup page), and the next nightly snapshot recorded that empty state and would have pruned the good ones within five nights. Now `up` restores, before starting, every named volume the newest snapshot holds that Docker lacks, and a shared database that is gone; volumes that exist are never touched, and `--fresh` still means blank. If a service already started empty, restore a good snapshot by hand before the retention prunes it: `uv run homeserver.py prod restore <service> --snapshot <timestamp>` (list them with `snapshots <service>`).
+
+## Boot safety
+
+On a reboot, `dockerd` restarts every `restart: unless-stopped` container itself, in parallel, with no `depends_on` ordering and without going through `homeserver.py`. On this Fedora host that produced two failure modes (both hit on 2026-09-25):
+
+1. **Containers bind the empty directory under an unmounted data drive.** Both data drives are `nofail` in `/etc/fstab`, so the host boots without waiting for them — Docker started at 08:08:47, `/mnt/mydata` finished mounting at 08:08:56. Containers started in that window got bind mounts pointing at the root disk's empty `/mnt/mydata/...` underlay: data written there is on the wrong disk, and state files look missing (Beszel's agent regenerated its fingerprint → hub rejected it with `fingerprint mismatch` → "server down"; `cloudflared-watchdog` failed because an earlier race had auto-created `watchdog.sh` as a *directory* on the underlay). A `docker restart` of the affected container re-resolves the mount.
+2. **`10.8.0.1` port binds fail.** Every prod service mirrors its ports to `10.8.0.1` (wg-easy's tunnel address), but `wg0` is created by the wg-easy *container*. Anything Docker autostarts first fails with `failed to bind host port 10.8.0.1:<port>/tcp: cannot assign requested address` — and Docker never retries a container that failed during network setup, so it stays `Exited`. The failed attempt can also leave the container with no network endpoint (then `could not translate host name "<x>-db"` / `EAI_AGAIN`) — `homeserver.py fix-network --yes` repairs that.
+
+**Host fix — run once, as root:**
+
+```bash
+sudo bash docker/host-boot-safety.sh      # idempotent; --remove undoes it
+# (run via 'bash' -- the file has no execute bit, so 'sudo docker/host-boot-safety.sh' fails)
+```
+
+It installs:
+
+- `/etc/systemd/system/docker.service.d/wait-for-data-mounts.conf` — `RequiresMountsFor=/mnt/mydata /mnt/media` (Docker won't start at all without the repo/`service_data` drive or the media drive — better than writing to the wrong disk; the media drive is required too because Jellyfin/Nextcloud/Immich bind paths on it and dockerd's autostart bypasses `homeserver.py`'s check). Trade-off: a dead or unmounted media disk keeps the whole stack down until it is fixed (or the drop-in is removed with `--remove`). Takes effect from the next boot.
+- `/etc/sysctl.d/90-homeserver-nonlocal-bind.conf` — `net.ipv4.ip_nonlocal_bind=1`, so docker-proxy can bind `10.8.0.1` before `wg0` exists. The firewall still gates who can reach it.
+- `homeserver-docker-forward.service` (+ `/usr/local/bin/homeserver-docker-forward`) — re-allows forwarding for libvirt VMs (`virbr0`) and WireGuard clients (`wg0`) past Docker's `FORWARD` DROP policy, re-applied every time Docker (re)starts. Without it a VM gets a DHCP lease but no internet (hit 2026-09-26 on the `win11` VM right after a Docker restart). See [09-firewall.md](09-firewall.md#docker-vs-vms-and-the-vpn).
+- `homeserver-mount-watch.timer` — every 5 min, a script copied to `/usr/local/bin/` (so it still runs if `/mnt/mydata` itself is missing) checks each data drive is mounted and read-write, and alerts via ntfy's `homeserver-alerts` topic (token reused from `services/ntfy/.env`, re-alerts at most every 6h). Caveat: ntfy's own data lives on `/mnt/mydata`, so a missing `/mnt/mydata` only reaches the journal (`journalctl -u homeserver-mount-watch`) — but with the drop-in above, Docker doesn't start at all in that case either.
+- SELinux boolean `virt_use_fusefs=on` (`setsebool -P`, persistent). `/mnt/media` is NTFS through ntfs-3g (`fuseblk`), which SELinux labels `fusefs_t` and can't be relabelled; with the boolean off, libvirt/QEMU VMs fail with `Could not open '/mnt/media/OS-ISO/<file>.iso': Permission denied` even though the ISO is `rwxrwxrwx` (hit 2026-10-06 installing Win11 in virt-manager). Check with `getsebool virt_use_fusefs`; if it ever fails again, `sudo ausearch -m avc -ts recent` shows the denial. Applied on the host immediately; the script makes it survive a reinstall.
+- Host firewall lockdown (firewalld): on the zone of the default-route interface (`FedoraWorkstation` / `wlp13s0` here) it removes the `1025-65535` tcp+udp allows, keeps only `51820/udp` (WireGuard) and enables masquerade (wg-easy full-tunnel clients). The hand-applied fix from 2026-09-04 was lost in the 2026-10-04 reinstall, which left every high port reachable over the host's public IPv6 address and would have exposed GNOME RDP (3389) the moment it was switched on. Guacamole is unaffected (`guacd` reaches the host over the Docker bridges, firewalld's `docker` zone, target ACCEPT). `--remove` deliberately leaves the firewall as is. Background and manual commands: [09-firewall.md](09-firewall.md).
+- wg-easy host prerequisites: `/etc/modules-load.d/wg-easy.conf` (`iptable_nat`, `ip6table_nat`) and `/etc/sysctl.d/99-wg-easy.conf` (IPv6 forwarding), both applied immediately. wg-easy is `network_mode: host`, so they can't be set from the container; without the modules `wg-quick` fails with `can't initialize iptables table 'nat'`. Lost in the 2026-10-04 reinstall. Details: [wg-easy](services/wg-easy.md#3-kernel-nat-modules).
+- `/etc/systemd/resolved.conf.d/90-homeserver-dns.conf` — `DNS=1.1.1.1 9.9.9.9`, public resolvers next to the router's. On 2026-10-06 the router/ISP DNS timed out (cloudflared `lookup region1.v2.argotunnel.com: i/o timeout` at 10:30/11:00/12:26 IST; later the watchdog's `Could not resolve host`) while the public sites degraded for hours. `DNS=` is tried together with the per-link servers and fails over on timeout; `FallbackDNS=` would not help, since systemd-resolved only uses it when no other server is known. Containers pick it up when they are recreated (Docker reads `/run/systemd/resolve/resolv.conf`). Trade-off: some lookups leave via Cloudflare/Quad9 instead of the ISP.
+- `/etc/udev/rules.d/90-homeserver-sata-alpm.rules`, plus the tuned profile `balanced-nolpm` where tuned is installed. These keep every SATA link at `max_performance`, so the system SSD can't drop off the bus and freeze the host. See [System freezes / SSD drops off the bus](#system-freezes--ssd-drops-off-the-bus-sata-link-power).
+
+**Repo-side guard (no setup needed):** `homeserver.py up`/`update`/`restart` refuse to start a service whose `DATA_ROOT` — or any path-valued var in its own `.env` (`UPLOAD_LOCATION`, `MEDIA_ROOT`, `OS_ISO_ROOT`, …) — sits on an `/etc/fstab` mount that is unmounted or read-only. This only covers starts through `homeserver.py`, not dockerd's own autostart — hence the host fix above.
+
+**`/mnt/media` (NTFS) came up read-only.** The boot journal says `Metadata kept in Windows cache, refused to mount. Falling back to read-only mount` — Windows was last shut down with Fast Startup or hibernation, leaving the volume dirty. Permanent fix: in Windows, `powercfg /h off` (disables both), then shut down fully. To recover from Linux without booting Windows (discards any hibernated Windows session):
+
+```bash
+uv run homeserver.py prod down immich nextcloud jellyfin --no-backup
+sudo umount /mnt/media
+sudo ntfsfix -d /dev/sdb1
+sudo mount /mnt/media && findmnt -no OPTIONS /mnt/media    # should start with rw
+uv run homeserver.py prod up immich nextcloud jellyfin
+```
+
+**After any reboot, check for containers bound to the wrong disk** (compares each `/mnt/mydata` bind's device inside the container with the real one; images without `sh`, e.g. `beszel`/`portainer`, can't be checked this way):
+
+```bash
+real=$(mountpoint -d /mnt/mydata); for c in $(docker ps -q); do n=$(docker inspect $c --format '{{.Name}}'); for s in $(docker inspect $c --format '{{range .Mounts}}{{if eq .Type "bind"}}{{.Destination}}|{{.Source}} {{end}}{{end}}'); do dst=${s%%|*}; src=${s#*|}; case $src in /mnt/mydata/*) d=$(docker exec $c sh -c "grep -F ' $dst ' /proc/self/mountinfo | head -1 | cut -d' ' -f3" 2>/dev/null); [ -n "$d" ] && [ "$d" != "$real" ] && echo "BAD $n $dst dev=$d";; esac; done; done
+```
+
+### The host went to sleep: every site down for hours
+
+**Symptom:** all public sites answer `530` (or are unreachable) and the cluster looks fine when you look, or the sites come back by themselves after you touch the machine. The `cloudflared` log is silent for hours.
+
+**Cause (2026-10-05):** the desktop **suspended itself**. GNOME's default is "automatic suspend after 15 minutes of inactivity" (`org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'suspend'`, timeout 900), even on mains power. The journal shows it exactly:
+
+```text
+10:19:37 systemd-logind: The system will suspend now!
+10:19:38 NetworkManager: manager: NetworkManager state is now DISABLED (ASLEEP)
+16:07:31 kernel: ACPI: PM: Waking up from system sleep state S3
+```
+
+While suspended nothing runs (Docker, the kind node, the tunnel). On waking, `cloudflared` still reported `readyConnections: 4`, but Cloudflare's edge had dropped its connections and returned `530 / error code: 1033`; restarting the pod (`kubectl -n apps rollout restart deploy/cloudflared`) re-registered it.
+
+**Check:** `journalctl --since today | grep -E "will suspend|Waking up from system sleep"`, and `systemctl is-enabled suspend.target` (should say `masked`).
+
+**Fix (permanent):** `sudo bash docker/host-boot-safety.sh` (item 6) masks `sleep`, `suspend`, `hibernate` and `hybrid-sleep`, so nothing (the desktop, the login screen, a key press) can suspend the host. Also switch off the desktop's own setting: `gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'`. `cluster.py verify` flags a host that can still sleep.
+
+### System freezes / SSD drops off the bus (SATA link power)
+
+**Symptom:** the whole machine freezes and the screen goes dark. Only a forced reboot helps, and the previous boot's journal just stops, with no error at the end, because the disk it would log to is gone. Before that, the same boot's kernel log has repeated link errors on one SATA port:
+
+```text
+ata8: SError: { PHYRdyChg CommWake UnrecFIS DevExch }
+ata8.00: failed command: DATA SET MANAGEMENT ... (ATA bus error)
+ata8: hard resetting link
+```
+
+On this host on 2026-10-02 there were 98 of these in a day on the system SSD (WD Green 240GB, which holds the OS, `/home` and every Docker volume), until a final drop froze the host.
+
+**Cause:** SATA link power management (ALPM). With power saving on, the link sleeps between commands, and some drives (budget SSDs in particular) sometimes fail to wake it up (`PHYRdyChg CommWake`). Fedora's default **tuned** `balanced` power profile sets `alpm=med_power_with_dipm` on every port, overriding the kernel's own setting (even `ahci.mobile_lpm_policy=1` on the boot line). Others report the same failure with the same fix: [Fedora Discussion](https://discussion.fedoraproject.org/t/fc44-problem-with-link-power-management-policy-type-med-power-with-dipm-on-wd-gold-hdd/190748), [Arch forums](https://bbs.archlinux.org/viewtopic.php?id=303095), [Arch forums (WD drive)](https://bbs.archlinux.org/viewtopic.php?id=298023).
+
+**Diagnose** (rule out the drive and cable before blaming power management):
+
+```bash
+# 1. Link errors in the previous boot (-b -1), per port
+journalctl -k -b -1 | grep -E 'ata[0-9]+.*(hard resetting|SError|exception)' | grep -oE 'ata[0-9]+' | sort | uniq -c
+
+# 2. Which disk is on that port
+for p in /sys/class/ata_port/ata*; do d=$(ls -d $p/device/host*/target*/*/block/* 2>/dev/null | xargs -rn1 basename); [ -n "$d" ] && echo "$(basename $p) -> $d"; done
+
+# 3. Drive health. UDMA_CRC_Error_Count > 0 means the cable/port;
+#    reallocated/pending/grown bad blocks > 0 mean the drive is failing;
+#    all 0 points to link power management.
+sudo smartctl -A /dev/sdX | grep -E 'Reallocated|Pending|Grown_Bad|UDMA_CRC|Unexpected_Power_Loss'
+
+# 4. Current policy: anything but max_performance on that port means power saving is on
+grep . /sys/class/scsi_host/host*/link_power_management_policy
+tuned-adm active
+```
+
+**Fix (permanent, item 5 of the boot-safety script):**
+
+```bash
+sudo bash docker/host-boot-safety.sh      # idempotent; --remove undoes it
+```
+
+It keeps every SATA link at `max_performance` in two ways:
+- **A udev rule**, `/etc/udev/rules.d/90-homeserver-sata-alpm.rules`, for any distro. It is applied right away as well.
+- **A tuned child profile** where tuned is installed (Fedora/RHEL). The profile, `/etc/tuned/profiles/balanced-nolpm/tuned.conf`, is `include=balanced` plus `[scsi_host] alpm=max_performance`. It's needed because tuned re-applies its own `alpm=` after udev. With tuned-ppd, `balanced=balanced-nolpm` in `/etc/tuned/ppd.conf` makes the desktop's "Balanced" power mode use it.
+
+The equivalent by hand, for reference:
+
+```bash
+echo max_performance | sudo tee /sys/class/scsi_host/host*/link_power_management_policy   # until reboot
+sudo mkdir -p /etc/tuned/profiles/balanced-nolpm
+printf '[main]\ninclude=balanced\n\n[scsi_host]\nalpm=max_performance\n' | sudo tee /etc/tuned/profiles/balanced-nolpm/tuned.conf
+sudo sed -i 's/^balanced=balanced$/balanced=balanced-nolpm/' /etc/tuned/ppd.conf
+sudo systemctl restart tuned-ppd tuned && tuned-adm active      # -> balanced-nolpm
+```
+
+**Verify:** every port with a policy shows `max_performance`. Ports showing `keep_firmware_settings` have no ALPM support, so leave those alone. A day later this should print `0`, where before it was several per hour:
+
+```bash
+journalctl -k -b 0 | grep -c 'hard resetting link'
+```
+
+If errors continue at `max_performance`, the cause is hardware: reseat or replace the SATA data and power cables, try another port, and watch `UDMA_CRC_Error_Count` and `Unexpected_Power_Loss` in SMART.
+
+**Trade-off:** about 1W per drive. Picking "Power Saver" in the desktop's power menu (tuned's `powersave` profile) turns ALPM back on, so stay on Balanced or Performance. On a laptop running on battery, tuned-ppd's `[battery]` mapping still uses `balanced-battery`, with ALPM on.
+
+---
+
 ## Troubleshooting
 
 Reactive fixes, keyed by symptom:
@@ -490,7 +657,8 @@ Reactive fixes, keyed by symptom:
 | --- | --- |
 | Container not starting | `uv run homeserver.py dev up <service>` then check `uv run homeserver.py dev logs <service>` |
 | `network homeserver not found` | `homeserver.py` auto-creates it — or run `docker network create homeserver` manually |
-| Data drive not mounted | `sudo mount -a` |
+| Data drive not mounted / read-only; `homeserver.py` says "Not starting … fix the mount first" | See [Boot safety](#boot-safety) below |
+| Host freezes and needs a forced reboot; `ata*: hard resetting link` / `PHYRdyChg CommWake` in the kernel log | SATA link power management. See [System freezes / SSD drops off the bus](#system-freezes--ssd-drops-off-the-bus-sata-link-power) |
 | Tunnel not routing | `sudo systemctl restart cloudflared` → `journalctl -u cloudflared -f` |
 | Nextcloud/Postgres data directory ownership or corruption error | **Do not delete the data to "fix" this** — Postgres/MariaDB/RabbitMQ data lives in a named Docker volume (not a bind mount), so this class of error shouldn't occur under normal operation. If it does, first `uv run homeserver.py dev restore <service>` from the last snapshot rather than resetting; see the `homeserver-postgres` skill for why bind-mounting DB data is unsafe and never worth reintroducing |
 | Nextcloud trusted domain error | Should self-heal on next restart — `nextcloud/hooks/before-starting/02-configure-proxy.sh` sets `trusted_domains`/`trusted_proxies` via `occ` automatically on every startup. If it persists, check the hook actually ran: `docker exec nextcloud php occ config:system:get trusted_domains`; see [`docs/services/nextcloud.md`](services/nextcloud.md) |
@@ -519,3 +687,134 @@ Preventive knowledge — things to know *before* they bite you, as opposed to th
 ---
 
 [← Landing Page](07-landing.md) | [Home](../setup.md) | [Next: Firewall →](09-firewall.md)
+
+For every way to start and stop services, see [15 — Starting & Stopping Services](15-starting-services.md).
+
+## Off-machine copy (`archive`)
+
+```bash
+uv run homeserver.py archive "/run/media/raju/My Passport/homeserver-backup"
+```
+
+Writes `homeserver-archive-<timestamp>.tar.gz` and a `.sha256` next to it, containing everything a fresh clone can't recreate:
+- `homeserver/`: every git-ignored file in the repo (all `.env` secrets, `CLAUDE.md`/`AGENTS.md`/`.claude`, `research/`, …). The list comes from git itself, so new ignored files are covered automatically.
+- `service_data/`: every snapshot (the **only** copy of the databases, which are Docker named volumes), the `reset-backup-*` folders, live data and database dumps. `cache/` is left out, since it's regenerable.
+- `meta/`: README with restore steps, a MANIFEST (date, git commit, each service's latest snapshot) and a git bundle of the repo (keeps unpushed commits).
+
+Files are read through a throwaway root container, so root-owned files can't be silently skipped. The command refuses a missing destination or too little space, and only writes the checksum after reading the whole archive back and finding all three parts. If services are running it warns, because their live data may be mid-write (snapshots are always consistent); run it after `down all` for a fully consistent copy. Media under `/mnt/media` isn't included and needs its own sync.
+
+Check a copy later with `sha256sum -c homeserver-archive-<timestamp>.tar.gz.sha256`.
+
+### Restoring from an archive (new machine or a rebuilt disk)
+
+You need Docker (or Podman), git and [uv](https://docs.astral.sh/uv/), and a user that can run Docker. The archive's `meta/README.txt` has the same steps in short form.
+
+```bash
+A=homeserver-archive-<timestamp>.tar.gz
+sha256sum -c "$A.sha256"                           # the copy is intact
+
+# 1. Unpack as root, with numeric owners: most files belong to app uids
+#    (Grafana 472, Loki 10001, www-data 33, ...), not to you.
+sudo mkdir -p /restore
+sudo tar --numeric-owner -xpzf "$A" -C /restore
+
+# 2. The repo, including unpushed commits, from the bundle
+git clone /restore/meta/homeserver.bundle ~/homeserver
+git -C ~/homeserver checkout <branch>              # "git: branch ..." line in /restore/meta/MANIFEST.txt
+git -C ~/homeserver remote set-url origin <your GitHub URL>
+
+# 3. The git-ignored files: every .env, CLAUDE.md, .claude/, ...
+#    Use "/." and not "/*": the shell's * skips dotfiles such as the root .env.
+cp -a /restore/homeserver/. ~/homeserver/
+
+# 4. service_data on the data drive, symlinked into the repo (this host's layout)
+sudo mv /restore/service_data /mnt/mydata/service_data
+ln -s /mnt/mydata/service_data ~/homeserver/service_data
+```
+
+Then, in `~/homeserver`:
+
+1. Check the root `.env` for this machine (`RUNTIME`, `DOCKER_SOCKET`). `DOMAIN` and every service's secrets come back unchanged.
+2. Run `uv sync`.
+3. Run `uv run homeserver.py prod restore all -y`. It loads every service's named volumes (the databases) and data folder from its latest snapshot. Apps on a shared database server start [shared-postgres](services/shared-postgres.md)/[shared-mariadb](services/shared-mariadb.md), recreate their own login and database, and load their dump. Services without a snapshot are skipped and keep the live data that came out of the archive. GitLab is MANUAL-tier, so restore it separately with `restore gitlab` if you use it.
+4. Run `uv run homeserver.py prod up all`, or the tiers you actually want.
+5. Copy the media back on its own (`/mnt/media`: Immich photos, the Jellyfin library, Nextcloud user files). It isn't in the archive.
+
+Plain `up` would *not* restore here. Auto-restore only fires when a service has no volumes **and** no `service_data/data/<service>/`, and moving `service_data` into place above already put the data folders back. That's why `restore all` has to be run explicitly.
+
+## Copying a service's data back from another drive
+
+Use this when a service came up empty (a data drive was missing and Docker created blank folders) and the real data is on another disk: a pendrive, a laptop, the old drive. It copies the service's whole `service_data/data/<service>/` folder over the empty one. The service must be stopped first: overwriting a live database corrupts it.
+
+```bash
+cd ~/homeserver
+
+# 1. Stop the service. --no-backup skips the automatic snapshot, which would only record the empty state.
+uv run homeserver.py prod down <service> --no-backup
+
+# 2. Copy with sudo so the original owners and permissions are kept (containers expect their own uid).
+#    BOTH paths must end in "/" so the contents land inside the folder.
+sudo rsync -aH --info=progress2 /path/to/old/service_data/data/<service>/ ~/homeserver/service_data/data/<service>/
+
+# 3. Start it again and check the logs.
+uv run homeserver.py prod up <service>
+docker logs <service> --tail 20
+```
+
+Example (Vaultwarden, old data on a pendrive):
+
+```bash
+uv run homeserver.py prod down vaultwarden --no-backup
+sudo rsync -aH --info=progress2 /run/media/raju/Pendrive250/homeserver/service_data/data/vaultwarden/ ~/homeserver/service_data/data/vaultwarden/
+uv run homeserver.py prod up vaultwarden
+```
+
+Gotchas:
+
+- **A missing trailing `/` on the source nests the data one level too deep** (`data/vaultwarden/vaultwarden/data/...`) and the service keeps reading its empty copy. This happened on 2026-10-17. If you see it, rerun the `rsync` with both slashes, then delete the extra nested folder.
+- **Don't register a new account or log in first.** The copy replaces the whole database, so anything created on the empty instance is lost.
+- **Not a snapshot restore.** For data that exists as a snapshot in `service_data/backup/<service>/`, use `restore <service>` instead (see above). This is for a plain copy of the live folder.
+- **Named volumes aren't in the folder.** Databases and other Docker named volumes (Postgres, Nextcloud's `html`/`config`) live under `/var/lib/docker`, not `service_data/data/`. For those use a snapshot or the archive.
+- **Secondary data roots** (`/mnt/media/...` for Immich, Jellyfin, Nextcloud) are separate folders. Copy them on their own, and point the service's `.env` at the new location if it moved.
+
+## Fresh start of a service (`reset`)
+
+```bash
+uv run homeserver.py prod reset <service>      # type 'reset' to confirm
+uv run homeserver.py prod restore <service>    # undo
+```
+
+`reset` snapshots the service (volumes, `service_data/data/<service>/`, and its own database on a shared server) and verifies the snapshot holds all of it. It then keeps that snapshot as `service_data/backup/<service>/reset-backup-<timestamp>/`, wipes exactly that service and starts it blank. Reset backups sit outside the normal snapshot retention: regular `down` snapshots can never push them out, and the newest `RESET_BACKUP_RETENTION` (root `.env`, default 5) are kept per service. `reset` prints the exact undo command: `restore <service> --snapshot reset-backup-<timestamp>`. Plain `restore <service>` uses the newest *regular* snapshot instead. If the snapshot is incomplete, it deletes nothing. A tier target (`reset office`) means only that tier. It's never auto-confirmed: without a terminal it needs `-y`.
+
+For the full MIN/CORE procedure (reset each service, check the empty install, restore its data, with every command used), see [16 — MIN/CORE reset runbook](16-min-core-reset-runbook.md).
+
+`up --fresh` is different: it only skips the auto-restore of an existing snapshot and deletes nothing. Don't fake a reset with `--fresh` plus deleting volumes by hand. For an app on [shared-postgres](services/shared-postgres.md) or [shared-mariadb](services/shared-mariadb.md), that leaves its old database behind, so the app wouldn't actually start fresh.
+
+## Tests (`homeserver.py` and repo consistency)
+
+```bash
+uv sync            # once — installs pytest (dev dependency only; homeserver.py stays pure-stdlib)
+uv run pytest      # ~20s (the Kubernetes sync test renders every service with `docker compose config`); never changes Docker
+```
+
+Once per clone, also run `git config core.hooksPath .githooks`: the pre-commit hook refuses a commit that changes Compose, `.env.example`, `services.json` or the Kubernetes overrides while `kubernetes/generated/` is stale (details in [17 — Docker to Kubernetes](17-docker-to-kubernetes.md)).
+
+- **`tests/test_lifecycle.py`, `tests/test_shared_db.py`** run the real `homeserver.py` code (`main()`, `do_up`, `do_down`, backup/restore…) against `FakeBackend` (`tests/conftest.py`), an in-memory implementation of the `DockerBackend` interface. Any real `subprocess.run` fails the test, so the live stack can't be touched. They cover:
+  - the tier cascades and `down` semantics;
+  - bundles never stopping `requires` infra;
+  - snapshot retention and auto-restore;
+  - the shared-database reference counting, provisioning, dumps and restore.
+- **`tests/test_backend_interface.py`** checks that both backends implement the whole interface, and that nothing calls docker outside them.
+- **`tests/test_repo_invariants.py`** checks that `services.json`, the compose files, `.env.example`, the docs and the `CLAUDE.md` tier lists agree:
+  - prod ports are loopback-only and mirrored on `10.8.0.1`;
+  - every compose variable is in `.env.example`;
+  - every service has a doc;
+  - doc image tags aren't stale;
+  - `shared_db` apps are wired consistently.
+
+  Legitimate exceptions are listed in that file with a reason.
+
+Run it after any change to `homeserver.py`, `services.json`, a compose file, a `.env.example` or a doc.
+
+**One test per check, not per service (since 2026-10-04).** A check that applies to every service, container or shared-database app is one test. It runs over all of them with `each()` from `tests/conftest.py` and fails once, listing every offender. The assertions are the same as one test per service, so nothing is lost, and a failure shows the whole picture at once. This took the suite from 1110 tests in about 4 minutes to 132 in about 20 seconds. Each merged check was verified by injecting a fault (an unknown tier, a missing VPN port mirror, a removed healthcheck) and seeing it reported by name. Write new per-service checks the same way: a `_check(item)` with plain asserts, and a `test_…()` that calls `each(items, _check)`. When you add a `DockerBackend` method, `FakeBackend` must implement it too: it subclasses the ABC, so the suite errors out until it does.
+

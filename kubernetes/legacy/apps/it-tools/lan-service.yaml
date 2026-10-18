@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8119 matches it-tools/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down it-tools) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: it-tools-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: it-tools
+  ports:
+    - port: 8119
+      targetPort: 80

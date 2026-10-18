@@ -94,6 +94,7 @@ Things this is meant to show a new user:
     known in advance.
 """
 
+import os
 from pathlib import Path
 
 from dagster import (
@@ -126,6 +127,7 @@ from dagster import (
     define_asset_job,
     job,
     multi_asset,
+    multiprocess_executor,
     op,
     sensor,
     success_hook,
@@ -620,22 +622,21 @@ defs = Definitions(
         "io_manager": FilesystemIOManager(base_dir="/tmp/io_manager_storage"),
         "source_system": SourceSystemResource(),
     },
-    executor=docker_executor.configured(
+    # How steps run is the runtime's choice (DAGSTER_EXECUTOR in .env), so
+    # this file runs unchanged on Docker and on Kubernetes:
+    #   docker (default, Compose): each step in its own container.
+    #   multiprocess (Kubernetes): each run is its own Job pod (the chart's
+    #     K8sRunLauncher) and its steps are processes inside it, Dagster's
+    #     default Kubernetes setup; no shared volume needed between steps.
+    executor=multiprocess_executor if os.environ.get("DAGSTER_EXECUTOR") == "multiprocess" else docker_executor.configured(
         {
             "network": "homeserver",
             "container_kwargs": {
                 "mem_limit": "512m",
                 "nano_cpus": 1_000_000_000,  # 1 CPU — raise if a real asset needs more
-                # Step containers use the same homeserver/dagster-user-code
-                # image, which no longer bakes in definitions.py — needs this
-                # mount too, or a step can't import the code it's supposed to
-                # run. Hardcoded absolute host path, not ${DATA_ROOT}/... —
-                # this file is baked into the image at build time, not
-                # compose-interpolated. Update if service_data/ ever moves.
-                "volumes": [
-                    "dagster-io-manager-storage:/tmp/io_manager_storage",
-                    "/mnt/mydata/homeserver/service_data/data/dagster/user-code:/opt/dagster/app",
-                ],
+                # The code is built into the image (user-code/Dockerfile), so
+                # step containers only need the shared IO-manager volume.
+                "volumes": ["dagster-io-manager-storage:/tmp/io_manager_storage"],
                 "auto_remove": True,
             },
         }

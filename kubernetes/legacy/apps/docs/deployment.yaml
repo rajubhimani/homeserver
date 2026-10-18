@@ -1,0 +1,94 @@
+# Mirrors services/docs/compose.yml. docs-content PVC holds vendor/ +
+# the repo's own docs/, setup.md, docker/, kubernetes/, _sidebar.md —
+# populate via kubectl cp after the pod starts (kind has no host
+# filesystem passthrough, see configmap.yaml's header comment).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: docs-content
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs
+  namespace: apps
+  labels:
+    app: docs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: docs
+  template:
+    metadata:
+      labels:
+        app: docs
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: docs
+          image: nginx:1.28.3-alpine
+          command: ["/entrypoint.sh"]
+          env:
+            - name: SITE_TITLE
+              value: Homeserver Docs
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /template/index.html
+              subPath: index.html
+            - name: config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx.conf
+            - name: config
+              mountPath: /entrypoint.sh
+              subPath: entrypoint.sh
+            - name: content
+              mountPath: /usr/share/nginx/html
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: docs-config
+            items:
+              - key: index.html
+                path: index.html
+              - key: nginx.conf
+                path: nginx.conf
+              - key: entrypoint.sh
+                path: entrypoint.sh
+                mode: 0755
+        - name: content
+          persistentVolumeClaim:
+            claimName: docs-content
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docs
+  namespace: apps
+spec:
+  selector:
+    app: docs
+  ports:
+    - port: 80

@@ -1,0 +1,21 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Ports 8085 (HTTP) + 2224 (git-over-SSH) match gitlab/compose.dev.yml
+# exactly. Stop the Compose version (uv run homeserver.py dev down gitlab)
+# before applying this — same host ports, can't both bind them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: gitlab
+  ports:
+    - name: http
+      port: 8085
+      targetPort: 80
+    - name: ssh
+      port: 2224
+      targetPort: 22

@@ -1,0 +1,11 @@
+containers:
+  temporal:
+    ports: [7233]   # frontend gRPC (TEMPORAL_ADDRESS=temporal:7233)
+    mounts:
+      # Temporal's dynamic config (one small file): a ConfigMap.
+      /etc/temporal/config/dynamicconfig: {from: configmap}
+  temporal-worker:
+    mounts:
+      /var/run/docker.sock:
+        skip: true
+        reason: "Only for the example activities that launch containers (activities.py, docker.from_env()). Kubernetes has no Docker socket; there they'd create Kubernetes Jobs instead. Workflows that don't launch containers run unchanged. The image is built locally (build: ./worker), so kind needs it loaded."

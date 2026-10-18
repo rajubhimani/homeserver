@@ -17,21 +17,44 @@ services:
       - authentik-postgres:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
+      # Upstream's own (lifecycle/container/compose.yml).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
       timeout: 5s
       retries: 5
+      start_period: 20s
+      start_interval: 2s
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # authentik's server/worker images run as a hardcoded uid 1000 (confirmed
+  # via `docker inspect ghcr.io/goauthentik/server:2026.8.4 --format
+  # '{{.Config.User}}'` -> "1000") with no root fallback, so neither can
+  # self-heal media/templates/certs if recreated root-owned. Currently safe
+  # only because these three directories already carry a permissive 777
+  # (world-writable) mode from an earlier manual/setup step -- this fix
+  # makes that no longer load-bearing, so a future full top-level wipe
+  # (not just a contents wipe, which preserves the existing 777 dir itself)
+  # can't silently break authentication for the whole stack.
+  authentik-permissions:
+    image: alpine:3.24.2
+    container_name: authentik-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}:/authentik-data
+    command: sh -c "mkdir -p /authentik-data/media /authentik-data/templates /authentik-data/certs && chown -R 1000:1000 /authentik-data/media /authentik-data/templates /authentik-data/certs"
+
   authentik-server:
-    image: ghcr.io/goauthentik/server:2026.8.0
+    image: ghcr.io/goauthentik/server:2026.8.4
     container_name: authentik-server
     restart: unless-stopped
     command: server
     env_file: .env
     environment:
-      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__HOST: ${DB_HOST}
+      AUTHENTIK_POSTGRESQL__PORT: ${DB_PORT}
       AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
       AUTHENTIK_POSTGRESQL__NAME: ${POSTGRES_DB}
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
@@ -40,26 +63,25 @@ services:
     volumes:
       - ${DATA_ROOT}/media:/media
       - ${DATA_ROOT}/templates:/templates
-    healthcheck:
-      test: ["CMD-SHELL", "ak healthcheck || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    # No healthcheck here on purpose: the image ships its own (ak healthcheck, 30s interval, 120s start period), and
+    # upstream's compose defines none, so a compose one would only replace it.
     depends_on:
       authentik-db:
         condition: service_healthy
+      authentik-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2026.8.0
+    image: ghcr.io/goauthentik/server:2026.8.4
     container_name: authentik-worker
     restart: unless-stopped
     command: worker
     env_file: .env
     environment:
-      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__HOST: ${DB_HOST}
+      AUTHENTIK_POSTGRESQL__PORT: ${DB_PORT}
       AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
       AUTHENTIK_POSTGRESQL__NAME: ${POSTGRES_DB}
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
@@ -73,6 +95,8 @@ services:
     depends_on:
       authentik-db:
         condition: service_healthy
+      authentik-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 

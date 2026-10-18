@@ -49,9 +49,11 @@ or containerized, is never exposed publicly).
    container.
 3. Pull a model into the container: `docker exec -it ollama ollama pull llama3.2` (or any model
    from the [Ollama library](https://ollama.com/library)).
-4. Open `https://open-webui.yourdomain.com` (or `http://localhost:8109` in dev) and create the first
-   account — it becomes the admin automatically. Set `ENABLE_SIGNUP=false` in `services/open-webui/.env`
-   once your account exists if you don't want further public signups.
+4. `ENABLE_SIGNUP` defaults to `false` in this repo — set it to `true` first, `up`/restart, then open
+   `https://open-webui.yourdomain.com` (or `http://localhost:8109` in dev) and create the first
+   account (it becomes the admin automatically), then set it back to `false` and restart. To add
+   more accounts later without reopening public signup, use the admin panel instead:
+   **Admin Panel → Users → Add User** (logged in as the admin).
 
 ## Using a native host Ollama instead
 
@@ -127,9 +129,9 @@ already gives it — no homeserver-side config needed.
 ### Image variant
 
 `services/open-webui/compose.yml` picks its image tag from `OPEN_WEBUI_IMAGE_TAG` in
-`services/open-webui/.env`, defaulting to `v0.11.0-slim` (no bundled local RAG/embeddings/Whisper/TTS
+`services/open-webui/.env`, defaulting to `v0.12.3-slim` (no bundled local RAG/embeddings/Whisper/TTS
 stack — smaller image, less runtime memory). When GPU passthrough lands and local RAG or
-voice features are wanted, change it to the standard tag (`v0.11.0`, no `-slim` suffix) and
+voice features are wanted, change it to the standard tag (`v0.12.3`, no `-slim` suffix) and
 run `uv run homeserver.py dev update open-webui` to pull and recreate. Chat history and
 settings carry over unchanged — the image swap doesn't touch `service_data/data/open-webui/`.
 
@@ -137,6 +139,10 @@ A compose profile was considered for this instead but rejected: a profile-gated 
 variant would coexist with the unprofiled "slim" service rather than replace it, and both
 share `container_name: open-webui` — running `--profile full` would try to start both at
 once and collide. The env var avoids that entirely.
+
+## Code execution: Open Terminal
+
+Code execution runs in the [`open-terminal`](open-terminal.md) container, defined in this same compose file so `up open-webui` starts both (any pip library, a real shell), wired through `TERMINAL_SERVER_CONNECTIONS` from `OPEN_TERMINAL_URL` and `OPEN_TERMINAL_API_KEY` in `.env` It is a persistent setting: a value already saved in the database wins, so see [open-terminal.md](open-terminal.md) if it does not appear. Use a model with native tool calling.
 
 ## Gotchas
 
@@ -153,6 +159,10 @@ once and collide. The env var avoids that entirely.
   left Open WebUI still pointed at `http://host.docker.internal:11434` and unable to reach the
   `ollama` container. Fix in the UI too — Admin Panel → Settings → Connections → edit the Ollama
   URL directly — the env var edit alone is not enough once a database already exists.
+
+## Reverse proxy: no buffering (2026-10-11)
+
+The `open-webui` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Token-by-token chat replies could arrive in bursts, because nginx-plain buffered the streamed response. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
 
 ---
 

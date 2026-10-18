@@ -1,0 +1,72 @@
+services:
+  code-server:
+    build:
+      context: .
+      args:
+        DOCKER_VERSION: ${DOCKER_VERSION}
+        CODE_SERVER_VERSION: ${CODE_SERVER_VERSION}
+        UV_VERSION: ${UV_VERSION}
+        NODE_VERSION: ${NODE_VERSION}
+        GH_VERSION: ${GH_VERSION}
+        DEV_PACKAGES: ${DEV_PACKAGES}
+    image: homeserver/code-server:${CODE_SERVER_VERSION}-docker${DOCKER_VERSION}
+    container_name: code-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # The sidecar shares this container's network namespace, so its engine
+      # is on localhost (bound to loopback only, never reachable from the network)
+      DOCKER_HOST: tcp://127.0.0.1:2375
+    volumes:
+      # The whole home directory: extensions, settings, logins (gh, git, ssh,
+      # Claude, ...), shell history and dotfiles all persist
+      - ${DATA_ROOT}/home:/home/coder
+      # Package caches (uv, npm, pip): regenerable, so outside the snapshots
+      - ${CACHE_ROOT}:/home/coder/.cache
+      # The code you edit: lives on this host, edits happen in place
+      - ${WORKSPACE_ROOT}:/home/coder/project
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - homeserver
+
+  # Isolated Docker engine for `docker` in the editor's terminal. Separate from
+  # the host's Docker: containers you start here cannot see or touch the rest
+  # of the stack. It joins code-server's network namespace, so a port you
+  # publish (`docker run -p 3000:3000`) is on code-server's localhost and
+  # reachable at https://code-server.<domain>/proxy/3000/.
+  code-server-docker:
+    image: docker:${DOCKER_VERSION}-dind
+    container_name: code-server-docker
+    restart: unless-stopped
+    privileged: true
+    network_mode: "service:code-server"
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command:
+      - dockerd
+      - --host=unix:///var/run/docker.sock
+      - --host=tcp://127.0.0.1:2375
+    volumes:
+      # Images, containers and build cache (regenerable, so not under data/)
+      - ${DOCKER_ROOT}:/var/lib/docker
+      # Same path as in code-server: `docker run -v $PWD:/app` resolves paths
+      # inside THIS container, so it must see the workspace where the editor does
+      - ${WORKSPACE_ROOT}:/home/coder/project
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      code-server:
+        condition: service_healthy
+
+networks:
+  homeserver:
+    external: true

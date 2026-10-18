@@ -1,39 +1,16 @@
+# Database lives on the shared MariaDB server (services/shared-mariadb),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-mariadb.md.
 services:
-  invoiceshelf-db:
-    image: mariadb:12.3.2
-    container_name: invoiceshelf-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    command: --innodb-buffer-pool-size=128M --max-connections=20
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - invoiceshelf-db:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - homeserver
-
   invoiceshelf:
-    image: invoiceshelf/invoiceshelf:2.4.2
+    image: invoiceshelf/invoiceshelf:2.4.6
     container_name: invoiceshelf
     restart: unless-stopped
     env_file: .env
     user: "0:0"
     environment:
       DB_CONNECTION: mysql
-      DB_HOST: invoiceshelf-db
+      DB_HOST: ${DB_HOST}
       DB_PORT: 3306
       DB_DATABASE: ${MYSQL_DATABASE}
       DB_USERNAME: ${MYSQL_USER}
@@ -52,9 +29,11 @@ services:
       SESSION_DOMAIN: invoiceshelf.${DOMAIN}
     volumes:
       - ${DATA_ROOT}/uploads:/var/www/html/storage
-      # Runs on every start (serversideup/php's own documented drop-in
-      # mechanism) — fixes .env's write permission for www-data. See
-      # docs/services/invoiceshelf.md and the script's own comment for why.
+      # Both run on every start (serversideup/php's own documented drop-in
+      # mechanism, /etc/entrypoint.d/*, executed in filename order before the
+      # app boots). See docs/services/invoiceshelf.md and each script's own
+      # comment for why.
+      - ./entrypoint.d/10-ensure-storage-dirs.sh:/etc/entrypoint.d/10-ensure-storage-dirs.sh:ro
       - ./entrypoint.d/99-fix-env-permissions.sh:/etc/entrypoint.d/99-fix-env-permissions.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
@@ -62,14 +41,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    depends_on:
-      invoiceshelf-db:
-        condition: service_healthy
     networks:
       - homeserver
-
-volumes:
-  invoiceshelf-db:
 
 networks:
   homeserver:

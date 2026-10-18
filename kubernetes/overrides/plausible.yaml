@@ -1,0 +1,3 @@
+containers:
+  plausible-events-db:
+    ports: [8123, 9000]   # ClickHouse HTTP + native ports; Compose never publishes them

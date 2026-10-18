@@ -1,0 +1,12 @@
+containers:
+  bichon:
+    # The image's own HEALTHCHECK (rustmailer/bichon:2.1.0), verbatim (kubernetes/image_healthcheck.py);
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py checks it.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fs http://localhost:${BICHON_HTTP_PORT:-15630}/api/status || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3

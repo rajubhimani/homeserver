@@ -1,0 +1,40 @@
+containers:
+  plane-web:
+    # The image's own HEALTHCHECK (makeplane/plane-frontend:v1.4.2), verbatim (kubernetes/image_healthcheck.py);
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py checks it.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS http://127.0.0.1:3000/ >/dev/null || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+  plane-space:
+    # The image's own HEALTHCHECK (makeplane/plane-space:v1.4.2), verbatim (kubernetes/image_healthcheck.py);
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py checks it.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS http://127.0.0.1:3000/spaces/ >/dev/null || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+  plane-admin:
+    # The image's own HEALTHCHECK (makeplane/plane-admin:v1.4.2), verbatim (kubernetes/image_healthcheck.py);
+    # Kubernetes ignores image healthchecks. tests/test_k8s_sync.py checks it.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS http://127.0.0.1:3000/ >/dev/null || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+  plane-mq:
+    ports: [5672]   # RabbitMQ's AMQP port; Compose never publishes it
+  plane-redis:
+    ports: [6379]   # valkey's default port; Compose never publishes it
+  plane-minio:
+    ports: [9000]   # MinIO's S3 API (S3_ENDPOINT); Compose never publishes it

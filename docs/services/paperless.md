@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Scan, OCR, and archive documents with full-text search.
-**Port:** `8010` (host) → `8000` (container) | **Data:** `service_data/data/paperless/` | **Requires:** Postgres + Redis | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~582MB total (app 521 + db 53 + redis 8) — closely matches community-reported idle figures (~600-900MB). **OCR ingestion of scanned documents spikes this to 1.5-2GB + 100% CPU on one core**, not reflected in the idle number
+**Port:** `8010` (host) → `8000` (container) | **Data:** `service_data/data/paperless/` | **Requires:** Postgres + Redis | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~582MB total (app 521 + db 53 + redis 8), measured before the 2026-10-01 move to the shared server — closely matches community-reported idle figures (~600-900MB). **OCR ingestion of scanned documents spikes this to 1.5-2GB + 100% CPU on one core**, not reflected in the idle number
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/paperless/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 

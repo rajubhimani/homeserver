@@ -4,7 +4,7 @@
 
 ---
 
-A service dashboard served by Nginx Alpine. Shows all services with **live status indicators** —
+A service dashboard served by Nginx Alpine, at **`status.<domain>`** (since 2026-10-17; `www.<domain>` is now a simple static company page, `services/nginx-plain/html/company/index.html`, served by nginx-plain itself. Uptime Kuma stays on `uptime-kuma.<domain>`; it used to share `status.<domain>`). Shows all services with **live status indicators** —
 green when up, red when down, rechecked every 60 seconds.
 
 ## Files
@@ -17,7 +17,7 @@ green when up, red when down, rechecked every 60 seconds.
 | `docker-compose.yml` | Base config (no ports) |
 | `compose.dev.yml` | Exposes port `8080` on all interfaces |
 | `compose.prod.yml` | Exposes port `8080` on `127.0.0.1` only |
-| `.env` | `DOMAIN`, `SITE_NAME`, `TAGLINE`, `AUTHOR`, `LOCATION` |
+| `.env` | `DOMAIN`, `SITE_NAME`, `TAGLINE`, `AUTHOR`, `LOCATION`, `PLAUSIBLE_SCRIPT` |
 
 ## Dynamic configuration
 
@@ -30,7 +30,10 @@ SITE_NAME=MyServer
 TAGLINE=Your data, your hardware, your control.
 AUTHOR=Your Name
 LOCATION=Your City
+PLAUSIBLE_SCRIPT=script.js
 ```
+
+`PLAUSIBLE_SCRIPT` is the analytics script filename from your own self-hosted [Plausible](services/plausible.md) instance's site Settings → Tracking → "site installation" — the embed loads from `https://plausible.${DOMAIN}/js/${PLAUSIBLE_SCRIPT}`. Leave it blank to disable the analytics embed entirely.
 
 `entrypoint.sh` runs `sed` at container start to replace placeholders in `index.html`
 before nginx serves it.
@@ -63,6 +66,15 @@ sequenceDiagram
 
 Health endpoints are in `nginx.conf`. Docker's internal DNS (`127.0.0.11`) with
 `set $upstream` defers resolution — the landing container starts even if other services are down.
+
+### Services on another server (public-URL fallback)
+
+`/health/<service>` only reaches containers on this host's Docker network, so a service that runs on a different server would always read offline. When the local check fails, the page calls `/ping/<subdomain>` instead. Nginx (`nginx.conf` and `nginx.podman.conf`) requests `https://<subdomain>.${DOMAIN}` server-side and passes the real status back, so Cloudflare's 530 and nginx-plain's 502 read as offline, which a browser `no-cors` fetch couldn't tell apart from a 200. A 2xx or redirect (a login redirect to Authentik, for example) counts as online. Hovering the badge says which path answered ("Reachable on this host" or "Reachable via its public URL (another server)").
+
+- Only runs when the local check fails, so services on this host add no extra requests. Fully stopped services do make one public request per minute each.
+- Skipped for cards with a `path` in `services.json` (the individual Browser Hub browsers): the hub's subdomain being up says nothing about one browser.
+- The subdomain is limited to `[a-z0-9-]` and the host is always `*.${DOMAIN}`, so `/ping/` can't be pointed at an arbitrary site.
+- Nothing new in `.env`: the public hostname is built from the existing `DOMAIN`.
 
 Redirects (e.g. GitLab's 302) are treated as online using `redirect: 'manual'` in the
 JS fetch call — opaque responses count as up.
@@ -115,7 +127,7 @@ membership. One entry drives both, so there's no second file to keep in sync.
 
    In practice, though, if `services.json` ever 404s or the landing page shows stale
    cards right after an edit, recreate the container anyway — `services.json` is bind-mounted
-   as a single file, and an editor that saves via write-temp-then-rename replaces the
+   as a single file, and an editor that saves via write-temp-then-rename (or a `git switch`/`merge` that touches the file) replaces the
    underlying inode, orphaning the running container's mount even though `docker inspect`
    still lists it. `uv run homeserver.py dev restart landing` does a full recreate, which
    fixes it. Hit this in practice; see [docs](services/docs.md)'s Notes for the same
@@ -125,6 +137,18 @@ membership. One entry drives both, so there's no second file to keep in sync.
 uv run homeserver.py dev up landing
 ```
 
+
+## Health checks: DNS resolver (Compose and Kubernetes)
+
+The service cards' status comes from `/health/<service>` routes in `nginx.conf`, which proxy through a variable (`set $upstream http://<container>:<port>`), so nginx needs an explicit `resolver`. Two `.env` settings make it work in both runtimes:
+
+- `NGINX_RESOLVER=auto` (default): the entrypoint takes the container's own nameserver from `/etc/resolv.conf`, which is Docker's embedded DNS (`127.0.0.11`) under Compose and kube-dns under Kubernetes. Until 2026-10-03 it was hardcoded to `127.0.0.11`, so on Kubernetes every check failed (`resolver: 127.0.0.11:53 ... Connection refused`) and the page showed 0 online.
+- `UPSTREAM_SUFFIX`: empty under Compose. Kubernetes sets `.apps.svc.cluster.local` (`kubernetes/overrides/landing.yaml`), because nginx's resolver doesn't apply the pod's search domains.
+
+Under Compose the rendered config is unchanged.
+
 ---
 
 [← Immich](06-immich.md) | [Home](../setup.md) | [Next: Maintenance →](08-maintenance.md)
+
+`WG_EASY_HOST` (`.env`): wg-easy runs on the host network, so its status check reaches it by address. Under Compose that's the `homeserver` bridge's gateway, `172.18.0.1`; Kubernetes sets the `wg-easy` Service in `kubernetes/overrides/landing.yaml`. It used to be hardcoded in `nginx.conf`.

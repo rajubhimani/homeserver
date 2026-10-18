@@ -1,0 +1,7 @@
+services:
+  code-server:
+    security_opt:
+      - label=disable
+  code-server-docker:
+    security_opt:
+      - label=disable

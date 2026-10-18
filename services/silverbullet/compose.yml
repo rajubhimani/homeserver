@@ -1,6 +1,6 @@
 services:
   silverbullet:
-    image: ghcr.io/silverbulletmd/silverbullet:2.10.0
+    image: ghcr.io/silverbulletmd/silverbullet:2.11.1
     container_name: silverbullet
     restart: unless-stopped
     env_file: .env

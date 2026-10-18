@@ -1,0 +1,94 @@
+# AdGuard Home has no env-based secrets at all (per adguard-home/.env.example
+# — admin password + all other config is set through the first-run web setup
+# wizard and stored in conf/AdGuardHome.yaml, not env vars), so unlike most
+# services here there's no Secret to reference.
+#
+# Only the web UI (port 3000, LAN 8123) is ported — AdGuard Home is also
+# meant to be this network's actual DNS resolver on port 53/UDP+TCP, but
+# that's deliberately out of scope for this k8s pilot: LAN-wide DNS is a
+# single-resolver role, and running both the Compose and k8s instances at
+# once (or flipping which one phones/devices point at) isn't something
+# worth building for a config-validation exercise. No port-53 Service is
+# created here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: adguard-home-work
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: adguard-home-conf
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adguard-home
+  namespace: apps
+  labels:
+    app: adguard-home
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: adguard-home
+  template:
+    metadata:
+      labels:
+        app: adguard-home
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: adguard-home
+          image: adguard/adguardhome:v0.107.78
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: work
+              mountPath: /opt/adguardhome/work
+            - name: conf
+              mountPath: /opt/adguardhome/conf
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: work
+          persistentVolumeClaim:
+            claimName: adguard-home-work
+        - name: conf
+          persistentVolumeClaim:
+            claimName: adguard-home-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adguard-home
+  namespace: apps
+spec:
+  selector:
+    app: adguard-home
+  ports:
+    - port: 3000

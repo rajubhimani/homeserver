@@ -12,3 +12,4 @@ services:
       # override — reach it via SSH tunnel or the LAN-only nginx route instead
       # of exposing the admin panel to the LAN directly.
       - "127.0.0.1:8123:3000/tcp"
+      - "10.8.0.1:8123:3000/tcp"

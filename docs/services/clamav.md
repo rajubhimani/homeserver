@@ -1,0 +1,98 @@
+# ClamAV
+
+[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+---
+
+**Purpose:** Antivirus scanning daemon backing [Nextcloud](nextcloud.md)'s `files_antivirus` app. No UI of its own — a pure backend `clamd` daemon reached only over the internal Docker network, never through the reverse proxy.
+**Port:** `8152` (host, dev-only debugging) → `3310` (container, `clamd`'s TCP protocol) — no public route, nothing here should ever be reachable from outside this host. | **Data:** `service_data/cache/clamav/db/` — the virus-signature database only, fully regenerable via `freshclam` re-download, so it lives under `cache/` rather than `data/` (see the `homeserver-add-service` skill's data-bucket rules) — nothing here needs backing up. | **Requires:** nothing | **Memory:** measured idle with signatures loaded: **~950MB** — this is the heaviest service added to this stack so far by a wide margin, driven entirely by ClamAV's own signature database living in RAM (upstream's own docs: "Preferred: 4 GiB", loading signatures alone needs "upwards of 1.2 GiB"). `compose.yml` caps it at 3GB via `deploy.resources.limits`.
+**Pinned version:** `clamav/clamav:1.5.4_base`, the newest feature release (non-LTS). On 2026-10-03 it was set to the 1.4.6 LTS line per the stack's LTS-always rule; on 2026-10-17 you asked for the latest, so it moved to 1.5.4. The 1.4 LTS line gets patches for 3 years; 1.5 gets fewer, so plan to keep up with 1.5.x patches. The `_base` variant ships without a bundled signature database (freshclam downloads it into the persistent `CACHE_ROOT` volume), which upstream recommends to avoid re-pulling the database with every image pull.
+
+## Setup
+
+```bash
+cp services/clamav/.env.example services/clamav/.env
+uv run homeserver.py dev up clamav
+```
+
+First start downloads the full signature database via `freshclam` (a few hundred MB) — `CLAMD_STARTUP_TIMEOUT=1800` (30 minutes, the image's own documented default) gives it room to finish before the container's healthcheck gives up. Confirmed on this deployment: actual first-run download took well under a minute, not anywhere near the worst-case 30-minute allowance — that ceiling is there for slow/constrained connections, not the expected case.
+
+## Wiring up Nextcloud's `files_antivirus`
+
+```bash
+docker exec -u www-data nextcloud php occ app:enable files_antivirus
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_mode --value="daemon"
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_host --value="clamav"
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_port --value="3310"
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_infected_action --value="only_log"
+docker exec -u www-data nextcloud php occ config:app:set files_antivirus av_stream_max_length --value="104857600"
+```
+
+**`av_infected_action=only_log`, not `delete`, is a deliberate default here** — logs a detection instead of silently removing the file. Given a real infected upload is rare on a small family instance and false positives do happen with AV engines generally, log-and-review is the safer default than automatic deletion; switch to `delete` explicitly if that tradeoff isn't wanted.
+
+**`av_stream_max_length=104857600` (100MB)** caps how much of a file gets streamed to `clamd` for scanning — must not exceed PHP's own `memory_limit` (`512M` in this stack's `nextcloud/.env.example`), since the stream is buffered in PHP memory during the scan.
+
+## Verifying it's actually working — don't just trust "container healthy"
+
+A healthy `clamav` container only proves the daemon started, not that Nextcloud is actually using it. Confirmed working here via the app's own built-in self-test:
+
+```bash
+docker exec -u www-data nextcloud php occ files_antivirus:test
+```
+
+Expected output: `Scanning regular text: ✓` and `Scanning EICAR test file: ✓` (the standard, harmless [EICAR test string](https://en.wikipedia.org/wiki/EICAR_test_file) that every antivirus engine recognizes as a positive-detection test, not a real virus). A third check — `Scanning modified EICAR test file` — tests a slightly obfuscated variant and reported `❌ file not detected` on this deployment; that's a narrower heuristic-matching gap, not a connectivity/config problem, and doesn't indicate the daemon-mode integration itself is broken.
+
+## Scanning is background/queued, not synchronous on upload
+
+**This tripped up initial verification** — uploading a real EICAR test file via WebDAV produced no scan activity at all (no log entry, no connection to `clamd`), which looked like the integration was silently broken. It wasn't: `occ files_antivirus:status` showed a backlog of unscanned files (`390 unscanned files` at the time), confirming files_antivirus queues writes for a **background** scan pass rather than blocking the upload request itself. Trigger it manually:
+
+```bash
+docker exec -u www-data nextcloud php occ files_antivirus:background-scan
+```
+
+Runs automatically as part of Nextcloud's own background job system otherwise (`cron.php`, via `nextcloud-cron` — see `docs/services/nextcloud.md`'s "Architecture notes") — no scheduling changes needed here, uploads just aren't scanned the instant they land.
+
+## Testing detection end-to-end
+
+```bash
+# Upload a real EICAR test file via WebDAV (harmless, universally-recognized AV test signature)
+curl -u '<user>:<app-password>' -T /dev/stdin \
+  "https://nextcloud.${DOMAIN}/remote.php/dav/files/<user>/eicar-test.txt" \
+  <<< 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+
+# Then trigger a scan pass (or wait for the next background job run)
+docker exec -u www-data nextcloud php occ files_antivirus:background-scan
+```
+
+With `av_infected_action=only_log`, an infected file stays in place but the detection is logged — check `nextcloud.log` (or the Nextcloud admin notifications) for an `files_antivirus` entry naming the file, not a blocked upload.
+
+## Detecting a silently-failing signature update
+
+**The real risk here isn't `clamd` crashing — it's `freshclam` failing quietly.** If the daily update check fails (network issue, DNS, upstream rate-limiting), nothing crashes: `clamd` keeps running and scanning fine with whatever signatures it already has. Confirmed directly from the image's own healthcheck script (`clamdcheck.sh`) before this was fixed: it only pings `clamd` on port 3310 and checks for a `PONG` — it says nothing about signature freshness. A container could sit at `healthy` in `docker ps` for months with stale signatures and nothing would ever say otherwise.
+
+**Fixed via a custom healthcheck** (`healthcheck.sh`, bind-mounted over the image's default, `compose.yml`) that does both checks:
+1. The original `clamd` ping.
+2. `find`s `/var/lib/clamav/daily.cvd` **and** `/var/lib/clamav/daily.cld` for an mtime within `CLAMAV_MAX_SIGNATURE_AGE_DAYS` (default `3`, `.env`). If neither exists or both are older than that, the healthcheck fails — `docker ps` shows `unhealthy`, giving something real to alert on instead of a silent gap.
+
+**Checking both filenames matters — confirmed live, not assumed.** `freshclam` downloads the initial full database as `daily.cvd`, but its normal steady-state behavior is applying incremental patches on top and rewriting the result as `daily.cld` instead — `daily.cvd` stops being touched entirely once that happens. This switch was observed within the very first update cycle after this healthcheck was added; a version checking only `.cvd` would have started reporting permanently stale/missing the moment `freshclam` did its completely ordinary thing, which very nearly shipped that way before catching it via a real restart-and-check rather than trusting the logic on paper.
+
+**3 days, not 1**, gives freshclam (which checks once daily via `FRESHCLAM_CHECKS`) room for a one-off blip without alerting — the check only fires after at least two consecutive missed days.
+
+## Proactive alerting — Uptime Kuma
+
+An unhealthy `clamav` (stale signatures included, via the check above) is alerted by [Uptime Kuma](uptime-kuma.md). Its Docker Container monitor for `clamav` marks an `unhealthy` container **DOWN** (upstream `server/model/monitor.js`) and notifies through the ntfy `homeserver-alerts` channel. Check that this monitor exists after a rebuild; `services/uptime-kuma/setup-monitors.py` creates one for every running container.
+
+Until 2026-10-03 a separate `clamav-watchdog` container (a curl loop on the Docker socket) sent the same alert. It was removed as redundant with Uptime Kuma. The ntfy alert credentials it used now live in `services/ntfy/.env` (`NTFY_ALERT_URL`/`NTFY_ALERT_TOKEN`).
+
+
+## On Kubernetes
+
+Generated from this compose file. `CACHE_ROOT` (the signature database) becomes its own volume. `cluster.py import` copies it in so the first start is quick; freshclam would otherwise download it again. ClamAV keeps no other data, so it has no snapshot. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: stateless (signatures re-downloaded); stale-signature alerting moved to Uptime Kuma. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
+---
+
+[← Services Reference](../11-services-reference.md) | [Home](../../setup.md)

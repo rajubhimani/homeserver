@@ -1,0 +1,7 @@
+# Namespaces and storage classes every cluster needs (ArgoCD app cluster-base).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespaces.yaml
+  - storage.yaml
+  - observability-rbac.yaml

@@ -73,7 +73,11 @@ Not independently confirmed live (no phone was used to install/log into the app 
 - **Android:** the app exposes its own toggle to restrict background uploads to only run while charging, plus a minimum-delay setting for how long after a photo is taken the background upload task is allowed to run. Aggressive OEM battery optimization (common on some Android skins) can still kill the background worker regardless of these toggles — if backups stall with the app closed, check the phone's per-app battery/background-activity restriction setting too.
 - **Album sync:** a separate feature from picking which local albums to back up — under **Library → On this device**, syncing keeps a chosen device album's membership mirrored to an Immich album server-side, rather than just uploading the files into one flat timeline.
 
-**Version compatibility — checked specifically for the pinned `v3.1.0` server:** Immich's mobile app enforces a **major-version match** against the server at login/sync time, not just a soft recommendation — an app still on a `v2.x.x` build cannot talk to this stack's `v3.1.0` server at all (confirmed via Immich's own upgrade docs and multiple GitHub issues describing the exact "app major version is not compatible" error). Update the mobile app to a current `v3.x.x` build before or immediately after any server major-version bump; minor/patch bumps (e.g. this repo's pin of `v3.1.0` moving to a later `v3.x.x`) don't have this constraint.
+**Updated to `v3.3.3` on 2026-10-16** (from `v3.3.1`; bug fixes only, including faster people queries on the explore page; `v3.3.2` was never published). `homeserver.py prod dump immich` first, then `prod update immich` failed to bind `10.8.0.1:2283` because wg-easy was unhealthy and `wg0` was down, so it was started with `prod up immich --no-wg` (no `10.8.0.1` mapping). Verified: `Immich Server is listening ... [v3.3.3]`, all containers healthy, `/api/server/ping` 200 locally and through the tunnel. The `10.8.0.1:2283` mapping returns once wg-easy is healthy and immich is brought up normally.
+
+**Updated to `v3.3.1` on 2026-10-11** (from `v3.2.4`; `v3.3.0` adds people sharing, birthday memories, higher-quality thumbnails and opt-in faster ML models via `MACHINE_LEARNING_MODEL_REVISION=v2`, and `v3.3.1` fixes sharing bugs). Done with a hand-made `pg_dumpall` first (`service_data/backup/immich-manual/pre-v3.3.1_*.sql.gz`, since `homeserver.py dump` doesn't support Immich's `DB_USERNAME` naming). Verified: migrations finished, `Immich Server is listening ... [v3.3.1]`, all containers healthy, `/api/server/ping` 200 through the tunnel. Existing thumbnails keep the old quality unless you re-run thumbnail generation in the job panel. The ML model revision is not switched on here.
+
+**Version compatibility — checked specifically for the `v3.2.4` server (bumped from `v3.2.2` on 2026-09-28 — a 4-commit patch fixing a memory leak via a dependency update, no DB migrations; upstream pulled `v3.2.3`, so there is no such tag to pin):** Immich's mobile app enforces a **major-version match** against the server at login/sync time, not just a soft recommendation — an app still on a `v2.x.x` build cannot talk to this stack's `v3.2.x` server at all (confirmed via Immich's own upgrade docs and multiple GitHub issues describing the exact "app major version is not compatible" error). Update the mobile app to a current `v3.x.x` build before or immediately after any server major-version bump; minor/patch bumps (e.g. this repo's pin of `v3.2.4` moving to a later `v3.x.x`) don't have this constraint.
 
 ## Using it day to day
 
@@ -87,7 +91,7 @@ Confirmed against Immich's own current documentation, not assumed from memory.
 
 ## Health endpoint
 
-`immich-server` and `immich-ml` both ship a Docker-image-baked `HEALTHCHECK` (not declared in this repo's `compose.yml` — inherited from the upstream image, confirmed via `docker inspect immich-server`/`immich-ml --format '{{json .Config.Healthcheck}}'`, which show `immich-healthcheck` and `python3 healthcheck.py` respectively rather than a plain HTTP probe). Confirmed live against the running `v3.1.0` containers:
+`immich-server` and `immich-ml` both ship a Docker-image-baked `HEALTHCHECK` (not declared in this repo's `compose.yml` — inherited from the upstream image, confirmed via `docker inspect immich-server`/`immich-ml --format '{{json .Config.Healthcheck}}'`, which show `immich-healthcheck` and `python3 healthcheck.py` respectively rather than a plain HTTP probe). Confirmed live against the running `v3.2.2` containers:
 
 ```bash
 docker exec immich-server curl -s http://localhost:2283/api/server/ping
@@ -96,18 +100,30 @@ docker exec immich-server curl -s http://localhost:2283/api/server/version
 # {"major":3,"minor":1,"patch":0,"prerelease":null}
 ```
 
-`immich-db` and `immich-redis` use plain compose-level healthchecks instead (`pg_isready` and `valkey-cli ping`, both visible directly in `compose.yml`). All five containers (`immich-server`, `immich-ml`, `immich-db`, `immich-redis`, `immich-offline-remover`) were observed `Up`/`(healthy)` via `docker ps --filter name=immich` at the time of this pass.
+`immich-db` also uses its image's own check (`/usr/local/bin/healthcheck.sh`: every 5s while starting, then every 300s). Upstream's compose only says `healthcheck: disable: false` to keep it, so `compose.yml` declares none (until 2026-10-03 it overrode it with a plain `pg_isready`). `immich-redis` has a compose check, `valkey-cli ping`, the valkey form of upstream's `redis-cli ping`. All five containers (`immich-server`, `immich-ml`, `immich-db`, `immich-redis`, `immich-offline-remover`) were observed `Up`/`(healthy)` via `docker ps --filter name=immich` at the time of this pass.
 
 ## Notes
 
 - Uses a custom Postgres image with pgvector (`ghcr.io/immich-app/postgres`) — see the `homeserver-postgres` skill for why its `command:` override must keep `-c config_file=/etc/postgresql/postgresql.conf` as the first flag
 - Major version bumps (e.g. v2 → v3) break compatibility with older mobile app builds — the server only supports the matching major client version. Update the mobile app(s) before or right after bumping the server's major version. Minor/patch bumps don't have this constraint.
 
+## On Kubernetes
+
+Generated from this compose file:
+
+- **Database:** `immich-db` becomes a CloudNativePG cluster on CNPG's standard PostgreSQL 18.6 image, with VectorChord 0.5.3 (the release Compose runs) added as an image-volume extension. That follows Immich's own example (`immich-charts`, `local/cloudnative-pg.yaml`). A Service named `immich-database` keeps `DB_URL` working.
+- **Photos:** `UPLOAD_LOCATION` is mounted read-write from the real folder. Snapshots don't include it, so have your own copy first, and stop Compose's Immich before Kubernetes' starts.
+- **Offline remover:** `immich-offline-remover` doesn't run on Kubernetes.
+
+Commands and caveats: [docs/17](../17-docker-to-kubernetes.md) step 8.
+
 ## Troubleshooting: `immich-server` crash-loops with `Failed to read .../.immich: ENOENT`
 
 **Symptom:** Immich does a create→read→overwrite self-check on a hidden `.immich` marker file in each `upload/` subdirectory on every boot (see [Immich's system-integrity docs](https://docs.immich.app/administration/system-integrity)). On Windows Docker Desktop, the read step can fail immediately after the write succeeds, even though the file is independently readable via a plain `docker run` — not a permissions or race issue, just how this host's bind mount behaves under Immich's own Node.js process.
 
-**Fix:** `IMMICH_IGNORE_MOUNT_CHECK_ERRORS=true` in `services/immich/.env` (already set by default in this repo) — Immich's own documented escape hatch for this failure mode. It only skips the startup self-check; normal photo/video read/write during actual use is unaffected.
+**Fix (Windows Docker Desktop only):** `IMMICH_IGNORE_MOUNT_CHECK_ERRORS=true` in `services/immich/.env` — Immich's own documented escape hatch for this failure mode. It only skips the startup self-check; normal photo/video read/write during actual use is unaffected. `.env.example` defaults to `false`.
+
+**Leave it `false` on Linux.** On a native Linux host the check passes normally (verified 2026-09-25: all six folders — `thumbs`, `upload`, `backups`, `library`, `profile`, `encoded-video` — pass), and it's the only thing that makes a broken upload drive *visible*. With it `true`, a read-only upload drive (e.g. `/mnt/media` NTFS falling back to read-only after a Windows Fast Startup) leaves `immich-server` reporting healthy while every upload fails with `EROFS: read-only file system` / `ENOENT ... mkdir '/usr/src/app/upload/upload/...'` (ntfs-3g reports ENOENT for a mkdir on a read-only mount) — this happened on 2026-09-25 and went unnoticed for ~a day. With it `false`, Immich refuses to start instead (`ImmichStartupError: Failed to write "<UPLOAD_LOCATION>/encoded-video/.immich"`). See [`docs/08-maintenance.md`](../08-maintenance.md) "Boot safety" for remounting the drive read-write and the host-level guards against it.
 
 **Before assuming it's this bug, verify the mount is even correct:** `docker inspect immich-server --format '{{.Mounts}}'` and confirm the host path matches `UPLOAD_LOCATION` in `services/immich/.env`. `UPLOAD_LOCATION` is a separate env var from `DATA_ROOT` and does **not** get auto-injected by `homeserver.py` — if you ever restructure `service_data/` paths, grep every `.env`/`.env.example` for `=../../service_data/`, not just lines starting with `DATA_ROOT=`. A stale `UPLOAD_LOCATION` silently bind-mounts an empty auto-created directory, which looks identical to the mount-check bug above but is a different problem with a different fix (correct the path, not `IMMICH_IGNORE_MOUNT_CHECK_ERRORS`).
 
@@ -120,6 +136,28 @@ docker exec immich-server curl -s http://localhost:2283/api/server/version
 **Fix applied:** raised `immich-db`'s memory limit to `2G` and scaled its tuning proportionally to actually use the extra headroom (not just raise the ceiling): `shared_buffers` 128MB→512MB, `effective_cache_size` 384MB→1536MB, `maintenance_work_mem` 64MB→256MB (faster VACUUM/index ops, relevant for a large photo library's DB). `work_mem` left at 4MB — fine at `max_connections=50`. Recreate just this container after changing these: `docker compose -f compose.yml -f compose.dev.yml up -d --no-deps immich-database` (or `compose.prod.yml`, matching whichever env is running).
 
 **If this recurs even at 2GB:** check `docker inspect immich-db --format '{{.State.OOMKilled}}'` right after — `true` confirms the same failure mode, and the limit should be raised further rather than assumed fixed. No forensic OOM-kill logging exists in this stack by default (Windows/WSL2's kernel ring buffer rolls over, and container recreation resets `OOMKilled`/`RestartCount`), so catching it live via `docker stats` during an active upload is the reliable way to confirm before raising the cap again.
+
+## Safe updates and backups
+
+**What protects what (checked 2026-10-11):**
+
+| Data | Where it lives | Protected by | Gap |
+| --- | --- | --- | --- |
+| Photos and videos (`library`, `upload`, `profile`; about 133GB) | `UPLOAD_LOCATION` on `/mnt/media` | A manual copy on the external "My Passport" drive (`media_backup/immich`, last synced about 2026-10-03/04) | Snapshots deliberately skip it. The copy is manual and about a week stale, and the live disk is the only other copy |
+| Database (people, albums, face data, paths) | named volume `immich-postgres` | Immich's own database dump in `UPLOAD_LOCATION/backups` (setting read from the database on 2026-10-11: cron `0 */8 * * *`, so 00:00, 08:00 and 16:00 UTC, last 30 kept; Immich's defaults are daily at 02:00 UTC and 14 kept); `down`/`backup` volume snapshots; hand-made dumps | The dumps sit on the same disk as the photos. A run that falls while the server is down is skipped. The newest file on 2026-10-11 was still the one from 2026-10-10 02:00 UTC, so check that the 8-hourly schedule is actually producing files |
+| `thumbs`, `encoded-video` | `UPLOAD_LOCATION` | Nothing, and that's fine | Regenerable from the job panel |
+
+**Before every Immich update:**
+
+1. Read the release notes for every version you skip over. Breaking changes only come with major versions, and patches aren't backported.
+2. Update the phone apps first or right away. A server major version needs a matching app major version.
+3. Take a database dump: `uv run homeserver.py prod dump immich` (writes `service_data/db_dump/immich/<ts>/`). Immich's own dump job (Administration > Job Queues > Create job > Create Database Dump) is the other way, and the one Immich's restore screen understands.
+4. Bump **both** tags together in `compose.yml` (`immich-server` and `immich-machine-learning`), then `uv run homeserver.py prod update immich`.
+5. Check `docker ps`, the server log for `Immich Server is listening ... [vX.Y.Z]`, and `/api/server/ping`.
+
+Immich doesn't support downgrading, even between patch versions, so the dump is the only way back. To roll back, restore it into the old version's images.
+
+**`dump` and Immich:** `homeserver.py dump immich` used to refuse with "has no POSTGRES_USER/POSTGRES_DB", because Immich's `.env` names its database variables `DB_USERNAME` and `DB_DATABASE_NAME`. `dump` now reads those as well (2026-10-11, covered by `tests/test_external_db.py`). It writes a `pg_dump -F c` of the `immich` database, which is not the file Immich's restore screen takes. Use Immich's own dump job when you want to restore through the web UI.
 
 ## Fixed: `UPLOAD_LOCATION` was nested inside `DATA_ROOT`, so every backup archived the whole photo/video library
 
@@ -135,11 +173,20 @@ docker exec immich-server curl -s http://localhost:2283/api/server/version
 
 **Why it's actually fine as-is:** Immich stores absolute file paths (thumbnails, encoded video, library entries) directly in its Postgres database, keyed to whatever the mount path was at write time. As long as the mount target never changes, everything stays internally consistent — which is exactly the case here; the host directory (`upload/`, `library/`, `thumbs/`, `encoded-video/`, `profile/`, `backups/`) has been reliably read/written at `/usr/src/app/upload` the whole time.
 
-**Why blindly changing it is dangerous:** per Immich's own [Discussion #20488](https://github.com/immich-app/immich/discussions/20488), users who changed their mount from `/usr/src/app/upload` to `/data` without anything else got broken thumbnails/videos (`ENOENT` on the old path) because the *database* still had the old path prefix baked into every record. Immich only added auto-detection/correction of this exact mismatch in **v1.137.1**. Confirming that auto-fix is actually present and safe in the currently-pinned `v3.1.0` (a much later calendar-versioned release) was not verified before this was almost changed — treat any future mount-path change here as a real migration, not a one-line compose edit: verify the changelog, and check thumbnails/videos still load in the UI immediately after, before considering it done.
+**Why blindly changing it is dangerous:** per Immich's own [Discussion #20488](https://github.com/immich-app/immich/discussions/20488), users who changed their mount from `/usr/src/app/upload` to `/data` without anything else got broken thumbnails/videos (`ENOENT` on the old path) because the *database* still had the old path prefix baked into every record. Immich only added auto-detection/correction of this exact mismatch in **v1.137.1**. Confirming that auto-fix is actually present and safe in the then-pinned `v3.2.2` (a much later calendar-versioned release) was not verified before this was almost changed — treat any future mount-path change here as a real migration, not a one-line compose edit: verify the changelog, and check thumbnails/videos still load in the UI immediately after, before considering it done.
 
 **The empty `immich-server-data` volume is harmless clutter, not a defect** — it's declared but never mounted to anything Immich reads/writes, so it costs nothing to leave in place. Removing it is a legitimate cleanup, but only as a mount-untouched change (drop the volume declaration and the `/data` mount line together, leave `/usr/src/app/upload` exactly as-is).
 
 **Later consolidated into `service_data/media/immich/`** (a same-volume rename, so instant despite the ~145GB size) so the top-level `service_data/` layout is just `backup/`, `cache/`, `data/`, `media/` — one folder per concern, service-named subfolders inside each — rather than a one-off `uploads/` directory existing only for this service. `UPLOAD_LOCATION` updated to match; no other change needed since it's still a sibling of `service_data/data/immich/`.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 21,246 assets and 2 users restored; `immich-db` on its image's own check. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
+
+## Reverse proxy: no buffering (2026-10-11)
+
+The `immich` block in `services/nginx-plain/templates/default.conf.template` sets `proxy_buffering off;` and `proxy_request_buffering off;`. Large originals and video playback (Range seeks) were buffered to disk by nginx-plain before reaching the client, and uploads were buffered in full before reaching Immich. Same fix as Jellyfin's playback hangs (see [jellyfin.md](jellyfin.md)). Apply with `docker restart nginx-plain`, since the template is rendered at container start.
 
 ---
 

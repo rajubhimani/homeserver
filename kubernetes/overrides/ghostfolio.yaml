@@ -1,0 +1,3 @@
+containers:
+  ghostfolio-redis:
+    ports: [6379]   # valkey's default port; Compose never publishes it

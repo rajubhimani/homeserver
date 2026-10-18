@@ -34,8 +34,8 @@ Setup is via the Browser Hub as a whole — see [browser-hub.md](browser-hub.md)
 ## Gotchas
 
 - Same `shm_size: "1gb"` requirement as Firefox.
-- **`LOCAL_NET`** — a Mullvad-Browser-specific env var not present on the other four images: a CIDR range (or ranges) to let the browser reach on your LAN despite its anti-fingerprinting network isolation. Left unset in `.env.example` unless you specifically need it.
-- No app-specific CLI-flags env var documented for this image (unlike Chromium/Ungoogled Chromium's `CHROME_CLI`).
+- **`LOCAL_NET`** — a Mullvad-Browser-specific env var not present on the other browser images: a CIDR range (or ranges) to let the browser reach on your LAN despite its anti-fingerprinting network isolation. Left unset in `.env.example` unless you specifically need it.
+- No app-specific CLI-flags env var documented for this image (unlike Chromium's `CHROME_CLI` or LibreWolf's `LIBREWOLF_CLI`).
 
 ---
 

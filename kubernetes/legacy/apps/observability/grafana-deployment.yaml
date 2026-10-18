@@ -1,0 +1,93 @@
+# compose.yml names this container "observability" (container_name trick so
+# homeserver.py's directory-name-based health-check matching works) but
+# keeps its Docker-network hostname "grafana" via the compose service key —
+# see compose.yml's comment. That trick is irrelevant to k8s (nothing here
+# matches on container_name), so this manifest just calls it "grafana"
+# everywhere: Deployment name, Service name, labels. Don't replicate the
+# name mismatch.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: apps
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: grafana
+          image: grafana/grafana-oss:13.0.2
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: observability-credentials
+                  key: admin-user
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: observability-credentials
+                  key: admin-password
+            - name: GF_SERVER_ROOT_URL
+              value: https://grafana.k8s.local
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: provisioning-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 60
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 60
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-data
+        - name: provisioning-datasources
+          configMap:
+            name: grafana-provisioning-datasources
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: apps
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000

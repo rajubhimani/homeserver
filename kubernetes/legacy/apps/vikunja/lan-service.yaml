@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8111 matches vikunja/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down vikunja) before applying this —
+# same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vikunja-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: vikunja
+  ports:
+    - port: 8111
+      targetPort: 3456

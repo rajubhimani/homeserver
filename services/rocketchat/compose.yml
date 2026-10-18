@@ -79,8 +79,30 @@ services:
       resources:
         limits:
           memory: 128M
+    # NATS's own monitoring endpoint (enabled by --http_port 8222).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - homeserver
+
+  # Same pattern as firefly-permissions/mattermost-permissions/n8n-permissions/
+  # vikunja-permissions -- rocket.chat's image runs as a hardcoded uid 65533
+  # (confirmed via /etc/passwd inside the container: "rocketchat:x:65533:65533")
+  # with no root fallback, so it can never self-heal its own bind mount.
+  # Doesn't block boot the way the others did -- rocket.chat doesn't touch
+  # uploads/ at startup -- but a real file/avatar upload would fail silently
+  # against a root-owned dir left behind by a wipe/--fresh restart.
+  rocketchat-permissions:
+    image: alpine:3.24.2
+    container_name: rocketchat-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/uploads:/rocketchat-uploads
+    command: sh -c "mkdir -p /rocketchat-uploads && chown -R 65533:65533 /rocketchat-uploads"
 
   rocketchat:
     image: registry.rocket.chat/rocketchat/rocket.chat:${ROCKETCHAT_VERSION}
@@ -92,8 +114,8 @@ services:
       PORT: "3000"
       DEPLOY_METHOD: docker
       DEPLOY_PLATFORM: compose
-      MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=${MONGODB_REPLICA_SET_NAME}
-      MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=${MONGODB_REPLICA_SET_NAME}
+      MONGO_URL: mongodb://${MONGO_HOST}:${MONGO_PORT}/rocketchat?replicaSet=${MONGODB_REPLICA_SET_NAME}
+      MONGO_OPLOG_URL: mongodb://${MONGO_HOST}:${MONGO_PORT}/local?replicaSet=${MONGODB_REPLICA_SET_NAME}
       TRANSPORTER: monolith+nats://nats:4222
       # Without this, an unhandled promise rejection from the missing mail
       # config trips Node's EXIT_UNHANDLEDPROMISEREJECTION policy and kills
@@ -129,6 +151,8 @@ services:
         condition: service_completed_successfully
       nats:
         condition: service_started
+      rocketchat-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 

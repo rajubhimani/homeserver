@@ -17,8 +17,8 @@ jobs:
       contents: read
       packages: write
     env:
-      REGISTRY: forgejo.prajnatech.in
-      IMAGE: forgejo.prajnatech.in/${{ github.repository_owner }}/my-python-app
+      REGISTRY: forgejo.yourdomain.com
+      IMAGE: forgejo.yourdomain.com/${{ github.repository_owner }}/my-python-app
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

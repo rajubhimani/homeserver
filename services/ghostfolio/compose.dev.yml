@@ -1,0 +1,4 @@
+services:
+  ghostfolio:
+    ports:
+      - "8162:3333"

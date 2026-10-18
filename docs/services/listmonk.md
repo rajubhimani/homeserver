@@ -5,7 +5,10 @@
 ---
 
 **Purpose:** Self-hosted newsletter and mailing list manager — single Go binary, Postgres-backed.
-**Port:** `8127` (host) → `9000` (container) | **Data:** `service_data/data/listmonk/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~53MB total (app 33 + db 19)
+**Port:** `8127` (host) → `9000` (container) | **Data:** `service_data/data/listmonk/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~53MB total (app 33 + db 19), measured before the 2026-10-01 move to the shared server
+
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/listmonk/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
 
 ## Setup
 

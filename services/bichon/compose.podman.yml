@@ -1,0 +1,4 @@
+services:
+  bichon:
+    security_opt:
+      - label=disable

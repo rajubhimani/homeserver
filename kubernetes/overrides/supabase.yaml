@@ -1,0 +1,14 @@
+containers:
+  supabase-db:
+    ports: [5432]   # Postgres' port (supabase's own image, so a plain workload, not CNPG); Compose never publishes it
+  supabase-studio:
+    ports: [3000]   # its own healthcheck calls localhost:3000
+    mounts:
+      # Studio saves SQL snippets here (writable in Compose): its own volume.
+      /app/snippets: {volume: snippets}
+      # Edge functions, read-only (as in Compose): a ConfigMap.
+      /app/edge-functions: {from: configmap}
+  supabase-edge-functions:
+    mounts:
+      # The edge functions folder (24 KB): a ConfigMap.
+      /home/deno/functions: {from: configmap}

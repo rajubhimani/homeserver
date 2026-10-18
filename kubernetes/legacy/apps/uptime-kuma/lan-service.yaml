@@ -1,0 +1,17 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 3001 matches uptime-kuma/compose.dev.yml exactly. Stop the Compose
+# version (uv run homeserver.py dev down uptime-kuma) before applying this
+# — same host port, can't both bind it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: uptime-kuma-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: uptime-kuma
+  ports:
+    - port: 3001
+      targetPort: 3001

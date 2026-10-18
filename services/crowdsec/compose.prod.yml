@@ -1,3 +1,0 @@
-# See compose.dev.yml — no port bindings needed.
-services:
-  crowdsec: {}

@@ -26,6 +26,10 @@ Browse to `http://<ip>:8085` — set the `root` password on first login. To rese
 docker exec -it gitlab gitlab-rake "gitlab:password:reset[root]"
 ```
 
+## Registration
+
+`SIGNUP_ENABLED` in `.env`, default `false` (closed) — `root` already exists from first login above, so public self-registration is never needed to get started. Add more accounts as the `root` (or any admin) user instead: **Admin Area → Users → New user**, works regardless of `SIGNUP_ENABLED`.
+
 ## Notes
 
 - All config goes through `GITLAB_OMNIBUS_CONFIG` in compose (Ruby format)
@@ -40,7 +44,7 @@ The official **GitLab** app ([Google Play](https://play.google.com/store/apps/de
 
 ## Health endpoint
 
-No `healthcheck:` is defined in `services/gitlab/compose.yml`. GitLab exposes its own `/-/readiness` and `/-/liveness` endpoints (JSON, 200 on healthy / 503 on failure) — both require either a token (`?token=...`, an instance-wide monitoring token set in the admin area) or the request coming from an IP on GitLab's monitoring allowlist (localhost by default), so they're not curl-from-outside-able without that setup.
+`services/gitlab/compose.yml` runs the Omnibus image's own `/opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10` (interval 60s, `start_period: 600s`, because first boot takes several minutes; verified healthy on a fresh install 2026-10-02). One known upstream gotcha: it can report unhealthy *during a backup restore*, so never let anything auto-restart an unhealthy GitLab while restoring. GitLab also exposes its own `/-/readiness` and `/-/liveness` endpoints (JSON, 200 on healthy / 503 on failure) — both require either a token (`?token=...`, an instance-wide monitoring token set in the admin area) or the request coming from an IP on GitLab's monitoring allowlist (localhost by default), so they're not curl-from-outside-able without that setup.
 
 ## Runner (optional)
 

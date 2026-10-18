@@ -38,16 +38,18 @@ Point that service's SMTP settings at:
 
 Airflow's `.env` (`SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_FROM_EMAIL=...`) is the worked example — copy that pattern for any other service that supports a configurable SMTP relay.
 
+`compose.yml` declares `expose: ["1025"]`. Docker doesn't need it, because containers on the network already reach the image's exposed ports. The generated Kubernetes Service only carries declared ports, though. Without it, Kubernetes' `mailpit` Service had only 8025, every mail send timed out, and Firefly's login hung until its "new login" notification gave up (2026-10-04).
+
 ## Architecture
 
 Single container, `axllent/mailpit`. Persistent message storage via `MP_DATABASE=/data/mailpit.db` (bind-mounted to `DATA_ROOT/data`) — caught mail survives a container restart, unlike Mailpit's own default (an auto-generated temporary file, deleted when the process stops). `MP_SMTP_AUTH_ACCEPT_ANY`/`MP_SMTP_AUTH_ALLOW_INSECURE` are both set so any sender's config "just works" without matching credentials — appropriate here because nothing this container touches is a real inbox; there's no delivery to protect.
 
 ## Health endpoint
 
-The compose healthcheck runs `wget -qO- http://localhost:8025/api/v1/info` inside the container. Confirmed live against the running `v1.30.7` container — it returns `200` with a JSON body describing the instance, not just a bare `ok`:
+The container uses the image's own `HEALTHCHECK`, `/mailpit readyz` (every 15s, every 1s while starting), so `compose.yml` declares none. `/api/v1/info` is still useful for a manual check. Confirmed live against the running `v1.31.3` container (re-checked 2026-09-28; version comes from `MAILPIT_VERSION` in `.env`) — it returns `200` with a JSON body describing the instance, not just a bare `ok`:
 
 ```json
-{"Version":"v1.30.7","LatestVersion":"v1.30.7","Database":"/data/mailpit.db","DatabaseSize":561152,"Messages":47,"Unread":0,"Tags":{},"RuntimeStats":{"Uptime":14847,"Memory":35498264,"MessagesDeleted":0,"SMTPAccepted":0,"SMTPAcceptedSize":0,"SMTPRejected":0,"SMTPIgnored":0}}
+{"Version":"v1.31.3","LatestVersion":"v1.31.3","Database":"/data/mailpit.db","DatabaseSize":122880,"Messages":4,"Unread":4,"Tags":{},"RuntimeStats":{"Uptime":11,"Memory":16660744,"MessagesDeleted":0,"SMTPAccepted":0,"SMTPAcceptedSize":0,"SMTPRejected":0,"SMTPIgnored":0}}
 ```
 
 Same endpoint from outside the container: `curl http://mailpit:8025/api/v1/info` from another service on the `homeserver` network, or `curl http://<host>:8140/api/v1/info` from the host in dev.
@@ -56,8 +58,13 @@ Same endpoint from outside the container: `curl http://mailpit:8025/api/v1/info`
 
 - **Not a real mail server.** It cannot send anything past itself — there's no relay, no MX, no outbound delivery path. If you ever need genuine outbound email (password resets a real user needs to receive, etc.), point that specific service at a real external SMTP provider instead — Mailpit is for development/testing/alerting-verification only.
 - **Gated behind Authentik forward-auth** — Mailpit has no login of its own (same situation as Temporal/Dagster/Dozzle/Excalidraw, see their own docs), so `mailpit.${DOMAIN}` requires an Authentik login at the nginx layer before any request reaches the container. See [Forward-auth for other services](authentik.md#forward-auth-for-other-services-nginx-auth_request) in `authentik.md`. **This is also why Mailpit moved from `min` to `core` tier** — Authentik (the thing now gating it) is core-tier, and gating a min-tier service behind a core-tier dependency would otherwise break `min`'s "works standalone" contract. Its REST API (used by the failure-alert check below) is gated by the same blanket vhost rule; nothing in this stack was found to call it outside a browser, so no path-scoping exception was carved out.
-- REST API for scripted checks (used to verify `example_email_alert_on_failure.py` actually worked): `curl http://mailpit:8025/api/v1/messages` from inside the network, or `http://<host>:8140/api/v1/messages` from the host in dev — see "Health endpoint" above for the same-family `/api/v1/info` endpoint the compose healthcheck itself uses.
+- REST API for scripted checks (used to verify `example_email_alert_on_failure.py` actually worked): `curl http://mailpit:8025/api/v1/messages` from inside the network, or `http://<host>:8140/api/v1/messages` from the host in dev — see "Health endpoint" above for the same-family `/api/v1/info` endpoint.
 - **No mobile app or desktop client exists for Mailpit** — it's a self-contained web UI plus API, nothing to install on a phone/tablet. Anything claiming otherwise wasn't found in Mailpit's own docs or repo; treat any such claim as unverified.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: mailbox restored; on its image's own check (`/mailpit readyz`). Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

@@ -33,7 +33,7 @@ docker exec airflow-scheduler airflow dags trigger example_variables_and_connect
 Prove it's genuinely encrypted, not plaintext, straight from the DB:
 
 ```bash
-docker exec airflow-db psql -U airflow -c "SELECT conn_id, password FROM connection WHERE conn_id='demo_api_connection';"
+docker exec shared-postgres psql -U airflow -d airflow -c "SELECT conn_id, password FROM connection WHERE conn_id='demo_api_connection';"
 ```
 
 ---

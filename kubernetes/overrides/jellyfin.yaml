@@ -1,0 +1,20 @@
+containers:
+  jellyfin:
+    # The image's own HEALTHCHECK (jellyfin/jellyfin:12.1), verbatim; Kubernetes ignores
+    # image healthchecks. tests/test_k8s_sync.py compares it with the image.
+    image_healthcheck:
+      test:
+      - CMD-SHELL
+      - curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+      interval: 30s
+      timeout: 30s
+      start_period: 10s
+      retries: 3
+    mounts:
+      # The real library; read-only because Compose mounts it :ro. cluster.py
+      # create mounts MEDIA_ROOT from services/jellyfin/.env at this node path.
+      /media: {hostPath: /var/k8s/host/jellyfin-media, env: MEDIA_ROOT}
+      # Jellyfin writes metadata: a copy of METADATA_ROOT.
+      /config/metadata: {volume: metadata, size: 10Gi, copy_from: METADATA_ROOT}
+storage:
+  data: {size: 5Gi}

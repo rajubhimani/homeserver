@@ -7,6 +7,9 @@
 **Purpose:** Polished self-hosted team wiki / docs app with good search.
 **Port:** `8114` (host) → `3000` (container) | **Data:** `service_data/data/outline/` | **Requires:** Postgres, Redis, and an OIDC/OAuth provider (no built-in email/password login)
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/outline/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup — Authentik OIDC required before first login
 
 Outline has **no built-in username/password login** — it requires at least one OAuth/OIDC provider configured or nobody can sign in. This stack already runs Authentik, so use it:
@@ -60,6 +63,8 @@ uv run homeserver.py dev up outline
 
 Open `https://outline.<domain>/` (or `http://<host>:8114` in dev) and log in via the "Authentik" OIDC option.
 
+**Permissions, handled automatically**: Outline's image runs as a hardcoded `nodejs` user (uid `1001`, gid `1001` — confirmed via `/etc/passwd` inside the container, distinct from the image's *other* `node` user at uid `1000`, which isn't what the app actually runs as) with no root fallback, so it could never self-heal `data/` if recreated root-owned (e.g. after a wipe/`--fresh` restart). `outline-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it on every start, before `outline` itself starts — verified live by wiping it and confirming a clean, correctly-owned restart.
+
 ## Using it day to day
 
 Browser-only for this deployment, by design of the app rather than a limitation here — Outline's official desktop app has no way to point at a self-hosted server domain (confirmed via Outline's own community reports, not just this stack), and there's no native mobile app, only a PWA. Use `https://outline.${DOMAIN}` directly in a browser; on mobile, the browser's own "Add to Home Screen" gives a PWA-style icon.
@@ -73,7 +78,12 @@ Browser-only for this deployment, by design of the app rather than a limitation 
 - `SECRET_KEY` / `UTILS_SECRET` must each be a random 32-byte hex string (`openssl rand -hex 32`) — Outline refuses to start without them set to non-default values.
 - File attachments use `FILE_STORAGE=local`, stored under `service_data/data/outline/data/`. `FILE_STORAGE_UPLOAD_MAX_SIZE` caps uploads (default ~250MB).
 - Health endpoint: `/_health`.
-- Needs both Postgres and Redis — two extra containers (`outline-db`, `outline-redis`) beyond the app itself, heavier than most services in this stack.
+- Needs both Postgres and Redis — its database is on `shared-postgres` and Redis is one extra container (`outline-redis`), heavier than most services in this stack.
+
+
+## Cache
+
+`outline-redis` runs `valkey/valkey:9.1.2-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged. Its data moved to the fresh `outline-valkey` volume, since Valkey cannot read Redis 8 RDB files.
 
 ---
 

@@ -7,6 +7,9 @@
 **Purpose:** Self-hosted document e-signing (DocuSign alternative).
 **Port:** `8128` (host) → `3000` (container) | **Data:** `service_data/data/documenso/` | **Requires:** Postgres, plus a signing certificate (see below)
 
+**Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/documenso/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup — a signing certificate is required before first start
 
 Documenso digitally signs documents with a PKCS#12 (`.p12`) certificate, and the container **will not start correctly without one** at `service_data/data/documenso/cert.p12`. A self-signed one is fine for personal/internal use (buy a real one only if documents need to be externally verifiable by third parties):
@@ -32,9 +35,11 @@ uv run homeserver.py dev up documenso
 
 Open `https://documenso.<domain>/` (or `http://<host>:8128` in dev) and create the first account.
 
+**`data/`'s ownership is handled automatically (unlike `cert.p12` above, which is a real secret only you can provide).** Documenso's image runs as a hardcoded `nodejs` user (uid `1001`, gid `65533`, confirmed via `/etc/passwd` inside the container) with no root fallback, so it could never self-heal `data/` if recreated root-owned (e.g. after a wipe/`--fresh` restart). `documenso-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) `chown`s it on every start, before `documenso` itself starts — verified live by wiping just `data/` and confirming a clean, correctly-owned restart.
+
 ## Registration
 
-Self-registration is on by default (`NEXT_PUBLIC_DISABLE_SIGNUP=false` in `.env.example`). Set it to `true` to close the instance to new signups.
+`NEXT_PUBLIC_DISABLE_SIGNUP`, default `true` (closed) — create your own account before this ever matters, then leave it closed. Documenso's self-hosted CE has no admin "create user" panel; to add another account later, temporarily set this back to `false`, have them sign up, then set it back to `true`.
 
 ## Using it day to day
 

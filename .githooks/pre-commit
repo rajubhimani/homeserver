@@ -1,0 +1,31 @@
+#!/bin/sh
+# Refuses a commit that changes what kubernetes/generate.py reads (Compose files, .env.example,
+# services.json, nginx-plain's template, the Kubernetes overrides/scope) while
+# kubernetes/generated/ is stale. The manifests are generated from Compose; without this check the
+# drift only shows up later as failing tests (2026-10-17: immich, Nextcloud and the www page).
+#
+# Install once per clone:   git config core.hooksPath .githooks
+# Fix a refusal:            uv run kubernetes/generate.py && git add kubernetes/generated
+# Skip on purpose:          git commit --no-verify
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Only when the commit touches an input of the generator, so docs-only commits stay instant.
+if ! git diff --cached --name-only | grep -qE '^(services/|services\.json$|kubernetes/(generate\.py|overrides/|scope\.yaml|deploy/))'; then
+  exit 0
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "pre-commit: uv not found, skipping the kubernetes/generated check (install uv, see CLAUDE.md)" >&2
+  exit 0
+fi
+
+if ! out=$(uv run kubernetes/generate.py --check 2>&1); then
+  echo "$out" >&2
+  echo >&2
+  echo "pre-commit: kubernetes/generated/ is out of date for these changes." >&2
+  echo "  uv run kubernetes/generate.py && git add kubernetes/generated   (then commit again)" >&2
+  echo "  or skip on purpose: git commit --no-verify" >&2
+  exit 1
+fi

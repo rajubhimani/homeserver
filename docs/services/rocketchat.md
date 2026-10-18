@@ -10,9 +10,10 @@ Full-featured team chat — channels, DMs, threads, apps/bots, webhooks. The hea
 
 ```bash
 cp services/rocketchat/.env.example services/rocketchat/.env
-mkdir -p service_data/data/rocketchat/uploads
 uv run homeserver.py dev up rocketchat
 ```
+
+No manual pre-create/chown step needed — `rocketchat-permissions` (a one-shot `alpine` init container, same pattern as `firefly-permissions`) creates and `chown`s `uploads/` to `65533:65533` (the image's baked-in `rocketchat` user, confirmed via `/etc/passwd` inside the container) on every start, before `rocketchat` itself starts. Doesn't block boot the way some of this stack's other permission fixes do — Rocket.Chat doesn't touch `uploads/` at startup — but a real file/avatar upload against a root-owned dir (e.g. left behind by a wipe/`--fresh` restart) would fail silently, so it's fixed the same way regardless.
 
 Open `https://rocketchat.<domain>/` (or `http://<host>:8142` in dev) — first-run setup wizard creates the admin account.
 
@@ -44,9 +45,11 @@ File uploads (`/app/uploads`, also a declared `VOLUME` on the Rocket.Chat image 
 
 ## Connecting the Android app
 
-Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/details?id=chat.rocket.android)) — on first launch, tap **Join a workspace**, enter `https://rocketchat.${DOMAIN}` as the workspace address, **Connect**, then log in. This stack pins `ROCKETCHAT_VERSION=8.7.0`. A known category of complaint in Rocket.Chat's own community forums is the app failing to reach a self-hosted server *from inside the same LAN* over HTTPS while working fine from outside — if that's hit, it's a known issue to search for, not necessarily a config mistake on this stack's side.
+Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/details?id=chat.rocket.android)) — on first launch, tap **Join a workspace**, enter `https://rocketchat.${DOMAIN}` as the workspace address, **Connect**, then log in. This stack pins `ROCKETCHAT_VERSION=8.8.1`. A known category of complaint in Rocket.Chat's own community forums is the app failing to reach a self-hosted server *from inside the same LAN* over HTTPS while working fine from outside — if that's hit, it's a known issue to search for, not necessarily a config mistake on this stack's side.
 
 ## Health endpoint
+
+NATS checks its own monitoring endpoint (`wget http://localhost:8222/healthz`, enabled by `--http_port 8222`), and MongoDB pings itself with `mongosh` (added/verified 2026-10-02).
 
 `services/rocketchat/compose.yml`'s healthcheck hits `http://localhost:3000/api/info` (a Node one-liner, not `curl`/`wget` — the image has neither) — 200 means healthy. `mongodb`'s own healthcheck is a `mongosh` ping instead.
 
@@ -78,6 +81,12 @@ Official **Rocket.Chat** app ([Google Play](https://play.google.com/store/apps/d
   Prevented on any *future* fresh install by `OVERWRITE_SETTING_Show_Setup_Wizard: completed` in `compose.yml`, which skips the wizard (and its cloud-registration step) entirely — the admin account then needs to be created via `INITIAL_USER`/`ADMIN_*` in `.env.example`'s "Remaining Rocket.Chat env vars" block instead of the browser wizard.
 - **No auth on `nats`'s monitoring port** — internal-only (`expose`, not `ports`), never reachable from outside the `homeserver` network, so this doesn't matter in practice.
 - Prometheus exporters for MongoDB/NATS metrics exist in Rocket.Chat's own official compose reference but were deliberately left out here — this is a playground instance, not a production deployment needing metrics scraping.
+
+## Version line
+
+- **Rocket.Chat `8.5.3`**, the current **LTS** (supported to 2027-07-31, see [endoflife.date](https://endoflife.date/rocket-chat) and the [release life cycle](https://docs.rocket.chat/docs/releaselifecycle)). It moved from the non-LTS 8.8.1 on 2026-10-03 with a reset (the instance was empty).
+- **MongoDB `8.0.32-ubi8`**, MongoDB's long-supported yearly major (to Oct 2029). 8.1/8.2/8.3 are short rapid releases, and 8.2 reached EOL on 2026-07-31. Rocket.Chat 8.5.3's own release notes list `MongoDB: 8.0` under *Engine versions*. Upstream's `rocketchat-compose` still defaults to 8.2, so this is a deliberate departure, made per the LTS-always rule ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)).
+- **NATS `2.14.7-alpine`**. NATS supports only its two newest minor versions (2.15, 2.14), and the 2.11 that upstream's compose pins is EOL. 2.14 is the more mature supported line.
 
 ---
 

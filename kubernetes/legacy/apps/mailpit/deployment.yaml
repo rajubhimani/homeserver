@@ -1,0 +1,85 @@
+# Mirrors services/mailpit/compose.yml. SMTP catcher for other ported
+# services to point at (mailpit:1025, internal, no auth) — no real mail
+# delivery, no MX, nothing leaves the cluster.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mailpit-data
+  namespace: apps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: apps
+  labels:
+    app: mailpit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mailpit
+  template:
+    metadata:
+      labels:
+        app: mailpit
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.30.7
+          env:
+            - name: MP_DATABASE
+              value: /data/mailpit.db
+            - name: MP_SMTP_AUTH_ACCEPT_ANY
+              value: "1"
+            - name: MP_SMTP_AUTH_ALLOW_INSECURE
+              value: "1"
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: http
+              containerPort: 8025
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: 8025
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: 8025
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mailpit-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: apps
+spec:
+  selector:
+    app: mailpit
+  ports:
+    - name: smtp
+      port: 1025
+    - name: http
+      port: 8025

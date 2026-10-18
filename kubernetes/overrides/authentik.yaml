@@ -1,0 +1,44 @@
+# Probes are copied from authentik's official Helm chart (charts.goauthentik.io,
+# chart 2026.8.3 = the Compose image): Compose defines none because the image
+# carries its own HEALTHCHECK, which Kubernetes ignores.
+containers:
+  authentik-server:
+    probes:
+      startupProbe:
+        httpGet: {path: /-/health/live/, port: 9000}
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 60
+      livenessProbe:
+        httpGet: {path: /-/health/live/, port: 9000}
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
+      readinessProbe:
+        httpGet: {path: /-/health/ready/, port: 9000}
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
+  authentik-worker:
+    probes:
+      startupProbe:
+        exec: {command: [ak, healthcheck]}
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 60
+      livenessProbe:
+        exec: {command: [ak, healthcheck]}
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
+      readinessProbe:
+        exec: {command: [ak, healthcheck]}
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
+    mounts:
+      /var/run/docker.sock:
+        skip: true
+        reason: "The socket lets authentik manage outposts as Docker containers. Forward auth uses the embedded outpost inside authentik-server, which needs no socket; Kubernetes-managed outposts (the chart's ServiceAccount + RBAC) can be added later."

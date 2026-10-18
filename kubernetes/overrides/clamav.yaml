@@ -1,0 +1,6 @@
+containers:
+  clamav:
+    mounts:
+      # Virus signature database (CACHE_ROOT): freshclam re-downloads it, so
+      # an empty volume is fine; copy_from speeds up the first start.
+      /var/lib/clamav: {volume: signatures, size: 2Gi, copy_from: CACHE_ROOT}

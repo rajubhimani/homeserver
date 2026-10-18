@@ -1,0 +1,49 @@
+# Kubernetes version of prometheus.yml (kubernetes/overrides/observability.yaml
+# mounts it instead). Container metrics come from the cAdvisor built into
+# every kubelet (/metrics/cadvisor), scraped from each kubelet directly as
+# kube-prometheus-stack does: that needs only the nodes/metrics permission,
+# not nodes/proxy (which reaches the kubelet's whole API). The standalone
+# cAdvisor container isn't needed. The kubelet's serving certificate is
+# self-signed on kind and kubeadm, so it isn't verified (as there).
+# Permissions: kubernetes/cluster/base/observability-rbac.yaml.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: cadvisor
+    scheme: https
+    metrics_path: /metrics/cadvisor
+    tls_config:
+      insecure_skip_verify: true
+    authorization:
+      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    kubernetes_sd_configs:
+      - role: node    # targets each node's kubelet on its InternalIP:10250
+    metric_relabel_configs:
+      # The dashboards select containers by "name" (Docker's container name);
+      # the kubelet calls it "container", and the generator gives every
+      # container its Compose container_name.
+      - source_labels: [container]
+        regex: (.+)
+        target_label: name
+
+  - job_name: node-exporter
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [apps]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        regex: node-exporter
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: $1:9100
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: instance

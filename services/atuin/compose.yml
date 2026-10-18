@@ -16,33 +16,50 @@ services:
     volumes:
       - atuin-postgres-alpine:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER}"]
       interval: 60s
       timeout: 5s
       retries: 5
+      start_period: 60s
+      start_interval: 2s
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # atuin's image runs as a hardcoded "atuin" user (uid 1000, gid 1000,
+  # confirmed via /etc/passwd inside the container) with no root fallback,
+  # so it can never self-heal config/ if recreated root-owned. Note: the
+  # actual synced shell history lives in the atuin-db named Postgres
+  # volume, not here -- this only covers server.toml, so the stakes of
+  # getting this wrong are low (config regenerates), but fixed anyway for
+  # consistency with the rest of this stack's now-established convention.
+  atuin-permissions:
+    image: alpine:3.24.2
+    container_name: atuin-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/config:/atuin-config
+    command: sh -c "mkdir -p /atuin-config && chown -R 1000:1000 /atuin-config"
+
   atuin:
-    image: ghcr.io/atuinsh/atuin:18.19.0
+    image: ghcr.io/atuinsh/atuin:18.23.0
     container_name: atuin
     restart: unless-stopped
     command: start
     env_file: .env
     environment:
       ATUIN_HOST: "0.0.0.0"
-      ATUIN_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@atuin-db/${POSTGRES_DB}
+      ATUIN_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}
     volumes:
       - ${DATA_ROOT}/config:/config
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8888/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+    # No healthcheck here on purpose: the image ships its own (curl /healthz, 30s interval), and
+    # upstream's compose defines none, so a compose one would only replace it.
     depends_on:
       atuin-db:
         condition: service_healthy
+      atuin-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 

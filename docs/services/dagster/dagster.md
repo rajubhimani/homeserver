@@ -7,6 +7,9 @@
 **Purpose:** Data orchestrator built around software-defined assets — track lineage, materialize pipelines, and observe data quality.
 **Port:** `8139` (host) → `3000` (container, `dagster-webserver`) | **Data:** DB in a named volume; no `DATA_ROOT`-scoped app data | **Requires:** Postgres
 
+**Database:** on the shared Postgres server ([shared-postgres](../shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `DAGSTER_POSTGRES_DB`, `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD` in `services/dagster/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
+
+
 ## Setup
 
 ```bash
@@ -24,7 +27,7 @@ mechanism.
 
 Open `https://dagster.<domain>/` (or `http://<host>:8139` in dev) — no login/setup wizard, the UI is open to anyone who can reach it (see Notes).
 
-**Health endpoint:** `dagster-webserver`'s own `compose.yml` healthcheck hits `GET /server_info` (port `3000` internally, `8139` on the dev host port) via `python3 -c "import urllib.request; ..."` rather than `curl` — `python:3.13-slim` doesn't ship `curl`, and adding a package just for the healthcheck wasn't worth it. `dagster-db` uses a plain `pg_isready` check instead, since it's Postgres.
+**Healthchecks:** `dagster-user-code` runs `dagster api grpc-health-check -p 4000`. `dagster-daemon` runs `dagster-daemon liveness-check` at 120s interval / 60s timeout / 2 retries: it reads heartbeats from Postgres and is slow, and those are the commonly used timings. All three Dagster containers set `init: true` (2026-10-02, verified healthy on a fresh install). **Health endpoint:** `dagster-webserver`'s own `compose.yml` healthcheck hits `GET /server_info` (port `3000` internally, `8139` on the dev host port) via `python3 -c "import urllib.request; ..."` rather than `curl` — `python:3.14-slim` (the base in both Dockerfiles) doesn't ship `curl`, and adding a package just for the healthcheck wasn't worth it. The database's readiness is covered by `shared-postgres`'s own `pg_isready` check, which `homeserver.py` waits on before starting Dagster.
 
 ## Architecture — no official pre-built webserver/daemon image, unlike Airflow or Temporal
 
@@ -32,39 +35,47 @@ Dagster's self-hosted webserver+daemon aren't published as ready-to-run images �
 
 **`dagster-user-code` is the reason this can't be a plain image at all** — it's the gRPC server exposing your actual pipeline code, and "your actual pipeline code" doesn't exist as a generic Docker Hub image by definition. See "Where your pipeline code actually lives" below for where `definitions.py` really is and why.
 
-4 containers total: `dagster-db`, `dagster-user-code`, `dagster-webserver`, `dagster-daemon` (plus two named volumes: Postgres data and `io_manager_storage`, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
+3 containers total: `dagster-user-code`, `dagster-webserver`, `dagster-daemon`, with run/event storage on `shared-postgres` (`dagster.yaml`'s `hostname: shared-postgres`, baked into the image, so rebuild it after changing that file), plus the `io_manager_storage` named volume, the default filesystem I/O manager's shared scratch space between the run-launcher container and whatever step container reads its output).
 
 ```mermaid
 flowchart LR
     UI["dagster-webserver<br/>(web UI + GraphQL)"] -->|gRPC| UC["dagster-user-code<br/>(your definitions.py)"]
     Daemon["dagster-daemon<br/>(schedules, sensors,<br/>run queue)"] -->|gRPC| UC
-    UI --> DB[("dagster-db<br/>Postgres")]
+    UI --> DB[("shared-postgres<br/>dagster db")]
     Daemon --> DB
 ```
 
-## Where your pipeline code actually lives
+## Where your pipeline code lives
 
-`services/dagster/user-code/definitions.py` is a **git-tracked template**, not what actually runs — the container reads live code from a bind mount: `service_data/data/dagster/user-code/` (gitignored, your live copy). The template is also baked into the built image at `/template`, purely as a seed source; `dagster-user-code`'s entrypoint copies it into the bind mount **only when `definitions.py` is missing there** (fresh clone, restored backup), then execs the gRPC server. After that first copy, the two are independent — edit freely in `service_data/`, it never touches git, and a `git pull` on this repo never overwrites your own pipeline. Same relationship as `.env.example`/`.env`, just for a whole file instead of a few variables.
+**In the image** (since 2026-10-04). `services/dagster/user-code/definitions.py` is built into `homeserver/dagster-user-code` (`user-code/Dockerfile`: `COPY definitions.py /opt/dagster/app/`). Compose and Kubernetes run that same image, and every run and step container uses it too, so the code needs no mount anywhere. That's Dagster's documented way for Kubernetes and for Dagster+ code locations.
 
-`definitions.py` is the container's actual entrypoint argument, not decoration — deleting it entirely just gets it re-seeded from the template on the next restart rather than leaving the container permanently unable to start a code location at all.
-
-The check and copy both live in `user-code/Dockerfile`'s `CMD`, not in `compose.yml` or `homeserver.py` — it runs fresh on every container start, not just the first:
-
-```dockerfile
-CMD ["/bin/sh", "-c", "[ -f definitions.py ] || cp /template/definitions.py .; exec dagster api grpc -h 0.0.0.0 -p 4000 -f definitions.py"]
-```
-
-Same shape as Temporal's worker (see its own doc for the full breakdown): `[ -f definitions.py ]` tests whether the file already exists in `/opt/dagster/app` (the bind mount, set as `WORKDIR`); `||` runs the `cp` only when that test fails; `;` then unconditionally starts the code server either way. `exec` hands off the process in place so `dagster` itself becomes PID 1 and receives Docker's shutdown signal directly, instead of a wrapping shell swallowing it.
-
-Changing `definitions.py` only needs a restart, not a rebuild:
+To change a pipeline, edit `user-code/definitions.py` and rebuild:
 
 ```bash
-docker restart dagster-user-code
+uv run homeserver.py dev update dagster      # rebuilds the image and restarts
 ```
 
-(Dagster's docker-compose deployment doesn't auto-reload on file change — restarting is the documented way to pick up code changes; see [dagster-io/dagster#30824](https://github.com/dagster-io/dagster/issues/30824).)
+**Before 2026-10-04** the code ran from an editable copy under `service_data/data/dagster/user-code/`, seeded from the template on first start. That copy matched the template exactly when this changed, so nothing was lost. The folder is left in place, unused.
 
-**Every run and step container launched by `DockerRunLauncher`/`docker_executor` also needs this same mount** — they run the identical `homeserver/dagster-user-code` image, and since that image no longer bakes in `definitions.py`, a run/step container can't import the code it's supposed to execute without it. That's why the bind mount appears **three places**, all pointing at the same host path: `dagster-user-code`'s own `compose.yml` volume (uses `${DATA_ROOT}`), plus `dagster.yaml`'s `run_launcher.container_kwargs.volumes` and `definitions.py`'s own `docker_executor` `container_kwargs.volumes` (both hardcoded to the absolute host path, since `dagster.yaml` is baked into the image at build time — not compose-interpolated, so `${DATA_ROOT}` doesn't work there). Update all three if `service_data/` ever moves.
+**How a run's steps execute** is the runtime's choice (`DAGSTER_EXECUTOR` in `.env`, read by `definitions.py`), so the same code runs on both:
+
+| `DAGSTER_EXECUTOR` | Where | Steps |
+|---|---|---|
+| `docker` (default) | Compose | each step in its own container (`docker_executor`), sharing the IO-manager volume |
+| `multiprocess` | Kubernetes (set by the chart's values) | each run is its own Job pod (`K8sRunLauncher`), steps are processes inside it. This is Dagster's default Kubernetes setup and needs no volume shared between pods |
+
+## On Kubernetes
+
+The webserver serves on 3000 (as in Compose), so the generated chart values move its readiness probe to port 3000 too. The chart's probe is fixed to its default service port, 80, and its `values.yaml` says to update the probes when `service.port` changes; left alone the pod was never Ready (found 2026-10-05).
+
+Dagster runs from its **official Helm chart** (`dagster-io/helm`; decided 2026-10-04 over generating it from Compose). `kubernetes/overrides/dagster.yaml` marks it, and `generate.py` writes the chart's values into the ArgoCD Application `dagster-chart` (`generated/gitops/<env>`):
+
+- **Names as in Compose:** Services `dagster-webserver:3000` and `dagster-user-code:4000`, so the route and `.env` endpoints don't change.
+- **Images:** the code server runs `homeserver/dagster-user-code` (built locally: `cluster.py images dagster`). The webserver and daemon run Dagster's official image at the same version, and the chart version is the `dagster==` pin in `user-code/pyproject.toml`.
+- **Database:** shared Postgres, from `.env.example`. The chart's own Postgres is off. Its password Secret (`dagster-postgresql-secret`) is built by External Secrets from `.env`.
+- **Limits and labels:** memory limits as in Compose. Run pods get Compose's run caps (512 MB, 1 CPU) and the `homeserver/service: dagster` label that shared Postgres's network policy admits.
+- **On and off:** the running list in `kubernetes/deploy/<env>.yaml`. Stopped means 0 webservers, and the daemon and code server switched off (the chart can't scale the code server to 0; it holds no data).
+- **Generated as usual:** the login and database, the secrets, the network policy and the route.
 
 ## Every run — and every step — launches as its own container, by default
 
@@ -77,7 +88,7 @@ flowchart TD
     RL -->|"docker_executor,<br/>same socket"| Step1["step container 1<br/>(512m, 1 CPU)"]
     RL --> Step2["step container 2<br/>(512m, 1 CPU)"]
     Step1 -.->|io_manager_storage volume| Step2
-    Step1 & Step2 --> DB[("dagster-db")]
+    Step1 & Step2 --> DB[("shared-postgres")]
 ```
 
 Every box on the right is short-lived — created for one run or one step, then removed — unlike the 4 long-running containers above.
@@ -122,7 +133,7 @@ Dagster 1.13 also added partitioned Asset Checks (a check scoped to one partitio
 
 ## Resource caps on the platform's own containers
 
-Separately from the per-run/per-step caps above, the 4 platform containers themselves have `deploy.resources.limits.memory` caps: `dagster-db` 512M, `dagster-user-code` 256M (just serves gRPC, lightweight), `dagster-webserver` 512M, `dagster-daemon` 384M — conservative starting points, same reasoning as Temporal's (see `docs/services/temporal/temporal.md`'s "Resource caps" section).
+Separately from the per-run/per-step caps above, the 3 platform containers themselves have `deploy.resources.limits.memory` caps (the database's memory is `shared-postgres`'s): `dagster-user-code` 256M (just serves gRPC, lightweight), `dagster-webserver` 512M, `dagster-daemon` 384M — conservative starting points, same reasoning as Temporal's (see `docs/services/temporal/temporal.md`'s "Resource caps" section).
 
 ## Notes
 
@@ -132,6 +143,10 @@ Separately from the per-run/per-step caps above, the 4 platform containers thems
 - `DAGSTER_CURRENT_IMAGE` on `dagster-user-code` must match that service's own `image:` tag in `compose.yml` — it's how the run launcher knows which image to use when it launches a new run container. If you ever rename the image tag, update both places together.
 - **`pool=` concurrency pools are documented (`reference_asset`/`reference_op`) but not demoed live** — see the [feature-parity table](../../12-orchestration.md)'s "Capping concurrent executions" row for why: it needs a `dagster.yaml` `concurrency:` block, baked into the shared `dagster-webserver`/`dagster-daemon` image at build time, so demoing it means editing that file and rebuilding both containers — not a `definitions.py`-only change like every other example here.
 - **Asset Observations (`@observable_source_asset`/`ObserveResult`) are not demoed here** — a distinct concept from materialization: recording that a *source* asset (data Dagster doesn't produce, e.g. an external table) was checked/is fresh, without computing anything. None of this repo's examples touch source assets at all; worth knowing the concept exists for a real external-freshness use case.
+
+## Managed-cloud parity
+
+The user code already runs as a separate code location (`dagster-user-code` gRPC server), the same model Dagster+ Hybrid uses. Since 2026-10-03 its image also carries `dagster-cloud==1.13.25`, matching `dagster`, which [Dagster+ requires in every code location](https://docs.dagster.io/deployment/dagster-plus/code-requirements). The same image can be pointed at a Dagster+ Hybrid agent unchanged ([10 — New Services](../../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). Instance settings (`webserver-daemon/dagster.yaml`: Postgres storage, Docker run launcher) stay in the webserver/daemon image. Dagster+ supplies its own, so nothing in user code depends on them. `definitions.py` has no hardcoded hosts.
 
 ---
 

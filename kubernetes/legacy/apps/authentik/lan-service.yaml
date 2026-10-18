@@ -1,0 +1,20 @@
+# Direct LAN-reachable port — see excalidraw/lan-service.yaml for the "why".
+#
+# Port 8088 matches authentik/compose.dev.yml's HTTP port exactly (the HTTPS
+# port 9444->9443 isn't ported here — Traefik/Gateway API already terminates
+# plain HTTP for every service in this pilot, same as every other app).
+# Only authentik-server gets a lan-service — authentik-worker isn't
+# network-reachable in Compose either. The Compose version was stopped
+# (uv run homeserver.py dev down authentik) to free this port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-server-lan
+  namespace: apps
+spec:
+  type: LoadBalancer
+  selector:
+    app: authentik-server
+  ports:
+    - port: 8088
+      targetPort: 9000

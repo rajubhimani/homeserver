@@ -1,51 +1,47 @@
+# Database lives on the shared Postgres server (services/shared-postgres),
+# provisioned and started by homeserver.py from services.json "shared_db" —
+# see docs/services/shared-postgres.md.
 services:
-  outline-db:
-    image: postgres:18.6-alpine
-    container_name: outline-db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=128MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=64MB -c effective_cache_size=256MB
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    volumes:
-      - outline-postgres-alpine:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 60s
-      timeout: 5s
-      retries: 5
-    networks:
-      - homeserver
-
   outline-redis:
-    image: redis:8.10-alpine
+    # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
+    # see docs/10-new-services.md "Managed-cloud parity".
+    image: valkey/valkey:9.1.2-alpine
     container_name: outline-redis
     restart: unless-stopped
     volumes:
-      - outline-redis-alpine:/data
+      - outline-valkey:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 5
     networks:
       - homeserver
 
+  # Same pattern as firefly-permissions/mattermost-permissions/etc. --
+  # outline's image runs as a hardcoded "nodejs" user (uid 1001, gid 1001,
+  # confirmed via /etc/passwd inside the container -- distinct from the
+  # image's OTHER "node" user, uid 1000, which is not what the app actually
+  # runs as) with no root fallback, so it can never self-heal data/ if
+  # recreated root-owned (e.g. after a wipe/--fresh restart).
+  outline-permissions:
+    image: alpine:3.24.2
+    container_name: outline-permissions
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - ${DATA_ROOT}/data:/outline-data
+    command: sh -c "mkdir -p /outline-data && chown -R 1001:1001 /outline-data"
+
   outline:
-    image: outlinewiki/outline:1.9.2
+    image: outlinewiki/outline:1.10.1
     container_name: outline
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@outline-db:5432/${POSTGRES_DB}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${POSTGRES_DB}?sslmode=disable
       PGSSLMODE: disable
-      REDIS_URL: redis://outline-redis:6379
+      REDIS_URL: redis://${CACHE_HOST}:${CACHE_PORT}
       URL: https://outline.${DOMAIN}
       PORT: 3000
       FILE_STORAGE: local
@@ -62,16 +58,15 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
-      outline-db:
-        condition: service_healthy
       outline-redis:
         condition: service_healthy
+      outline-permissions:
+        condition: service_completed_successfully
     networks:
       - homeserver
 
 volumes:
-  outline-postgres-alpine:
-  outline-redis-alpine:
+  outline-valkey:
 
 networks:
   homeserver:

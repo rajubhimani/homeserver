@@ -23,7 +23,7 @@ flowchart LR
     end
 ```
 
-The router never has an open inbound port in the Tunnel path — `cloudflared` dials out to Cloudflare and holds that connection open; Cloudflare routes matching requests back down it. Cloudflare terminates TLS — no SSL certs needed inside the reverse proxy.
+The router never has an open inbound port in the Tunnel path — `cloudflared` dials out to Cloudflare and holds that connection open; Cloudflare routes matching requests back down it. Cloudflare terminates TLS at its edge, so no certificate is *needed* inside the reverse proxy. The [acme](services/acme.md) service can still give `nginx-plain` its own Let's Encrypt wildcard certificate, to encrypt the last hop and serve the LAN/VPN with HTTPS; Cloudflare keeps reading the traffic at its edge either way.
 
 ---
 

@@ -1,9 +1,4 @@
 services:
-  invoiceshelf-db:
-    security_opt:
-      - label=disable
   invoiceshelf:
     security_opt:
       - label=disable
-    depends_on:
-      - invoiceshelf-db

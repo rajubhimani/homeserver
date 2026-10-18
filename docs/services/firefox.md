@@ -17,6 +17,8 @@
 
 ## Image tag — deliberate exception to this repo's pinned-version convention
 
+**Applies to all ten browser services** (firefox, chromium, brave, mullvad-browser, librewolf, zen, helium, chrome, edge, vivaldi) and the k8s pilot's manifests. A repo-wide "pin every floating tag" sweep (`9565c77`, 2026-09-04) pinned these by mistake; restored to `:latest` on 2026-09-26. Any future pinning sweep should skip them. To pick up a new browser release: `uv run homeserver.py prod update <browser>` (or `update group:<browser-group>`).
+
 Every other service in this stack pins an exact image version (see [CLAUDE.md](../../CLAUDE.md)). This one intentionally tracks `:latest` instead:
 
 - The container is reachable from the public internet and renders arbitrary third-party web content — it benefits from picking up Firefox security patches as soon as they ship, not on whatever cadence someone remembers to bump a pin.

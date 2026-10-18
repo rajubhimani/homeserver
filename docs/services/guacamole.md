@@ -18,7 +18,7 @@ Guacamole is a *gateway*, not a remote-desktop server. It doesn't grant access t
 Three containers:
 
 - **`guacamole-db`** — Postgres, holds all connection/user data
-- **`guacd`** — the protocol proxy that does the actual RDP/VNC/SSH work. Stateless, no volume needed
+- **`guacd`** — the protocol proxy that does the actual RDP/VNC/SSH work. Stateless, no volume needed. Healthcheck: the image's own probe (`nc -z 127.0.0.1 4822`). `compose.yml` only retunes its timing (no `test:`), because the image's 5-minute interval would otherwise hold `guacamole`, which waits for `guacd` to be healthy, back 5 minutes on every start
 - **`guacamole`** — the Tomcat webapp (the UI you log into)
 
 Deployed with `WEBAPP_CONTEXT=ROOT` so the webapp serves at `/` instead of its default `/guacamole/` subpath — this lets the landing page card and nginx proxy link straight to `guacamole.${DOMAIN}` like every other service, instead of needing an extra path segment.
@@ -94,6 +94,10 @@ Once a connection exists, everything below happens inside that connection's own 
 - **Sharing a connection with someone else** (if sharing is enabled on that connection): the menu's "Share" option generates a temporary link giving another person live access with no Guacamole account of their own — the link stops working as soon as you disconnect.
 - **On-screen keyboard:** menu → keyboard icon. Needed both for key combos the local OS would otherwise intercept (e.g. sending `Ctrl+Alt+Del` into a Windows session) and for typing from a touch device without its own physical keyboard.
 
+## On Kubernetes
+
+Generated from this compose file. `guacamole-db` becomes a CloudNativePG cluster. `guacd` gets a `tcpSocket` probe on 4822, the same check as its image's `nc -z 127.0.0.1 4822`, which Kubernetes ignores. Saved connections dial LAN addresses (e.g. `192.168.1.7:3389`), so they work unchanged from the cluster. Guide: [docs/17](../17-docker-to-kubernetes.md).
+
 ## Troubleshooting
 
 **Get more detail out of `guacd`** than its default `INFO` log level shows — useful for any future connection failure:
@@ -133,6 +137,11 @@ docker exec guacd sh -c 'nc -z -v -w 3 <target-ip> <port>'
 Via `uv run homeserver.py dev dump guacamole` + `dev migrate guacamole` — see `docs/services/forgejo.md`'s "Migrated: forgejo-db..." section for the full process.
 
 **Guacamole-specific gotcha hit here:** `guacamole-db`'s `postgres-init/01-schema.sql` bootstraps the *entire* Guacamole schema on first boot (unlike forgejo's init script, which only grants permissions) — so the fresh Alpine cluster already had all the tables/types before the restore even ran, and `pg_restore` errored on every `CREATE TYPE`/`CREATE TABLE` colliding with what `initdb` had already created. This is why the restore now always runs with `--clean --if-exists`, safe here specifically because the target is always a container created fresh for the migration.
+
+
+## Fresh-install verification (2026-10-03)
+
+Reset to an empty install, came up healthy, then restored from its `reset-backup-*` snapshot and came up healthy again: 3 connections restored. Procedure: [16 — MIN/CORE reset runbook](../16-min-core-reset-runbook.md).
 
 ---
 

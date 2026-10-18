@@ -4,6 +4,8 @@
 
 ---
 
+**nginx version:** every nginx container (`nginx-plain`, `docs`, `landing`, AppFlowy's proxy) runs `nginx:1.31.7-alpine`, the **mainline** branch. On 2026-10-03 the stack was moved to stable (1.30.x) under the LTS-always rule ([10 — New Services](10-new-services.md#which-version-to-run-lts-always)); on 2026-10-17 it was moved back to mainline at the owner's request. To return to stable, pin the newest `1.30.x-alpine`.
+
 Two reverse proxy options — **run only one at a time**, both bind to ports 80/443.
 
 | Option | Service | Best for |
@@ -57,6 +59,7 @@ Admin UI:
 
 - **Cloudflare path:** `http://localhost:8181` (or SSH tunnel: `ssh -L 8181:127.0.0.1:8181 user@server`)
 - **Tailscale path:** `http://100.x.x.x:8181`
+- **WireGuard path:** `http://10.8.0.1:8181`. In prod, every NPM port (8180/8443/8181) is also mirrored on wg-easy's tunnel address, like every other service; see [09 — Firewall](09-firewall.md).
 
 Default login: `admin@example.com` / `changeme` — change immediately.
 
@@ -65,6 +68,8 @@ The Forward Hostname is the Docker **container name** — NPM resolves via the `
 
 > No SSL certs in NPM when using Cloudflare — Cloudflare handles TLS at the edge.
 > Adding certs here causes double-encryption.
+>
+> `nginx-plain` is different: the [acme](services/acme.md) service can give it a Let's Encrypt wildcard certificate and it then also listens on 443, so the tunnel can re-encrypt to it and LAN/VPN clients get a trusted padlock. Cloudflare still terminates the visitor's HTTPS at its edge either way.
 
 → See [11 — Services Reference](11-services-reference.md) for the full proxy host table.
 
@@ -81,9 +86,9 @@ map $http_cf_connecting_ip $real_client_ip {
 }
 ```
 
-**Why this exists — confirmed live, not theoretical.** For traffic arriving via Cloudflare Tunnel, `$remote_addr` at nginx-plain is *always* `cloudflared`'s own container IP — nginx only sees the tunnel hop, never the real visitor. Left unfixed, every backend app's `X-Real-IP`/`X-Forwarded-For` headers, and nginx's own access log (which CrowdSec reads for IP-based ban decisions — `crowdsec.enable: "true"` in this compose.yml), all show the same internal Docker IP for every single visitor, regardless of where they actually are. `CF-Connecting-IP` is the header Cloudflare's edge always sets accurately to the real visitor IP, and `cloudflared` preserves it end to end — falls back to `$remote_addr` for direct dev-port access that bypasses Cloudflare entirely (nothing sets `CF-Connecting-IP` in that path).
+**Why this exists — confirmed live, not theoretical.** For traffic arriving via Cloudflare Tunnel, `$remote_addr` at nginx-plain is *always* `cloudflared`'s own container IP — nginx only sees the tunnel hop, never the real visitor. Left unfixed, every backend app's `X-Real-IP`/`X-Forwarded-For` headers, and nginx's own access log, all show the same internal Docker IP for every single visitor, regardless of where they actually are. `CF-Connecting-IP` is the header Cloudflare's edge always sets accurately to the real visitor IP, and `cloudflared` preserves it end to end — falls back to `$remote_addr` for direct dev-port access that bypasses Cloudflare entirely (nothing sets `CF-Connecting-IP` in that path).
 
-Every vhost's `proxy_set_header X-Real-IP`/`X-Forwarded-For` uses `$real_client_ip`, and every `server {}` block sets its own `access_log ... cf_combined;` using a log format that's the same field shape as nginx's built-in `combined` format (just `$real_client_ip` instead of `$remote_addr`) — so CrowdSec's bundled nginx parser keeps working unchanged, just with the correct IP.
+Every vhost's `proxy_set_header X-Real-IP`/`X-Forwarded-For` uses `$real_client_ip`, and every `server {}` block sets its own `access_log ... cf_combined;` using a log format that's the same field shape as nginx's built-in `combined` format (just `$real_client_ip` instead of `$remote_addr`) — so standard combined-format log parsers keep working unchanged, just with the correct IP.
 
 **Gotcha, confirmed live: this can't be a single http-level `access_log` directive.** Multiple `access_log` directives at the *same* context level accumulate in nginx (each is a separate log destination — documented behavior, not a bug) rather than the later one replacing the earlier one, so adding one at http-level produced *two* log lines per request (the base image's own `main` format, still showing the wrong IP, plus this one). Preceding it with `access_log off;` at http-level didn't fix that either — empirically, that suppressed logging entirely, zero lines. The reliable fix is context **inheritance**, not same-level override: setting `access_log` inside each `server {}` block cleanly replaces what it would otherwise inherit from `http`, with no ambiguity.
 
@@ -103,3 +108,14 @@ uv run homeserver.py dev up nginx-plain  # auto-stops nginx (NPM) if running
 ---
 
 [← Access Setup](03-access.md) | [Home](../setup.md) | [Next: Nextcloud →](05-nextcloud.md)
+
+## On Kubernetes
+
+Traefik's Gateway plus generated HTTPRoutes replace nginx-plain's routing, all generated from `templates/default.conf.template`:
+
+- **Proxy blocks** (`location /` → a container) become HTTPRoutes. Blocks with Authentik's `auth_request` keep the login through Traefik's ForwardAuth middleware, plus `/outpost.goauthentik.io/` routed to Authentik.
+- **Redirect-only blocks** (the bare domain → `www`) become `RequestRedirect` routes.
+- **Blocks that serve content themselves** (the Browser Hub, listed in `kubernetes/overrides/nginx-plain.yaml`) run as a small Deployment of this image with that exact block, minus the `auth_request` lines.
+- **The tunnel target:** a Service named `nginx-plain` points at Traefik, so the Cloudflare tunnel's `http://nginx-plain:80` works unchanged.
+
+Guide: [17 — Moving to Kubernetes](17-docker-to-kubernetes.md).

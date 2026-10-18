@@ -1,0 +1,10 @@
+containers:
+  guacd:
+    # guacd listens on 4822 (Compose relies on the image's own HEALTHCHECK,
+    # `nc -z 127.0.0.1 4822`, which Kubernetes ignores): the same check as a
+    # tcpSocket probe, at the image's 5 s timeout.
+    ports: [4822]
+    probes:
+      readinessProbe: {tcpSocket: {port: 4822}, periodSeconds: 60, timeoutSeconds: 5, failureThreshold: 5}
+      livenessProbe: {tcpSocket: {port: 4822}, periodSeconds: 60, timeoutSeconds: 5, failureThreshold: 10}
+      startupProbe: {tcpSocket: {port: 4822}, periodSeconds: 2, failureThreshold: 13}

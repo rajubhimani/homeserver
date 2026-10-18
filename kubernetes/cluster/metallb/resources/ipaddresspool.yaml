@@ -1,0 +1,26 @@
+# The address range MetalLB hands out to LoadBalancer Services. MUST be a
+# range inside kind's own Docker bridge network that's NOT already used by
+# any container — Docker assigns that subnet at `docker network create`
+# time (when the kind cluster is first created), so it can't be known ahead
+# of time and is filled in here as a placeholder.
+#
+# After `kind create cluster --config kubernetes/kind-config.yaml`, find the
+# real subnet with:
+#   docker network inspect kind -f '{{(index .IPAM.Config 0).Subnet}}'
+# e.g. it prints 172.18.0.0/16 — then pick a slice near the top of that
+# range (unlikely to collide with node IPs, which kind assigns from the
+# bottom): 172.18.255.200-172.18.255.250 gives 51 addresses, enough for
+# every current lan-service.yaml (45+) plus Traefik + ArgoCD with room to
+# grow. Replace the range below with your actual subnet's equivalent slice
+# before this Application will do anything useful — until then ArgoCD will
+# keep this resource in a harmless "applied but pointless" state (ArgoCD's
+# selfHeal just keeps reconciling it, no crash-loop, ports simply stay
+# unreachable).
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: homeserver-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 172.18.255.200-172.18.255.250

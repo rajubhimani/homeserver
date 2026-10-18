@@ -12,9 +12,9 @@ alongside the rest of Forgejo's data.
 ## 1. Container Registry (Docker/Podman)
 
 ```bash
-docker login forgejo.prajnatech.in
-docker pull forgejo.prajnatech.in/<owner>/<image>:latest
-docker push forgejo.prajnatech.in/<owner>/<image>:latest
+docker login forgejo.yourdomain.com
+docker pull forgejo.yourdomain.com/<owner>/<image>:latest
+docker push forgejo.yourdomain.com/<owner>/<image>:latest
 ```
 
 `<owner>` is the Forgejo username or org the image belongs to — the registry
@@ -28,7 +28,7 @@ and pushes automatically using Forgejo's own repo-scoped Actions token
 ### Public packages (no auth)
 
 ```bash
-pip install --index-url https://forgejo.prajnatech.in/api/packages/<owner>/pypi/simple/ <package-name>
+pip install --index-url https://forgejo.yourdomain.com/api/packages/<owner>/pypi/simple/ <package-name>
 ```
 
 ### Private packages (auth required)
@@ -38,7 +38,7 @@ pip install --index-url https://forgejo.prajnatech.in/api/packages/<owner>/pypi/
 2. Install with the token embedded:
 
 ```bash
-pip install --index-url https://<username>:<token>@forgejo.prajnatech.in/api/packages/<owner>/pypi/simple/ <package-name>
+pip install --index-url https://<username>:<token>@forgejo.yourdomain.com/api/packages/<owner>/pypi/simple/ <package-name>
 ```
 
 ### Publishing a package
@@ -46,7 +46,7 @@ pip install --index-url https://<username>:<token>@forgejo.prajnatech.in/api/pac
 ```bash
 pip install twine
 python -m build
-twine upload --repository-url https://forgejo.prajnatech.in/api/packages/<owner>/pypi/ \
+twine upload --repository-url https://forgejo.yourdomain.com/api/packages/<owner>/pypi/ \
   -u <username> -p <token> dist/*
 ```
 
@@ -56,7 +56,7 @@ twine upload --repository-url https://forgejo.prajnatech.in/api/packages/<owner>
   setting in Forgejo, not a separate registry-level toggle — check
   **Repository → Settings → Visibility** if a package isn't pulling
   anonymously as expected.
-- These endpoints require `https://forgejo.prajnatech.in` (matching
+- These endpoints require `https://forgejo.yourdomain.com` (matching
   `FORGEJO__server__ROOT_URL` in `services/forgejo/compose.yml`) — Cloudflare
   terminates TLS in front of this instance, so plain `http://` will not work
   from outside the Docker network.
