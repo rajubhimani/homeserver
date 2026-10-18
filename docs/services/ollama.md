@@ -48,7 +48,7 @@ Only `*-partial*` files are removed. Completed blobs and manifests are untouched
 
 ## Memory: one model at a time (2026-10-18)
 
-`.env` sets `OLLAMA_MAX_LOADED_MODELS=1` and `OLLAMA_KEEP_ALIVE=15m`. Ollama's own defaults are up to 3 models loaded on CPU and 5 minutes of keep-alive ([FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)), so a large model you had stopped using stayed in RAM after you switched to another one. With these values a new model replaces the idle one, and an idle model is unloaded after 15 minutes. The cost is a reload from disk when you come back after a pause or switch models. The models are on the NVMe, so that is quick. Set `OLLAMA_KEEP_ALIVE=-1` to pin a model, or `0` to unload right after every reply.
+`.env` sets `OLLAMA_MAX_LOADED_MODELS=1` and `OLLAMA_KEEP_ALIVE=5m`. Ollama's own defaults are up to 3 models loaded on CPU (keep-alive is 5 minutes, which we keep) ([FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)), so a large model you had stopped using stayed in RAM after you switched to another one. With these values a new model replaces the idle one, and an idle model is unloaded after 5 minutes. The cost is a reload from disk when you come back after a pause or switch models. The models are on the NVMe, so that is quick. Set `OLLAMA_KEEP_ALIVE=-1` to pin a model, or `0` to unload right after every reply.
 
 To free memory by hand: `docker exec ollama ollama ps` lists loaded models and `docker exec ollama ollama stop <model>` unloads one.
 
