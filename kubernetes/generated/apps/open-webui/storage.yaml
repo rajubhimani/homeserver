@@ -33,3 +33,20 @@ spec:
   resources:
     requests:
       storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: open-webui-terminal-home
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: open-webui
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: bulk
+  resources:
+    requests:
+      storage: 20Gi

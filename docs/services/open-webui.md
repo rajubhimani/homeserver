@@ -140,6 +140,10 @@ variant would coexist with the unprofiled "slim" service rather than replace it,
 share `container_name: open-webui` — running `--profile full` would try to start both at
 once and collide. The env var avoids that entirely.
 
+## Code execution: Open Terminal
+
+Code execution runs in the [`open-terminal`](open-terminal.md) container, defined in this same compose file so `up open-webui` starts both (any pip library, a real shell), wired through `TERMINAL_SERVER_CONNECTIONS` from `OPEN_TERMINAL_URL` and `OPEN_TERMINAL_API_KEY` in `.env` It is a persistent setting: a value already saved in the database wins, so see [open-terminal.md](open-terminal.md) if it does not appear. Use a model with native tool calling.
+
 ## Gotchas
 
 - Ollama has no `/health` endpoint; the health route and healthcheck both use `ollama list`

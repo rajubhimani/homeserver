@@ -3,6 +3,21 @@
 apiVersion: v1
 kind: Service
 metadata:
+  name: open-terminal
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: open-webui
+spec:
+  selector:
+    app.kubernetes.io/name: open-terminal
+  ports:
+  - name: p8000
+    port: 8000
+    targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: open-webui
   labels:
     app.kubernetes.io/part-of: homeserver

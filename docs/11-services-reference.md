@@ -119,6 +119,7 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Temporal | `temporal-ui` | 8138 | 8080 | automation-ai |
 | Ollama | `ollama` | 8110 | 11434 | automation-ai |
 | Open WebUI | `open-webui` | 8109 | 8080 | automation-ai |
+| Open Terminal | `open-terminal` | 8164 | 8000 | automation-ai |
 | n8n | `n8n` | 8120 | 5678 | automation-ai |
 | Brave | `brave` | 8148 | 3000 | browser |
 | Chromium | `chromium` | 8146 | 3000 | browser |

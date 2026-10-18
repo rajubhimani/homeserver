@@ -370,6 +370,11 @@
   protocol: tcp
   svc: ghostfolio
   container: ghostfolio
+- host: 8164
+  node: 30117
+  protocol: tcp
+  svc: open-webui
+  container: open-terminal
 - host: 8180
   node: 30080
   protocol: tcp

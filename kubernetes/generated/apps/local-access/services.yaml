@@ -382,6 +382,11 @@ spec:
     targetPort: 8162
     nodePort: 30173
     protocol: TCP
+  - name: h8164
+    port: 8164
+    targetPort: 8164
+    nodePort: 30117
+    protocol: TCP
   - name: h8200
     port: 8200
     targetPort: 8200

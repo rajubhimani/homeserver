@@ -72,6 +72,7 @@ data:
             8137 airflow-apiserver.apps.svc.cluster.local:8080;
             8138 temporal-ui.apps.svc.cluster.local:8080;
             8110 ollama.apps.svc.cluster.local:11434;
+            8164 open-terminal.apps.svc.cluster.local:8000;
             8109 open-webui.apps.svc.cluster.local:8080;
             8120 n8n.apps.svc.cluster.local:5678;
             8010 paperless.apps.svc.cluster.local:8000;
@@ -153,6 +154,7 @@ data:
             listen 8137;
             listen 8138;
             listen 8110;
+            listen 8164;
             listen 8109;
             listen 8120;
             listen 8010;

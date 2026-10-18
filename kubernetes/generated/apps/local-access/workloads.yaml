@@ -21,7 +21,7 @@ spec:
         app.kubernetes.io/part-of: homeserver
         app.kubernetes.io/name: local-access
       annotations:
-        homeserver/config-sha256: 329d8ec72ba7901bcfc7d63adc26378c1ecace95c8801bed5f2de0441f6a4e65
+        homeserver/config-sha256: cc9404a45994519cb503748995f3cd779d82a47c43808cd944fef0d84325f5d7
     spec:
       enableServiceLinks: false
       automountServiceAccountToken: false
@@ -355,6 +355,12 @@ spec:
           hostIP: 127.0.0.1
         - containerPort: 8110
           hostPort: 8110
+          hostIP: 10.8.0.1
+        - containerPort: 8164
+          hostPort: 8164
+          hostIP: 127.0.0.1
+        - containerPort: 8164
+          hostPort: 8164
           hostIP: 10.8.0.1
         - containerPort: 8109
           hostPort: 8109

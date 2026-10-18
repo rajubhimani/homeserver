@@ -36,4 +36,6 @@ spec:
           homeserver/service: nginx-plain
     ports:
     - protocol: TCP
+      port: 8000
+    - protocol: TCP
       port: 8080

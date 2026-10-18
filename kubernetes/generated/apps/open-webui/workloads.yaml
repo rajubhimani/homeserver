@@ -3,6 +3,177 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: open-terminal
+  labels:
+    app.kubernetes.io/part-of: homeserver
+    homeserver/service: open-webui
+    app.kubernetes.io/name: open-terminal
+  annotations:
+    secret.reloader.stakater.com/auto: 'true'
+spec:
+  replicas: 0
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-terminal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: homeserver
+        homeserver/service: open-webui
+        app.kubernetes.io/name: open-terminal
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: open-terminal
+        image: ghcr.io/open-webui/open-terminal:0.14.1
+        envFrom:
+        - configMapRef:
+            name: homeserver-root
+        env:
+        - name: OPEN_TERMINAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_API_KEY
+        - name: OPEN_TERMINAL_BINARY_MIME_PREFIXES
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_BINARY_MIME_PREFIXES
+        - name: OPEN_TERMINAL_CORS_ALLOWED_ORIGINS
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_CORS_ALLOWED_ORIGINS
+        - name: OPEN_TERMINAL_ENABLE_NOTEBOOKS
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_ENABLE_NOTEBOOKS
+        - name: OPEN_TERMINAL_ENABLE_SYSTEM_PROMPT
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_ENABLE_SYSTEM_PROMPT
+        - name: OPEN_TERMINAL_ENABLE_TERMINAL
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_ENABLE_TERMINAL
+        - name: OPEN_TERMINAL_FILE_BROWSER_ROOT
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_FILE_BROWSER_ROOT
+        - name: OPEN_TERMINAL_LOG_FLUSH_BUFFER
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_LOG_FLUSH_BUFFER
+        - name: OPEN_TERMINAL_LOG_FLUSH_INTERVAL
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_LOG_FLUSH_INTERVAL
+        - name: OPEN_TERMINAL_LOG_RETENTION
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_LOG_RETENTION
+        - name: OPEN_TERMINAL_MAX_LOG_SIZE
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_MAX_LOG_SIZE
+        - name: OPEN_TERMINAL_MAX_SESSIONS
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_MAX_SESSIONS
+        - name: OPEN_TERMINAL_MULTI_USER
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_MULTI_USER
+        - name: OPEN_TERMINAL_NPM_PACKAGES
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_NPM_PACKAGES
+        - name: OPEN_TERMINAL_PACKAGES
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_PACKAGES
+        - name: OPEN_TERMINAL_PIP_PACKAGES
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_PIP_PACKAGES
+        - name: OPEN_TERMINAL_SESSION_CWD_TTL
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_SESSION_CWD_TTL
+        - name: OPEN_TERMINAL_TERM
+          valueFrom:
+            secretKeyRef:
+              name: open-webui-env
+              key: OPEN_TERMINAL_TERM
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -sf http://localhost:8000/health || exit 1
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -sf http://localhost:8000/health || exit 1
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 6
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -sf http://localhost:8000/health || exit 1
+          timeoutSeconds: 10
+          periodSeconds: 10
+          failureThreshold: 93
+        resources:
+          requests:
+            memory: ${OPEN_TERMINAL_MEMORY_LIMIT}
+          limits:
+            memory: ${OPEN_TERMINAL_MEMORY_LIMIT}
+        volumeMounts:
+        - name: v-open-webui-terminal-home
+          mountPath: /home/user
+        securityContext:
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: v-open-webui-terminal-home
+        persistentVolumeClaim:
+          claimName: open-webui-terminal-home
+  strategy:
+    type: Recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: open-webui
   labels:
     app.kubernetes.io/part-of: homeserver
@@ -41,6 +212,8 @@ spec:
           value: $(ENABLE_SIGNUP)
         - name: OLLAMA_BASE_URL
           value: $(OLLAMA_BASE_URL)
+        - name: TERMINAL_SERVER_CONNECTIONS
+          value: '[{"id":"open-terminal","name":"Open Terminal","url":"$(OPEN_TERMINAL_URL)","auth_type":"bearer","key":"$(OPEN_TERMINAL_API_KEY)","enabled":true,"config":{"access_grants":[]}}]'
         - name: WEBUI_SECRET_KEY
           value: $(WEBUI_SECRET_KEY)
         ports:
