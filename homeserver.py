@@ -1672,6 +1672,33 @@ def drop_shared_db(service: str) -> bool:
     return ok
 
 
+def do_list(which: str) -> int:
+    """Flat name list of running ('up') or stopped ('down') services."""
+    running = set(get_running_services())
+    all_services = (
+        SERVICES_MIN
+        + SERVICES_CORE
+        + SERVICES_MONITORING
+        + SERVICES_DAILY
+        + SERVICES_BROWSER
+        + SERVICES_OFFICE
+        + SERVICES_AUTOMATION_AI
+        + SERVICES_EXTRA
+        + SERVICES_MANUAL
+    )
+    up = [s for s in all_services if s in running]
+    down = [s for s in all_services if s not in running]
+    if which == "up":
+        header(f"Running services ({len(up)}):")
+        for s in up:
+            print(f"  {GREEN}●{RESET} {s}")
+    else:
+        header(f"Stopped services ({len(down)}):")
+        for s in down:
+            print(f"  ○ {s}")
+    return 0
+
+
 def do_status() -> int:
     running = set(get_running_services())
     all_services = (
@@ -3177,6 +3204,7 @@ def show_help() -> None:
     print("                                                                     --update force-recreates existing (not running) containers")
     print("    python homeserver.py gc [--yes]                                 reclaim Docker disk space")
     print("    python homeserver.py orphaned-volumes [service|all] [--yes]     list/remove volumes not in current compose.yml")
+    print("    python homeserver.py list up | list down                        list only running / only stopped services")
     print("    python homeserver.py status (or ps)                             list every service + every group (tier by tier, marking which are running)")
     print("    python homeserver.py fix-network [--yes]                        recreate any running container detached from the 'homeserver' network")
     print()
@@ -3391,6 +3419,13 @@ def main() -> int:
     # dev/prod (only the port bindings do), so this needs no env argument.
     if argv and argv[0] in ("status", "ps"):
         return do_status()
+
+    if argv and argv[0] == "list":
+        which = argv[1] if len(argv) > 1 else ""
+        if which not in ("up", "down"):
+            error("usage: homeserver.py list up|down")
+            return 1
+        return do_list(which)
 
     # Same reasoning again — each affected container's own compose labels
     # say which env it was started under (see do_fix_network), so this
