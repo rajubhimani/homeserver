@@ -46,6 +46,10 @@ docker exec ollama ollama pull gemma4:e4b
 
 Only `*-partial*` files are removed. Completed blobs and manifests are untouched. Pull one model at a time, and let it finish before starting the next.
 
+## Context length: 16384 (2026-10-20)
+
+`.env` sets `OLLAMA_CONTEXT_LENGTH=16384`. Without it Ollama falls back to a 4096-token window on this host, so a longer prompt fails with `request (7478 tokens) exceeds the available context size (4096 tokens)`. Open WebUI sends no `num_ctx` unless you set one under Admin Settings, Models, Advanced Params, so the server value applies ([FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)). A bigger window costs RAM for the KV cache, so raise it only as far as you need. Apply with `uv run homeserver.py dev restart ollama`, then check `docker exec ollama ollama ps` for the CONTEXT column.
+
 ## Memory: one model at a time (2026-10-18)
 
 `.env` sets `OLLAMA_MAX_LOADED_MODELS=1` and `OLLAMA_KEEP_ALIVE=5m`. Ollama's own defaults are up to 3 models loaded on CPU (keep-alive is 5 minutes, which we keep) ([FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)), so a large model you had stopped using stayed in RAM after you switched to another one. With these values a new model replaces the idle one, and an idle model is unloaded after 5 minutes. The cost is a reload from disk when you come back after a pause or switch models. The models are on the NVMe, so that is quick. Set `OLLAMA_KEEP_ALIVE=-1` to pin a model, or `0` to unload right after every reply.
