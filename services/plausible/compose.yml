@@ -4,7 +4,7 @@
 # container: there is no shared ClickHouse server.
 services:
   plausible-events-db:
-    image: clickhouse/clickhouse-server:26.8.15.10-alpine
+    image: clickhouse/clickhouse-server:26.8.36.3-alpine
     container_name: plausible-events-db
     restart: unless-stopped
     env_file: .env

@@ -358,7 +358,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: zulip-redis
-        image: valkey/valkey:9.1.2-alpine
+        image: valkey/valkey:9.1.3-alpine
         args:
         - sh
         - -euc

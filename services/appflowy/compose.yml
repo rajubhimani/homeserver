@@ -21,7 +21,7 @@ services:
   appflowy-redis:
     # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
     # see docs/10-new-services.md "Managed-cloud parity".
-    image: valkey/valkey:9.1.2-alpine
+    image: valkey/valkey:9.1.3-alpine
     container_name: appflowy-redis
     restart: unless-stopped
     command: valkey-server --save "" --stop-writes-on-bgsave-error no

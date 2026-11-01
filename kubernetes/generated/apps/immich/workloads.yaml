@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: immich-ml
-        image: ghcr.io/immich-app/immich-machine-learning:v3.3.3
+        image: ghcr.io/immich-app/immich-machine-learning:v3.3.5
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -87,7 +87,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: immich-redis
-        image: valkey/valkey:9.1.2-alpine
+        image: valkey/valkey:9.1.3-alpine
         args:
         - valkey-server
         - --save
@@ -158,7 +158,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-immich-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -166,7 +166,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-immich-redis
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -175,7 +175,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: immich-server
-        image: ghcr.io/immich-app/immich-server:v3.3.3
+        image: ghcr.io/immich-app/immich-server:v3.3.5
         envFrom:
         - configMapRef:
             name: homeserver-root

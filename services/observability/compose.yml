@@ -6,7 +6,7 @@ services:
   # "permission denied". Documented fix: chown before start. Found by the
   # 2026-10-02 fresh-install run; the folders had only ever been fixed by hand.
   observability-permissions:
-    image: alpine:3.24.2
+    image: alpine:3.24.3
     container_name: observability-permissions
     restart: "no"
     user: "0:0"
@@ -19,7 +19,7 @@ services:
       - homeserver
 
   prometheus:
-    image: prom/prometheus:v3.13.4
+    image: prom/prometheus:v3.13.5
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -42,7 +42,7 @@ services:
       - homeserver
 
   loki:
-    image: grafana/loki:3.7.8
+    image: grafana/loki:3.7.9
     container_name: loki
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
@@ -73,7 +73,7 @@ services:
   # config needed since FastAPI services here already log Loki-compatible
   # JSON to stdout (queryable in Grafana via `| json` in LogQL).
   alloy:
-    image: grafana/alloy:v1.20.1
+    image: grafana/alloy:v1.21.3
     container_name: alloy
     restart: unless-stopped
     command:
@@ -165,7 +165,7 @@ services:
       - homeserver
 
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.3.0
     # container_name is "observability", not "grafana", so homeserver.py's
     # wait_healthy()/get_running_services() (which match on the service
     # *directory* name, "observability") find this container — same trick

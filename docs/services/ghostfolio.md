@@ -148,4 +148,4 @@ Everything is in Postgres (`ghostfolio-postgres` named volume). `homeserver.py d
 
 ## Cache
 
-`ghostfolio-redis` runs `valkey/valkey:9.1.2-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged.
+`ghostfolio-redis` runs `valkey/valkey:9.1.3-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged.

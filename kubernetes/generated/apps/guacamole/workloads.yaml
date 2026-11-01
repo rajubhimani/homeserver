@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-guacamole-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -38,7 +38,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-guacd
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c

@@ -143,7 +143,7 @@ Confirmed against Grafana's own current docs (Explore).
 
 ## Version line
 
-Prometheus runs `v3.13.4`, its current **LTS** (fixes for severe issues until 2027-07-31; normal releases get only 6 weeks, see the [release cycle](https://prometheus.io/docs/introduction/release-cycle/)), per the LTS-always rule ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)). It moved from the non-LTS v3.15.0 on 2026-10-03 with a reset (metrics only), since stepping back across Prometheus minor versions isn't guaranteed to read newer TSDB blocks. Grafana, Loki and Alloy publish no LTS line and stay on their newest supported releases.
+Prometheus runs `v3.13.5`, its current **LTS** (fixes for severe issues until 2027-07-31; normal releases get only 6 weeks, see the [release cycle](https://prometheus.io/docs/introduction/release-cycle/)), per the LTS-always rule ([10 — New Services](../10-new-services.md#which-version-to-run-lts-always)). It moved from the non-LTS v3.15.0 on 2026-10-03 with a reset (metrics only), since stepping back across Prometheus minor versions isn't guaranteed to read newer TSDB blocks. Grafana, Loki and Alloy publish no LTS line and stay on their newest supported releases.
 
 ---
 

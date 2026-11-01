@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plausible-env
@@ -41,7 +41,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plausible-events-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -146,7 +146,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plausible-env
@@ -158,7 +158,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plausible-events-db
-        image: clickhouse/clickhouse-server:26.8.15.10-alpine
+        image: clickhouse/clickhouse-server:26.8.36.3-alpine
         envFrom:
         - configMapRef:
             name: homeserver-root

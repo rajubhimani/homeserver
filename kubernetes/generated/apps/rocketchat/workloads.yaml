@@ -220,7 +220,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: rocketchat-permissions
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - sh
         - -c

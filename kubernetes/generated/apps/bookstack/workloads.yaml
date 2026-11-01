@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: bookstack-env

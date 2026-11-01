@@ -202,7 +202,7 @@ docker exec guacamole-db psql -h 127.0.0.1 -U $(e guacamole POSTGRES_USER) -d $(
 docker exec shared-postgres psql -U postgres -d plausible -tAc 'select count(*) from sites'   # Plausible's Postgres is on shared-postgres since 2026-10-06 (was plausible-db)
 docker exec plausible-events-db clickhouse-client -q 'select count() from plausible_events_db.events_v2'
 # vaultwarden (SQLite, read through a throwaway container)
-docker run --rm -v "$(readlink -f service_data)/data/vaultwarden/data:/d:ro" alpine:3.24.2 \
+docker run --rm -v "$(readlink -f service_data)/data/vaultwarden/data:/d:ro" alpine:3.24.3 \
   sh -c 'apk add -q sqlite >/dev/null; sqlite3 /d/db.sqlite3 "select count(*) from users; select count(*) from ciphers;"'
 # firefly / wg-easy / jellyfin
 docker exec firefly-db psql -h 127.0.0.1 -U $(e firefly POSTGRES_USER) -d $(e firefly POSTGRES_DB) -tAc 'select count(*) from transactions'

@@ -83,7 +83,7 @@ Browser-only for this deployment, by design of the app rather than a limitation 
 
 ## Cache
 
-`outline-redis` runs `valkey/valkey:9.1.2-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged. Its data moved to the fresh `outline-valkey` volume, since Valkey cannot read Redis 8 RDB files.
+`outline-redis` runs `valkey/valkey:9.1.3-alpine` since 2026-10-03, replacing `redis:8.10-alpine`. Valkey is the Redis-protocol drop-in that AWS ElastiCache and GCP Memorystore run ([managed-cloud parity](../10-new-services.md#managed-cloud-parity-orchestrators-and-backing-services)). The container and hostname are unchanged. Its data moved to the fresh `outline-valkey` volume, since Valkey cannot read Redis 8 RDB files.
 
 ---
 

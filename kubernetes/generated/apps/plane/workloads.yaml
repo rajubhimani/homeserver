@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -115,7 +115,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -126,7 +126,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-mq
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -134,7 +134,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-redis
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -242,7 +242,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -253,7 +253,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-mq
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -261,7 +261,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-redis
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -314,7 +314,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-plane-mq
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -322,7 +322,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-redis
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -381,7 +381,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -472,7 +472,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -567,7 +567,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -667,7 +667,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: plane-redis
-        image: valkey/valkey:9.1.2-alpine
+        image: valkey/valkey:9.1.3-alpine
         args:
         - valkey-server
         - --save
@@ -737,7 +737,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -822,7 +822,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -907,7 +907,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: plane-env
@@ -918,7 +918,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-mq
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -926,7 +926,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: wait-plane-redis
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c

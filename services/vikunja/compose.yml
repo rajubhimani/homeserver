@@ -10,7 +10,7 @@ services:
   # permission denied [process uid=1000 gid=0, dir owner uid=0 gid=0]" --
   # confirmed live via an actual wipe-and-restart test, not assumed.
   vikunja-permissions:
-    image: alpine:3.24.2
+    image: alpine:3.24.3
     container_name: vikunja-permissions
     restart: "no"
     user: "0:0"

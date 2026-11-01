@@ -17,7 +17,7 @@ if [ -z "${IN_SYNC_CONTAINER:-}" ]; then
     -e IN_SYNC_CONTAINER=1 -e TZ="${TZ:-Asia/Kolkata}" \
     -v "$dir/firefly-sync.sh:/sync.sh:ro" \
     -v "$dir/sync.env:/sync.env:ro" \
-    alpine:3.24.2 sh /sync.sh
+    alpine:3.24.3 sh /sync.sh
 fi
 
 command -v jq >/dev/null || apk add --no-cache curl jq tzdata >/dev/null

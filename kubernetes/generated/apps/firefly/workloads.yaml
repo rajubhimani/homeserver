@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-firefly-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -38,7 +38,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: firefly-permissions
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - chown
         - -R
@@ -175,7 +175,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-firefly
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -184,7 +184,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: firefly-cron
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - sh
         - -c
@@ -230,7 +230,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-firefly
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c

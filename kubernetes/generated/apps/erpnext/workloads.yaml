@@ -469,7 +469,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: erpnext-redis-cache
-        image: valkey/valkey:9.1.2-alpine
+        image: valkey/valkey:9.1.3-alpine
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -514,7 +514,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: erpnext-redis-queue
-        image: valkey/valkey:9.1.2-alpine
+        image: valkey/valkey:9.1.3-alpine
         envFrom:
         - configMapRef:
             name: homeserver-root

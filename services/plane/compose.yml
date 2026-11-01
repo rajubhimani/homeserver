@@ -3,7 +3,7 @@
 # see docs/services/shared-postgres.md.
 services:
   plane-redis:
-    image: valkey/valkey:9.1.2-alpine
+    image: valkey/valkey:9.1.3-alpine
     container_name: plane-redis
     restart: unless-stopped
     command: valkey-server --save "" --stop-writes-on-bgsave-error no

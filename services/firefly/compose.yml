@@ -27,7 +27,7 @@ services:
       - homeserver
 
   firefly-permissions:
-    image: alpine:3.24.2
+    image: alpine:3.24.3
     container_name: firefly-permissions
     restart: "no"
     user: "0:0"
@@ -100,7 +100,7 @@ services:
       - homeserver
 
   firefly-cron:
-    image: alpine:3.24.2
+    image: alpine:3.24.3
     container_name: firefly-cron
     restart: unless-stopped
     env_file: .env

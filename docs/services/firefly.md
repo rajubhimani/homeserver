@@ -83,7 +83,7 @@ docker logs firefly-db 2>&1 | grep "database system was"
 ```bash
 # 1. Copy the corrupted volume to a scratch volume and try pg_resetwal there
 docker volume create firefly-recovery-test
-docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v firefly-recovery-test:/to alpine:3.24.2 sh -c "cp -a /from/. /to/"
+docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v firefly-recovery-test:/to alpine:3.24.3 sh -c "cp -a /from/. /to/"
 docker run --rm -u 70:70 -v firefly-recovery-test:/var/lib/postgresql postgres:18.6-alpine pg_resetwal -f /var/lib/postgresql/18/docker
 
 # 2. Boot postgres against the scratch copy and verify with pg_dump — not just SELECT count(*),
@@ -92,7 +92,7 @@ docker run -d --name firefly-recovery-test -v firefly-recovery-test:/var/lib/pos
 docker exec firefly-recovery-test pg_dump -U firefly -d firefly -f /tmp/dump.sql && echo OK
 
 # 3. Only once that validates cleanly: back up the real volume, then apply the same fix to it
-docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v "$(pwd)/service_data/backup/firefly:/backup" alpine:3.24.2 sh -c "tar czf /backup/firefly-postgres-precorrupt.tar.gz -C /from ."
+docker run --rm -v firefly_firefly-postgres-alpine:/from:ro -v "$(pwd)/service_data/backup/firefly:/backup" alpine:3.24.3 sh -c "tar czf /backup/firefly-postgres-precorrupt.tar.gz -C /from ."
 docker run --rm -u 70:70 -v firefly_firefly-postgres-alpine:/var/lib/postgresql postgres:18.6-alpine pg_resetwal -f /var/lib/postgresql/18/docker
 
 # 4. Clean up the scratch volume/container

@@ -136,7 +136,7 @@ spec:
             mode: 420
           - key: services-docs-nginx-conf
             path: services-docs-nginx-conf
-            mode: 493
+            mode: 420
           - key: setup-md
             path: setup-md
             mode: 493

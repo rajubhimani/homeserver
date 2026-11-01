@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         envFrom:
         - secretRef:
             name: mattermost-env
@@ -41,7 +41,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: mattermost-permissions
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - sh
         - -c

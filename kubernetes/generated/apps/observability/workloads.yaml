@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: alloy
-        image: grafana/alloy:v1.20.1
+        image: grafana/alloy:v1.21.3
         args:
         - run
         - --server.http.listen-addr=0.0.0.0:12345
@@ -121,7 +121,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: observability-permissions
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - sh
         - -c
@@ -144,7 +144,7 @@ spec:
           mountPath: /grafana
           subPath: grafana
       - name: wait-prometheus
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -153,7 +153,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: observability
-        image: grafana/grafana:13.2.3
+        image: grafana/grafana:13.3.0
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -266,7 +266,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: observability-permissions
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - sh
         - -c
@@ -290,7 +290,7 @@ spec:
           subPath: grafana
       containers:
       - name: loki
-        image: grafana/loki:3.7.8
+        image: grafana/loki:3.7.9
         args:
         - -config.file=/etc/loki/loki-config.yml
         envFrom:
@@ -348,7 +348,7 @@ spec:
           items:
           - key: services-observability-loki-loki-config-yml
             path: services-observability-loki-loki-config-yml
-            mode: 493
+            mode: 420
   strategy:
     type: Recreate
 ---
@@ -471,7 +471,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: observability-permissions
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         args:
         - sh
         - -c
@@ -495,7 +495,7 @@ spec:
           subPath: grafana
       containers:
       - name: prometheus
-        image: prom/prometheus:v3.13.4
+        image: prom/prometheus:v3.13.5
         args:
         - --config.file=/etc/prometheus/prometheus.yml
         - --storage.tsdb.path=/prometheus

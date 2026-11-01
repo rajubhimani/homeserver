@@ -26,7 +26,7 @@ services:
   coolify-redis:
     # Valkey (the engine AWS ElastiCache and GCP Memorystore run), Redis-protocol drop-in;
     # see docs/10-new-services.md "Managed-cloud parity".
-    image: valkey/valkey:9.1.2-alpine
+    image: valkey/valkey:9.1.3-alpine
     container_name: coolify-redis
     restart: unless-stopped
     command: valkey-server --requirepass ${REDIS_PASSWORD}
@@ -80,7 +80,7 @@ services:
   # behind by a wipe/--fresh restart) would fail silently, same latent shape
   # as rocketchat's uploads/.
   coolify-permissions:
-    image: alpine:3.24.2
+    image: alpine:3.24.3
     container_name: coolify-permissions
     restart: "no"
     user: "0:0"

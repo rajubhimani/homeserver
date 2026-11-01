@@ -10,7 +10,7 @@ services:
   # '/home/node/.n8n/config'" -- confirmed live via an actual
   # wipe-and-restart test, not assumed.
   n8n-permissions:
-    image: alpine:3.24.2
+    image: alpine:3.24.3
     container_name: n8n-permissions
     restart: "no"
     user: "0:0"

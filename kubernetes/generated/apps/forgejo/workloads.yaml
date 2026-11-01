@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: wait-forgejo-db
-        image: alpine:3.24.2
+        image: alpine:3.24.3
         command:
         - sh
         - -c
@@ -39,7 +39,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: forgejo
-        image: codeberg.org/forgejo/forgejo:16.0.6
+        image: codeberg.org/forgejo/forgejo:16.0.7
         envFrom:
         - configMapRef:
             name: homeserver-root
