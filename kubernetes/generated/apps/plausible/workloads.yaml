@@ -237,15 +237,15 @@ spec:
           items:
           - key: services-plausible-clickhouse-default-profile-low-
             path: services-plausible-clickhouse-default-profile-low-
-            mode: 493
+            mode: 420
           - key: services-plausible-clickhouse-ipv4-only-xml
             path: services-plausible-clickhouse-ipv4-only-xml
-            mode: 493
+            mode: 420
           - key: services-plausible-clickhouse-logs-xml
             path: services-plausible-clickhouse-logs-xml
-            mode: 493
+            mode: 420
           - key: services-plausible-clickhouse-low-resources-xml
             path: services-plausible-clickhouse-low-resources-xml
-            mode: 493
+            mode: 420
   strategy:
     type: Recreate

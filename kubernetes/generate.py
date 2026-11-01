@@ -688,7 +688,7 @@ def convert(svc: str) -> dict[str, list[dict]]:
                 rel = p.relative_to(REPO).as_posix()
                 k = slug(rel.replace("/", "-").replace(".", "-"))
                 files_cm[k] = p.read_text()
-                if p.stat().st_mode & 0o111:
+                if git_modes(rel).get(rel) == "100755":  # git's mode, not this host's: same output on every machine
                     exec_keys.add(k)  # e.g. entrypoint.sh: ConfigMap files default to 0644
                 mounts.append({"name": "files", "mountPath": tgt, "subPath": k, "readOnly": True})
             elif kind == "repo-dir" and mo.get("from") == "configmap":

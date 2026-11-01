@@ -635,7 +635,7 @@ spec:
           items:
           - key: services-plane-caddyfile
             path: services-plane-caddyfile
-            mode: 493
+            mode: 420
 ---
 apiVersion: apps/v1
 kind: Deployment

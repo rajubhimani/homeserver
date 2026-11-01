@@ -264,22 +264,22 @@ spec:
           items:
           - key: services-supabase-volumes-db--supabase-sql
             path: services-supabase-volumes-db--supabase-sql
-            mode: 493
+            mode: 420
           - key: services-supabase-volumes-db-jwt-sql
             path: services-supabase-volumes-db-jwt-sql
             mode: 420
           - key: services-supabase-volumes-db-logs-sql
             path: services-supabase-volumes-db-logs-sql
-            mode: 493
+            mode: 420
           - key: services-supabase-volumes-db-pooler-sql
             path: services-supabase-volumes-db-pooler-sql
-            mode: 493
+            mode: 420
           - key: services-supabase-volumes-db-realtime-sql
             path: services-supabase-volumes-db-realtime-sql
-            mode: 493
+            mode: 420
           - key: services-supabase-volumes-db-roles-sql
             path: services-supabase-volumes-db-roles-sql
-            mode: 493
+            mode: 420
           - key: services-supabase-volumes-db-webhooks-sql
             path: services-supabase-volumes-db-webhooks-sql
             mode: 420
@@ -807,7 +807,7 @@ spec:
           items:
           - key: services-supabase-volumes-pooler-pooler-exs
             path: services-supabase-volumes-pooler-pooler-exs
-            mode: 493
+            mode: 420
 ---
 apiVersion: apps/v1
 kind: Deployment
