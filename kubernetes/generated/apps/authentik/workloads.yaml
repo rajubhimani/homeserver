@@ -104,6 +104,11 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
+        resources:
+          requests:
+            memory: 768Mi
+          limits:
+            memory: 768Mi
         volumeMounts:
         - name: v-authentik-data
           mountPath: /media
@@ -224,6 +229,11 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: v-authentik-data
           mountPath: /media

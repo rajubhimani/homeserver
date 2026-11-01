@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Identity provider — SSO, OAuth2, OIDC, SAML for all your other services.
-**Port:** `8088` (host) → `9000` (container, `authentik-server`, HTTP) and `9444` (host) → `9443` (container, HTTPS) | **Data:** `service_data/data/authentik/` | **Requires:** Postgres (no Redis in this compose.yml — this doc previously claimed one that doesn't exist here) | **Memory:** DB capped 384M in compose.yml; server/worker: no hard limit set; measured idle ~244MB total (server 143 + worker 49 + db 52). Authentik's own docs state a 2GB/2-core minimum for the whole stack — comfortable headroom for personal-scale use, though their GitHub issue #21413 notes real deployments at ~1400 users saw the worker alone peak past 7GB
+**Port:** `8088` (host) → `9000` (container, `authentik-server`, HTTP) and `9444` (host) → `9443` (container, HTTPS) | **Data:** `service_data/data/authentik/` | **Requires:** Postgres (no Redis in this compose.yml — this doc previously claimed one that doesn't exist here) | **Memory:** limits in compose.yml: server 768M, worker 512M, DB 384M. Measured idle on 2026-11-01 (after settling, one web worker): server ~354MB + worker ~276MB + db ~226MB = ~856MB total (the old "~244MB" figure was stale). Web sizing is `.env`-driven: `AUTHENTIK_WEB__WORKERS=1` / `AUTHENTIK_WEB__THREADS=4` (image default is 2 workers at ~270MB each; raise them if the UI feels slow under load, and raise the server limit with it). Authentik's own docs state a 2GB/2-core minimum for the whole stack; their GitHub issue #21413 notes real deployments at ~1400 users saw the worker alone peak past 7GB
 
 ## Setup
 

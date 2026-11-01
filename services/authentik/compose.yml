@@ -51,6 +51,7 @@ services:
     container_name: authentik-server
     restart: unless-stopped
     command: server
+    # AUTHENTIK_WEB__WORKERS/THREADS come from .env via env_file (see .env.example).
     env_file: .env
     environment:
       AUTHENTIK_POSTGRESQL__HOST: ${DB_HOST}
@@ -60,6 +61,10 @@ services:
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     volumes:
       - ${DATA_ROOT}/media:/media
       - ${DATA_ROOT}/templates:/templates
@@ -87,6 +92,10 @@ services:
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     volumes:
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${DATA_ROOT}/media:/media
