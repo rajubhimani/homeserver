@@ -1544,6 +1544,8 @@ def shared_db_ready(service: str, env: str, provision: bool = True) -> bool:
     provision its database. No-op for services without "shared_db". Safe to
     call from anywhere — starting is idempotent; only stopping is
     reference-counted (release_shared_dbs, from main())."""
+    if not shared_cache_ready(service, env, provision):
+        return False
     ext = shared_db_external(service)
     if ext:
         info(f"{service}: database on outside host {ext} (DB_HOST) — shared server not used")
@@ -1671,6 +1673,146 @@ def drop_shared_db(service: str) -> bool:
         ok = False
     return ok
 
+
+# ── Shared cache (Valkey) ───────────────────────────────────────────
+#
+# Services that declare "shared_cache" in services.json get their own Valkey
+# ACL login on the one shared server (services/valkey), limited to keys under
+# their own prefix, instead of running a <service>-redis container. Unlike
+# shared_db this server is an ordinary 'extra' service you may also use by
+# hand, so it is started on demand but never stopped automatically. Valkey
+# has no per-app databases (ACLs can't restrict SELECT n), so the isolation
+# is the key prefix (written literally, ending in a separator, e.g. "myapp:"):
+# an app must be able to set one. See docs/services/valkey.md.
+
+SHARED_CACHE_SERVICE = "valkey"
+# Commands a shared-cache login may NOT run: everything dangerous/admin
+# (FLUSHALL, KEYS, CONFIG, ACL, DEBUG, ...), except the few clients call on
+# connect (INFO for version checks, CLIENT SETNAME/SETINFO/ID).
+SHARED_CACHE_ACL_RULES = "+@all -@dangerous -@admin +info +client|setname +client|setinfo +client|id"
+_CACHE_SAFE = re.compile(r"^[A-Za-z0-9._~-]+$")
+# The app's key prefix, exactly as the app writes it, ending in a separator so
+# "app:" can never also match another app's "application:" keys.
+_CACHE_PREFIX = re.compile(r"^[A-Za-z0-9._~:-]*[:._-]$")
+
+
+def shared_cache_external(service: str) -> str | None:
+    """The outside cache host a "shared_cache" app is pointed at, or None
+    (CACHE_HOST in its own .env; default: the shared server's name)."""
+    if not _SERVICES_BY_SLUG.get(service, {}).get("shared_cache"):
+        return None
+    host = load_env_file(SERVICES_DIR / service / ".env").get("CACHE_HOST", "").strip()
+    return host if host and host != SHARED_CACHE_SERVICE else None
+
+
+def shared_cache_creds(service: str) -> dict | None:
+    """Resolve a service's "shared_cache" spec (key names in its .env, or
+    '=literal') into user/password/prefix. None if it doesn't use the shared
+    cache or its CACHE_HOST points outside the stack."""
+    spec = _SERVICES_BY_SLUG.get(service, {}).get("shared_cache")
+    if not spec or shared_cache_external(service):
+        return None
+    env_vals = load_env_file(SERVICES_DIR / service / ".env")
+
+    def resolve(key: str) -> str:
+        return key[1:] if key.startswith("=") else env_vals.get(key, "")
+
+    return {k: resolve(spec[k]) for k in ("user", "password", "prefix")}
+
+
+def _cache_admin_password() -> str:
+    return load_env_file(SERVICES_DIR / SHARED_CACHE_SERVICE / ".env").get("VALKEY_PASSWORD", "")
+
+
+def shared_cache_cli(commands: list[str]) -> tuple[bool, str]:
+    """Run valkey-cli commands as the admin. Commands go on stdin and the
+    admin password in the environment, so no secret reaches the process list.
+    valkey-cli exits 0 even for a refused command, so every output line must
+    be OK for the batch to count as successful."""
+    ok, out, err = BACKEND.db_exec(
+        SHARED_CACHE_SERVICE, ["valkey-cli", "--no-auth-warning"],
+        input=("\n".join(commands) + "\n").encode(), env={"REDISCLI_AUTH": _cache_admin_password()},
+    )
+    text = out.decode(errors="replace")
+    lines = [l for l in text.splitlines() if l.strip()]
+    return ok and all(l.strip() == "OK" for l in lines), (text + err).strip()
+
+
+def provision_shared_cache(service: str) -> bool:
+    """Idempotently create/refresh the service's ACL login on the shared
+    Valkey (password reset to whatever its .env says) and persist it with
+    ACL SAVE, so the login survives a Valkey restart."""
+    c = shared_cache_creds(service)
+    if not c:
+        return True
+    if not all(c.values()):
+        error(f"{service}: shared_cache spec in services.json didn't resolve a user/password/prefix from services/{service}/.env")
+        return False
+    bad = [k for k in ("user", "password") if not _CACHE_SAFE.match(c[k])]
+    if bad:
+        error(f"{service}: shared cache {', '.join(bad)} may only contain letters, digits and . _ ~ - ")
+        return False
+    if not _CACHE_PREFIX.match(c["prefix"]):
+        error(f"{service}: shared cache prefix must end in one of : . _ - (e.g. 'myapp:'), got {c['prefix']!r}")
+        return False
+    if c["user"] == "default":
+        error(f"{service}: 'default' is the admin login of the shared cache — choose another CACHE_USER")
+        return False
+    pat = f"{c['prefix']}*"
+    ok, msg = shared_cache_cli([
+        f"ACL SETUSER {c['user']} reset on >{c['password']} ~{pat} &{pat} {SHARED_CACHE_ACL_RULES}",
+        "ACL SAVE",
+    ])
+    if not ok:
+        error(f"{service}: couldn't create its login on {SHARED_CACHE_SERVICE}: {msg}")
+    return ok
+
+
+def ensure_shared_cache(env: str) -> bool:
+    if BACKEND.container_status(SHARED_CACHE_SERVICE) == "running" and BACKEND.container_health(SHARED_CACHE_SERVICE) == "healthy":
+        return True
+    info(f"Starting shared cache {SHARED_CACHE_SERVICE}...")
+    return do_up(SHARED_CACHE_SERVICE, env, None)
+
+
+def shared_cache_ready(service: str, env: str, provision: bool = True) -> bool:
+    """Start the shared Valkey if needed and provision the service's login.
+    No-op for services without "shared_cache". Never stops it afterwards."""
+    ext = shared_cache_external(service)
+    if ext:
+        info(f"{service}: cache on outside host {ext} (CACHE_HOST) — shared cache not used")
+        return True
+    if not shared_cache_creds(service):
+        return True
+    if not ensure_shared_cache(env):
+        error(f"{SHARED_CACHE_SERVICE} failed to start — {service} can't come up without it")
+        return False
+    return provision_shared_cache(service) if provision else True
+
+
+def drop_shared_cache(service: str) -> bool:
+    """Reset only: delete every key under the service's prefix, then its
+    login. Other apps' keys and logins are untouched."""
+    c = shared_cache_creds(service)
+    if not c or BACKEND.container_status(SHARED_CACHE_SERVICE) != "running":
+        return True
+    if not (_CACHE_PREFIX.match(c["prefix"]) and _CACHE_SAFE.match(c["user"])):
+        return True  # provisioning refused these names, so nothing was ever created
+    auth = {"REDISCLI_AUTH": _cache_admin_password()}
+    ok, keys, err = BACKEND.db_exec(
+        SHARED_CACHE_SERVICE, ["valkey-cli", "--no-auth-warning", "--scan", "--pattern", f"{c['prefix']}*"], env=auth,
+    )
+    names = [k for k in keys.decode(errors="replace").splitlines() if k and not re.search(r"[\s\"]", k)]
+    cmds = [f"UNLINK {' '.join(names[i:i + 500])}" for i in range(0, len(names), 500)]
+    # ACL DELUSER answers with a count rather than OK, so check for ERR.
+    done, out, err2 = BACKEND.db_exec(
+        SHARED_CACHE_SERVICE, ["valkey-cli", "--no-auth-warning"],
+        input=("\n".join(cmds + [f"ACL DELUSER {c['user']}", "ACL SAVE"]) + "\n").encode(), env=auth,
+    )
+    if not (ok and done) or "ERR" in out.decode(errors="replace"):
+        error(f"  couldn't remove {service}'s login/keys on {SHARED_CACHE_SERVICE}: {(err + err2).strip()}")
+        return False
+    return True
 
 def do_list(which: str) -> int:
     """Flat name list of running ('up') or stopped ('down') services."""
@@ -2159,7 +2301,7 @@ def do_up(service: str, env: str, profile: str | None, exclude: list[str] | None
         else:
             restore_lost_state(service)
 
-    if not provision_shared_db(service):
+    if not provision_shared_db(service) or not provision_shared_cache(service):
         return False
 
     stop_proxy_conflict(service, env)
@@ -2521,6 +2663,8 @@ def do_reset(service: str, env: str, profile: str | None) -> bool:
     if has_db and drop_shared_db(service):
         success(f"  dropped {service}'s database and login on {c['container']}")
     elif has_db:
+        ok = False
+    if not drop_shared_cache(service):
         ok = False
     if not ok:
         error(f"  {service} was only partly wiped — not starting it; 'restore {service}' brings the snapshot back")

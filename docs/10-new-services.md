@@ -98,6 +98,8 @@ Each service has its own consolidated doc under `docs/services/` — setup steps
 | Documenso | [docs/services/documenso.md](services/documenso.md) |
 | Penpot | [docs/services/penpot.md](services/penpot.md) |
 | Supabase | [docs/services/supabase.md](services/supabase.md) |
+| Valkey (shared) | [docs/services/valkey.md](services/valkey.md) |
+| Kafka | [docs/services/kafka.md](services/kafka.md) |
 | GitLab CE | [docs/services/gitlab.md](services/gitlab.md) |
 | acme | [docs/services/acme.md](services/acme.md) |
 | wg-easy | [docs/services/wg-easy.md](services/wg-easy.md) |

@@ -829,6 +829,14 @@
       "replaces": "Firebase"
     },
     {
+      "slug": "valkey",
+      "tier": "extra"
+    },
+    {
+      "slug": "kafka",
+      "tier": "extra"
+    },
+    {
       "slug": "nocodb",
       "tier": "extra",
       "name": "NocoDB",

@@ -58,7 +58,7 @@ vivaldi, browser (the hub's virtual card).
 **Extra services** (started with `up extra`/`up all` or individually):
 dockge,
 paperless, bookstack, audiobookshelf, mealie,
-supabase, nocodb, outline, penpot,
+supabase, nocodb, outline, penpot, valkey, kafka,
 documenso, invoiceshelf, erpnext, ghostfolio, openproject, mattermost,
 rocketchat, zulip, mail-archiver, bichon, orangehrm.
 
@@ -138,6 +138,8 @@ gitlab (redundant with forgejo at far higher memory cost).
 | Audiobookshelf | `audiobookshelf` | 8094 | 80 | extra |
 | Mealie | `mealie` | 9925 | 9000 | extra |
 | Supabase | `supabase-envoy` (alias `supabase-kong`) | 8133 | 8000 | extra |
+| Valkey (shared) | `valkey` | 6379 | 6379 | extra |
+| Kafka | `kafka` | 9092 | 9092 | extra |
 | NocoDB | `nocodb` | 8126 | 8080 | extra |
 | Outline | `outline` | 8114 | 3000 | extra |
 | Penpot | `penpot-frontend` | 8131 | 8080 | extra |
