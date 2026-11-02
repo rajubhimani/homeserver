@@ -39,7 +39,7 @@ This stack runs several services that solve the *same* job — three team-chat a
 | Our Service | Status | Tier | Containers | Memory | Version |
 | --- | --- | --- | --- | --- | --- |
 | **OpenProject** | ○ down | extra | 1 (bundled Postgres inside) | **~1.94GB** idle (65% of its 3G cap — already below OpenProject's own stated 4GB minimum) | 17.7.2 — current |
-| **Plane** | ● up | extra | 11 | **~709MB** total (`plane-worker` alone ~205MB) | v1.4.2 — current (verified via Docker Hub directly, not just search) |
+| **Plane** | ● up | extra | 11 | **~709MB** total (`plane-worker` alone ~205MB) | v1.4.3 — current (verified via Docker Hub directly, not just search) |
 | **Vikunja** | ● up | extra | 2 (db, app) | **~48MB** (live, this session — app ~30MB + db ~18MB) | 2.5.0 — current |
 
 **Notes:** OpenProject is the most Jira/Asana-like (biggest feature surface: Gantt, time tracking, budgets, wiki) but also the heaviest per-container and already running close to its memory cap with zero users — real OOM risk under actual load, and it's still the one of these three not brought up this session. Plane is lighter overall despite 11 containers (microservice split, most are small) and closer to Linear's UX. Vikunja, now measured, confirms it as the lightest of the three by a wide margin (~48MB total, 2 containers) — worth weighing ahead of OpenProject/Plane on footprint alone if project tracking is the deciding factor.

@@ -93,7 +93,7 @@ services:
     command: sh -c "mkdir -p /coolify-data/applications /coolify-data/databases /coolify-data/services /coolify-data/backups /coolify-data/images && chown -R 9999:9999 /coolify-data"
 
   coolify:
-    image: coollabsio/coolify:4.3.23
+    image: coollabsio/coolify:4.3.24
     container_name: coolify
     restart: unless-stopped
     env_file: .env

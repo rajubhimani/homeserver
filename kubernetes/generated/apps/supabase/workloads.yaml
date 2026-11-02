@@ -722,7 +722,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: supabase-pooler
-        image: supabase/supavisor:2.9.12
+        image: supabase/supavisor:2.9.13
         args:
         - /bin/sh
         - -c
@@ -962,7 +962,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: supabase-rest
-        image: postgrest/postgrest:v14.17
+        image: postgrest/postgrest:v14.18
         args:
         - postgrest
         envFrom:

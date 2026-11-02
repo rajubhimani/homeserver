@@ -1,6 +1,6 @@
 services:
   bichon:
-    image: rustmailer/bichon:2.1.0
+    image: rustmailer/bichon:2.1.1
     container_name: bichon
     restart: unless-stopped
     env_file: .env

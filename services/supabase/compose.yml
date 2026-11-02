@@ -82,7 +82,7 @@ services:
 
   supabase-rest:
     container_name: supabase-rest
-    image: postgrest/postgrest:v14.17
+    image: postgrest/postgrest:v14.18
     restart: unless-stopped
     env_file: .env
     environment:
@@ -349,7 +349,7 @@ services:
 
   supabase-pooler:
     container_name: supabase-pooler
-    image: supabase/supavisor:2.9.12
+    image: supabase/supavisor:2.9.13
     restart: unless-stopped
     env_file: .env
     environment:

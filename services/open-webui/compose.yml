@@ -1,6 +1,6 @@
 services:
   open-webui:
-    image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_IMAGE_TAG:-v0.12.3-slim}
+    image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_IMAGE_TAG:-v0.12.5-slim}
     container_name: open-webui
     restart: unless-stopped
     env_file: .env
@@ -26,7 +26,7 @@ services:
   # Code-execution sandbox for Open WebUI. Deliberately NOT env_file: .env: the model has a shell
   # in this container, so it gets only the OPEN_TERMINAL_* values below, never WEBUI_SECRET_KEY.
   open-terminal:
-    image: ghcr.io/open-webui/open-terminal:${OPEN_TERMINAL_IMAGE_TAG:-0.14.1}
+    image: ghcr.io/open-webui/open-terminal:${OPEN_TERMINAL_IMAGE_TAG:-0.14.8}
     container_name: open-terminal
     restart: unless-stopped
     # Upstream's security guide: cap CPU and memory so a runaway process cannot take the host down.

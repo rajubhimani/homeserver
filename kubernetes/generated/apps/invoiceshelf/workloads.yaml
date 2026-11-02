@@ -44,7 +44,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: invoiceshelf
-        image: invoiceshelf/invoiceshelf:2.4.6
+        image: invoiceshelf/invoiceshelf:2.4.7
         envFrom:
         - configMapRef:
             name: homeserver-root

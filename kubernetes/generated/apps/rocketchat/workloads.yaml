@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: rocketchat-mongodb-fix-permission
-        image: docker.io/mongodb/mongodb-community-server:8.0.32-ubi8
+        image: docker.io/mongodb/mongodb-community-server:8.0.34-ubi8
         command:
         - sh
         - -xc
@@ -57,7 +57,7 @@ spec:
           mountPath: /data/configdb
       containers:
       - name: rocketchat-mongodb
-        image: docker.io/mongodb/mongodb-community-server:8.0.32-ubi8
+        image: docker.io/mongodb/mongodb-community-server:8.0.34-ubi8
         command:
         - sh
         - -ec
@@ -146,7 +146,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: rocketchat-nats
-        image: docker.io/nats:2.14.7-alpine
+        image: docker.io/nats:2.14.9-alpine
         args:
         - --http_port
         - '8222'
@@ -201,7 +201,7 @@ spec:
           type: RuntimeDefault
       initContainers:
       - name: rocketchat-mongodb-init
-        image: docker.io/mongodb/mongodb-community-server:8.0.32-ubi8
+        image: docker.io/mongodb/mongodb-community-server:8.0.34-ubi8
         command:
         - sh
         - -xc
@@ -238,7 +238,7 @@ spec:
           subPath: uploads
       containers:
       - name: rocketchat
-        image: registry.rocket.chat/rocketchat/rocket.chat:8.5.3
+        image: registry.rocket.chat/rocketchat/rocket.chat:8.5.4
         envFrom:
         - configMapRef:
             name: homeserver-root

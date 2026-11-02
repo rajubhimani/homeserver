@@ -59,7 +59,7 @@ spec:
           subPath: data
       containers:
       - name: n8n
-        image: n8nio/n8n:2.41.6
+        image: n8nio/n8n:2.41.7
         envFrom:
         - configMapRef:
             name: homeserver-root

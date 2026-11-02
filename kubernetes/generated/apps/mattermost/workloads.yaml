@@ -59,7 +59,7 @@ spec:
           mountPath: /mattermost-data
       containers:
       - name: mattermost
-        image: mattermost/mattermost-team-edition:11.7.8
+        image: mattermost/mattermost-team-edition:11.7.14
         envFrom:
         - configMapRef:
             name: homeserver-root

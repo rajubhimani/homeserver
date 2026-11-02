@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: gitlab
-        image: gitlab/gitlab-ce:19.4.1-ce.0
+        image: gitlab/gitlab-ce:19.4.5-ce.0
         envFrom:
         - configMapRef:
             name: homeserver-root

@@ -42,7 +42,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: miniflux
-        image: miniflux/miniflux:2.3.3
+        image: miniflux/miniflux:2.3.5
         envFrom:
         - configMapRef:
             name: homeserver-root

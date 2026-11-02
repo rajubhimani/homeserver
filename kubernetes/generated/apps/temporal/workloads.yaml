@@ -43,7 +43,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: temporal-schema-setup
-        image: temporalio/admin-tools:1.32.0
+        image: temporalio/admin-tools:1.32.1
         command:
         - /bin/sh
         - -c
@@ -88,7 +88,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: temporal
-        image: temporalio/server:1.32.0
+        image: temporalio/server:1.32.1
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -194,7 +194,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: temporal-admin-tools
-        image: temporalio/admin-tools:1.32.0
+        image: temporalio/admin-tools:1.32.1
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -334,7 +334,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
       - name: temporal-create-namespace
-        image: temporalio/admin-tools:1.32.0
+        image: temporalio/admin-tools:1.32.1
         command:
         - /bin/sh
         - -c

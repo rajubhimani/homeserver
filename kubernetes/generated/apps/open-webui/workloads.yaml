@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: open-terminal
-        image: ghcr.io/open-webui/open-terminal:0.14.1
+        image: ghcr.io/open-webui/open-terminal:0.14.8
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -201,7 +201,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: open-webui
-        image: ghcr.io/open-webui/open-webui:v0.12.3-slim
+        image: ghcr.io/open-webui/open-webui:v0.12.5-slim
         envFrom:
         - configMapRef:
             name: homeserver-root

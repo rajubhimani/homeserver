@@ -67,7 +67,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: penpot-backend
-        image: penpotapp/backend:2.18.1
+        image: penpotapp/backend:2.18.5
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -181,7 +181,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: penpot-exporter
-        image: penpotapp/exporter:2.18.1
+        image: penpotapp/exporter:2.18.5
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -227,7 +227,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: penpot-frontend
-        image: penpotapp/frontend:2.18.1
+        image: penpotapp/frontend:2.18.5
         envFrom:
         - configMapRef:
             name: homeserver-root

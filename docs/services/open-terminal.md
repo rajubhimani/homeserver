@@ -76,7 +76,7 @@ The model gets a real shell with passwordless sudo inside the container, so trea
 
 ## Notes
 
-- Version: no LTS track, so the newest release (`0.14.1`, 2026-10-16). Update by changing `OPEN_TERMINAL_IMAGE_TAG`.
+- Version: no LTS track, so the newest release (`0.14.8`). Update by changing `OPEN_TERMINAL_IMAGE_TAG`.
 - Upstream: <https://github.com/open-webui/open-terminal>.
 
 ---

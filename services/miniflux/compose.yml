@@ -3,7 +3,7 @@
 # see docs/services/shared-postgres.md.
 services:
   miniflux:
-    image: miniflux/miniflux:2.3.3
+    image: miniflux/miniflux:2.3.5
     container_name: miniflux
     restart: unless-stopped
     env_file: .env

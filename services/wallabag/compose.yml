@@ -3,7 +3,7 @@
 # see docs/services/shared-postgres.md.
 services:
   wallabag:
-    image: wallabag/wallabag:2.6.14
+    image: wallabag/wallabag:2.6.15
     container_name: wallabag
     restart: unless-stopped
     env_file: .env

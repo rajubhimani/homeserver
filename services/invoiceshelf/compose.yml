@@ -3,7 +3,7 @@
 # see docs/services/shared-mariadb.md.
 services:
   invoiceshelf:
-    image: invoiceshelf/invoiceshelf:2.4.6
+    image: invoiceshelf/invoiceshelf:2.4.7
     container_name: invoiceshelf
     restart: unless-stopped
     env_file: .env

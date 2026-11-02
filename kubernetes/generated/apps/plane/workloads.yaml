@@ -42,7 +42,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-admin
-        image: makeplane/plane-admin:v1.4.2
+        image: makeplane/plane-admin:v1.4.3
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -143,7 +143,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-api
-        image: makeplane/plane-backend:v1.4.2
+        image: makeplane/plane-backend:v1.4.3
         args:
         - ./bin/docker-entrypoint-api.sh
         envFrom:
@@ -270,7 +270,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-beat
-        image: makeplane/plane-backend:v1.4.2
+        image: makeplane/plane-backend:v1.4.3
         args:
         - ./bin/docker-entrypoint-beat.sh
         envFrom:
@@ -331,7 +331,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-migrator
-        image: makeplane/plane-backend:v1.4.2
+        image: makeplane/plane-backend:v1.4.3
         args:
         - ./bin/docker-entrypoint-migrator.sh
         envFrom:
@@ -484,7 +484,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-mq
-        image: rabbitmq:4.3.6-alpine
+        image: rabbitmq:4.3.7-alpine
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -579,7 +579,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-proxy
-        image: makeplane/plane-proxy:v1.4.2
+        image: makeplane/plane-proxy:v1.4.3
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -749,7 +749,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-space
-        image: makeplane/plane-space:v1.4.2
+        image: makeplane/plane-space:v1.4.3
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -834,7 +834,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-web
-        image: makeplane/plane-frontend:v1.4.2
+        image: makeplane/plane-frontend:v1.4.3
         envFrom:
         - configMapRef:
             name: homeserver-root
@@ -935,7 +935,7 @@ spec:
           allowPrivilegeEscalation: false
       containers:
       - name: plane-worker
-        image: makeplane/plane-backend:v1.4.2
+        image: makeplane/plane-backend:v1.4.3
         args:
         - ./bin/docker-entrypoint-worker.sh
         envFrom:
