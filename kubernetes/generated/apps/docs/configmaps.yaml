@@ -291,7 +291,7 @@ data:
     - One drive for OS + Docker (SSD preferred)
     - One drive for data (internal or USB, formatted ext4)
     - Ubuntu 24.04 LTS (or any Debian-based distro) for the primary/production deployment target described below — Docker Desktop works fine on Mac/Windows for development
-    - [uv](https://docs.astral.sh/uv/) to run `homeserver.py` (`uv sync` once, then `uv run homeserver.py ...`) — no other dependencies, it's stdlib-only. `pyproject.toml` pins the exact Python minor version (currently 3.14); `uv` downloads a matching interpreter automatically if you don't already have one, so you don't need to install Python yourself
+    - [uv](https://docs.astral.sh/uv/) to run `homeserver.py` (`uv sync` once, then `uv run homeserver.py ...`) — no other dependencies, it's stdlib-only. `pyproject.toml` pins the exact Python minor version (currently 3.15, Fedora 45's system Python); `uv` downloads a matching interpreter automatically if you don't already have one, so you don't need to install Python yourself
     - A domain on Cloudflare — or use [Tailscale](docs/03b-tailscale.md) for local/testing access
 
     ---
