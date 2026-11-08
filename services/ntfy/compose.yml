@@ -2,6 +2,10 @@ services:
   ntfy:
     image: binwiederhier/ntfy:v2.31.1
     container_name: ntfy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     command: serve
     env_file: .env

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** VS Code in the browser (a self-hosted GitHub Codespaces): open `https://code-server.<domain>/` from any device and edit, run and debug code that lives on this server.
-**Port:** `8163` (host) → `8080` (container) | **Data:** `service_data/data/code-server/home/` (the whole `/home/coder`) | **Package cache:** `service_data/cache/code-server/home-cache/` | **Workspace:** `WORKSPACE_ROOT` (default: this repo) | **Docker cache:** `service_data/cache/code-server/docker/` | **Requires:** nothing | **Memory:** no hard limit set
+**Port:** `8163` (host) → `8080` (container) | **Data:** `service_data/data/code-server/home/` (the whole `/home/coder`) | **Package cache:** `service_data/cache/code-server/home-cache/` | **Workspace:** `WORKSPACE_ROOT` (default: this repo) | **Docker cache:** `service_data/cache/code-server/docker/` | **Requires:** nothing | **Memory:** capped in compose.yml (added 2026-11-08): `code-server` 4G, `code-server-docker` 8G 
 
 ## Setup
 
@@ -79,7 +79,7 @@ Not persisted: anything outside `/home/coder` and the workspace (system paths su
 - **Privileged:** the sidecar runs `privileged: true`, which Docker-in-Docker requires. That is a wider kernel surface than a normal container, but it has no access to the host's Docker socket or the host's files other than the workspace and its own cache.
 - **Storage:** `DOCKER_ROOT` (`service_data/cache/code-server/docker/`, ext4 here so the default overlay driver works) holds pulled images, containers and build cache. It is regenerable and can grow large, so it sits in the `cache/` bucket and is never in a snapshot. Its contents are owned by root (the engine writes as root), so the host user cannot list it. Reclaim space with `docker system prune -a` in the editor terminal, not by deleting files.
 - **Restart together:** the sidecar is bound to the editor's network namespace, so if `code-server` is recreated, `code-server-docker` must be restarted too (`homeserver.py … restart code-server` handles both; starting only the sidecar will not).
-- **Limits:** no memory/CPU limits are set on what you run in the sidecar; a runaway container there competes with the stack. For a heavy job, cap it with `docker run --memory`.
+- **Limits:** the `code-server-docker` sidecar is capped at 8G as a whole, so everything you run inside it shares that 8G (a runaway job there gets OOM-killed instead of starving the stack). There are no per-container caps inside it; for a heavy job, cap it with `docker run --memory`, or raise the sidecar's limit in `compose.yml`.
 ## Working from the browser
 
 - **Terminal:** `` Ctrl+` ``. It runs in the code-server container (git, curl and the Docker CLI are available; anything else, run in a container via the sidecar).

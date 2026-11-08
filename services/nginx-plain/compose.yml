@@ -3,6 +3,10 @@ services:
     image: nginx:1.31.8-alpine
     container_name: nginx-plain
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     env_file: .env
     environment:
       DOMAIN: ${DOMAIN}

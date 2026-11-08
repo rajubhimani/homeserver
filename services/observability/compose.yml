@@ -8,6 +8,10 @@ services:
   observability-permissions:
     image: alpine:3.24.3
     container_name: observability-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:
@@ -21,6 +25,10 @@ services:
   prometheus:
     image: prom/prometheus:v3.13.5
     container_name: prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -44,6 +52,10 @@ services:
   loki:
     image: grafana/loki:3.7.9
     container_name: loki
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
     environment:
@@ -75,6 +87,10 @@ services:
   alloy:
     image: grafana/alloy:v1.21.3
     container_name: alloy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     command:
       - run
@@ -103,6 +119,10 @@ services:
   cadvisor:
     image: ghcr.io/google/cadvisor:v0.60.6
     container_name: cadvisor
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     privileged: true
     # Only track actual container cgroups, not the whole host cgroup tree
@@ -145,6 +165,10 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.12.1
     container_name: node-exporter
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     restart: unless-stopped
     command:
       - --path.procfs=/host/proc
@@ -174,6 +198,10 @@ services:
     # unaffected by container_name — every other container in this stack
     # still reaches it at http://grafana:3000.
     container_name: observability
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}

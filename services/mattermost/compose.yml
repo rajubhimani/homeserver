@@ -14,6 +14,10 @@ services:
   mattermost-permissions:
     image: alpine:3.24.3
     container_name: mattermost-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:

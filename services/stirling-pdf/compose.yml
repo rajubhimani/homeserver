@@ -2,6 +2,10 @@ services:
   stirling-pdf:
     image: stirlingtools/stirling-pdf:3.0.2
     container_name: stirling-pdf
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     restart: unless-stopped
     env_file: .env
     volumes:

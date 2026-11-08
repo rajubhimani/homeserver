@@ -6,6 +6,10 @@ services:
   plausible-events-db:
     image: clickhouse/clickhouse-server:26.8.36.3-alpine
     container_name: plausible-events-db
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     restart: unless-stopped
     env_file: .env
     environment:
@@ -36,6 +40,10 @@ services:
   plausible:
     image: ghcr.io/plausible/community-edition:v3.2.1
     container_name: plausible
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
     env_file: .env

@@ -107,6 +107,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 11
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-nextcloud-nextcloud-html
           mountPath: /var/www/html
@@ -233,6 +238,11 @@ spec:
           value: $(POSTGRES_PASSWORD)
         - name: POSTGRES_USER
           value: $(POSTGRES_USER)
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-nextcloud-nextcloud-html
           mountPath: /var/www/html
@@ -326,5 +336,10 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 2
           failureThreshold: 35
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false

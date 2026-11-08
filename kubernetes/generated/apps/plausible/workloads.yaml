@@ -102,6 +102,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 9
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-plausible-plausible-data
           mountPath: /var/lib/plausible
@@ -201,6 +206,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 2
           failureThreshold: 35
+        resources:
+          requests:
+            memory: 3Gi
+          limits:
+            memory: 3Gi
         volumeMounts:
         - name: v-plausible-plausible-clickhouse-data-alpine
           mountPath: /var/lib/clickhouse

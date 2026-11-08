@@ -118,6 +118,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 11
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-penpot-data
           mountPath: /opt/data/assets
@@ -194,6 +199,11 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/0
         - name: PENPOT_SECRET_KEY
           value: $(PENPOT_SECRET_KEY)
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -266,6 +276,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-penpot-data
           mountPath: /opt/data/assets
@@ -337,5 +352,10 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false

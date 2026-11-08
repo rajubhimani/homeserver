@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** The official Microsoft Edge running remotely, for Microsoft 365 and sites that insist on Edge — part of the [Browser Hub](browser-hub.md).
-**Port:** `8160` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/edge/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/edge/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; idle usage not yet measured (expect 300-700MB in use, ~4.5GB image on disk)
+**Port:** `8160` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/edge/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/edge/config/` | **Requires:** nothing (single container, no DB) | **Memory:** capped in compose.yml (added 2026-11-08): `edge` 3G; idle usage not yet measured (expect 300-700MB in use, ~4.5GB image on disk) 
 
 ---
 

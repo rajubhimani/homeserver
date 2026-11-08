@@ -127,6 +127,11 @@ spec:
           timeoutSeconds: 3
           periodSeconds: 5
           failureThreshold: 63
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -197,6 +202,11 @@ spec:
             name: homeserver-root
         - secretRef:
             name: firefly-env
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 64Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -288,6 +298,11 @@ spec:
           timeoutSeconds: 3
           periodSeconds: 3
           failureThreshold: 23
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: v-firefly-firefly-importer-upload
           mountPath: /var/www/html/storage/upload

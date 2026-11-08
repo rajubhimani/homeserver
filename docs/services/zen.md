@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Zen Browser — an open-source Firefox fork focused on design and customizability (vertical tabs, split view, workspaces) running remotely — part of the [Browser Hub](browser-hub.md).
-**Port:** `8157` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/zen/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/zen/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; idle usage not yet measured
+**Port:** `8157` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/zen/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/zen/config/` | **Requires:** nothing (single container, no DB) | **Memory:** capped in compose.yml (added 2026-11-08): `zen` 3G; idle usage not yet measured 
 
 ---
 

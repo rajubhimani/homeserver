@@ -4,6 +4,10 @@ services:
   acme:
     image: goacme/lego:v5.5.2
     container_name: acme
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     restart: unless-stopped
     env_file: .env
     environment:
@@ -32,6 +36,10 @@ services:
   acme-reload:
     image: curlimages/curl:8.23.0
     container_name: acme-reload
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: unless-stopped
     # curlimages/curl runs as a non-root user that can't use the Docker socket; see cloudflared-watchdog.
     user: "0:0"

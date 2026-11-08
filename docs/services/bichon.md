@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Lightweight email archiver: pulls mail from any IMAP account (password or OAuth2) and gives you very fast full-text search, tags, conversation threads, an attachment browser and a contacts view. Single Rust binary, no database container.
-**Port:** `8154` (host) → `15630` (container) | **Data:** `bichon-data` named volume (index + compressed mail + metadata) | **Requires:** nothing | **Memory:** no hard limit set; upstream recommends 2GB+ RAM for 10+ accounts / 200GB+ of mail; measured idle with an empty archive ~22MB
+**Port:** `8154` (host) → `15630` (container) | **Data:** `bichon-data` named volume (index + compressed mail + metadata) | **Requires:** nothing | **Memory:** capped in compose.yml (added 2026-11-08): `bichon` 2G, `bichon-init` 64M; upstream recommends 2GB+ RAM for 10+ accounts / 200GB+ of mail; measured idle with an empty archive ~22MB 
 
 Upstream: [github.com/rustmailer/bichon](https://github.com/rustmailer/bichon).
 

@@ -7,6 +7,10 @@ services:
     # stays current.
     image: lscr.io/linuxserver/mullvad-browser:latest
     container_name: mullvad-browser
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     restart: unless-stopped
     env_file: .env
     environment:

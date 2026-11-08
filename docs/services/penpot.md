@@ -56,3 +56,7 @@ No confirmed official mobile app as of this check (a mobile app has been a long-
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `penpot-redis` 256M, `penpot-permissions` 64M, `penpot-backend` 2G, `penpot-exporter` 1G, `penpot-frontend` 256M. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

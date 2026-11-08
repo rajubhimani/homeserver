@@ -90,6 +90,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-nocodb-data
           mountPath: /usr/app/data

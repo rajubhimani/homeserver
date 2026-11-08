@@ -2,6 +2,10 @@ services:
   trilium:
     image: triliumnext/trilium:v0.106.1
     container_name: trilium
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

@@ -36,6 +36,10 @@ services:
   atuin-permissions:
     image: alpine:3.24.3
     container_name: atuin-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:
@@ -45,6 +49,10 @@ services:
   atuin:
     image: ghcr.io/atuinsh/atuin:18.24.4
     container_name: atuin
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     command: start
     env_file: .env

@@ -72,6 +72,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 14
+        resources:
+          requests:
+            memory: 4Gi
+          limits:
+            memory: 4Gi
         volumeMounts:
         - name: v-onlyoffice-data
           mountPath: /var/www/onlyoffice/Data

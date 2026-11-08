@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Real-time Docker container log viewer in the browser.
-**Port:** `9999` (host) → `8080` (container) | **Requires:** — | **Memory:** no hard limit set; measured idle ~50MB
+**Port:** `9999` (host) → `8080` (container) | **Requires:** — | **Memory:** capped in compose.yml (added 2026-11-08): `dozzle` 256M; measured idle ~50MB 
 
 ## Setup
 

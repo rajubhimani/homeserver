@@ -192,3 +192,7 @@ The worker connects through Temporal's standard [environment configuration](http
 ---
 
 [← Services Reference](../../11-services-reference.md) | [Home](../../../setup.md)
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `temporal-schema-setup` 256M, `temporal-create-namespace` 256M. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

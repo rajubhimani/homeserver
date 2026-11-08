@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Community-driven Git hosting — repos, issues, pull requests, CI/CD (Actions).
-**Port:** `3002` (web), `2223` (SSH) | **Data:** `service_data/data/forgejo/` | **Requires:** Postgres | **Memory:** DB capped 384M in compose.yml; app: no hard limit set; measured idle ~96MB total (app 76 + db 20)
+**Port:** `3002` (web), `2223` (SSH) | **Data:** `service_data/data/forgejo/` | **Requires:** Postgres | **Memory:** capped in compose.yml (added 2026-11-08): `forgejo` 1G, `forgejo-runner` 512M; DB capped 384M in compose.yml; measured idle ~96MB total (app 76 + db 20) 
 
 ## Setup
 

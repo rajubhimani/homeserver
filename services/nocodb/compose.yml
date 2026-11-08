@@ -5,6 +5,10 @@ services:
   nocodb:
     image: nocodb/nocodb:2026.09.1
     container_name: nocodb
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

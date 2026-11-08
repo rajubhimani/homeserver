@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Docker Compose stack manager UI.
-**Port:** `5001` | **Data:** `service_data/data/dockge/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~132MB
+**Port:** `5001` | **Data:** `service_data/data/dockge/` | **Requires:** — | **Memory:** capped in compose.yml (added 2026-11-08): `dockge` 512M; measured idle ~132MB 
 
 ## Setup
 

@@ -11,6 +11,10 @@ services:
         DEV_PACKAGES: ${DEV_PACKAGES}
     image: homeserver/code-server:${CODE_SERVER_VERSION}-docker${DOCKER_VERSION}
     container_name: code-server
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     restart: unless-stopped
     env_file: .env
     environment:
@@ -42,6 +46,10 @@ services:
   code-server-docker:
     image: docker:${DOCKER_VERSION}-dind
     container_name: code-server-docker
+    deploy:
+      resources:
+        limits:
+          memory: 8G
     restart: unless-stopped
     privileged: true
     network_mode: "service:code-server"

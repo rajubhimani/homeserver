@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Audiobook and podcast server with mobile app support.
-**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/` | **Requires:** — | **Memory:** no hard limit set; measured idle ~36MB
+**Port:** `8094` (host) → `80` (container) | **Data:** `service_data/data/audiobookshelf/` | **Requires:** — | **Memory:** capped in compose.yml (added 2026-11-08): `audiobookshelf` 1G; measured idle ~36MB 
 
 ## Setup
 

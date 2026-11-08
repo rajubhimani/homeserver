@@ -6,6 +6,10 @@ services:
     # security patches. `uv run homeserver.py dev update chromium` stays current.
     image: lscr.io/linuxserver/chromium:latest
     container_name: chromium
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     restart: unless-stopped
     env_file: .env
     environment:

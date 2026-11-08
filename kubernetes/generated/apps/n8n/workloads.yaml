@@ -118,6 +118,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-n8n-data
           mountPath: /home/node/.n8n

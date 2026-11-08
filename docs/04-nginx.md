@@ -119,3 +119,7 @@ Traefik's Gateway plus generated HTTPRoutes replace nginx-plain's routing, all g
 - **The tunnel target:** a Service named `nginx-plain` points at Traefik, so the Cloudflare tunnel's `http://nginx-plain:80` works unchanged.
 
 Guide: [17 — Moving to Kubernetes](17-docker-to-kubernetes.md).
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `nginx-plain` 256M, `nginx-proxy-manager` 512M. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

@@ -9,6 +9,10 @@ services:
     # see docs/10-new-services.md "Managed-cloud parity".
     image: valkey/valkey:9.1.3-alpine
     container_name: ghostfolio-redis
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     env_file: .env
     command: >-
@@ -24,6 +28,10 @@ services:
   ghostfolio:
     image: ghostfolio/ghostfolio:3.77.0
     container_name: ghostfolio
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     init: true
     cap_drop:

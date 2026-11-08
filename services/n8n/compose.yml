@@ -12,6 +12,10 @@ services:
   n8n-permissions:
     image: alpine:3.24.3
     container_name: n8n-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:
@@ -21,6 +25,10 @@ services:
   n8n:
     image: n8nio/n8n:2.41.7
     container_name: n8n
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     restart: unless-stopped
     env_file: .env
     environment:

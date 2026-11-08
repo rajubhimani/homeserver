@@ -2,6 +2,10 @@ services:
   syncthing-permissions:
     image: alpine:3.24
     container_name: syncthing-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:
@@ -12,6 +16,10 @@ services:
   syncthing:
     image: lscr.io/linuxserver/syncthing:2.1.5
     container_name: syncthing
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

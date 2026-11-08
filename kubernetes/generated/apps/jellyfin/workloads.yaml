@@ -67,6 +67,11 @@ spec:
           timeoutSeconds: 30
           periodSeconds: 10
           failureThreshold: 4
+        resources:
+          requests:
+            memory: 4Gi
+          limits:
+            memory: 4Gi
         volumeMounts:
         - name: v-jellyfin-data
           mountPath: /config

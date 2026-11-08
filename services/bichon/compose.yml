@@ -2,6 +2,10 @@ services:
   bichon:
     image: rustmailer/bichon:2.1.1
     container_name: bichon
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     restart: unless-stopped
     env_file: .env
     environment:
@@ -27,6 +31,10 @@ services:
   bichon-init:
     image: curlimages/curl:8.22.0
     container_name: bichon-init
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     environment:
       BICHON_URL: http://bichon:15630

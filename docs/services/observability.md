@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Metrics and log dashboards covering every container in the stack — Prometheus for metrics, Loki for logs, Grafana as the single UI over both.
-**Port:** `8134` (Grafana) / `8135` (Prometheus) (host) → `3000` / `9090` (container) | **Data:** `service_data/data/observability/{grafana,prometheus,loki}/` | **Requires:** nothing (all six containers are self-contained, no shared Postgres) | **Memory:** untuned, expect roughly Grafana ~254MB, Prometheus ~877MB+ (grows with retention/cardinality), Loki ~299MB, Alloy ~437MB, cAdvisor scales with container count (see below), node-exporter ~11MB
+**Port:** `8134` (Grafana) / `8135` (Prometheus) (host) → `3000` / `9090` (container) | **Data:** `service_data/data/observability/{grafana,prometheus,loki}/` | **Requires:** nothing (all six containers are self-contained, no shared Postgres) | **Memory:** capped in compose.yml (added 2026-11-08): `observability-permissions` 64M, `prometheus` 2G, `loki` 1G, `alloy` 1G, `cadvisor` 512M, `node-exporter` 128M, `grafana` 768M; untuned, expect roughly Grafana ~254MB, Prometheus ~877MB+ (grows with retention/cardinality), Loki ~299MB, Alloy ~437MB, cAdvisor scales with container count (see below), node-exporter ~11MB 
 
 ---
 

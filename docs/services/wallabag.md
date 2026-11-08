@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Read-it-later app — saves a clean, readable copy of articles for offline reading (self-hosted Pocket alternative).
-**Port:** `8121` (host) → `80` (container) | **Data:** `service_data/data/wallabag/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~50MB total (app 32 + db 18), measured before the 2026-10-01 move to the shared server
+**Port:** `8121` (host) → `80` (container) | **Data:** `service_data/data/wallabag/` | **Requires:** Postgres | **Memory:** capped in compose.yml (added 2026-11-08): `wallabag` 512M; database on `shared-postgres` (counted there); measured idle ~50MB total (app 32 + db 18), measured before the 2026-10-01 move to the shared server 
 
 **Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/wallabag/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
 

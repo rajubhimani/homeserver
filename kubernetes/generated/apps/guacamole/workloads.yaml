@@ -126,6 +126,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 8
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -185,5 +190,10 @@ spec:
             port: 4822
           periodSeconds: 2
           failureThreshold: 13
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false

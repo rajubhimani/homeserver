@@ -10,6 +10,10 @@ services:
     # version tag (identical digest on 2026-10-04), so it can't change unannounced.
     image: ghcr.io/karakeep-app/karakeep-chrome:151.0.7922.47-r1
     container_name: karakeep-chrome
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     init: true
     command:
@@ -26,6 +30,10 @@ services:
   karakeep-meilisearch:
     image: getmeili/meilisearch:v1.41.0
     container_name: karakeep-meilisearch
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     environment:
       MEILI_NO_ANALYTICS: "true"
@@ -47,6 +55,10 @@ services:
   karakeep:
     image: ghcr.io/karakeep-app/karakeep:0.33.2
     container_name: karakeep
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

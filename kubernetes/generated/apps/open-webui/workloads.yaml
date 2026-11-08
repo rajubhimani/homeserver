@@ -245,6 +245,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 8
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-open-webui-data
           mountPath: /app/backend/data

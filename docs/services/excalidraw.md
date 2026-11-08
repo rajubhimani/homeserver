@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Hand-drawn-style whiteboard for diagrams and sketches — doesn't look like a corporate slide.
-**Port:** `8116` (host) → `80` (container) | **Data:** none | **Requires:** nothing | **Memory:** no hard limit set; measured idle ~10MB
+**Port:** `8116` (host) → `80` (container) | **Data:** none | **Requires:** nothing | **Memory:** capped in compose.yml (added 2026-11-08): `excalidraw` 128M; measured idle ~10MB 
 
 ## Setup
 

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Full open-source ERP (the Frappe framework's flagship app) — accounting, per-customer/supplier running credit-debit ledger (**Party Ledger**, under Accounts Receivable/Payable), invoicing, and inventory. This is the closest self-hostable equivalent to apps like Khatabook/Vyapar for tracking who owes you money and who you owe — plus a lot more that those apps don't do.
-**Port:** `8153` (host) → `8080` (container, the `erpnext` frontend/nginx container) | **Data:** `service_data/data/erpnext/` | **Requires:** MariaDB, two Redis instances (all bundled in this stack) | **Memory:** not yet measured live — this is a genuinely heavy multi-container stack (9 containers: db, 2x redis, configurator, backend, frontend, websocket, 2x queue worker, scheduler), expect noticeably more than InvoiceShelf or Firefly III.
+**Port:** `8153` (host) → `8080` (container, the `erpnext` frontend/nginx container) | **Data:** `service_data/data/erpnext/` | **Requires:** MariaDB, two Redis instances (all bundled in this stack) | **Memory:** capped in compose.yml (added 2026-11-08): `erpnext-redis-cache` 512M, `erpnext-redis-queue` 512M, `erpnext-configurator` 512M, `erpnext-backend` 1536M, `erpnext-websocket` 256M, `erpnext-queue-short` 1G, `erpnext-queue-long` 1G, `erpnext-scheduler` 512M, `erpnext-create-site` 1G, `erpnext` 256M; not yet measured live — this is a genuinely heavy multi-container stack (9 containers: db, 2x redis, configurator, backend, frontend, websocket, 2x queue worker, scheduler), expect noticeably more than InvoiceShelf or Firefly III. 
 
 ## Why ERPNext and not Frappe Books
 

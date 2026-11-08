@@ -247,6 +247,19 @@ sudo sysctl vm.swappiness=150 # raise for zram (temporary — add to /etc/sysctl
 
 ---
 
+## Per-container memory limits and `HOMESERVER_USERS`
+
+Every container in every `compose.yml` has a `deploy.resources.limits.memory` cap (enforced by `tests/test_sizing.py`). A runaway container then gets OOM-killed on its own instead of pushing the whole host into the kernel OOM killer, which on 2026-11-01 killed VS Code and a browser when ~133 uncapped containers filled 30 GB. The limits are sized for a **household (up to 5 users)**: each service's measured idle memory (its doc's **Memory:** field) with 2-4x headroom, or upstream's documented minimum where one exists. A cap is a backstop, not a tuning target, so it errs generous; GitLab's 6G cap (`SERVICE_ROLLOUT.md`) shows what a cap that's too tight does.
+
+**More users:** set `HOMESERVER_USERS` in the root `.env`. Above 5, `homeserver.py` writes a throwaway override (`$TMPDIR/homeserver-sizing-<service>.yml`) that raises each container listed in that service's `services.json` `"per_user_memory"` to `compose limit + rate x (users - 5)`, rounded up to 64 MiB. Only containers whose memory grows with users carry a rate: web/app workers, Postgres/MariaDB (connections), Jellyfin (streams), guacd (sessions), ONLYOFFICE (editors). Caches, one-shot helpers and single-user apps stay at their compose limit. At 50 users the rates land near each project's team-size guidance (Nextcloud ~4.1G, Authentik server ~2G, ONLYOFFICE ~6G, Mattermost ~3.9G). `up` prints what it raised. Recreate a running service to apply it: `uv run homeserver.py dev restart <service>`.
+
+- **Below 5 nothing shrinks.** The compose limits are already the small-home size.
+- **Postgres's internal tuning doesn't scale with it.** A higher cap gives room for more connections, but `shared_buffers`/`max_connections` in each DB's `command:` stay as set (see "Tune every Postgres container" above). Raise those by hand for a large team.
+- **Kubernetes ignores it.** `kubernetes/generate.py` renders the compose limits (household size) as request = limit; size a cluster for more users through each service's override.
+- **A container killed for hitting its cap** shows `OOMKilled=true`: `docker ps -aq | xargs docker inspect --format '{{.Name}} OOMKilled={{.State.OOMKilled}}' | grep true`. Raise its limit in `compose.yml` (and its doc), or its `per_user_memory` rate if it only runs out with more users.
+
+---
+
 ## Capping Docker's total resource usage (Fedora / native Linux)
 
 Applies to whichever machine actually runs `dockerd` — the numbers below

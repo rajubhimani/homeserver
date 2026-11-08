@@ -2,6 +2,10 @@ services:
   it-tools:
     image: corentinth/it-tools:2024.10.22-7ca5933
     container_name: it-tools
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]

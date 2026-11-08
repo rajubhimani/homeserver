@@ -184,6 +184,16 @@ DOCKER_SOCKET = _ROOT_ENV.get("DOCKER_SOCKET", "/var/run/docker.sock")
 # subnet on 2026-10-05, Docker picked 172.19.0.0/16 instead of the old 172.18.0.0/16 and every browser failed to
 # create ("no configured subnet contains IP address"). Set HOMESERVER_SUBNET in the root .env to change it.
 HOMESERVER_SUBNET = _ROOT_ENV.get("HOMESERVER_SUBNET", "172.19.0.0/16")
+# HOMESERVER_USERS (root .env): how many people use this server. Every compose.yml memory limit is sized for
+# SIZING_BASELINE_USERS (a household). Above that, each container with a "per_user_memory" rate in
+# services.json gets <compose limit> + rate x (users - baseline), through a throwaway override written by
+# _sizing_override(). Below the baseline nothing shrinks: the compose limits are already the small-home size.
+SIZING_BASELINE_USERS = 5
+try:
+    HOMESERVER_USERS = max(1, int(_ROOT_ENV.get("HOMESERVER_USERS", str(SIZING_BASELINE_USERS))))
+except ValueError:
+    print(f"HOMESERVER_USERS={_ROOT_ENV.get('HOMESERVER_USERS')!r} in .env: needs a whole number of users", file=sys.stderr)
+    sys.exit(1)
 
 
 def browser_net(subnet: str = HOMESERVER_SUBNET) -> str:
@@ -1275,11 +1285,60 @@ def compose_files(service: str, env: str) -> list[Path]:
         podman_file = d / "compose.podman.yml"
         if podman_file.is_file():
             files.append(podman_file)
+    sizing = _sizing_override(service, files)
+    if sizing:
+        files.append(sizing)
     if env == "prod" and (not WG_TUNNEL or (NO_WG_START and not wg_tunnel_up() and not nonlocal_bind_enabled())):
         no_wg = _without_tunnel_ports(service, files)
         if no_wg:
             files.append(no_wg)
     return files
+
+
+def memory_mib(value) -> int | None:
+    """A Compose memory value in MiB, rounded up: '512M', '2G', '1536m', '2gb', or plain bytes (the form
+    'compose config --format json' prints). None when it isn't a literal size (e.g. an unresolved ${VAR})."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([kmg]?)i?b?", str(value).strip().lower())
+    if not m:
+        return None
+    mib = float(m.group(1)) * {"": 1 / 2**20, "k": 1 / 1024, "m": 1, "g": 1024}[m.group(2)]
+    return int(-(-mib // 1))
+
+
+def scaled_memory(base, rate, users: int, baseline: int = SIZING_BASELINE_USERS) -> int | None:
+    """Memory limit in MiB for `users` people: the compose limit (sized for `baseline`) plus `rate` per extra
+    user, rounded up to a 64 MiB step. Never below the compose limit. None if either value isn't a size."""
+    b, r = memory_mib(base), memory_mib(rate)
+    if b is None or r is None:
+        return None
+    total = b + r * max(0, users - baseline)
+    return -(-total // 64) * 64 if total > b else b
+
+
+def _sizing_override(service: str, files: list[Path]) -> Path | None:
+    """HOMESERVER_USERS is above the household baseline: write a throwaway override that raises the memory
+    limit of each container listed in the service's services.json "per_user_memory" (see scaled_memory).
+    Containers without a rate keep their compose limit — their load doesn't grow with users (caches,
+    one-shot helpers, single-user apps). None when nothing changes."""
+    rates = (_SERVICES_BY_SLUG.get(service) or {}).get("per_user_memory") or {}
+    if HOMESERVER_USERS <= SIZING_BASELINE_USERS or not rates:
+        return None
+    services = BACKEND.compose_config(files, {**os.environ, **compose_env(service)}).get("services", {})
+    lines, raised = ["services:"], []
+    for name, rate in rates.items():
+        svc = services.get(name) or {}
+        base = ((svc.get("deploy") or {}).get("resources") or {}).get("limits", {}).get("memory") or svc.get("mem_limit")
+        new = scaled_memory(base, rate, HOMESERVER_USERS) if base else None
+        if new is None or new == memory_mib(base):
+            continue
+        lines += [f"  {name}:", "    deploy:", "      resources:", "        limits:", f"          memory: {new}M"]
+        raised.append(f"{name} {new}M")
+    if not raised:
+        return None
+    path = Path(tempfile.gettempdir()) / f"homeserver-sizing-{service}.yml"
+    path.write_text("\n".join(lines) + "\n")
+    info(f"HOMESERVER_USERS={HOMESERVER_USERS}: {service} memory limits raised: {', '.join(raised)}")
+    return path
 
 
 def _without_tunnel_ports(service: str, files: list[Path]) -> Path | None:

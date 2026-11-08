@@ -8,6 +8,10 @@ services:
     # one-off, not a new default.
     image: lscr.io/linuxserver/firefox:latest
     container_name: firefox
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     restart: unless-stopped
     env_file: .env
     environment:

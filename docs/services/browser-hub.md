@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** One public entry point, one SSO login, ten real browsers (Firefox, Chromium, Brave, Mullvad Browser, LibreWolf, Zen, Helium, Chrome, Edge, Vivaldi) running on the server and controlled remotely — for reaching sites blocked on your own device or local network.
-**Port:** n/a — subpath-routed through `nginx-plain`, not a container of its own | **Login:** Authentik forward-auth on `browser.${DOMAIN}` (see [authentik.md](authentik.md)) — same SSO session as every other forward-auth-gated service in this stack | **Requires:** the ten browser containers (see their own docs) | **Memory:** no hard limit set on any browser container; measured idle varies notably by browser (see individual docs) — roughly 207-442MB each for the original five (the newer ones not yet measured; expect 300-700MB each while in use, ~4.5GB disk per image)
+**Port:** n/a — subpath-routed through `nginx-plain`, not a container of its own | **Login:** Authentik forward-auth on `browser.${DOMAIN}` (see [authentik.md](authentik.md)) — same SSO session as every other forward-auth-gated service in this stack | **Requires:** the ten browser containers (see their own docs) | **Memory:** every browser container is capped at 3G in its compose.yml (added 2026-11-08); measured idle varies notably by browser (see individual docs) — roughly 207-442MB each for the original five (the newer ones not yet measured; expect 300-700MB each while in use, ~4.5GB disk per image)
 
 ---
 

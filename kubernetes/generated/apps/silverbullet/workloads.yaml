@@ -65,6 +65,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 5
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-silverbullet-data
           mountPath: /space

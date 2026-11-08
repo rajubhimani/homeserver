@@ -81,6 +81,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 7
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-ntfy-data
           mountPath: /var/lib/ntfy

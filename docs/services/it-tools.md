@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** ~80 browser-only dev utilities in one place — JWT decoder, cron parser, hash/UUID/base64 generators, regex tester, and more. Replaces a dozen sketchy websites with one self-hosted page.
-**Port:** `8119` (host) → `80` (container) | **Data:** none | **Requires:** nothing | **Memory:** no hard limit set; measured idle ~6MB
+**Port:** `8119` (host) → `80` (container) | **Data:** none | **Requires:** nothing | **Memory:** capped in compose.yml (added 2026-11-08): `it-tools` 64M; measured idle ~6MB 
 
 ## Setup
 

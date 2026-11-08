@@ -2,6 +2,10 @@ services:
   docs:
     image: nginx:1.31.8-alpine
     container_name: docs
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     restart: unless-stopped
     env_file: .env
     entrypoint: ["/entrypoint.sh"]

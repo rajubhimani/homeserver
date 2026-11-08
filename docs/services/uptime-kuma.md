@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Monitor services and alert when something goes down.
-**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** MariaDB (bundled `uptime-kuma-db` container), Docker socket (`${DOCKER_SOCKET}`, read-only — same mount pattern this stack already uses for Portainer/Dozzle/Dockge — used for Docker Container monitors) | **Memory:** no hard limit set on the app; measured idle ~56MB — `uptime-kuma-db` capped at 384M
+**Port:** `3001` (host) → `3001` (container) | **Data:** `service_data/data/uptime-kuma/` | **Requires:** MariaDB (bundled `uptime-kuma-db` container), Docker socket (`${DOCKER_SOCKET}`, read-only — same mount pattern this stack already uses for Portainer/Dozzle/Dockge — used for Docker Container monitors) | **Memory:** capped in compose.yml (added 2026-11-08): `uptime-kuma` 512M; measured idle ~56MB — `uptime-kuma-db` capped at 384M 
 
 ## Setup
 

@@ -8,6 +8,10 @@ services:
     # this in the same pass as the app (see docs/services/whiteboard.md).
     image: ghcr.io/nextcloud-releases/whiteboard:v2.0.0
     container_name: whiteboard
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     env_file: .env
     environment:

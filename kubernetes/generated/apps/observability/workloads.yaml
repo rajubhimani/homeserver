@@ -60,6 +60,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 7
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: files
           mountPath: /etc/alloy/config.alloy
@@ -215,6 +220,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 65
+        resources:
+          requests:
+            memory: 768Mi
+          limits:
+            memory: 768Mi
         volumeMounts:
         - name: v-observability-data
           mountPath: /var/lib/grafana
@@ -328,6 +338,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 8
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: files
           mountPath: /etc/loki/loki-config.yml
@@ -407,6 +422,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 7
+        resources:
+          requests:
+            memory: 128Mi
+          limits:
+            memory: 128Mi
         volumeMounts:
         - name: h-host-proc
           mountPath: /host/proc
@@ -532,6 +552,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 7
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: files
           mountPath: /etc/prometheus/prometheus.yml
