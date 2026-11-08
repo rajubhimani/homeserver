@@ -5,6 +5,10 @@ services:
   bookstack:
     image: lscr.io/linuxserver/bookstack:v26.09.1-ls287
     container_name: bookstack
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     env_file: .env
     environment:

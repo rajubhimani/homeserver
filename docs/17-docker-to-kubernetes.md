@@ -269,7 +269,7 @@ An app that genuinely needs an exception records it in its override: `security: 
 Without requests, every pod is "BestEffort": under memory pressure the kubelet evicts those first, a database as readily as a web page. Now:
 
 - **Default requests:** a LimitRange in `apps` (`homeserver-config`) gives every container a small default request (10m CPU, 64 Mi), so no pod is BestEffort. It sets no default limits, matching Compose.
-- **Where Compose sets a memory limit** (22 containers), the request equals the limit, so that memory is reserved. For Postgres that follows CloudNativePG's recommendation of Guaranteed QoS.
+- **Where Compose sets a memory limit** (every container since 2026-11-08), the request equals the limit, so that memory is reserved. For Postgres that follows CloudNativePG's recommendation of Guaranteed QoS.
 - **Measured requests next:** `metrics-server` (add-on, v0.9.0) shows real usage in `kubectl top` and Headlamp. After the rebuild, each service's request comes from its measured usage, set through its override.
 
 ### Secrets encrypted at rest, and a steadier control plane

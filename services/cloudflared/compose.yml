@@ -3,6 +3,10 @@ services:
     image: cloudflare/cloudflared:2026.10.7
     container_name: cloudflared
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     env_file: .env
     # --metrics exposes a local health endpoint cloudflared can probe itself
     # --protocol http2 forces TCP transport instead of QUIC (UDP) — this network's
@@ -27,6 +31,10 @@ services:
     image: curlimages/curl:8.23.0
     container_name: cloudflared-watchdog
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     # curlimages/curl drops to a non-root user by default, which can't reach the
     # Docker socket regardless of its host-side group ownership (varies between
     # Docker and rootless podman). Root bypasses that permission check entirely.

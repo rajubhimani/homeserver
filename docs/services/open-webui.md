@@ -167,3 +167,7 @@ The `open-webui` block in `services/nginx-plain/templates/default.conf.template`
 ---
 
 [← New Services](../10-new-services.md) | [Home](../../setup.md)
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `open-webui` 2G. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

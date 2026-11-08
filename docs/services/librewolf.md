@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** A privacy-hardened Firefox fork (telemetry removed, uBlock Origin built in, stricter privacy defaults) running remotely — part of the [Browser Hub](browser-hub.md).
-**Port:** `8156` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/librewolf/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/librewolf/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; idle usage not yet measured
+**Port:** `8156` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/librewolf/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/librewolf/config/` | **Requires:** nothing (single container, no DB) | **Memory:** capped in compose.yml (added 2026-11-08): `librewolf` 3G; idle usage not yet measured 
 
 ---
 

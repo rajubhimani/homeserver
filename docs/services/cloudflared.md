@@ -4,7 +4,7 @@
 
 ---
 
-**Purpose:** Cloudflare Tunnel connector — exposes `nginx-plain` to the public internet without opening any inbound ports. **Port:** none (outbound-only) | **Requires:** `nginx-plain` | **Memory:** no hard limit set; measured idle ~38MB total (cloudflared 36 + watchdog 2)
+**Purpose:** Cloudflare Tunnel connector — exposes `nginx-plain` to the public internet without opening any inbound ports. **Port:** none (outbound-only) | **Requires:** `nginx-plain` | **Memory:** capped in compose.yml (added 2026-11-08): `cloudflared` 256M, `cloudflared-watchdog` 64M; measured idle ~38MB total (cloudflared 36 + watchdog 2) 
 
 ## Setup
 

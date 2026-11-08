@@ -2,6 +2,10 @@ services:
   nginx-proxy-manager:
     image: jc21/nginx-proxy-manager:2.16.0
     container_name: nginx-proxy-manager
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     env_file: .env
     volumes:

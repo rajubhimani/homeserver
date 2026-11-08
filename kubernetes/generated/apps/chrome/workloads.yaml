@@ -76,6 +76,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 9
+        resources:
+          requests:
+            memory: 3Gi
+          limits:
+            memory: 3Gi
         volumeMounts:
         - name: v-chrome-data
           mountPath: /config

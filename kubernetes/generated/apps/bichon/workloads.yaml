@@ -72,6 +72,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-bichon-bichon-data
           mountPath: /data
@@ -134,6 +139,11 @@ spec:
               key: BICHON_ADMIN_PASSWORD
         - name: BICHON_URL
           value: http://bichon:15630
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 64Mi
         volumeMounts:
         - name: files
           mountPath: /init-admin.sh

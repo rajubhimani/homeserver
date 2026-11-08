@@ -62,3 +62,7 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server lo
 - Plaintext, no authentication: the ports are reachable only from the host (and WireGuard in prod) and never opened on the router. Do not publish `9092` beyond that. Add SASL if you ever need to.
 - No web UI is included. A browser UI such as `kafka-ui` can be added later if wanted.
 - Data lives in a named volume, so the `down` auto-snapshot does not archive it.
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `kafka` 1G. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

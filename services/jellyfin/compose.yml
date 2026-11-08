@@ -2,6 +2,10 @@ services:
   jellyfin:
     image: jellyfin/jellyfin:12.4
     container_name: jellyfin
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     restart: unless-stopped
     env_file: .env
     volumes:

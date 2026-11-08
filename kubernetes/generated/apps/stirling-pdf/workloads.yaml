@@ -65,6 +65,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 11
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-stirling-pdf-data
           mountPath: /configs

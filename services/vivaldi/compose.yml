@@ -7,6 +7,10 @@ services:
     # stays current.
     image: lscr.io/linuxserver/vivaldi:latest
     container_name: vivaldi
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     restart: unless-stopped
     env_file: .env
     environment:

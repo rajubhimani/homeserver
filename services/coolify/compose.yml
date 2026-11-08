@@ -28,6 +28,10 @@ services:
     # see docs/10-new-services.md "Managed-cloud parity".
     image: valkey/valkey:9.1.3-alpine
     container_name: coolify-redis
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     command: valkey-server --requirepass ${REDIS_PASSWORD}
     volumes:
@@ -43,6 +47,10 @@ services:
   coolify-realtime:
     image: coollabsio/coolify-realtime:1.0.20
     container_name: coolify-realtime
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     env_file: .env
     # Needed for the terminal feature specifically: coolify-realtime SSHes
@@ -82,6 +90,10 @@ services:
   coolify-permissions:
     image: alpine:3.24.3
     container_name: coolify-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:
@@ -95,6 +107,10 @@ services:
   coolify:
     image: coollabsio/coolify:4.3.24
     container_name: coolify
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

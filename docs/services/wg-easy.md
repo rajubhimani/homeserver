@@ -338,3 +338,7 @@ The VPN runs on the 24/7 server, not on every machine that clones this repo. `WG
 - `off` (a laptop or dev box): `homeserver.py` treats wg-easy as `manual` tier, so `up core`/`up all` skip it and `up wg-easy` still works by name. `prod` never asks to start it, and every service starts without its `10.8.0.1` port mapping (a temporary compose override drops it; the `127.0.0.1` ports stay). `compose.prod.yml` files are unchanged, so the same repo works on both machines.
 
 Switching a machine from `off` to `on` needs a restart of the services started while it was off to pick the `10.8.0.1` ports up.
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `wg-easy` 256M. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

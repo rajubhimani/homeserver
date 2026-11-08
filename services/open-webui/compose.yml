@@ -3,6 +3,10 @@ services:
     image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_IMAGE_TAG:-v0.12.5-slim}
     container_name: open-webui
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     env_file: .env
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}

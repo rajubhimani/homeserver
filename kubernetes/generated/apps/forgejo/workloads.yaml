@@ -108,6 +108,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 8
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-forgejo-data
           mountPath: /data

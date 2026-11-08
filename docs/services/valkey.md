@@ -95,3 +95,7 @@ AOF persistence is on (`--appendonly yes`), so keys survive restarts. Logins are
 
 - Dev publishes on all interfaces; prod on `127.0.0.1` and the WireGuard address only. The port is never opened on the router and does not go through the Cloudflare tunnel (it is not HTTP).
 - Data lives in a named volume, so it is outside `service_data/data/` and the `down` auto-snapshot does not archive it.
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `valkey` 1G. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

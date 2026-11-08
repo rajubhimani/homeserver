@@ -2,6 +2,10 @@ services:
   beszel:
     image: henrygd/beszel:0.21.1
     container_name: beszel
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     environment:
       APP_URL: https://beszel.${DOMAIN}
@@ -35,6 +39,10 @@ services:
     # needed for the S.M.A.R.T. panel — see docs/services/beszel.md
     image: henrygd/beszel-agent:0.21.1-alpine
     container_name: beszel-agent
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     restart: unless-stopped
     network_mode: host
     # Disks for S.M.A.R.T. data. Stable /dev/disk/by-id sources mapped onto the

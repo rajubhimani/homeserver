@@ -2,6 +2,10 @@ services:
   silverbullet:
     image: ghcr.io/silverbulletmd/silverbullet:2.11.1
     container_name: silverbullet
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     env_file: .env
     volumes:

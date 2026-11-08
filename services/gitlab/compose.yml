@@ -51,6 +51,10 @@ services:
   gitlab-runner:
     image: gitlab/gitlab-runner:v19.4.3
     container_name: gitlab-runner
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     profiles:
       - runner

@@ -18,6 +18,10 @@ services:
   temporal-schema-setup:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
     container_name: temporal-schema-setup
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: "no"
     environment:
       SQL_PASSWORD: ${POSTGRES_PASSWORD}
@@ -105,6 +109,10 @@ services:
   temporal-create-namespace:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
     container_name: temporal-create-namespace
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: "no"
     environment:
       TEMPORAL_ADDRESS: temporal:7233

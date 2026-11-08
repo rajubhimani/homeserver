@@ -7,6 +7,10 @@ services:
   airflow-init:
     image: apache/airflow:${AIRFLOW_VERSION}
     container_name: airflow-init
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: "no"
     entrypoint: /bin/bash
     command:

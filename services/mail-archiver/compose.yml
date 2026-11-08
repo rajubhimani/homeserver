@@ -5,6 +5,10 @@ services:
   mail-archiver:
     image: s1t5/mailarchiver:2609.1
     container_name: mail-archiver
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

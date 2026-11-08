@@ -92,5 +92,10 @@ spec:
           timeoutSeconds: 15
           periodSeconds: 10
           failureThreshold: 9
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         securityContext:
           allowPrivilegeEscalation: false

@@ -5,6 +5,10 @@ services:
   calcom:
     image: calcom/cal.com:v6.2.0
     container_name: calcom
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     restart: unless-stopped
     env_file: .env
     environment:

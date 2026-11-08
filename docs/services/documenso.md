@@ -58,3 +58,7 @@ No mobile app — web-only (`https://documenso.${DOMAIN}`), by design of the pro
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `documenso-permissions` 64M, `documenso` 1G. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

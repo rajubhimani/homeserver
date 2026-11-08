@@ -5,6 +5,10 @@ services:
   listmonk:
     image: listmonk/listmonk:v6.2.0
     container_name: listmonk
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     env_file: .env
     environment:

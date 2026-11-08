@@ -29,6 +29,10 @@ services:
   forgejo:
     image: codeberg.org/forgejo/forgejo:16.0.7
     container_name: forgejo
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:
@@ -71,6 +75,10 @@ services:
   forgejo-runner:
     image: code.forgejo.org/forgejo/runner:13.2.1
     container_name: forgejo-runner
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     # Image defaults to uid 1000, which can't reach the bind-mounted host docker.sock
     # (owned by root:docker on the host) -- run as root like this repo's other

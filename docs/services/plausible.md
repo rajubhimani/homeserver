@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Self-hosted, privacy-friendly web analytics (Google Analytics alternative, no cookies/tracking-consent banner needed).
-**Port:** `8130` (host) → `8000` (container) | **Data:** named volumes only (see Notes) | **Requires:** shared Postgres (`shared-postgres`, started on demand), ClickHouse | **Memory:** app and events-db (ClickHouse): no hard limit set; measured idle ~218MB across the 2 containers (app 81 + events-db 137), plus its share of the shared Postgres server
+**Port:** `8130` (host) → `8000` (container) | **Data:** named volumes only (see Notes) | **Requires:** shared Postgres (`shared-postgres`, started on demand), ClickHouse | **Memory:** capped in compose.yml (added 2026-11-08): `plausible-events-db` 3G, `plausible` 1G; measured idle ~218MB across the 2 containers (app 81 + events-db 137), plus its share of the shared Postgres server 
 
 ## Setup
 

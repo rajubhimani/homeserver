@@ -5,6 +5,10 @@ services:
   miniflux:
     image: miniflux/miniflux:2.3.5
     container_name: miniflux
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     restart: unless-stopped
     env_file: .env
     environment:

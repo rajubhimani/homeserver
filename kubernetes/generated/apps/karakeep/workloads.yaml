@@ -86,6 +86,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-karakeep-data
           mountPath: /data
@@ -139,6 +144,11 @@ spec:
         envFrom:
         - configMapRef:
             name: homeserver-root
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -206,6 +216,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 30
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-karakeep-karakeep-meilisearch
           mountPath: /meili_data

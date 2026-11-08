@@ -90,6 +90,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 9
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-mail-archiver-data
           mountPath: /app/DataProtection-Keys

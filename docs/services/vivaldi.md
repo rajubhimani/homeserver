@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Vivaldi, a power-user Chromium browser (tab stacking, built-in mail and calendar, heavy customisation), running remotely — part of the [Browser Hub](browser-hub.md).
-**Port:** `8161` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/vivaldi/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/vivaldi/config/` | **Requires:** nothing (single container, no DB) | **Memory:** no hard limit set; idle usage not yet measured (expect 300-700MB in use, ~4.5GB image on disk)
+**Port:** `8161` (host, dev-only direct access) → `3000` (container) | **Public access:** `https://browser.${DOMAIN}/vivaldi/` via the [Browser Hub](browser-hub.md), not its own subdomain | **Data:** `service_data/data/vivaldi/config/` | **Requires:** nothing (single container, no DB) | **Memory:** capped in compose.yml (added 2026-11-08): `vivaldi` 3G; idle usage not yet measured (expect 300-700MB in use, ~4.5GB image on disk) 
 
 ---
 

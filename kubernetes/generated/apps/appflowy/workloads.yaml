@@ -52,6 +52,11 @@ spec:
           value: https://appflowy.$(DOMAIN)/gotrue
         ports:
         - containerPort: 3000
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -178,6 +183,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 7
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -244,6 +254,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 60
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-appflowy-appflowy-postgres
           mountPath: /var/lib/postgresql/data
@@ -361,6 +376,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 8
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -430,6 +450,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 30
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-appflowy-data
           mountPath: /data
@@ -517,6 +542,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 9
+        resources:
+          requests:
+            memory: 128Mi
+          limits:
+            memory: 128Mi
         volumeMounts:
         - name: files
           mountPath: /etc/nginx/nginx.conf
@@ -591,6 +621,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 60
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-appflowy-appflowy-valkey
           mountPath: /data
@@ -655,5 +690,10 @@ spec:
           value: wss://appflowy.$(DOMAIN)/ws
         ports:
         - containerPort: 80
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false

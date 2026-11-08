@@ -51,3 +51,7 @@ Official **Mattermost** app ([Google Play](https://play.google.com/store/apps/de
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `mattermost-permissions` 64M. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

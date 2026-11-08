@@ -31,6 +31,10 @@ services:
   guacd:
     image: guacamole/guacd:1.6.0
     container_name: guacd
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     environment:
       # Image default — documents current logging verbosity, no behavior change
@@ -50,6 +54,10 @@ services:
   guacamole:
     image: guacamole/guacamole:1.6.0
     container_name: guacamole
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     environment:
       GUACD_HOSTNAME: guacd

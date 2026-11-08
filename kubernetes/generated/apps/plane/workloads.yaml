@@ -82,6 +82,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -209,6 +214,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 11
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -287,6 +297,11 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/
         - name: SECRET_KEY
           value: $(SECRET_KEY)
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -346,6 +361,11 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/
         - name: SECRET_KEY
           value: $(SECRET_KEY)
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
       restartPolicy: OnFailure
@@ -429,6 +449,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 30
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-plane-data
           mountPath: /data
@@ -523,6 +548,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 19
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-plane-plane-rabbitmq-alpine
           mountPath: /var/lib/rabbitmq
@@ -621,6 +651,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 9
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: files
           mountPath: /etc/caddy/Caddyfile
@@ -695,6 +730,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 60
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: v-plane-plane-redis-alpine
           mountPath: /data
@@ -789,6 +829,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -874,6 +919,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -960,5 +1010,10 @@ spec:
           value: redis://$(CACHE_HOST):$(CACHE_PORT)/
         - name: SECRET_KEY
           value: $(SECRET_KEY)
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         securityContext:
           allowPrivilegeEscalation: false

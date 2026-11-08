@@ -40,6 +40,10 @@ services:
   authentik-permissions:
     image: alpine:3.24.3
     container_name: authentik-permissions
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     restart: "no"
     user: "0:0"
     volumes:

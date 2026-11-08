@@ -126,6 +126,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-outline-data
           mountPath: /var/lib/outline/data
@@ -191,6 +196,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-outline-outline-valkey
           mountPath: /data

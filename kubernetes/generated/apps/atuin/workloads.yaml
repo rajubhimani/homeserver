@@ -98,6 +98,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 4
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-atuin-data
           mountPath: /config

@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Minimal, fast RSS reader with keyboard shortcuts, no JavaScript frontend.
-**Port:** `8093` (host) → `8080` (container) | **Data:** `service_data/data/miniflux/` | **Requires:** Postgres, on the shared server ([shared-postgres](shared-postgres.md), started automatically) | **Memory:** app: no hard limit set; measured idle ~13MB (the database's share is part of shared-postgres)
+**Port:** `8093` (host) → `8080` (container) | **Data:** `service_data/data/miniflux/` | **Requires:** Postgres, on the shared server ([shared-postgres](shared-postgres.md), started automatically) | **Memory:** capped in compose.yml (added 2026-11-08): `miniflux` 256M; measured idle ~13MB (the database's share is part of shared-postgres) 
 
 ## Setup
 

@@ -56,3 +56,7 @@ All in `services/acme/.env` (twelve-factor; see `.env.example`): `ACME_EMAIL`, `
 ---
 
 [← Services Reference](../11-services-reference.md) | [Home](../../setup.md)
+
+## Memory limits
+
+`compose.yml` caps these containers with `deploy.resources.limits.memory` (added 2026-11-08): `acme` 128M, `acme-reload` 64M. Limits are sized from measured idle with headroom, or upstream's documented minimum where one exists; a backstop against one container exhausting host RAM — raise it if `docker inspect <name> --format '{{.State.OOMKilled}}'` shows true.

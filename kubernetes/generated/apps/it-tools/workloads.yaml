@@ -66,5 +66,10 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 5
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 64Mi
         securityContext:
           allowPrivilegeEscalation: false

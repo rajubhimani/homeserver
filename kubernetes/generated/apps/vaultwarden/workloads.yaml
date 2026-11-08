@@ -59,6 +59,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 60
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-vaultwarden-data
           mountPath: /data

@@ -89,6 +89,11 @@ spec:
           timeoutSeconds: 30
           periodSeconds: 10
           failureThreshold: 23
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: v-uptime-kuma-data
           mountPath: /app/data

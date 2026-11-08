@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Recipe manager and meal planner.
-**Port:** `9925` (host) → `9000` (container) | **Data:** `service_data/data/mealie/` | **Requires:** Postgres | **Memory:** database on `shared-postgres` (counted there); app: no hard limit set; measured idle ~329MB total (app 278 + db 51), measured before the 2026-10-01 move to the shared server
+**Port:** `9925` (host) → `9000` (container) | **Data:** `service_data/data/mealie/` | **Requires:** Postgres | **Memory:** capped in compose.yml (added 2026-11-08): `mealie` 1G; database on `shared-postgres` (counted there); measured idle ~329MB total (app 278 + db 51), measured before the 2026-10-01 move to the shared server 
 
 **Database:** on the shared Postgres server ([shared-postgres](shared-postgres.md)), not its own container — since 2026-10-01. `homeserver.py` starts `shared-postgres` before this service and creates its database and login from `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` in `services/mealie/.env` (the `shared_db` entry in `services.json`); snapshots include a dump of just this service's database.
 

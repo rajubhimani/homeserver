@@ -8,6 +8,10 @@ services:
     container_name: kafka
     hostname: kafka
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     env_file: .env
     environment:
       KAFKA_NODE_ID: 1

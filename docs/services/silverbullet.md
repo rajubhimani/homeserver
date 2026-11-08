@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Markdown notes with a query language over your own space — lightweight, no plugin sprawl.
-**Port:** `8113` (host) → `3000` (container) | **Data:** `service_data/data/silverbullet/` | **Requires:** nothing (plain markdown files on disk, no DB) | **Memory:** no hard limit set; measured idle ~2MB
+**Port:** `8113` (host) → `3000` (container) | **Data:** `service_data/data/silverbullet/` | **Requires:** nothing (plain markdown files on disk, no DB) | **Memory:** capped in compose.yml (added 2026-11-08): `silverbullet` 256M; measured idle ~2MB 
 
 ## Setup
 

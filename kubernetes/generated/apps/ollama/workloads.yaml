@@ -65,6 +65,11 @@ spec:
           timeoutSeconds: 10
           periodSeconds: 10
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 20Gi
+          limits:
+            memory: 20Gi
         volumeMounts:
         - name: v-ollama-models
           mountPath: /root/.ollama

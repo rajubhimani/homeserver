@@ -2,6 +2,10 @@ services:
   dockge:
     image: louislam/dockge:1.5.0
     container_name: dockge
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     env_file: .env
     environment:

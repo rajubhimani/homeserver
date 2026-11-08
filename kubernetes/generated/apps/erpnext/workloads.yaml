@@ -107,6 +107,11 @@ spec:
           timeoutSeconds: 15
           periodSeconds: 10
           failureThreshold: 17
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
@@ -201,6 +206,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 10
           failureThreshold: 17
+        resources:
+          requests:
+            memory: 1536Mi
+          limits:
+            memory: 1536Mi
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
@@ -355,6 +365,11 @@ spec:
             name: homeserver-root
         - secretRef:
             name: erpnext-env
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
@@ -427,6 +442,11 @@ spec:
             name: homeserver-root
         - secretRef:
             name: erpnext-env
+        resources:
+          requests:
+            memory: 1Gi
+          limits:
+            memory: 1Gi
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
@@ -481,6 +501,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -526,6 +551,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: v-erpnext-erpnext-valkey-queue-data
           mountPath: /data
@@ -596,6 +626,11 @@ spec:
             name: homeserver-root
         - secretRef:
             name: erpnext-env
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites
@@ -676,6 +711,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 30
           failureThreshold: 10
+        resources:
+          requests:
+            memory: 256Mi
+          limits:
+            memory: 256Mi
         volumeMounts:
         - name: v-erpnext-erpnext-sites
           mountPath: /home/frappe/frappe-bench/sites

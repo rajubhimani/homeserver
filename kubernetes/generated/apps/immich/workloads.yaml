@@ -45,6 +45,11 @@ spec:
           timeoutSeconds: 30
           periodSeconds: 30
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 4Gi
+          limits:
+            memory: 4Gi
         volumeMounts:
         - name: v-immich-immich-model-cache
           mountPath: /cache
@@ -123,6 +128,11 @@ spec:
           timeoutSeconds: 5
           periodSeconds: 2
           failureThreshold: 35
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
 ---
@@ -218,6 +228,11 @@ spec:
           timeoutSeconds: 30
           periodSeconds: 30
           failureThreshold: 6
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
         volumeMounts:
         - name: v-immich-host-immich-upload
           mountPath: /usr/src/app/upload

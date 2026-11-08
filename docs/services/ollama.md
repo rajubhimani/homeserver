@@ -5,7 +5,7 @@
 ---
 
 **Purpose:** Runs large language models locally and serves them over an API — the engine behind [Open WebUI](open-webui.md)'s chat interface.
-**Port:** `8110` (host, dev) → `11434` (container) | **Requires:** — | **Memory:** varies heavily by loaded model; idle (no model loaded) is small
+**Port:** `8110` (host, dev) → `11434` (container) | **Requires:** — | **Memory:** capped in compose.yml (added 2026-11-08): `ollama` 20G; varies heavily by loaded model; idle (no model loaded) is small 
 
 ## Setup
 

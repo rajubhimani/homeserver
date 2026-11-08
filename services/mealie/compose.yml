@@ -5,6 +5,10 @@ services:
   mealie:
     image: ghcr.io/mealie-recipes/mealie:v3.28.0
     container_name: mealie
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     restart: unless-stopped
     env_file: .env
     environment:

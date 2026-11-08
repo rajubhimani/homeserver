@@ -9,6 +9,10 @@ services:
     image: valkey/valkey:9.1.3-alpine
     container_name: valkey
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     env_file: .env
     # Logins live in an ACL file on the data volume (survives restarts). On
     # every start only the admin ("default") line is rewritten from
